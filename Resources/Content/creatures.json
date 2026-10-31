@@ -1,0 +1,26 @@
+[
+  {
+    "id": "fungling",
+    "name": "Fungling",
+    "stats": ["damp", "glow"],
+    "sprite": "creature.fungling",
+    "glimmerPaletteSwap": { "2": "#b98cff", "3": "#e6d2ff", "5": "#7affd9" },
+    "guideText": "A sleepy little cap that keeps the soil soft and faintly glowing."
+  },
+  {
+    "id": "sproutling",
+    "name": "Sproutling",
+    "stats": ["verdure", "bloom"],
+    "sprite": "creature.sproutling",
+    "glimmerPaletteSwap": { "2": "#ffd84a", "3": "#fff2a8", "5": "#ff7ac8" },
+    "guideText": "Wherever it naps, green things wake up and flowers open."
+  },
+  {
+    "id": "geodeCritter",
+    "name": "Geode Critter",
+    "stats": ["stone", "depth"],
+    "sprite": "creature.geodeCritter",
+    "glimmerPaletteSwap": { "2": "#5a6ad8", "3": "#9fb0ff", "5": "#ff9ef0" },
+    "guideText": "Burrows slowly downward, leaving stone and hollows behind."
+  }
+]

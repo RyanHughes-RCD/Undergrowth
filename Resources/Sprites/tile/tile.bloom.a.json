@@ -1,0 +1,45 @@
+{
+ "id": "tile.bloom.a",
+ "size": [
+  32,
+  24
+ ],
+ "anchor": [
+  16,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "...............b9...............",
+    ".............9a99a9.............",
+    "...........99aa9a9a9b...........",
+    ".........d9a9a99a999999.........",
+    ".......999ab9a99999999a99.......",
+    ".....99999a99999af99d9b99b9.....",
+    "...9a99g99a9g9999999a999ab99a...",
+    ".999999ea9ba9999999aa99a999a999.",
+    ".a9b99b9bb9999ab9e99da9a999e9a9.",
+    ".NNa9999a999aa99g99999b99a999OO.",
+    ".NNNN999b99f9999e999a999b99OOOO.",
+    ".NNNNNN999b99a999ad99a999OOOOOO.",
+    ".NNNNNNNN9a99dba9999a99OOOOOOOO.",
+    ".NNNNNNNNNN999999abbaOOOOOOOOSO.",
+    ".NNRRNNNNNNNN99999bOOOOOOOOSSOO.",
+    ".NNNNRNNNNNNNNN99OOOOOOOOSOOOOO.",
+    ".NNNNNNRRNNNNNNNOOOOOOOSOOOOOOO.",
+    "...NNNNNNRRNNNNNOOOOOSSOOOOOO...",
+    ".....NNNNNNNNNNNOOOOOOOOOOO.....",
+    ".......NNNNNNNNNOOSOOOOOO.......",
+    ".........NNNNNNRSOOOOOO.........",
+    "...........NNNNNOOOOO...........",
+    ".............NNNOOO.............",
+    "...............NO..............."
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

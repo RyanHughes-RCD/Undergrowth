@@ -1,0 +1,45 @@
+{
+ "id": "tile.mossrock.a",
+ "size": [
+  32,
+  24
+ ],
+ "anchor": [
+  16,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "...............tv...............",
+    ".............uttuvt.............",
+    "...........tttttttuvt...........",
+    ".........vttttvtttttttu.........",
+    ".......vvttttttttttvttttu.......",
+    ".....vtttvvtttttttttvuuttvt.....",
+    "...ttttttttvtttutttttttttttut...",
+    ".vttttttttvttttttttttuutttttttt.",
+    ".uttvttvlmmlmtwtttttttttttttvut.",
+    ".PPtttmmmllmlmtuuttvtwttvutttQQ.",
+    ".PPPPmmmmmmmltttttvwvtvtvtvQQQQ.",
+    ".PPPPPPllmmlttututvvttttvQQQQQQ.",
+    ".PPPPPPPPttttvutttvttvtQQQQQQQQ.",
+    ".PRPPPPPPPPttttttvtttQQQQQQQQSQ.",
+    ".PPRPPPPPPPPPttttttQQQQQQQQQSQQ.",
+    ".PPPPPPPPPPPPPPvtQQQQQQQQQSQQQQ.",
+    ".PPPPPPRPPPPPPPPQQQQQQQQQQQQQQQ.",
+    "...PPPPPPRPPPPPPQQQQQSSQQQQQQ...",
+    ".....PPPPPPPRPPPQQQSQQQQQQQ.....",
+    ".......PPPPPPPRPQSQQQQQQQ.......",
+    ".........PPPPPPPSQQQQQQ.........",
+    "...........PPPPPQQQQQ...........",
+    ".............PPPQQQ.............",
+    "...............PQ..............."
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

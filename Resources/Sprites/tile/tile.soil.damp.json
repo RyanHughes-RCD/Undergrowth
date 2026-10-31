@@ -1,0 +1,45 @@
+{
+ "id": "tile.soil.damp",
+ "size": [
+  32,
+  24
+ ],
+ "anchor": [
+  16,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "...............11...............",
+    ".............2111k1.............",
+    "...........jk1112kkk2...........",
+    ".........11k11k11k11k1k.........",
+    ".......11121111kk11111kk1.......",
+    ".....12112jkk111k112k2k11kk.....",
+    "...1k111k1jkkkk1k21kk2111k111...",
+    ".111kk111211k11kkkjk1112k11k1k1.",
+    ".2111111k12121111k11121111k1k21.",
+    ".NN212121111k11k111k211k21kk1OO.",
+    ".NNNN1111121k211111kkkk11k1OOOO.",
+    ".NNNNNN21j21k1111k11211kkOOOOOO.",
+    ".NNNNNNNNk2122kk11j11kkOOOOOOOO.",
+    ".RNNNNNNNNN112122kk1kOOOOOOOOSS.",
+    ".NNRRNNNNNNNN1211k1OOOOOOOOSSOO.",
+    ".NNNNRRNNNNNNNN11OOOOOOOOSSOOOO.",
+    ".NNNNNNNRNNNNNNNOOOOOOOOOOOOOOO.",
+    "...NNNNNNRRNNNNNOOOOOSSOOOOOO...",
+    ".....NNNNNNNRNNNOOOSSOOOOOO.....",
+    ".......NNNNNNRRNOOOOOOOOO.......",
+    ".........NNNNNNRSOOOOOO.........",
+    "...........NNNNNOOOOO...........",
+    ".............NNNOOO.............",
+    "...............NO..............."
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

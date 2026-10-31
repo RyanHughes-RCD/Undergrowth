@@ -1,0 +1,45 @@
+{
+ "id": "tile.cave.a",
+ "size": [
+  32,
+  24
+ ],
+ "anchor": [
+  16,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "...............ut...............",
+    ".............tttvut.............",
+    "...........vttttttttt...........",
+    ".........tuuuuuuuuuuutt.........",
+    ".......tvuuLKKKKKKKKLuutt.......",
+    ".....vtLLKKKJJJJJJJJKKKLLtt.....",
+    "...tttLKKKJJJMMMMMMJJJKKKLtvt...",
+    ".ttttLLKKJJMMMMMMMMMMJJKKLLtttt.",
+    ".ttttLKKJJJMMMMMMMMMMJJJKKLtttt.",
+    ".PPvtLLKKJJMMMMMMMMMMJJKKLLtvQQ.",
+    ".PPPPtLKKKJJJMMMMMMJJJKKKLtQQQQ.",
+    ".PPPPPPLLKKKJJJJJJJJKKKLLQQQQQQ.",
+    ".PPPPPPPPLLLKKKKKKKKLLLQQQQQQQQ.",
+    ".RPPPPPPPPPttttututttQQQQQQQQSQ.",
+    ".PPRRPPPPPPPPtttttuQQQQQQQQQSQQ.",
+    ".PPPPPRPPPPPPPPtuQQQQQQQQQSQQQQ.",
+    ".PPPPPPRRPPPPPPPQQQQQQQQSQQQQQQ.",
+    "...PPPPPPRRPPPPPQQQQQQSQQQQQQ...",
+    ".....PPPPPPRRPPPQQQSQQQQQQQ.....",
+    ".......PPPPPPRRPQQQQQQQQQ.......",
+    ".........PPPPPPRSQQQQQQ.........",
+    "...........PPPPPQQQQQ...........",
+    ".............PPPQQQ.............",
+    "...............PQ..............."
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

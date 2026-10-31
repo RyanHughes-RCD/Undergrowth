@@ -1,0 +1,7 @@
+.DS_Store
+.build/
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+*.ppm
+__pycache__/

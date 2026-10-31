@@ -1,0 +1,45 @@
+{
+ "id": "tile.mud.a",
+ "size": [
+  32,
+  24
+ ],
+ "anchor": [
+  16,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "...............jh...............",
+    ".............ihiiih.............",
+    "...........ijihhhhhih...........",
+    ".........hhhhijihkhkhhh.........",
+    ".......hihkkikhhhhhkikhhh.......",
+    ".....kkhjhhhiihkhhhkhhhkiii.....",
+    "...khkihhhhihkhkhkhhhhhkiiihi...",
+    ".hhhhhhhhhhhhhhhhhhhhkhkkhkkhih.",
+    ".khhhkkhiiihkhihhkiihhhhjhkhhhh.",
+    ".NNhhhikhhihkihhjkhhihihhhhjhOO.",
+    ".NNNNhhhhhhhhhhhhkikijihhkkOOOO.",
+    ".NNNNNNjhhhjhhhhhhhhhhhhhOOOOOO.",
+    ".NNNNNNNNhhhhihkkjiiikhOOOOOOOO.",
+    ".RRNNNNNNNNikhkhhhhhhOOOOOOOOOO.",
+    ".NNRRNNNNNNNNihhhiiOOOOOOOOOSOO.",
+    ".NNNNRRNNNNNNNNhhOOOOOOOOSOOOOO.",
+    ".NNNNNNRNNNNNNNNOOOOOOOOSOOOOOO.",
+    "...NNNNNNNRNNNNNOOOOOSSOOOOOO...",
+    ".....NNNNNNRNNNNOOOOSOOOOOO.....",
+    ".......NNNNNNRRNOSOOOOOOO.......",
+    ".........NNNNNNNOOOOOOO.........",
+    "...........NNNNNOOOOO...........",
+    ".............NNNOOO.............",
+    "...............NO..............."
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

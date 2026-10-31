@@ -1,0 +1,45 @@
+{
+ "id": "tile.lush.a",
+ "size": [
+  32,
+  24
+ ],
+ "anchor": [
+  16,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "...............99...............",
+    ".............999ba9.............",
+    "...........b9999b9a99...........",
+    ".........9b9a9baa99ba99.........",
+    ".......99b9c9cc9b9b999ab9.......",
+    ".....bb9a99999a9999a9a9ba99.....",
+    "...99999999a99999cb9999999999...",
+    ".9abb99bbb9b99bb99999b99bbba9b9.",
+    ".aca9bb99c999ca9a999b99ba999999.",
+    ".NN9ab99b99ac99999ac99aa99999OO.",
+    ".NNNN9a9ba99999aab99c999b99OOOO.",
+    ".NNNNNNcb9999a9999aa9ba99OOOOOO.",
+    ".NNNNNNNN9a99999b9c9ab9OOOOOOOO.",
+    ".RRNNNNNNNN9c9999bb99OOOOOOOOSS.",
+    ".NNRNNNNNNNNN9c99aaOOOOOOOOSOOO.",
+    ".NNNNNRNNNNNNNN99OOOOOOOOSSOOOO.",
+    ".NNNNNNNRNNNNNNNOOOOOOOSSOOOOOO.",
+    "...NNNNNNRNNNNNNOOOOOSSOOOOOO...",
+    ".....NNNNNNRRNNNOOOOSOOOOOO.....",
+    ".......NNNNNNRRNOSSOOOOOO.......",
+    ".........NNNNNNRSOOOOOO.........",
+    "...........NNNNNOOOOO...........",
+    ".............NNNOOO.............",
+    "...............NO..............."
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

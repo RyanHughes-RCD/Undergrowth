@@ -1,0 +1,26 @@
+{
+  "loot.plant.clover":   { "rolls": [ { "item": "plant.clover" },   { "item": "seed.wild", "chance": 0.30 } ] },
+  "loot.plant.frond":    { "rolls": [ { "item": "plant.frond" },    { "item": "seed.wild", "chance": 0.40 } ] },
+  "loot.plant.bluebell": { "rolls": [ { "item": "plant.bluebell" }, { "item": "seed.wild", "chance": 0.40 } ] },
+  "loot.plant.cavefern": { "rolls": [ { "item": "plant.cavefern" }, { "item": "seed.wild", "chance": 0.55, "count": [1, 2] } ] },
+  "loot.plant.sunpetal": { "rolls": [ { "item": "plant.sunpetal" }, { "item": "seed.wild", "chance": 0.60, "count": [1, 2] } ] },
+  "loot.plant.moonlily": { "rolls": [ { "item": "plant.moonlily" }, { "item": "seed.wild", "count": [1, 3] } ] },
+
+  "loot.mushroom.redcap":     { "rolls": [ { "item": "mushroom.redcap" } ] },
+  "loot.mushroom.glowcap":    { "rolls": [ { "creature": "fungling", "chance": 0.06, "pity": "fungling" }, { "item": "mushroom.glowcap" } ] },
+  "loot.mushroom.ghostmorel": { "rolls": [ { "creature": "fungling", "chance": 0.18, "pity": "fungling" }, { "item": "mushroom.ghostmorel" } ] },
+
+  "loot.dig.plain":   { "rolls": [ { "item": "rock.rough" } ] },
+  "loot.dig.crystal": { "rolls": [ { "item": "rock.crystal" } ] },
+  "loot.dig.deep":    { "rolls": [ { "item": "rock.deep" } ] },
+
+  "loot.crack.rough":   { "rolls": [ { "creature": "geodeCritter", "chance": 0.04, "pity": "geodeCritter", "exclusive": true },
+                                     { "group": "gems", "rarityPity": "rareGem", "rarityPityMin": "rare" } ] },
+  "loot.crack.crystal": { "rolls": [ { "creature": "geodeCritter", "chance": 0.08, "pity": "geodeCritter", "exclusive": true },
+                                     { "group": "gems", "minRarity": "uncommon", "rarityPity": "rareGem", "rarityPityMin": "rare" } ] },
+  "loot.crack.deep":    { "rolls": [ { "creature": "geodeCritter", "chance": 0.15, "pity": "geodeCritter", "exclusive": true },
+                                     { "group": "gems", "minRarity": "rare" } ] },
+
+  "loot.grow.wild": { "rolls": [ { "creature": "sproutling", "chance": 0.05, "pity": "sproutling", "exclusive": true },
+                                 { "group": "plants" } ] }
+}

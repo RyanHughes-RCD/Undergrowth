@@ -1,0 +1,45 @@
+{
+ "id": "tile.crystal.a",
+ "size": [
+  32,
+  24
+ ],
+ "anchor": [
+  16,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "...............tt...............",
+    ".............tutttt.............",
+    "...........vtttvtttut...........",
+    ".........vttttttttHtvtt.........",
+    ".......ttuHtttttttFtttvtt.......",
+    ".....tuttHFvttttttIttvtHttt.....",
+    "...ttttttGIvvvtttttvtvtFwttvt...",
+    ".tvttttttIttutvtttuttvvIttttttt.",
+    ".vuttttttttttttvtvtvtttttuttutt.",
+    ".PPtttttttttttttvtttvttttwvttQQ.",
+    ".PPPPvtttttttttttttttttttttQQQQ.",
+    ".PPPPPPtttttttttttvttttttQQQQQQ.",
+    ".PPPPPPPPtttwttttttttttQQQQQQQQ.",
+    ".RRPPPPPPPPtttttvttttQQQQQQQQSS.",
+    ".PPRRPPPPPPPPttttttQQQQQQQQQQQQ.",
+    ".PPPPPRPPPPPPPPttQQQQQQQQSSQQQQ.",
+    ".PPPPPPRPPPPPPPPQQQQQQQQSQQQQQQ.",
+    "...PPPPPPPRPPPPPQQQQQQSQQQQQQ...",
+    ".....PPPPPPPPPPPQQQSSQQQQQQ.....",
+    ".......PPPPPPRRPQQSQQQQQQ.......",
+    ".........PPPPPPRSQQQQQQ.........",
+    "...........PPPPPQQQQQ...........",
+    ".............PPPQQQ.............",
+    "...............PQ..............."
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

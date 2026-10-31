@@ -1,0 +1,75 @@
+{
+ "id": "tile.glowmoss.a",
+ "size": [
+  32,
+  24
+ ],
+ "anchor": [
+  16,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "...............qn...............",
+    ".............ppppqp.............",
+    "...........ppqpppqppp...........",
+    ".........pqnpppnpqppqpp.........",
+    ".......pspsppqpnqppqpqqrn.......",
+    ".....pppppqppnppqppnpqprppp.....",
+    "...ppnqpppppqpppnppqppppnpsqp...",
+    ".qpqnqpppqpnprppppnpppppsppqppp.",
+    ".qqpqpppqqpppqpppqqppppppppqnqn.",
+    ".NNppqnqnppppqppppqqpppqpppqpOO.",
+    ".NNNNpqppppqqqppnppnqpppppqOOOO.",
+    ".NNNNNNppqqrpqppppppqppppOOOOOO.",
+    ".NNNNNNNNqpppnpnqpqpsnnOOOOOOOO.",
+    ".NNNNNNNNNNpqnppnppqpOOOOOOOOSS.",
+    ".NNRNNNNNNNNNpqpnppOOOOOOOOOSOO.",
+    ".NNNNRRNNNNNNNNpnOOOOOOOOSOOOOO.",
+    ".NNNNNNRRNNNNNNNOOOOOOOSSOOOOOO.",
+    "...NNNNNNRNNNNNNOOOOOOSOOOOOO...",
+    ".....NNNNNNRRNNNOOOOSOOOOOO.....",
+    ".......NNNNNNRRNOOSOOOOOO.......",
+    ".........NNNNNNRSOOOOOO.........",
+    "...........NNNNNOOOOO...........",
+    ".............NNNOOO.............",
+    "...............NO..............."
+   ],
+   "duration": 0.9
+  },
+  {
+   "rows": [
+    "...............qn...............",
+    ".............ppppqp.............",
+    "...........ppqpppqppp...........",
+    ".........pqnpppspqppqpp.........",
+    ".......pqppppqpnqppqpqqpr.......",
+    ".....pppppqppnppqppnpsppppp.....",
+    "...ppnqpppppqpppnppqppppnppqp...",
+    ".qpqnqpppqpnppppppnppprppprqppp.",
+    ".qqpqppsqqpppqpppqqppppppppqnqn.",
+    ".NNppqnqnppppqppppqqpppqpppqpOO.",
+    ".NNNNpqppppqqqppnppnqpppppqOOOO.",
+    ".NNNNNNppqqnpqpppppsqppppOOOOOO.",
+    ".NNNNNNNNqpppnpnqpqpnnnOOOOOOOO.",
+    ".NNNNNNNNNNpqnppnppqpOOOOOOOOSS.",
+    ".NNRNNNNNNNNNpqpnppOOOOOOOOOSOO.",
+    ".NNNNRRNNNNNNNNpnOOOOOOOOSOOOOO.",
+    ".NNNNNNRRNNNNNNNOOOOOOOSSOOOOOO.",
+    "...NNNNNNRNNNNNNOOOOOOSOOOOOO...",
+    ".....NNNNNNRRNNNOOOOSOOOOOO.....",
+    ".......NNNNNNRRNOOSOOOOOO.......",
+    ".........NNNNNNRSOOOOOO.........",
+    "...........NNNNNOOOOO...........",
+    ".............NNNOOO.............",
+    "...............NO..............."
+   ],
+   "duration": 0.9
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}
