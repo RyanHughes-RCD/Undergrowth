@@ -19,6 +19,25 @@ The game logic lives in a plain Swift package that also builds on Linux. Run its
 cd Packages/UndergrowthCore && swift test
 ```
 
+## Web prototype (play in a phone browser)
+
+`web/` is a dependency-free JavaScript port of the game logic and renderer. It reads the same `Resources/` data as the iOS app, so the two versions share sprites, tuning, creatures, items, loot and tile rules.
+
+- **Live:** the workflow `.github/workflows/pages.yml` builds and deploys it to GitHub Pages on every push that touches `web/`, `Resources/` or the build script. One-time setup: repo **Settings → Pages → Source: GitHub Actions**.
+- **Local:** build it, then serve it.
+
+```bash
+python3 tools/build_web.py
+```
+```bash
+python3 -m http.server -d dist 8000
+```
+
+Then open <http://localhost:8000>.
+- **On iPhone:** open the Pages URL in Safari, tap Share, then *Add to Home Screen*. It launches full-screen like an app.
+- **Saves:** stored in the browser's `localStorage`. They're separate from the iOS app's saves, and Safari may clear them after a long period without visiting.
+- **Same gameplay as the iOS app:** `web/js/core.js` mirrors `UndergrowthCore`. When game rules change, update both.
+
 ## How to play (v0.1)
 
 - **Burrow** lists your creatures. Pick one, choose *Place in forest*, then tap an empty tile. You have 3 slots.

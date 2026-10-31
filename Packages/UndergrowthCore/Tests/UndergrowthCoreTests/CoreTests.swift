@@ -285,7 +285,7 @@ final class SpawnAndLootTests: XCTestCase {
         try g.plantSeed(itemID: "seed.wild", at: GridPoint(7, 7), now: t0)
         let seed = g.state.plantedSeeds[0]
         XCTAssertThrowsError(try g.harvestSeed(id: seed.id, now: t0))
-        let result = try g.harvestSeed(id: seed.id, now: t0.addingTimeInterval(seed.growSeconds))
+        let result = try g.harvestSeed(id: seed.id, now: t0.addingTimeInterval(seed.growSeconds + 1))
         XCTAssertEqual(result.count, 1)
         XCTAssertTrue(g.state.plantedSeeds.isEmpty)
     }

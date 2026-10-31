@@ -65,14 +65,16 @@ public final class Game {
             size: t.grid, createdAt: now, customName: nil,
             creatures: [], placements: [], slots: [], spawns: [], plantedSeeds: [],
             inventory: [:], discovered: [], pity: [:],
-            lastSpawnTick: now, lastUpdated: now, statCache: nil, debugTimeOffset: 0)
+            // Back-date the spawn clock so a new forest starts with a few things to find.
+            lastSpawnTick: now.addingTimeInterval(-t.spawns.tickSeconds * 6), lastUpdated: now,
+            statCache: nil, debugTimeOffset: 0)
         let game = Game(content: content, state: state)
         for typeID in t.starterCreatures {
             let c = game.loot.rollCreature(typeID: typeID, origin: "starter", now: now,
                                            forceGlimmer: false, rng: &game.state.rng)
             game.addCreature(c)
         }
-        game.state.statCache = game.statField(at: now)
+        game.advance(to: now)
         return game
     }
 

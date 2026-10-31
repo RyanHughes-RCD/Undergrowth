@@ -152,6 +152,7 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
         if !didInitialCenter {
             didInitialCenter = true
             cam.position = Iso.point(GridPoint(state.size.width / 2, state.size.height / 2))
+            zoom = size.width < 600 ? 2 : 3
             applyZoom()
         }
         let field = state.statCache ?? store.game.statField(at: store.now)

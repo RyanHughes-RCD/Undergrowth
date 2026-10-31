@@ -10,7 +10,7 @@ struct FieldGuideView: View {
     @State private var tab = "creatures"
     @State private var selected: GuideEntry?
 
-    static let silhouette = RenderVariant(silhouette: RGBA(28, 30, 36))
+    static let silhouette = RenderVariant(silhouette: RGBA(78, 84, 92))
 
     private var itemCategories: [String] {
         let cats = Set(store.content.orderedItems.filter(\.showsInGuide).map(\.category))

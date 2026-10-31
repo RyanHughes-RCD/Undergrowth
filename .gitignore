@@ -5,3 +5,4 @@ xcuserdata/
 DerivedData/
 *.ppm
 __pycache__/
+dist/
