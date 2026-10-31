@@ -6,6 +6,7 @@ enum InteractionMode: Equatable {
     case browse
     case placeCreature(UUID)
     case plantSeed(String)
+    case useItem(String)
 }
 
 struct Toast: Identifiable, Equatable {
@@ -253,8 +254,24 @@ final class GameStore: ObservableObject {
             } catch {
                 showToast("\(error)")
             }
+        case .useItem(let itemID):
+            do {
+                let msg = try game.use(itemID: itemID, on: tile, now: now)
+                if state.inventory[itemID, default: 0] == 0 { mode = .browse }
+                selectedTile = tile
+                showToast(msg, sprite: content.items[itemID]?.sprite)
+                changed()
+            } catch {
+                showToast("\(error)")
+            }
         case .browse:
-            if let p = game.creatureAt(tile) {
+            if let v = game.visitorAt(tile) {
+                do {
+                    let results = try game.befriend(visitorID: v.id, now: now)
+                    present(results, source: "the wild (it wandered in on its own)")
+                    changed()
+                } catch { showToast("\(error)") }
+            } else if let p = game.creatureAt(tile) {
                 selectedTile = nil
                 selectedCreatureID = p.creatureID
             } else if let spawn = game.spawnAt(tile) {
@@ -304,6 +321,20 @@ final class GameStore: ObservableObject {
         mode = .placeCreature(creatureID)
     }
 
+    /// Soil boosts need a tile; other uses (Moonfall Shard) happen right away.
+    func beginUsing(_ itemID: String) {
+        guard content.items[itemID]?.use?.type == "soilBoost" else {
+            do {
+                let msg = try game.use(itemID: itemID, on: nil, now: now)
+                showToast(msg, sprite: content.items[itemID]?.sprite)
+                changed()
+            } catch { showToast("\(error)") }
+            return
+        }
+        selectedCreatureID = nil
+        mode = .useItem(itemID)
+    }
+
     func beginPlanting(_ itemID: String) {
         selectedTile = nil
         selectedCreatureID = nil
@@ -333,7 +364,7 @@ final class GameStore: ObservableObject {
         changed()
     }
 
-    /// Cracks a rough rock. Returns results for the reveal animation.
+    /// Cracks a geode. Returns results for the reveal animation.
     func crack(_ itemID: String) -> [LootResult] {
         do {
             let results = try game.crack(itemID: itemID, now: now)
@@ -368,6 +399,16 @@ final class GameStore: ObservableObject {
         game.debugGrant(itemID: itemID, count: count)
         showToast("+\(count) \(content.items[itemID]?.name ?? itemID)")
         changed()
+    }
+
+    /// Forest clock line for the HUD: time of day, rain, pending glimmer.
+    var clockText: String {
+        let t = now
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: t)
+        var s = (game.isNight(at: t) ? "🌙 " : "☀️ ") + String(format: "%02d:%02d", comps.hour ?? 0, comps.minute ?? 0)
+        if game.isRaining(at: t) { s += " 🌧" }
+        if state.nextGlimmer { s += " ✨" }
+        return s
     }
 
     func debugGiveCreature(_ typeID: String, glimmer: Bool) {

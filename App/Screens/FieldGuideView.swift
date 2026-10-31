@@ -7,14 +7,18 @@ import UndergrowthCore
 struct FieldGuideView: View {
     @EnvironmentObject var store: GameStore
     @Environment(\.dismiss) private var dismiss
-    @State private var tab = "creatures"
+    @State private var tab = "fungling"
     @State private var selected: GuideEntry?
+
+    struct Family: Identifiable, Hashable { let id: String; let name: String }
+    static let families = [Family(id: "fungling", name: "Funglings"), Family(id: "sproutling", name: "Sproutlings"),
+                           Family(id: "geodeCritter", name: "Geode Critters"), Family(id: "wanderer", name: "Wanderers")]
 
     static let silhouette = RenderVariant(silhouette: RGBA(78, 84, 92))
 
     private var itemCategories: [String] {
         let cats = Set(store.content.orderedItems.filter(\.showsInGuide).map(\.category))
-        let order = ["plant", "mushroom", "geode", "gem"]
+        let order = ["mushroom", "plant", "geode", "gem", "material"]
         return cats.sorted {
             let a = order.firstIndex(of: $0) ?? 99, b = order.firstIndex(of: $1) ?? 99
             return a != b ? a < b : $0 < $1
@@ -22,14 +26,15 @@ struct FieldGuideView: View {
     }
 
     private var entries: [GuideEntry] {
-        if tab == "creatures" {
-            return store.content.orderedCreatures.flatMap { def in
+        if Self.families.contains(where: { $0.id == tab }) {
+            return store.content.orderedCreatures.filter { $0.family == tab }.flatMap { def in
                 [false, true].map { glimmer in
                     let (sprite, variant) = store.art(forCreatureType: def, glimmer: glimmer)
                     return GuideEntry(key: GuideKey.creature(def.id, glimmer: glimmer),
                                       name: glimmer ? "Glimmer \(def.name)" : def.name,
-                                      sprite: sprite, variant: variant, rarity: nil,
-                                      text: def.guideText, glimmer: glimmer)
+                                      sprite: sprite, variant: variant, rarity: glimmer ? nil : def.rarity,
+                                      text: [def.howFound, def.special.map { "✨ " + $0 }].compactMap { $0 }.joined(separator: "\n"),
+                                      glimmer: glimmer)
                 }
             }
         }
@@ -37,7 +42,9 @@ struct FieldGuideView: View {
             .filter { $0.showsInGuide && $0.category == tab }
             .sorted { $0.rarity != $1.rarity ? $0.rarity < $1.rarity : false }
             .map { GuideEntry(key: GuideKey.item($0.id), name: $0.name, sprite: $0.sprite, variant: .normal,
-                              rarity: $0.rarity, text: $0.guideText, glimmer: false) }
+                              rarity: $0.rarity,
+                              text: [$0.howFound, $0.guideText, $0.use?.text].compactMap { $0 }.joined(separator: "\n"),
+                              glimmer: false) }
     }
 
     private var allKeys: [String] {
@@ -51,12 +58,12 @@ struct FieldGuideView: View {
             let found = allKeys.filter { discovered.contains($0) }.count
             VStack(spacing: 0) {
                 Picker("Section", selection: $tab) {
-                    Text("Creatures").tag("creatures")
+                    ForEach(Self.families) { f in Text(f.name).tag(f.id) }
                     ForEach(itemCategories, id: \.self) { cat in
                         Text(InventoryView.title(cat)).tag(cat)
                     }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
                 .padding()
 
                 ScrollView {

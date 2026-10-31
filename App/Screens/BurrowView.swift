@@ -22,7 +22,10 @@ struct BurrowView: View {
                 Section("In the Burrow") {
                     let burrow = store.game.burrow
                     if burrow.isEmpty {
-                        Text("Everyone is out in the forest.").foregroundStyle(.secondary)
+                        Text(store.state.creatures.isEmpty
+                             ? "No creatures yet. Pick mushrooms (Funglings hide inside), plant seeds (Sproutlings grow from them) and crack geodes (Geode Critters sleep inside)."
+                             : "Everyone is out in the forest.")
+                            .foregroundStyle(.secondary)
                     }
                     ForEach(burrow) { c in
                         NavigationLink { CreatureDetailView(creatureID: c.id, onLocate: onLocate) } label: { CreatureRow(creature: c) }
@@ -55,6 +58,9 @@ struct CreatureRow: View {
                     if creature.isGlimmer {
                         Text("✦ Glimmer").font(.caption2.bold()).foregroundStyle(.yellow)
                     }
+                }
+                if let def = store.creatureDef(creature) {
+                    Text("\(def.displayFamily) · \(def.rarity?.displayName ?? "")").font(.caption2).foregroundStyle(.secondary)
                 }
                 Text(TraitText.summary(creature)).font(.caption).foregroundStyle(.secondary)
                 if let level = store.rampLevel(for: creature) {
@@ -103,7 +109,17 @@ struct CreatureDetailView: View {
                         Label("A glimmer! Stronger and wider-reaching than most.", systemImage: "sparkles")
                             .foregroundStyle(.yellow)
                     }
-                    if let text = def?.guideText { Text(text).font(.callout).foregroundStyle(.secondary) }
+                    if let def {
+                        Text("\(def.displayFamily) · \(def.rarity?.displayName ?? "")").font(.callout).foregroundStyle(.secondary)
+                    }
+                    if let special = def?.special {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(special, systemImage: "sparkles").font(.callout)
+                            if let notYet = def?.notYet {
+                                Text("Not in the game yet: \(notYet)").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
                 Section("Name") {
                     TextField(def?.name ?? "Name", text: $nickname)
@@ -114,6 +130,7 @@ struct CreatureDetailView: View {
                         StatBar(stat: pair.key, value: pair.value)
                     }
                     LabeledContent("Influence radius", value: String(format: "%.1f tiles", c.radius))
+                    if let h = def?.rampHours { LabeledContent("Ramps up over", value: "\(Int(h)) hours") }
                     if let origin = c.origin {
                         LabeledContent("Found", value: originText(origin))
                     }
@@ -124,7 +141,7 @@ struct CreatureDetailView: View {
                         LabeledContent("In the forest at", value: "\(placement.tile.x), \(placement.tile.y)")
                         ProgressView(value: level) { Text("Influence \(Int(level * 100))%") }.tint(.green)
                         if level < 1 {
-                            let remaining = (1 - level) * store.tuning.rampSecondsToFull
+                            let remaining = (1 - level) * (placement.rampSeconds ?? store.tuning.rampSecondsToFull)
                             Text("Full strength in about \(GameStore.duration(remaining)).")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
@@ -159,7 +176,8 @@ struct CreatureDetailView: View {
 
     private func originText(_ origin: String) -> String {
         if origin == "starter" { return "Was here from the start" }
-        if let item = store.content.items[origin] { return "In a \(item.name)" }
+        if origin == "wanderer" { return "Wandered in on its own" }
+        if let item = store.content.items[origin] { return "From a \(item.name)" }
         return origin.capitalized
     }
 }

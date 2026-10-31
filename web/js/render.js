@@ -97,10 +97,13 @@ export class ForestView {
     }
     const field = g.field(g.now());
     const overlay = this.app.ui.statOverlay;
+    const overrides = g.groundOverrides(field);
     for (let y = 0; y < s.size.height; y++) {
       for (let x = 0; x < s.size.width; x++) {
         const stats = field.statsAt(x, y);
         const v = this.engine.visual(stats, x, y);
+        const forced = overrides.get(x + ',' + y);
+        if (forced) { v.ground = forced; v.overlays = []; }
         if (overlay) v.overlay = overlayColor(stats);
         this.visuals[y * s.size.width + x] = v;
       }
@@ -154,6 +157,12 @@ export class ForestView {
       const c = iso(p.tile.x, p.tile.y);
       if (!this.firstSeen.has(p.id)) this.firstSeen.set(p.id, performance.now());
       objs.push({ sprite: art.sprite, variant: art.variant, x: c.x, y: c.y, z: p.tile.x + p.tile.y + 0.6, tile: p.tile, kind: 'creature', key: p.id, glimmer: cr.isGlimmer, phase: hash32(p.tile.x, p.tile.y) % 1000 / 300 });
+    }
+    for (const v of s.visitors || []) {
+      const def = this.app.content.creatures[v.speciesID];
+      if (!def) continue;
+      const c = iso(v.tile.x, v.tile.y);
+      objs.push({ sprite: def.sprite, x: c.x, y: c.y, z: v.tile.x + v.tile.y + 0.6, tile: v.tile, kind: 'visitor', key: v.id, bob: true, glimmer: true, phase: hash32(v.tile.x, v.tile.y) % 1000 / 100 });
     }
     // Spawns that vanished get a little "picked" pop.
     const keys = new Set(objs.filter((o) => o.key).map((o) => o.key));

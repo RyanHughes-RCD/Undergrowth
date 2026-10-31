@@ -34,7 +34,13 @@ public struct SaveStore {
     public func load() -> ForestState? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         do {
-            return SaveStore.migrate(try SaveStore.decoder.decode(ForestState.self, from: data))
+            let state = try SaveStore.decoder.decode(ForestState.self, from: data)
+            guard state.version >= 2 else {
+                // Pre-spawn-table forest: its creatures and items no longer exist. Keep a backup, start fresh.
+                try? data.write(to: url.appendingPathExtension("v\(state.version)"))
+                return nil
+            }
+            return SaveStore.migrate(state)
         } catch {
             let backup = url.appendingPathExtension("corrupt")
             try? FileManager.default.removeItem(at: backup)

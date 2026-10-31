@@ -20,6 +20,7 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
     private var spawnNodes: [UUID: SKSpriteNode] = [:]
     private var seedNodes: [UUID: (node: SKSpriteNode, sprite: String)] = [:]
     private var creatureNodes: [UUID: SKSpriteNode] = [:]   // keyed by placement id
+    private var visitorNodes: [UUID: SKSpriteNode] = [:]
     private var ruleEngine: TileRuleEngine?
     private var builtSize: GridSize?
     private var builtForest: UUID?
@@ -165,6 +166,7 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
         syncSpawns(store)
         syncSeeds(store)
         syncCreatures(store)
+        syncVisitors(store)
         syncSelection(store)
     }
 
@@ -172,6 +174,7 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
         world.children.filter { $0 !== selectionNode }.forEach { $0.removeFromParent() }
         groundNodes.removeAll(); decoNodes.removeAll(); overlayNodes.removeAll(); visuals.removeAll()
         spawnNodes.removeAll(); seedNodes.removeAll(); creatureNodes.removeAll(); ringNodes.removeAll()
+        visitorNodes.removeAll()
         builtSize = size
         ruleEngine = TileRuleEngine(rules: store.content.tileRules,
                                     maxDecorations: store.tuning.visuals.maxDecorationsPerTile, seed: seed)
@@ -237,11 +240,16 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
         let overlay = store.showStatOverlay
         let overlayChanged = overlay != overlayWasOn
         overlayWasOn = overlay
+        let overrides = store.game.groundOverrides(at: store.now, field: field)
         for y in 0..<field.size.height {
             for x in 0..<field.size.width {
                 let p = GridPoint(x, y)
                 let stats = field.stats(at: p)
-                let v = engine.visual(for: stats, at: p)
+                var v = engine.visual(for: stats, at: p)
+                if let forced = overrides[p] {
+                    v.ground = forced
+                    v.overlays = []
+                }
                 let old = visuals[p]
                 if old == v && !overlayChanged && !overlay { continue }
                 visuals[p] = v
@@ -410,6 +418,27 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
                                   SKAction.moveBy(x: 0, y: -12, duration: 0.3)]))
             world.addChild(n)
             creatureNodes[p.id] = n
+        }
+    }
+
+    /// Wanderers waiting to be befriended: bob gently with a sparkle.
+    private func syncVisitors(_ store: GameStore) {
+        let current = Dictionary(uniqueKeysWithValues: store.state.visitors.map { ($0.id, $0) })
+        for (id, node) in visitorNodes where current[id] == nil {
+            node.run(SKAction.sequence([SKAction.fadeOut(withDuration: 0.3), SKAction.removeFromParent()]))
+            visitorNodes[id] = nil
+        }
+        for (id, v) in current where visitorNodes[id] == nil {
+            guard let def = store.content.creatures[v.speciesID] else { continue }
+            let n = makeSprite(def.sprite, store: store)
+            n.position = Iso.point(v.tile)
+            n.zPosition = objectZ(v.tile, 0.6)
+            tag(n, v.tile)
+            n.run(SKAction.repeatForever(SKAction.sequence([
+                SKAction.moveBy(x: 0, y: 2, duration: 0.8), SKAction.moveBy(x: 0, y: -2, duration: 0.8),
+            ])))
+            world.addChild(n)
+            visitorNodes[id] = n
         }
     }
 

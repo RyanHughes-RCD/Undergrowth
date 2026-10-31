@@ -16,7 +16,10 @@ let seed = args.count > 4 ? UInt64(args[4]) ?? 7 : 7
 let t0 = Date(timeIntervalSince1970: 1_700_000_000)
 let game = Game.newForest(content: content, now: t0, seed: seed)
 let w = game.state.size.width, h = game.state.size.height
-// Place the starters in a loose triangle so their zones overlap a little.
+// Players start with no creatures; give the preview a few species to place.
+for id in ["spore-sage", "pollen-puff", "hollow-digger"] { game.debugGrantCreature(typeID: id, glimmer: false, now: t0) }
+game.debugClearSpawns()
+// Place them in a loose triangle so their zones overlap a little.
 let spots = [GridPoint(w / 2 - 7, h / 2 - 4), GridPoint(w / 2 + 6, h / 2 - 5), GridPoint(w / 2, h / 2 + 7)]
 for (c, p) in zip(game.burrow, spots) { try game.place(creatureID: c.id, at: p, now: t0) }
 let now = t0.addingTimeInterval(hours * 3600)

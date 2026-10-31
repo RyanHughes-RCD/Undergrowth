@@ -88,7 +88,7 @@ struct ForestScreen: View {
                         .font(.system(.headline, design: .rounded))
                         .foregroundStyle(.white)
                         .lineLimit(2)
-                    Text("Tap to rename")
+                    Text("\(store.clockText) · tap to rename")
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -124,6 +124,10 @@ struct ForestScreen: View {
         case .plantSeed(let itemID):
             let left = store.state.inventory[itemID, default: 0]
             return AnyView(ModeBanner(text: "Tap an empty tile to plant (\(left) left)") { store.mode = .browse })
+        case .useItem(let itemID):
+            let def = store.content.items[itemID]
+            let left = store.state.inventory[itemID, default: 0]
+            return AnyView(ModeBanner(text: "Tap a tile: \(def?.use?.verb ?? "Use") \(def?.name ?? "") (\(left) left)") { store.mode = .browse })
         }
     }
 
@@ -324,11 +328,20 @@ struct DebugMenu: View {
                 Toggle("Stat overlay", isOn: $store.showStatOverlay)
             }
             Section("Give") {
-                Button("3 Wild Seeds") { store.debugGive("seed.wild") }
-                Button("3 Rough Rocks") { store.debugGive("rock.rough") }
-                Button("1 Humming Rock") { store.debugGive("rock.deep", count: 1) }
-                ForEach(store.content.orderedCreatures) { def in
-                    Button("Glimmer \(def.name)") { store.debugGiveCreature(def.id, glimmer: true) }
+                Button("3 Mystery Seeds") { store.debugGive("seed.mystery-seed") }
+                Button("3 Pebble Geodes") { store.debugGive("geode.pebble-geode") }
+                Button("1 Deep Geode") { store.debugGive("geode.deep-geode", count: 1) }
+                Button("Heartstone Core") { store.debugGive("material.heartstone-core", count: 1) }
+                Button("Moonfall Shard") { store.debugGive("material.moonfall-shard", count: 1) }
+            }
+            Section("Give a creature") {
+                ForEach(FieldGuideView.families) { family in
+                    Menu(family.name) {
+                        ForEach(store.content.orderedCreatures.filter { $0.family == family.id }) { def in
+                            Button(def.name) { store.debugGiveCreature(def.id, glimmer: false) }
+                            Button("✦ Glimmer \(def.name)") { store.debugGiveCreature(def.id, glimmer: true) }
+                        }
+                    }
                 }
             }
             Section {

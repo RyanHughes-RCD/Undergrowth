@@ -38,23 +38,58 @@ Then open <http://localhost:8000>.
 - **Saves:** stored in the browser's `localStorage`. They're separate from the iOS app's saves, and Safari may clear them after a long period without visiting.
 - **Same gameplay as the iOS app:** `web/js/core.js` mirrors `UndergrowthCore`. When game rules change, update both.
 
-## How to play (v0.1)
+## How to play
 
-- **Burrow** lists your creatures. Pick one, choose *Place in forest*, then tap an empty tile. You have 3 slots.
-- A placed creature's influence **ramps up over about 6 hours** of real time, out to its radius. The progress bar under each slot shows how far along it is.
-- *Return to Burrow* brings the creature back right away. Its effect on the land **fades over about 12 hours**.
-- Tap a bare tile to see its six stats. Tap a placed creature to see its influence ring.
-- **Mushrooms**, **plants** and **geodes** spawn over time, more often where the land suits them. Tap one to pick it or dig it up.
-  - Rare mushrooms sometimes hold a Fungling.
-  - Plants can drop seeds. Plant a seed from the Bag, and it grows over a few hours. Sometimes a Sproutling comes up instead of a plant.
-  - Geodes give a rough rock. Open the Bag and choose *Crack*, then tap the rock until it bursts open. Inside is a gem, or now and then a Geode Critter.
-  - Pity counters guarantee the rare result after enough misses.
-- **Guide** is the Field Guide. Undiscovered entries are silhouettes, and glimmer creatures have their own slots.
-- Tap the forest name to rename it. If you leave it unnamed, it names itself from its strongest stats.
-- Pan with one finger and pinch to zoom. Zoom snaps to whole-pixel scales so the art stays crisp.
-- The 🐞 menu holds debug tools: skip time, a stat-overlay heatmap, free items, glimmer creatures, and reset. Turn it off with `"debugTools": false` in `tuning.json`.
+- **You start with no creatures.** Tap things that grow in the forest:
+  - **Mushrooms**: pick them; Funglings sometimes hide inside.
+  - **Plants**: pick them; they sometimes drop a Mystery Seed. Plant the seed from the Bag, and it grows into a plant or, sometimes, a Sproutling.
+  - **Geodes**: dig them up, then crack them from the Bag. Inside is a gem or, sometimes, a Geode Critter.
+  - **Wanderers** turn up on their own once a tile meets their conditions (checked once a day). Tap one to befriend it.
+- **Finding creatures**
+  - Each species has its own find chance and tile conditions: the tile where the mushroom was picked, the seed planted, or the geode dug.
+  - A pity counter per family guarantees a find after enough misses.
+  - Every creature rolls 60–100% of its species' maximum bonuses. 1% are **Glimmers**: +50% bonuses, +1 radius, and a shiny palette.
+- **Placing creatures**
+  - Place up to 3 creatures (a config value) from the Burrow.
+  - Each one ramps up over its own species time (12–48 hours) and fades over the same time after you return it.
+  - Rarer creatures have special effects, listed on their detail page.
+- **Gems and materials**
+  - Gems can be crushed into a tile for a timed stat boost.
+  - A Heartstone Core boosts a tile permanently.
+  - A Moonfall Shard makes your next creature find a Glimmer.
+- **Time and weather**: some things only spawn at night (from 20:00 to 06:00 local time), in the daytime, or in the rain. The HUD shows the time (☀️/🌙) and 🌧 when it's raining.
+- **Tiles**
+  - Tap a tile to see its stats.
+  - Every stat adds its own overlay (wildflowers, lush grass, dirt, pebbles, mycelium, glow), and the overlays stack.
+  - Strong mixes become special tiles.
+- **Field Guide**: grouped by creature family and item type, with glimmer slots and silhouettes for things you haven't found.
+- **Debug menu (🐞)**: speed up time (60×, 600×, 3600×), skip ahead, show a stat overlay, give items, or give any species (normal or glimmer). Turn it off with `"debugTools": false` in `tuning.json`.
 
-Progress continues while the app is closed. Everything is computed from real timestamps, so when the app reopens it catches up on the missed time.
+Progress continues while the app is closed. Everything is computed from real timestamps, so the forest catches up when you reopen it.
+
+## Spawn table (design data)
+
+`design/Undergrowth_Spawn_Table.xlsx` is the source of truth for species, items, spawn conditions, drop chances and geode loot.
+
+After editing it (the blue cells), regenerate the content and art:
+
+```bash
+pip install openpyxl
+```
+```bash
+python3 tools/import_spawn_table.py
+```
+```bash
+python3 tools/gen_placeholders.py
+```
+
+- **Special effects:** creature "Special effect" text can't be read automatically, so its rules live in `design/creature_effects.json`, keyed by creature name. Anything not built yet is listed in a creature's details as "Not in the game yet". Right now that covers fossils, the underground layer, hybrid plants and visible fairy rings.
+- **Gem effects** ("Crush into soil: +5 Stone on a tile for 24h") are read from the text.
+- **Extra conditions** that are understood: night only, daytime only, during rain, only one per forest, planted during the day or at night, and checked once per day. Notes like "melts if left unpicked for a day" set a 24h lifetime.
+- **Unclear sheet entries** and how I read them:
+  - "Turns low ground into pond tiles" (Bog Wisp): Damp 25+ in its radius.
+  - "Use on a creature source item" (Moonfall Shard): the next creature you find is a Glimmer.
+  - "+10% Sproutling chance" (Hybridizer): ×1.1.
 
 ## Project layout
 
@@ -80,7 +115,9 @@ Resources/                      all data, copied into the app as a folder
   tuning.json                   every tuning number
   Content/*.json                creatures, items, loot, tile rules, name parts
   Sprites/**/*.json             one sprite per file; Sprites/Palettes/ for shared palettes
-tools/gen_placeholders.py       regenerates the placeholder art
+tools/gen_placeholders.py       regenerates the placeholder art (+ gen_content_sprites.py for spawn-table entries)
+tools/import_spawn_table.py     spreadsheet → Resources/Content JSON
+design/                         the spawn table + creature effect definitions
 ```
 
 ## Data formats

@@ -1,5 +1,5 @@
 // DOM user interface: HUD, sheets (Burrow, Bag, Field Guide), geode cracking, reveals.
-import { CORE_STATS, RARITIES, rarityIndex } from './core.js';
+import { CORE_STATS, RARITIES, RARITY_NAMES, rarityIndex } from './core.js';
 
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
@@ -15,7 +15,8 @@ export function h(tag, attrs = {}, ...children) {
 }
 
 export const STAT_COLORS = { damp: '#4a7dff', glow: '#4fe3f0', bloom: '#ff79b8', verdure: '#4fcf4f', stone: '#a0a0b0', depth: '#9a5ad8' };
-export const RARITY_COLORS = { common: '#a0a0a0', uncommon: '#5fd35a', rare: '#5a9cff', epic: '#c58cff' };
+export const RARITY_COLORS = { common: '#a0a0a0', uncommon: '#5fd35a', rare: '#5a9cff', veryRare: '#c58cff', legendary: '#ffc84a' };
+const rarityName = (r) => RARITY_NAMES[r] || r;
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function duration(seconds) {
@@ -26,7 +27,8 @@ export function duration(seconds) {
   return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
 }
 
-const CATEGORY_TITLES = { seed: 'Seeds', roughRock: 'Rocks to crack', gem: 'Gems', plant: 'Plants', mushroom: 'Mushrooms', geode: 'Geodes' };
+const CATEGORY_TITLES = { seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
+const FAMILY_TABS = [['fungling', 'Funglings'], ['sproutling', 'Sproutlings'], ['geodeCritter', 'Geode Critters'], ['wanderer', 'Wanderers']];
 const catTitle = (c) => CATEGORY_TITLES[c] || cap(c);
 
 export class UI {
@@ -37,7 +39,7 @@ export class UI {
     this.selectedCreatureID = null;
     this.statOverlay = false;
     this.sheet = null;           // { type, arg }
-    this.guideTab = 'creatures';
+    this.guideTab = 'fungling';
     this.root = document.getElementById('ui');
     this.toastTimer = null;
   }
@@ -50,10 +52,13 @@ export class UI {
 
   render(withSheet = true) {
     const g = this.game;
+    const now = g.now();
+    const d = new Date(now);
+    const clock = `${g.isNight(now) ? '🌙' : '☀️'} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}${g.isRaining(now) ? ' 🌧' : ''}${g.state.nextGlimmer ? ' ✨' : ''}`;
     const top = h('div', { class: 'hud-top' },
       h('button', { class: 'name-btn', onclick: () => this.open('rename') },
         h('div', { class: 'forest-name' }, g.forestName),
-        h('div', { class: 'hint' }, 'Tap to rename')),
+        h('div', { class: 'hint' }, `${clock} · tap to rename`)),
       this.content.tuning.debugTools ? h('div', { class: 'dev' },
         h('button', { class: 'speed-btn' + (this.app.speed > 1 ? ' on' : ''), title: 'Time speed', onclick: () => this.app.cycleSpeed() },
           h('b', {}, `⏩ ${this.app.speed}×`),
@@ -87,6 +92,9 @@ export class UI {
     if (this.mode.type === 'place') {
       const c = g.creature(this.mode.creatureID);
       text = `Tap an empty tile to place ${c ? this.app.displayName(c) : 'creature'}`;
+    } else if (this.mode.type === 'use') {
+      const def = this.content.items[this.mode.itemID];
+      text = `Tap a tile: ${def?.use?.verb || 'Use'} ${def?.name || ''} (${g.state.inventory[this.mode.itemID] || 0} left)`;
     } else {
       text = `Tap an empty tile to plant (${g.state.inventory[this.mode.itemID] || 0} left)`;
     }
@@ -99,7 +107,10 @@ export class UI {
     return h('div', { class: 'card' },
       h('div', { class: 'row space' }, h('b', {}, `Tile ${tile.x}, ${tile.y}`),
         h('button', { class: 'x', onclick: () => { this.selectedTile = null; this.app.changed(false); } }, '✕')),
-      h('div', { class: 'stat-grid' }, CORE_STATS.map((k) => this.statBar(k, stats[k] || 0))));
+      h('div', { class: 'stat-grid' }, CORE_STATS.map((k) => this.statBar(k, stats[k] || 0))),
+      ...this.game.activeBoosts(this.game.now()).filter((b) => b.tile.x === tile.x && b.tile.y === tile.y).map((b) =>
+        h('div', { class: 'sub' }, '💎 ' + Object.entries(b.stats).map(([k, v]) => `+${v} ${cap(k)}`).join(', ') +
+          (b.expiresAt ? ` · ${duration((b.expiresAt - this.game.now()) / 1000)} left` : ' · permanent'))));
   }
 
   statBar(stat, value) {
@@ -188,9 +199,17 @@ export class UI {
       h('div', { class: 'thumb' }, this.sprites.element(art.sprite, art.variant, 3)),
       h('div', { class: 'grow' },
         h('div', {}, h('b', {}, this.app.displayName(c)), c.isGlimmer ? h('span', { class: 'glimmer' }, ' ✦ Glimmer') : null),
+        h('div', { class: 'sub' }, this.speciesLine(c)),
         h('div', { class: 'sub' }, this.traitSummary(c)),
         p ? h('div', { class: 'sub' }, `Influence ${Math.round(g.level(p, g.now()) * 100)}%`) : null),
       h('span', { class: 'chev' }, '›'));
+  }
+
+  speciesLine(c) {
+    const def = this.content.creatures[c.typeID];
+    if (!def) return '';
+    const name = c.nickname ? `${def.name} · ` : '';
+    return `${name}${def.familyName || def.family} · ${rarityName(def.rarity)}`;
   }
 
   burrowBody() {
@@ -200,7 +219,9 @@ export class UI {
       placed.length ? h('div', { class: 'section' }, `Out in the forest (${placed.length}/${g.state.slots.length})`) : null,
       ...placed.map((c) => this.creatureRow(c)),
       h('div', { class: 'section' }, 'In the Burrow'),
-      burrow.length ? burrow.map((c) => this.creatureRow(c)) : h('p', { class: 'sub' }, 'Everyone is out in the forest.'),
+      burrow.length ? burrow.map((c) => this.creatureRow(c))
+        : h('p', { class: 'sub' }, g.state.creatures.length ? 'Everyone is out in the forest.'
+          : 'No creatures yet. Pick mushrooms (Funglings hide inside), plant seeds (Sproutlings grow from them) and crack geodes (Geode Critters sleep inside).'),
     ];
   }
 
@@ -219,7 +240,7 @@ export class UI {
       status = [
         h('div', { class: 'sub' }, `In the forest at ${p.tile.x}, ${p.tile.y}`),
         h('div', { class: 'progress' }, h('span', { style: `width:${lv * 100}%` })),
-        h('div', { class: 'sub' }, lv < 1 ? `Influence ${Math.round(lv * 100)}% · full strength in about ${duration((1 - lv) * this.content.tuning.rampSecondsToFull)}` : 'At full strength.'),
+        h('div', { class: 'sub' }, lv < 1 ? `Influence ${Math.round(lv * 100)}% · full strength in about ${duration((1 - lv) * (p.rampSeconds || this.content.tuning.rampSecondsToFull))}` : 'At full strength.'),
         h('div', { class: 'row gap' },
           h('button', { class: 'btn', onclick: () => { this.app.view.centerOn(p.tile); this.selectedCreatureID = c.id; this.sheet = null; this.close(); } }, 'Show in forest'),
           h('button', { class: 'btn red', onclick: () => { this.app.recall(c.id); this.sheet = null; this.close(); } }, 'Return to Burrow')),
@@ -231,15 +252,18 @@ export class UI {
         h('button', { class: 'btn green', disabled: !free, onclick: () => { this.app.beginPlacing(c.id); } }, free ? '🌿 Place in forest' : 'All slots are full'),
       ];
     }
-    const origin = c.origin === 'starter' ? 'Was here from the start' : this.content.items[c.origin] ? `In a ${this.content.items[c.origin].name}` : cap(c.origin || '');
+    const origin = c.origin === 'starter' ? 'Was here from the start' : c.origin === 'wanderer' ? 'Wandered in on its own'
+      : this.content.items[c.origin] ? `From a ${this.content.items[c.origin].name}` : cap(c.origin || '');
     return [this.app.displayName(c), [
       h('div', { class: 'hero' }, this.sprites.element(art.sprite, art.variant, 7)),
-      c.isGlimmer ? h('p', { class: 'glimmer' }, '✦ A glimmer! Stronger and wider-reaching than most.') : null,
-      def && def.guideText ? h('p', { class: 'sub' }, def.guideText) : null,
+      h('p', { class: 'sub center' }, this.speciesLine(c)),
+      c.isGlimmer ? h('p', { class: 'glimmer' }, '✦ A glimmer! +50% bonuses and +1 radius.') : null,
+      def && def.special ? h('div', { class: 'card special' }, h('b', {}, '✨ Special: '), def.special,
+        def.notYet ? h('div', { class: 'sub' }, `Not in the game yet: ${def.notYet}`) : null) : null,
       h('label', { class: 'field' }, 'Name', name),
       h('div', { class: 'section' }, 'Traits'),
       ...Object.entries(c.contributions).sort((a, b) => b[1] - a[1]).map(([k, v]) => this.statBar(k, v)),
-      h('div', { class: 'sub' }, `Influence radius ${c.radius.toFixed(1)} tiles`),
+      h('div', { class: 'sub' }, `Influence radius ${c.radius.toFixed(1)} tiles · ramps up over ${def?.rampHours ?? '?'}h`),
       origin ? h('div', { class: 'sub' }, `Found: ${origin}`) : null,
       h('div', { class: 'section' }, 'Status'),
       ...status,
@@ -251,7 +275,7 @@ export class UI {
     const owned = Object.entries(g.state.inventory).filter(([, n]) => n > 0)
       .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def);
     if (!owned.length) return h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms, plants and geodes in the forest to collect them.');
-    const order = ['seed', 'roughRock', 'gem', 'plant', 'mushroom'];
+    const order = ['seed', 'geode', 'material', 'gem', 'plant', 'mushroom'];
     const cats = [...new Set(owned.map((e) => e.def.category))].sort((a, b) =>
       ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
     return cats.map((cat) => [
@@ -260,39 +284,55 @@ export class UI {
         .sort((a, b) => rarityIndex(b.def.rarity) - rarityIndex(a.def.rarity) || a.def.name.localeCompare(b.def.name))
         .map(({ def, n }) => h('div', { class: 'list-row' },
           h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)),
-          h('div', { class: 'grow' }, h('b', {}, def.name), h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, cap(def.rarity))),
+          h('div', { class: 'grow' }, h('b', {}, def.name),
+            h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, rarityName(def.rarity)),
+            def.use ? h('div', { class: 'sub' }, def.use.text) : null),
           h('b', {}, `×${n}`),
           def.onGrow ? h('button', { class: 'btn green small', onclick: () => this.app.beginPlanting(def.id) }, 'Plant') : null,
-          def.onCrack ? h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack') : null)),
+          def.onCrack ? h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack') : null,
+          def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : 'Crush') : 'Use') : null)),
     ]);
   }
 
   guideEntries(tab) {
     const content = this.content;
-    if (tab === 'creatures') {
-      return content.creatureList.flatMap((def) => [false, true].map((glimmer) => {
+    const fam = FAMILY_TABS.find(([id]) => id === tab);
+    if (fam) {
+      return content.creatureList.filter((def) => def.family === tab).flatMap((def) => [false, true].map((glimmer) => {
         const art = this.app.artForType(def, glimmer);
-        return { key: `creature:${def.id}${glimmer ? ':glimmer' : ''}`, name: glimmer ? `Glimmer ${def.name}` : def.name, ...art, text: def.guideText, glimmer };
+        return {
+          key: `creature:${def.id}${glimmer ? ':glimmer' : ''}`, name: glimmer ? `Glimmer ${def.name}` : def.name, ...art,
+          rarity: glimmer ? null : def.rarity, glimmer, howFound: def.howFound, special: def.special,
+          text: def.requires && Object.keys(def.requires).length
+            ? 'Needs a tile with ' + Object.entries(def.requires).map(([k, v]) => `${cap(k)} ${v.min}+`).join(', ') + '.' : null,
+        };
       }));
     }
     return content.itemList.filter((i) => i.inGuide !== false && i.category === tab)
       .map((i, idx) => ({ i, idx })).sort((a, b) => rarityIndex(a.i.rarity) - rarityIndex(b.i.rarity) || a.idx - b.idx)
-      .map(({ i }) => ({ key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: null, rarity: i.rarity, text: i.guideText }));
+      .map(({ i }) => ({
+        key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: null, rarity: i.rarity, text: i.guideText,
+        howFound: i.howFound || (i.spawn ? 'Grows wild' + (i.spawn.requires && Object.keys(i.spawn.requires).length
+          ? ' where ' + Object.entries(i.spawn.requires).map(([k, v]) => `${cap(k)} ${v.min}+`).join(', ') : ' anywhere') + '.' : null),
+        special: i.use ? i.use.text : null,
+      }));
   }
 
   guideBody() {
     const content = this.content;
-    const order = ['plant', 'mushroom', 'geode', 'gem'];
+    const order = ['mushroom', 'plant', 'geode', 'gem', 'material'];
     const cats = [...new Set(content.itemList.filter((i) => i.inGuide !== false).map((i) => i.category))]
       .sort((a, b) => ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
-    const tabs = ['creatures', ...cats];
+    const famTabs = FAMILY_TABS.filter(([id]) => content.creatureList.some((c) => c.family === id)).map(([id]) => id);
+    if (this.guideTab === 'creatures') this.guideTab = famTabs[0];
+    const tabs = [...famTabs, ...cats];
     const all = tabs.flatMap((t) => this.guideEntries(t));
     const found = all.filter((e) => this.game.discovered.has(e.key)).length;
     const sil = { silhouette: [78, 84, 92] };
     return [`Field Guide · ${found}/${all.length}`, [
       h('div', { class: 'tabs' }, tabs.map((t) => h('button', {
         class: 'tab' + (t === this.guideTab ? ' on' : ''), onclick: () => { this.guideTab = t; this.renderSheet(); },
-      }, t === 'creatures' ? 'Creatures' : catTitle(t)))),
+      }, (FAMILY_TABS.find(([id]) => id === t) || [null, catTitle(t)])[1]))),
       h('div', { class: 'guide-grid' }, this.guideEntries(this.guideTab).map((e) => {
         const known = this.game.discovered.has(e.key);
         return h('button', { class: 'guide-cell' + (known ? '' : ' unknown') + (e.glimmer ? ' glim' : ''), onclick: () => { if (known) this.open('entry', e); } },
@@ -306,8 +346,10 @@ export class UI {
   entryBody(e) {
     return [
       h('div', { class: 'hero' }, this.sprites.element(e.sprite, e.variant, 9)),
-      e.rarity ? h('p', { class: 'rarity', style: `color:${RARITY_COLORS[e.rarity]}` }, e.rarity.toUpperCase()) : null,
+      e.rarity ? h('p', { class: 'rarity', style: `color:${RARITY_COLORS[e.rarity]}` }, rarityName(e.rarity).toUpperCase()) : null,
+      e.howFound ? h('p', { class: 'sub center' }, e.howFound) : null,
       e.text ? h('p', { class: 'sub center' }, e.text) : null,
+      e.special ? h('p', { class: 'center' }, '✨ ' + e.special) : null,
     ];
   }
 
@@ -329,17 +371,26 @@ export class UI {
     return [
       h('div', { class: 'section' }, 'Time speed'),
       h('div', { class: 'row gap wrap' }, a.speeds.map((v) => b(`${v}×`, () => { a.setSpeed(v); this.renderSheet(); }, v === a.speed ? 'green' : 'grey'))),
-      h('p', { class: 'sub' }, '60× = a minute per second · 3600× = an hour per second. Creatures reach full strength in 6 forest-hours.'),
+      h('p', { class: 'sub' }, '60× = a minute per second · 3600× = an hour per second. Creatures take 12–48 forest-hours to reach full strength.'),
       h('div', { class: 'section' }, 'Skip ahead'),
       h('div', { class: 'row gap wrap' }, b('+1 hour', () => a.debugSkip(1)), b('+6 hours', () => a.debugSkip(6)), b('+1 day', () => a.debugSkip(24))),
       h('div', { class: 'section' }, 'View'),
       b(this.statOverlay ? 'Hide stat overlay' : 'Show stat overlay', () => { this.statOverlay = !this.statOverlay; a.changed(false); this.renderSheet(); }),
       h('div', { class: 'section' }, 'Give'),
       h('div', { class: 'row gap wrap' },
-        b('3 Wild Seeds', () => a.debugGive('seed.wild', 3)),
-        b('3 Rough Rocks', () => a.debugGive('rock.rough', 3)),
-        b('1 Humming Rock', () => a.debugGive('rock.deep', 1)),
-        ...this.content.creatureList.map((d) => b(`Glimmer ${d.name}`, () => a.debugGiveCreature(d.id)))),
+        b('3 Mystery Seeds', () => a.debugGive('seed.mystery-seed', 3)),
+        b('3 Pebble Geodes', () => a.debugGive('geode.pebble-geode', 3)),
+        b('1 Deep Geode', () => a.debugGive('geode.deep-geode', 1)),
+        b('Heartstone Core', () => a.debugGive('material.heartstone-core', 1)),
+        b('Moonfall Shard', () => a.debugGive('material.moonfall-shard', 1))),
+      (() => {
+        const sel = h('select', { class: 'select' }, FAMILY_TABS.map(([fid, fname]) =>
+          h('optgroup', { label: fname }, this.content.creatureList.filter((c) => c.family === fid)
+            .map((c) => h('option', { value: c.id }, `${c.name} (${rarityName(c.rarity)})`)))));
+        return h('div', { class: 'row gap wrap' }, sel,
+          b('Give', () => a.debugGiveCreature(sel.value, false)),
+          b('Give glimmer', () => a.debugGiveCreature(sel.value, true)));
+      })(),
       h('div', { class: 'section' }, 'Danger'),
       b('Reset forest', () => { if (confirm('Start a brand-new forest? This erases your progress.')) a.resetForest(); }, 'red'),
     ];
@@ -420,16 +471,18 @@ export class UI {
         revealEl = h('div', { class: 'rays-wrap' }, h('div', { class: 'rays', style: `--ray:${color}` }), this.sprites.element(gem?.sprite || '__missing', null, 10, 'grow-in'));
         text = h('div', { class: 'center' },
           h('h2', {}, gem ? gem.name : r.item),
-          gem ? h('p', { class: 'rarity', style: `color:${color}` }, gem.rarity.toUpperCase()) : null,
+          gem ? h('p', { class: 'rarity', style: `color:${color}` }, rarityName(gem.rarity).toUpperCase()) : null,
+          gem && gem.use ? h('p', { class: 'sub' }, gem.use.text) : null,
           r.isNew ? h('p', { class: 'new' }, 'New Field Guide entry!') : null);
       }
       rockWrap.replaceChildren(left, right, revealEl);
       requestAnimationFrame(() => rockWrap.classList.add('split'));
       hint.replaceWith(text);
       const left2 = app.game.state.inventory[itemID] || 0;
-      footer.replaceChildren(
+      footer.replaceChildren(...[
         left2 > 0 ? h('button', { class: 'btn orange', onclick: () => this.openCrack(itemID) }, `Crack another (${left2})`) : null,
-        h('button', { class: 'btn grey', onclick: () => { ov.classList.remove('show'); ov.replaceChildren(); } }, 'Done'));
+        h('button', { class: 'btn grey', onclick: () => { ov.classList.remove('show'); ov.replaceChildren(); } }, 'Done'),
+      ].filter(Boolean));
     };
 
     rockWrap.onclick = () => {

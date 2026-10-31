@@ -27,7 +27,8 @@ class App {
     if (saved && report.spawned > 0 && report.ticks > 2) {
       this.ui.toast(`While you were away, ${report.spawned} new thing${report.spawned === 1 ? '' : 's'} appeared.`);
     }
-    if (!saved) this.ui.toast('Welcome! Open the Burrow and place a creature to start shaping your forest.');
+    if (this.replanted) this.ui.toast('The forest has been replanted for the new spawn table. Creatures now hide in mushrooms, seeds and geodes.');
+    else if (!saved) this.ui.toast('Welcome! Your forest is empty. Pick mushrooms, plants and geodes: creatures hide inside.');
     this.save();
 
     // Clock: every second, apply the debug time speed; refresh the forest on its normal cadence
@@ -94,6 +95,7 @@ class App {
       if (!raw) return null;
       const s = JSON.parse(raw);
       if (!s || typeof s.version !== 'number' || s.version > SAVE_VERSION) return null;
+      if (s.version < SAVE_VERSION) { this.replanted = true; return null; }
       return s;
     } catch (e) {
       console.warn('Could not read save; starting fresh', e);
@@ -157,6 +159,17 @@ class App {
       }
       return;
     }
+    if (ui.mode && ui.mode.type === 'use') {
+      const item = ui.mode.itemID;
+      const msg = this.attempt(() => g.use(item, tile, now));
+      if (msg) {
+        if (!(g.state.inventory[item] > 0)) ui.mode = null;
+        ui.selectedTile = tile;
+        this.ui.toast(msg, this.content.items[item]?.sprite);
+        this.changed();
+      }
+      return;
+    }
     if (ui.mode && ui.mode.type === 'plant') {
       const item = ui.mode.itemID;
       const ok = this.attempt(() => { g.plantSeed(item, tile, now); return true; });
@@ -173,6 +186,12 @@ class App {
       ui.selectedCreatureID = p.creatureID;
       ui.open('creature', p.creatureID);
       this.changed(false);
+      return;
+    }
+    const visitor = g.visitorAt(tile);
+    if (visitor) {
+      const results = this.attempt(() => g.befriend(visitor.id, now));
+      if (results) { this.present(results, 'the wild (it wandered in on its own)'); this.changed(); }
       return;
     }
     const spawn = g.spawnAt(tile);
@@ -207,6 +226,20 @@ class App {
     this.ui.selectedTile = null;
     this.ui.selectedCreatureID = null;
     this.ui.mode = { type: 'place', creatureID };
+    this.changed(false);
+  }
+
+  beginUsing(itemID) {
+    const def = this.content.items[itemID];
+    if (def?.use?.type !== 'soilBoost') {
+      const msg = this.attempt(() => this.game.use(itemID, null, this.game.now()));
+      if (msg) { this.ui.toast(msg, def?.sprite); this.changed(); }
+      return;
+    }
+    this.ui.sheet = null;
+    this.ui.close();
+    this.ui.selectedCreatureID = null;
+    this.ui.mode = { type: 'use', itemID };
     this.changed(false);
   }
 
@@ -269,10 +302,10 @@ class App {
     this.changed();
   }
 
-  debugGiveCreature(typeID) {
+  debugGiveCreature(typeID, glimmer = true) {
     this.ui.sheet = null;
     this.ui.close();
-    this.present(this.game.debugGrantCreature(typeID, true, this.game.now()), 'the debug menu');
+    this.present(this.game.debugGrantCreature(typeID, glimmer, this.game.now()), 'the debug menu');
     this.changed();
   }
 

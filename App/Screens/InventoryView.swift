@@ -7,7 +7,8 @@ extension Rarity {
         case .common: return .gray
         case .uncommon: return .green
         case .rare: return .blue
-        case .epic: return .purple
+        case .veryRare: return .purple
+        case .legendary: return .yellow
         }
     }
 }
@@ -24,15 +25,15 @@ struct InventoryView: View {
     @Environment(\.dismiss) private var dismiss
 
     /// Category display order; unknown categories (added via data) go last.
-    static let categoryOrder = ["seed", "roughRock", "gem", "plant", "mushroom"]
+    static let categoryOrder = ["seed", "geode", "material", "gem", "plant", "mushroom"]
     static func title(_ category: String) -> String {
         switch category {
         case "seed": return "Seeds"
-        case "roughRock": return "Rocks to crack"
+        case "geode": return "Geodes to crack"
+        case "material": return "Materials"
         case "gem": return "Gems"
         case "plant": return "Plants"
         case "mushroom": return "Mushrooms"
-        case "geode": return "Geodes"
         default: return category.capitalized
         }
     }
@@ -79,6 +80,7 @@ struct InventoryView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(def.name).font(.headline)
                 Text(def.rarity.displayName).font(.caption).foregroundStyle(def.rarity.color)
+                if let text = def.use?.text { Text(text).font(.caption2).foregroundStyle(.secondary) }
             }
             Spacer()
             Text("×\(count)").font(.headline.monospacedDigit())
@@ -95,6 +97,12 @@ struct InventoryView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { store.crackingItemID = def.id }
                 }
                 .buttonStyle(.borderedProminent).tint(.orange)
+            } else if let use = def.use {
+                Button(use.type == "soilBoost" ? (use.verb == "Set into a tile" ? "Set" : "Crush") : "Use") {
+                    if use.type == "soilBoost" { dismiss() }
+                    store.beginUsing(def.id)
+                }
+                .buttonStyle(.borderedProminent).tint(.blue)
             }
         }
     }

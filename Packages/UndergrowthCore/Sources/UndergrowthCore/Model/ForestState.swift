@@ -103,7 +103,8 @@ public struct PlantedSeed: Codable, Identifiable, Hashable {
 /// Everything saved about one forest. Self-contained so it can later be
 /// shared as a snapshot (friend visits).
 public struct ForestState: Codable {
-    public static let currentVersion = 1
+    /// 2 = spawn-table content (species, geodes, visitors). Older forests are replanted.
+    public static let currentVersion = 2
 
     public var version: Int
     public var forestID: UUID
