@@ -4,87 +4,30 @@
     "height": 28
   },
   "placementSlots": 3,
-  "starterCreatures": [
-    "fungling",
-    "sproutling",
-    "geodeCritter"
-  ],
+  "starterCreatures": [],
   "statCap": 100,
-  "rampSecondsToFull": 21600,
+  "rampSecondsToFull": 43200,
   "decaySecondsToZero": 43200,
   "falloff": {
     "curve": "smoothstep",
-    "innerRadiusFraction": 0.25
+    "innerRadiusFraction": 0.0,
+    "radiusPadding": 1
   },
-  "glimmerChance": 0.03,
-  "creatureTraits": {
-    "fungling": {
-      "contribution": {
-        "damp": [
-          40,
-          70
-        ],
-        "glow": [
-          25,
-          55
-        ]
-      },
-      "radius": [
-        4.5,
-        7.5
-      ],
-      "glimmer": {
-        "contributionMult": 1.35,
-        "radiusBonus": 1.5
-      }
-    },
-    "sproutling": {
-      "contribution": {
-        "verdure": [
-          40,
-          70
-        ],
-        "bloom": [
-          25,
-          55
-        ]
-      },
-      "radius": [
-        4.5,
-        7.5
-      ],
-      "glimmer": {
-        "contributionMult": 1.35,
-        "radiusBonus": 1.5
-      }
-    },
-    "geodeCritter": {
-      "contribution": {
-        "stone": [
-          40,
-          70
-        ],
-        "depth": [
-          25,
-          55
-        ]
-      },
-      "radius": [
-        4.0,
-        7.0
-      ],
-      "glimmer": {
-        "contributionMult": 1.35,
-        "radiusBonus": 1.5
-      }
-    }
+  "glimmerChance": 0.01,
+  "creatureRoll": {
+    "bonusRange": [
+      0.6,
+      1.0
+    ],
+    "glimmerBonusMult": 1.5,
+    "glimmerRadiusBonus": 1
   },
   "spawns": {
     "tickSeconds": 300,
     "attemptsPerTick": 3,
     "spawnChance": 0.5,
     "maxTotal": 30,
-    "lifetimeSeconds": 28800,
+    "lifetimeSeconds": 172800,
     "maxCatchUpTicks": 288
   },
   "seeds": {
@@ -97,13 +40,14 @@
     "common": 60,
     "uncommon": 25,
     "rare": 10,
-    "epic": 3
+    "veryRare": 3,
+    "legendary": 0.5
   },
   "pity": {
-    "fungling": 15,
-    "sproutling": 12,
-    "geodeCritter": 12,
-    "rareGem": 8
+    "fungling": 25,
+    "sproutling": 15,
+    "geodeCritter": 20,
+    "rareGem": 10
   },
   "visuals": {
     "maxDecorationsPerTile": 2,
@@ -132,8 +76,17 @@
     ]
   },
   "naming": {
-    "quietThreshold": 0.6,
+    "quietThreshold": 0.3,
     "featureFraction": 0.45
+  },
+  "clock": {
+    "nightStartHour": 20,
+    "nightEndHour": 6,
+    "rainChance": 0.25,
+    "weatherBlockHours": 2
+  },
+  "wanderers": {
+    "maxCatchUpDays": 7
   },
   "debugTools": true
 }

@@ -1,0 +1,80 @@
+{
+  "_about": "Structured versions of the 'Special effect' column, keyed by creature name. tools/import_spawn_table.py merges these into Resources/Content/creatures.json. 'notYet' lists parts of an effect the game doesn't do yet (shown in the creature's details). Effect types: spawnWeight, seedGrowth, seedDrops, creatureChance, gemUpgrade, rampSpeed, radiusLink, night, requirementOffset, statSubstitute, bonusDrop, groundOverride. scope 'radius' (default) = tiles within the creature's influence; 'forest' = everywhere.",
+
+  "Fairy Ring Keeper": {
+    "effects": [{ "type": "spawnWeight", "category": "mushroom", "mult": 1.25 }],
+    "notYet": "Mushrooms sprouting in visible rings"
+  },
+  "Spore Sage": {
+    "effects": [{ "type": "spawnWeight", "category": "mushroom", "rarities": ["rare", "veryRare"], "mult": 1.5 }]
+  },
+  "Rot Hermit": {
+    "extraContributions": { "stone": -10 }
+  },
+  "Crystal Cap Wanderer": {
+    "effects": [{ "type": "bonusDrop", "items": ["mushroom.crystal-cap"], "chance": 0.25, "table": "loot.crack.pebble-geode" }]
+  },
+  "Mycelium Weaver": {
+    "effects": [{ "type": "radiusLink", "range": 6, "bonus": 1 }]
+  },
+  "Moonlight Monarch": {
+    "effects": [
+      { "type": "night" },
+      { "type": "creatureChance", "family": "fungling", "mult": 2, "scope": "forest" }
+    ]
+  },
+  "Pollen Puff": {
+    "effects": [{ "type": "seedGrowth", "mult": 2 }]
+  },
+  "Thornback": {
+    "effects": [{ "type": "seedDrops", "mult": 2 }]
+  },
+  "Night Bloomer": {
+    "effects": [{ "type": "spawnWeight", "items": ["plant.glowbloom"], "mult": 2 }]
+  },
+  "Hybridizer": {
+    "effects": [{ "type": "creatureChance", "family": "sproutling", "mult": 1.1 }],
+    "notYet": "Hybrid plants"
+  },
+  "Root Delver": {
+    "effects": [{ "type": "requirementOffset", "category": "plant", "stat": "depth", "offset": -20 }]
+  },
+  "Grove Heart": {
+    "effects": [{ "type": "rampSpeed", "mult": 2 }]
+  },
+  "Amethyst Tortoise": {
+    "effects": [{ "type": "gemUpgrade", "chance": 0.15 }]
+  },
+  "Hollow Digger": {
+    "effects": [
+      { "type": "groundOverride", "sprite": "tile.cave.a", "scope": "tile" },
+      { "type": "spawnWeight", "category": "geode", "mult": 1.5 }
+    ]
+  },
+  "Fossil Keeper": {
+    "effects": [],
+    "notYet": "Fossils (a new collectible that still needs designing)"
+  },
+  "Geode Golem": {
+    "effects": [{ "type": "spawnWeight", "category": "geode", "rarities": ["rare", "veryRare"], "mult": 2 }]
+  },
+  "Opal Serpent": {
+    "effects": [{ "type": "creatureChance", "family": "geodeCritter", "mult": 2 }]
+  },
+  "Deepstone Ancient": {
+    "effects": [],
+    "notYet": "The underground layer"
+  },
+  "Glowmoss Sprite": {
+    "effects": [{ "type": "statSubstitute", "items": ["mushroom.glowcap"], "from": "damp", "to": "verdure" }]
+  },
+  "Bog Wisp": {
+    "effects": [{ "type": "groundOverride", "sprite": "tile.pool.a", "when": { "damp": { "min": 25 } } }]
+  },
+  "Crystal Bloom Fae": {
+    "effects": [{ "type": "bonusDrop", "items": ["plant.moss-rose"], "chance": 0.25, "table": "loot.crack.pebble-geode" }]
+  },
+  "Ancient Woodkeeper": {
+    "effects": [{ "type": "spawnWeight", "mult": 1.25, "scope": "forest" }]
+  }
+}

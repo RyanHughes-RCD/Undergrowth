@@ -14,6 +14,8 @@ public struct CreatureInstance: Codable, Identifiable, Hashable {
     public var nickname: String?
     /// How it was found ("starter", "mushroom.glowcap"...), for flavor.
     public var origin: String?
+    /// Hours to ramp to full strength (from the species).
+    public var rampHours: Double?
 }
 
 /// A creature's influence on the land. Records outlive the creature being on
@@ -30,6 +32,8 @@ public struct Placement: Codable, Identifiable, Hashable {
     /// on a tile it is still decaying on).
     public var startLevel: Double
     public var removedAt: Date?
+    /// Ramp/decay time for this creature (nil = tuning default).
+    public var rampSeconds: Double?
 
     public var isActive: Bool { removedAt == nil }
 }
@@ -49,6 +53,38 @@ public struct WildSpawn: Codable, Identifiable, Hashable {
     public var itemID: String
     public var tile: GridPoint
     public var spawnedAt: Date
+}
+
+/// A dug-up geode waiting to be cracked. Remembers the stats of the tile it was
+/// found on, which decide which Geode Critters can be inside.
+public struct GeodeInstance: Codable, Identifiable, Hashable {
+    public var id: UUID
+    public var itemID: String
+    public var foundTile: GridPoint?
+    public var foundStats: StatValues
+    public var foundAt: Date
+}
+
+/// A wanderer creature that has arrived on its own and is waiting to be befriended.
+public struct Visitor: Codable, Identifiable, Hashable {
+    public var id: UUID
+    public var speciesID: String
+    public var tile: GridPoint
+    public var arrivedAt: Date
+}
+
+/// A flat stat bonus on one tile (crushed gems, Heartstone Core).
+public struct SoilBoost: Codable, Identifiable, Hashable {
+    public var id: UUID
+    public var tile: GridPoint
+    public var stats: StatValues
+    public var appliedAt: Date
+    /// nil = permanent.
+    public var expiresAt: Date?
+
+    public func isActive(at now: Date) -> Bool {
+        now >= appliedAt && (expiresAt.map { now < $0 } ?? true)
+    }
 }
 
 public struct PlantedSeed: Codable, Identifiable, Hashable {
@@ -92,8 +128,62 @@ public struct ForestState: Codable {
     public var statCache: StatField?
     /// Debug: seconds added to the real clock (time-skip button).
     public var debugTimeOffset: TimeInterval
+    public var geodes: [GeodeInstance] = []
+    public var visitors: [Visitor] = []
+    public var soilBoosts: [SoilBoost] = []
+    /// Set by a Moonfall Shard: the next creature found is a glimmer.
+    public var nextGlimmer = false
+    /// Day number (since 1970, forest time) of the last wanderer check.
+    public var lastWandererDay: Int?
 
     public func creature(_ id: UUID) -> CreatureInstance? { creatures.first { $0.id == id } }
+
+    enum CodingKeys: String, CodingKey {
+        case version, forestID, seed, rng, size, createdAt, customName, creatures, placements, slots, spawns,
+             plantedSeeds, inventory, discovered, pity, lastSpawnTick, lastUpdated, statCache, debugTimeOffset,
+             geodes, visitors, soilBoosts, nextGlimmer, lastWandererDay
+    }
+
+    public init(version: Int, forestID: UUID, seed: UInt64, rng: SeededRNG, size: GridSize, createdAt: Date,
+                customName: String?, creatures: [CreatureInstance], placements: [Placement], slots: [Slot],
+                spawns: [WildSpawn], plantedSeeds: [PlantedSeed], inventory: [String: Int], discovered: Set<String>,
+                pity: [String: Int], lastSpawnTick: Date, lastUpdated: Date, statCache: StatField?,
+                debugTimeOffset: TimeInterval) {
+        self.version = version; self.forestID = forestID; self.seed = seed; self.rng = rng; self.size = size
+        self.createdAt = createdAt; self.customName = customName; self.creatures = creatures
+        self.placements = placements; self.slots = slots; self.spawns = spawns; self.plantedSeeds = plantedSeeds
+        self.inventory = inventory; self.discovered = discovered; self.pity = pity; self.lastSpawnTick = lastSpawnTick
+        self.lastUpdated = lastUpdated; self.statCache = statCache; self.debugTimeOffset = debugTimeOffset
+    }
+
+    // Older saves don't have the newer fields; default them.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decode(Int.self, forKey: .version)
+        forestID = try c.decode(UUID.self, forKey: .forestID)
+        seed = try c.decode(UInt64.self, forKey: .seed)
+        rng = try c.decode(SeededRNG.self, forKey: .rng)
+        size = try c.decode(GridSize.self, forKey: .size)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        customName = try c.decodeIfPresent(String.self, forKey: .customName)
+        creatures = try c.decode([CreatureInstance].self, forKey: .creatures)
+        placements = try c.decode([Placement].self, forKey: .placements)
+        slots = try c.decode([Slot].self, forKey: .slots)
+        spawns = try c.decode([WildSpawn].self, forKey: .spawns)
+        plantedSeeds = try c.decode([PlantedSeed].self, forKey: .plantedSeeds)
+        inventory = try c.decode([String: Int].self, forKey: .inventory)
+        discovered = try c.decode(Set<String>.self, forKey: .discovered)
+        pity = try c.decode([String: Int].self, forKey: .pity)
+        lastSpawnTick = try c.decode(Date.self, forKey: .lastSpawnTick)
+        lastUpdated = try c.decode(Date.self, forKey: .lastUpdated)
+        statCache = try c.decodeIfPresent(StatField.self, forKey: .statCache)
+        debugTimeOffset = try c.decodeIfPresent(TimeInterval.self, forKey: .debugTimeOffset) ?? 0
+        geodes = try c.decodeIfPresent([GeodeInstance].self, forKey: .geodes) ?? []
+        visitors = try c.decodeIfPresent([Visitor].self, forKey: .visitors) ?? []
+        soilBoosts = try c.decodeIfPresent([SoilBoost].self, forKey: .soilBoosts) ?? []
+        nextGlimmer = try c.decodeIfPresent(Bool.self, forKey: .nextGlimmer) ?? false
+        lastWandererDay = try c.decodeIfPresent(Int.self, forKey: .lastWandererDay)
+    }
 }
 
 public enum GuideKey {

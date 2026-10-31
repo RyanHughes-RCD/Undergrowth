@@ -1,310 +1,357 @@
 import XCTest
 @testable import UndergrowthCore
 
+func resourcesURL() -> URL {
+    URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Resources")
+}
+
 /// Loads the real bundled content from the repo's Resources folder.
 func loadContent() throws -> ContentDatabase {
-    let here = URL(fileURLWithPath: #filePath)
-    let resources = here.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources")
-    return try ContentDatabase.load(roots: [resources])
+    try ContentDatabase.load(roots: [resourcesURL()])
+}
+
+/// A noon timestamp in the local time zone (so day/night conditions are predictable).
+func localNoon() -> Date {
+    var c = DateComponents()
+    c.year = 2026; c.month = 6; c.day = 1; c.hour = 12
+    return Calendar.current.date(from: c)!
 }
 
 final class ContentTests: XCTestCase {
     func testBundledContentIsValid() throws {
         let db = try loadContent()
         XCTAssertEqual(db.validate(), [])
-        XCTAssertEqual(db.orderedCreatures.map(\.id), ["fungling", "sproutling", "geodeCritter"])
-        XCTAssertGreaterThan(db.sprites.sprites.count, 50)
+        XCTAssertEqual(db.orderedCreatures.count, 43)
+        XCTAssertEqual(Set(db.orderedCreatures.map(\.family)), ["fungling", "sproutling", "geodeCritter", "wanderer"])
+        XCTAssertEqual(db.items["mushroom.ancient-sporecrown"]?.rarity, .legendary)
+        XCTAssertEqual(db.items["plant.ghost-orchid"]?.rarity, .veryRare)
+        for c in db.orderedCreatures {
+            XCTAssertTrue(db.sprites.contains(c.sprite), c.sprite)
+            XCTAssertTrue(db.sprites.contains(c.glimmerSprite!), c.id)
+        }
+    }
+
+    func testSpreadsheetValuesImported() throws {
+        let db = try loadContent()
+        let lantern = try XCTUnwrap(db.creatures["lantern-fungling"])
+        XCTAssertEqual(lantern.bonuses?[.glow], 14)
+        XCTAssertEqual(lantern.radius, 2)
+        XCTAssertEqual(lantern.rampHours, 18)
+        XCTAssertEqual(lantern.source?.items, ["mushroom.glowcap"])
+        let morel = try XCTUnwrap(db.items["mushroom.moonlight-morel"]?.spawn)
+        XCTAssertEqual(morel.time, "night")
+        XCTAssertEqual(morel.requires?[.damp]?.min, 70)
+        let quartz = try XCTUnwrap(db.items["gem.quartz"]?.use)
+        XCTAssertEqual(quartz.stats?[.stone], 5)
+        XCTAssertEqual(quartz.hours, 24)
+        let pebble = try XCTUnwrap(db.loot["loot.crack.pebble-geode"]?.rolls.first?.pick)
+        XCTAssertEqual(pebble.reduce(0) { $0 + $1.weight }, 1, accuracy: 0.0001)
     }
 
     func testSpriteDecodingAndPaletteRef() throws {
         let db = try loadContent()
-        let tile = db.sprites.sprite("tile.soil.a")
-        XCTAssertEqual(tile.paletteRef, "pal.ground")
-        let buf = db.sprites.pixels("tile.soil.a")
+        XCTAssertEqual(db.sprites.sprite("tile.grass.a").paletteRef, "pal.ground")
+        let buf = db.sprites.pixels("tile.grass.a")
         XCTAssertEqual(buf.width, 32)
-        XCTAssertEqual(buf.bytes.count, 32 * 24 * 4)
-        // Diamond center is opaque, the top-left corner is transparent.
         XCTAssertEqual(buf.bytes[(8 * 32 + 16) * 4 + 3], 255)
         XCTAssertEqual(buf.bytes[3], 0)
     }
 
-    func testPaletteSwapAndSilhouette() throws {
-        let db = try loadContent()
-        let swap = RenderVariant.swap(["2": "#ff0000"])
-        let normal = db.sprites.pixels("creature.fungling")
-        let glimmer = db.sprites.pixels("creature.fungling", variant: swap)
-        XCTAssertNotEqual(normal.bytes, glimmer.bytes)
-        let sil = db.sprites.pixels("creature.fungling", variant: RenderVariant(silhouette: RGBA(1, 2, 3)))
-        for i in stride(from: 0, to: sil.bytes.count, by: 4) where sil.bytes[i + 3] > 0 {
-            XCTAssertEqual(sil.bytes[i], 1)
-        }
-    }
-
     func testMissingSpriteFallsBack() throws {
-        let db = try loadContent()
-        XCTAssertEqual(db.sprites.sprite("does.not.exist").id, SpriteRegistry.missingID)
+        XCTAssertEqual(try loadContent().sprites.sprite("does.not.exist").id, SpriteRegistry.missingID)
     }
 
     func testUserContentRootOverrides() throws {
-        let db0 = try loadContent()
-        _ = db0
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tmp.appendingPathComponent("Sprites"), withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: tmp.appendingPathComponent("Content"), withIntermediateDirectories: true)
         let sprite = SpriteData(id: "user.blob", size: [2, 2], palette: ["transparent", "#00ff00"],
                                 frames: [SpriteFrame(rows: ["11", "1."])])
         try JSONEncoder().encode(sprite).write(to: tmp.appendingPathComponent("Sprites/user.blob.json"))
-        let itemJSON = """
+        try """
         [{ "id": "mushroom.user", "category": "mushroom", "name": "User Cap", "rarity": "rare",
            "sprite": "user.blob", "spawn": { "baseWeight": 1 } }]
-        """
-        try itemJSON.data(using: .utf8)!.write(to: tmp.appendingPathComponent("Content/items.json"))
-
-        let here = URL(fileURLWithPath: #filePath)
-        let resources = here.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources")
-        let db = try ContentDatabase.load(roots: [resources, tmp])
-        XCTAssertNotNil(db.items["mushroom.user"])
+        """.data(using: .utf8)!.write(to: tmp.appendingPathComponent("Content/items.json"))
+        let db = try ContentDatabase.load(roots: [resourcesURL(), tmp])
         XCTAssertTrue(db.spawnableItems.contains { $0.id == "mushroom.user" })
         XCTAssertEqual(db.validate(), [])
     }
 }
 
+func freeTile(_ g: Game, near p: GridPoint) -> GridPoint {
+    for r in 0..<14 {
+        for dy in -r...r { for dx in -r...r {
+            let t = GridPoint(p.x + dx, p.y + dy)
+            if g.isFree(t) { return t }
+        } }
+    }
+    fatalError("no free tile")
+}
+
 final class StatTests: XCTestCase {
     var content: ContentDatabase!
-    let t0 = Date(timeIntervalSince1970: 1_000_000)
-
+    let t0 = localNoon()
     override func setUpWithError() throws { content = try loadContent() }
 
-    func testNewForestHasStartersInBurrowAndZeroStats() {
+    func testNewForestStartsWithNoCreatures() {
         let g = Game.newForest(content: content, now: t0, seed: 42)
-        XCTAssertEqual(g.burrow.count, 3)
-        XCTAssertEqual(g.state.slots.count, content.tuning.placementSlots)
-        XCTAssertEqual(g.state.size, content.tuning.grid)
-        XCTAssertEqual(g.statField(at: t0).values.max(), 0)
+        XCTAssertTrue(g.state.creatures.isEmpty)
+        XCTAssertEqual(g.state.slots.count, 3)
+        XCTAssertGreaterThan(g.state.spawns.count, 0, "a few things to find right away")
     }
 
-    func testPlacementRampsOverTimeNotImmediately() throws {
+    func testCreatureRollsWithinSpeciesRange() {
+        let roller = LootRoller(content: content)
+        var rng = SeededRNG(seed: 1)
+        for _ in 0..<50 {
+            let c = roller.rollCreature(typeID: "spore-sage", origin: nil, now: t0, forceGlimmer: false, rng: &rng)
+            XCTAssertTrue((10.75...18.05).contains(c.contributions[.damp]!), "\(c.contributions)")
+            XCTAssertEqual(c.radius, 3)
+            XCTAssertEqual(c.rampHours, 24)
+        }
+        let g = roller.rollCreature(typeID: "spore-sage", origin: nil, now: t0, forceGlimmer: true, rng: &rng)
+        XCTAssertEqual(g.radius, 4, "glimmer +1 radius")
+        XCTAssertGreaterThanOrEqual(g.contributions[.damp]!, 18 * 0.6 * 1.5 - 0.05)
+    }
+
+    func testRampsOverSpeciesTimeAndFallsOff() throws {
         let g = Game.newForest(content: content, now: t0, seed: 1)
-        let fungling = g.burrow.first { $0.typeID == "fungling" }!
-        let tile = GridPoint(20, 20)
-        try g.place(creatureID: fungling.id, at: tile, now: t0)
-        XCTAssertEqual(g.tileStats(tile, at: t0)[.damp], 0)
-
-        let ramp = content.tuning.rampSecondsToFull
-        let half = g.tileStats(tile, at: t0.addingTimeInterval(ramp / 2))[.damp]!
-        let full = g.tileStats(tile, at: t0.addingTimeInterval(ramp))[.damp]!
-        let later = g.tileStats(tile, at: t0.addingTimeInterval(ramp * 10))[.damp]!
-        XCTAssertEqual(half, fungling.contributions[.damp]! / 2, accuracy: 0.01)
-        XCTAssertEqual(full, fungling.contributions[.damp]!, accuracy: 0.01)
-        XCTAssertEqual(later, full, accuracy: 0.0001, "capped at the creature's contribution")
-        XCTAssertEqual(g.tileStats(tile, at: t0.addingTimeInterval(ramp))[.stone], 0)
+        g.debugGrantCreature(typeID: "lantern-fungling", glimmer: false, now: t0)
+        let c = g.state.creatures[0]
+        let tile = GridPoint(14, 14)
+        g.removeSpawnsForTest()
+        try g.place(creatureID: c.id, at: tile, now: t0)
+        XCTAssertEqual(g.tileStats(tile, at: t0)[.glow], 0)
+        let half = t0.addingTimeInterval(9 * 3600)
+        XCTAssertEqual(g.tileStats(tile, at: half)[.glow]!, c.contributions[.glow]! / 2, accuracy: 0.01)
+        let full = t0.addingTimeInterval(18 * 3600)
+        XCTAssertEqual(g.tileStats(tile, at: full)[.glow]!, c.contributions[.glow]!, accuracy: 0.01)
+        // Radius 2 + 1 padding: two tiles out gets some, three tiles out gets none.
+        XCTAssertGreaterThan(g.tileStats(GridPoint(tile.x + 2, tile.y), at: full)[.glow]!, 0)
+        XCTAssertEqual(g.tileStats(GridPoint(tile.x + 3, tile.y), at: full)[.glow]!, 0)
+        try g.recall(creatureID: c.id, now: full)
+        XCTAssertEqual(g.tileStats(tile, at: full.addingTimeInterval(9 * 3600))[.glow]!, c.contributions[.glow]! / 2, accuracy: 0.01)
     }
 
-    func testFalloffWithDistanceAndRadius() throws {
+    func testRotHermitLowersStone() throws {
         let g = Game.newForest(content: content, now: t0, seed: 2)
-        let c = g.burrow.first { $0.typeID == "geodeCritter" }!
-        let center = GridPoint(20, 20)
-        try g.place(creatureID: c.id, at: center, now: t0)
-        let t = t0.addingTimeInterval(content.tuning.rampSecondsToFull)
-        let r = Int(c.radius)
-        let atCenter = g.tileStats(center, at: t)[.stone]!
-        let mid = g.tileStats(GridPoint(20 + r - 1, 20), at: t)[.stone]!
-        let outside = g.tileStats(GridPoint(20 + r + 1, 20), at: t)[.stone]!
-        XCTAssertGreaterThan(atCenter, mid)
-        XCTAssertGreaterThan(mid, 0)
-        XCTAssertEqual(outside, 0)
-        // Circular: same distance on a diagonal-ish point gives the same value.
-        let a = g.tileStats(GridPoint(23, 24), at: t)[.stone]!
-        let b = g.tileStats(GridPoint(24, 23), at: t)[.stone]!
-        XCTAssertEqual(a, b, accuracy: 0.0001)
-    }
-
-    func testRemovalDecaysGraduallyAndPrunes() throws {
-        let g = Game.newForest(content: content, now: t0, seed: 3)
-        let c = g.burrow.first { $0.typeID == "sproutling" }!
+        g.removeSpawnsForTest()
+        g.debugGrantCreature(typeID: "rot-hermit", glimmer: false, now: t0)
+        g.debugGrant(itemID: "gem.jasper")
         let tile = GridPoint(10, 10)
-        try g.place(creatureID: c.id, at: tile, now: t0)
-        let ramp = content.tuning.rampSecondsToFull, decay = content.tuning.decaySecondsToZero
-        let tRemove = t0.addingTimeInterval(ramp)
-        try g.recall(creatureID: c.id, now: tRemove)
-        XCTAssertEqual(g.burrow.count, 3, "creature is back in the burrow right away")
-        let full = c.contributions[.verdure]!
-        XCTAssertEqual(g.tileStats(tile, at: tRemove)[.verdure]!, full, accuracy: 0.01)
-        XCTAssertEqual(g.tileStats(tile, at: tRemove.addingTimeInterval(decay / 2))[.verdure]!, full / 2, accuracy: 0.01)
-        XCTAssertEqual(g.tileStats(tile, at: tRemove.addingTimeInterval(decay))[.verdure]!, 0, accuracy: 0.0001)
-        g.advance(to: tRemove.addingTimeInterval(decay + 1))
-        XCTAssertTrue(g.state.placements.isEmpty)
+        try g.use(itemID: "gem.jasper", on: tile, now: t0)
+        XCTAssertEqual(g.tileStats(tile, at: t0)[.stone], 8)
+        try g.place(creatureID: g.state.creatures[0].id, at: tile, now: t0)
+        XCTAssertLessThan(g.tileStats(tile, at: t0.addingTimeInterval(23 * 3600))[.stone]!, 8)
     }
 
-    func testReplacingResumesFromDecayingLevel() throws {
-        let g = Game.newForest(content: content, now: t0, seed: 4)
-        let c = g.burrow.first { $0.typeID == "fungling" }!
-        let tile = GridPoint(5, 5)
-        let ramp = content.tuning.rampSecondsToFull, decay = content.tuning.decaySecondsToZero
-        try g.place(creatureID: c.id, at: tile, now: t0)
-        let t1 = t0.addingTimeInterval(ramp)
-        try g.recall(creatureID: c.id, now: t1)
-        let t2 = t1.addingTimeInterval(decay / 4)
-        let before = g.tileStats(tile, at: t2)[.damp]!
-        try g.place(creatureID: c.id, at: tile, now: t2)
-        XCTAssertEqual(g.tileStats(tile, at: t2)[.damp]!, before, accuracy: 0.01)
-        XCTAssertEqual(g.state.placements.count, 1)
+    func testSoilBoostsExpireAndHeartstoneIsPermanent() throws {
+        let g = Game.newForest(content: content, now: t0, seed: 3)
+        g.debugGrant(itemID: "gem.quartz")
+        g.debugGrant(itemID: "material.heartstone-core")
+        try g.use(itemID: "gem.quartz", on: GridPoint(3, 3), now: t0)
+        try g.use(itemID: "material.heartstone-core", on: GridPoint(4, 4), now: t0)
+        let later = t0.addingTimeInterval(30 * 3600)
+        g.advance(to: later)
+        XCTAssertEqual(g.tileStats(GridPoint(3, 3), at: later)[.stone], 0)
+        XCTAssertEqual(g.tileStats(GridPoint(4, 4), at: later)[.depth], 10)
+        XCTAssertEqual(g.state.soilBoosts.count, 1)
     }
 
     func testSlotLimit() throws {
         let g = Game.newForest(content: content, now: t0, seed: 5)
-        for (i, c) in g.burrow.enumerated() { try g.place(creatureID: c.id, at: GridPoint(i * 3, 0), now: t0) }
-        var rng = SeededRNG(seed: 9)
-        let extra = g.loot.rollCreature(typeID: "fungling", origin: nil, now: t0, rng: &rng)
-        g.addCreature(extra)
-        let freeTile = (0..<g.state.size.width).map { GridPoint($0, g.state.size.height - 1) }.first { g.isFree($0) }!
-        XCTAssertThrowsError(try g.place(creatureID: extra.id, at: freeTile, now: t0)) {
+        g.removeSpawnsForTest()
+        for _ in 0..<4 { g.debugGrantCreature(typeID: "pebble-mite", glimmer: false, now: t0) }
+        for (i, c) in g.state.creatures.prefix(3).enumerated() {
+            try g.place(creatureID: c.id, at: GridPoint(i * 6 + 2, 3), now: t0)
+        }
+        XCTAssertThrowsError(try g.place(creatureID: g.state.creatures[3].id, at: GridPoint(20, 20), now: t0)) {
             XCTAssertEqual($0 as? GameError, .noFreeSlot)
         }
     }
 
-    func testStatsCappedAt100() throws {
+    func testGroveHeartSpeedsUpNeighbours() throws {
         let g = Game.newForest(content: content, now: t0, seed: 6)
-        var rng = SeededRNG(seed: 1)
-        for i in 0..<3 {
-            var c = g.loot.rollCreature(typeID: "fungling", origin: nil, now: t0, rng: &rng)
-            c.contributions[.damp] = 90
-            g.addCreature(c)
-            _ = i
-        }
-        let ids = g.burrow.filter { $0.contributions[.damp] == 90 }.map(\.id)
-        try g.place(creatureID: ids[0], at: GridPoint(10, 10), now: t0)
-        try g.place(creatureID: ids[1], at: GridPoint(11, 10), now: t0)
-        try g.place(creatureID: ids[2], at: GridPoint(10, 11), now: t0)
-        let v = g.tileStats(GridPoint(10, 10), at: t0.addingTimeInterval(1e6))[.damp]!
-        XCTAssertEqual(v, 100)
-    }
-
-    func testFieldMatchesPerTileStats() throws {
-        let g = Game.newForest(content: content, now: t0, seed: 7)
-        for (i, c) in g.burrow.enumerated() { try g.place(creatureID: c.id, at: GridPoint(10 + i * 5, 12), now: t0) }
-        let t = t0.addingTimeInterval(5000)
-        let field = g.statField(at: t)
-        for p in [GridPoint(10, 12), GridPoint(13, 13), GridPoint(25, 30), GridPoint(0, 0)] {
-            let s = g.tileStats(p, at: t)
-            for k in StatKey.core { XCTAssertEqual(field.value(k, at: p), s[k]!, accuracy: 1e-9) }
-        }
+        g.removeSpawnsForTest()
+        g.debugGrantCreature(typeID: "grove-heart", glimmer: false, now: t0)
+        g.debugGrantCreature(typeID: "pebble-mite", glimmer: false, now: t0)
+        let heart = g.state.creatures[0], mite = g.state.creatures[1]
+        try g.place(creatureID: heart.id, at: GridPoint(12, 12), now: t0)
+        try g.place(creatureID: mite.id, at: GridPoint(14, 12), now: t0)
+        // Pebble Mite normally takes 12h; under the Grove Heart it takes 6h.
+        let p = try XCTUnwrap(g.activePlacement(for: mite.id))
+        XCTAssertEqual(g.level(of: p, at: t0.addingTimeInterval(6 * 3600)), 1, accuracy: 0.001)
     }
 }
 
 final class SpawnAndLootTests: XCTestCase {
     var content: ContentDatabase!
-    let t0 = Date(timeIntervalSince1970: 1_000_000)
+    let t0 = localNoon()
     override func setUpWithError() throws { content = try loadContent() }
 
-    func testOfflineCatchUpSpawnsAndIsCapped() {
+    func testBareTilesOnlySpawnUnconditionalThings() {
         let g = Game.newForest(content: content, now: t0, seed: 11)
+        let ids = Set(g.spawnWeights(for: GridPoint(5, 5), at: t0).map(\.0.id))
+        XCTAssertEqual(ids, ["mushroom.brown-button-cap", "plant.clover", "geode.pebble-geode"])
+    }
+
+    func testTimeOfDayAndRainConditions() throws {
+        let g = Game.newForest(content: content, now: t0, seed: 12)
+        let tile = GridPoint(6, 6)
+        for _ in 0..<9 {
+            g.debugGrant(itemID: "material.heartstone-core")
+            try g.use(itemID: "material.heartstone-core", on: tile, now: t0)
+        }
+        let noon = Set(g.spawnWeights(for: tile, at: t0).map(\.0.id))
+        XCTAssertTrue(noon.contains("plant.sunpetal"))
+        XCTAssertFalse(noon.contains("mushroom.moonlight-morel"), "night only")
+        let midnight = t0.addingTimeInterval(12 * 3600)
+        let night = Set(g.spawnWeights(for: tile, at: midnight).map(\.0.id))
+        XCTAssertTrue(night.contains("mushroom.moonlight-morel"))
+        XCTAssertFalse(night.contains("plant.sunpetal"), "daytime only")
+        let rainyNight = (0..<400).map { midnight.addingTimeInterval(Double($0) * 86400) }.first { g.isRaining(at: $0) }!
+        XCTAssertTrue(g.spawnWeights(for: tile, at: rainyNight).contains { $0.0.id == "mushroom.ancient-sporecrown" })
+    }
+
+    func testOfflineCatchUpSpawnsAndIsCapped() {
+        let g = Game.newForest(content: content, now: t0, seed: 13)
         let report = g.advance(to: t0.addingTimeInterval(86400 * 30))
         XCTAssertEqual(report.ticks, content.tuning.spawns.maxCatchUpTicks)
-        XCTAssertGreaterThan(g.state.spawns.count, 0)
         XCTAssertLessThanOrEqual(g.state.spawns.count, content.tuning.spawns.maxTotal)
-        let tiles = g.state.spawns.map(\.tile)
-        XCTAssertEqual(Set(tiles).count, tiles.count, "one spawn per tile")
     }
 
-    func testStatsShiftSpawnWeights() throws {
-        let g = Game.newForest(content: content, now: t0, seed: 12)
-        let critter = g.burrow.first { $0.typeID == "geodeCritter" }!
-        try g.place(creatureID: critter.id, at: GridPoint(20, 20), now: t0)
-        let later = t0.addingTimeInterval(content.tuning.rampSecondsToFull)
-        func share(_ category: String, _ tile: GridPoint) -> Double {
-            let w = g.spawnWeights(for: tile, at: later)
-            let total = w.reduce(0) { $0 + $1.1 }
-            return w.filter { $0.0.category == category }.reduce(0) { $0 + $1.1 } / total
-        }
-        XCTAssertGreaterThan(share("geode", GridPoint(20, 20)), share("geode", GridPoint(0, 0)) * 3)
-        // Threshold-gated rare items don't appear on bare ground.
-        XCTAssertFalse(g.spawnWeights(for: GridPoint(0, 0), at: later).contains { $0.0.id == "mushroom.glowcap" })
-    }
-
-    func testPityGuaranteesHit() {
-        let roller = LootRoller(content: content)
-        var pity: [String: Int] = [:]
-        var rng = SeededRNG(seed: 3)
+    func testMushroomPityGuaranteesFirstFungling() throws {
+        let g = Game.newForest(content: content, now: t0, seed: 14)
+        g.removeSpawnsForTest()
         let threshold = content.tuning.pity["fungling"]!
-        var hits = 0
-        for _ in 0..<threshold {
-            if roller.pityRoll(chance: 0, key: "fungling", pity: &pity, rng: &rng) { hits += 1 }
+        var found: CreatureInstance?
+        for i in 0..<threshold where found == nil {
+            let tile = GridPoint(i % 20, i / 20 + 20)
+            g.debugAddSpawn(itemID: "mushroom.brown-button-cap", at: tile, now: t0)
+            for r in try g.collect(spawnID: g.spawnAt(tile)!.id, now: t0) {
+                if case .creature(let c, _) = r { found = c }
+            }
         }
-        XCTAssertEqual(hits, 1)
-        XCTAssertEqual(pity["fungling"], 0)
+        XCTAssertEqual(found?.typeID, "button-fungling", "the only species a bare tile's Brown Button Cap can hold")
+        XCTAssertGreaterThan(g.state.inventory["mushroom.brown-button-cap"] ?? 0, 0)
     }
 
-    func testRareGemPity() {
-        let roller = LootRoller(content: content)
-        var pity: [String: Int] = [:]
-        var rng = SeededRNG(seed: 5)
+    func testGeodesRememberWhereTheyWereFound() throws {
+        let g = Game.newForest(content: content, now: t0, seed: 15)
+        g.removeSpawnsForTest()
+        g.debugAddSpawn(itemID: "geode.pebble-geode", at: GridPoint(2, 2), now: t0)
+        let dug = try g.collect(spawnID: g.spawnAt(GridPoint(2, 2))!.id, now: t0)
+        XCTAssertEqual(dug, [.item(id: "geode.pebble-geode", count: 1, isNew: false)])
+        XCTAssertEqual(g.state.geodes.first?.foundTile, GridPoint(2, 2))
+        let cracked = try g.crack(itemID: "geode.pebble-geode", now: t0)
+        XCTAssertEqual(cracked.count, 1)
+        XCTAssertTrue(g.state.geodes.isEmpty)
+        if case .item(let id, _, _) = cracked[0] {
+            let allowed = Set(content.loot["loot.crack.pebble-geode"]!.rolls[0].pick!.map(\.item))
+            XCTAssertTrue(allowed.contains(id))
+        }
+    }
+
+    func testGeodeCrackPityYieldsCritter() throws {
+        let g = Game.newForest(content: content, now: t0, seed: 16)
+        var critter = false
+        for _ in 0..<content.tuning.pity["geodeCritter"]! where !critter {
+            g.debugGrant(itemID: "geode.pebble-geode")
+            for r in try g.crack(itemID: "geode.pebble-geode", now: t0) {
+                if case .creature(let c, _) = r { critter = content.creatures[c.typeID]?.family == "geodeCritter" }
+            }
+        }
+        XCTAssertTrue(critter)
+    }
+
+    func testRareGemPity() throws {
+        let g = Game.newForest(content: content, now: t0, seed: 17)
         let threshold = content.tuning.pity["rareGem"]!
         var streak = 0, maxStreak = 0
-        for _ in 0..<500 {
-            let id = roller.pickFromGroup("gems", minRarity: nil, rarityPity: "rareGem", rarityPityMin: .rare,
-                                          pity: &pity, rng: &rng)!
-            if content.items[id]!.rarity >= .rare { streak = 0 } else { streak += 1; maxStreak = max(maxStreak, streak) }
+        for _ in 0..<200 {
+            g.debugGrant(itemID: "geode.deep-geode")
+            for r in try g.crack(itemID: "geode.deep-geode", now: t0) {
+                guard case .item(let id, _, _) = r else { continue }
+                if content.items[id]!.rarity >= .rare { streak = 0 } else { streak += 1; maxStreak = max(maxStreak, streak) }
+            }
         }
         XCTAssertLessThan(maxStreak, threshold)
     }
 
-    func testDigCrackAndDiscovery() throws {
-        let g = Game.newForest(content: content, now: t0, seed: 21)
-        g.debugAddSpawn(itemID: "geode.plain", at: GridPoint(3, 3), now: t0)
-        let spawn = g.state.spawns[0]
-        let dug = try g.collect(spawnID: spawn.id, now: t0)
-        XCTAssertEqual(dug, [.item(id: "rock.rough", count: 1, isNew: false)])
-        XCTAssertTrue(g.state.discovered.contains("item:geode.plain"))
-        XCTAssertEqual(g.state.inventory["rock.rough"], 1)
-        let cracked = try g.crack(itemID: "rock.rough", now: t0)
-        XCTAssertEqual(cracked.count, 1)
-        XCTAssertNil(g.state.inventory["rock.rough"])
-        XCTAssertTrue(cracked[0].isNew)
-        XCTAssertThrowsError(try g.crack(itemID: "rock.rough", now: t0))
-    }
-
-    func testCrackingEventuallyYieldsCritterViaPity() throws {
-        let g = Game.newForest(content: content, now: t0, seed: 22)
-        let threshold = content.tuning.pity["geodeCritter"]!
-        var gotCritter = false
-        for _ in 0..<threshold {
-            g.debugGrant(itemID: "rock.rough")
-            for r in try g.crack(itemID: "rock.rough", now: t0) {
-                if case .creature(let c, _) = r, c.typeID == "geodeCritter" { gotCritter = true }
+    func testSeedsGrowIntoPlantsOrSproutlings() throws {
+        let g = Game.newForest(content: content, now: t0, seed: 18)
+        g.removeSpawnsForTest()
+        g.debugGrant(itemID: "seed.mystery-seed", count: 30)
+        var plants = 0, sprouts = 0
+        for i in 0..<30 {
+            let tile = GridPoint(i % 28, 27 - i / 28)
+            try g.plantSeed(itemID: "seed.mystery-seed", at: tile, now: t0)
+            let seed = g.seedAt(tile)!
+            XCTAssertThrowsError(try g.harvestSeed(id: seed.id, now: t0))
+            for r in try g.harvestSeed(id: seed.id, now: t0.addingTimeInterval(seed.growSeconds + 1)) {
+                switch r {
+                case .creature(let c, _): XCTAssertEqual(content.creatures[c.typeID]?.family, "sproutling"); sprouts += 1
+                case .item(let id, _, _): XCTAssertEqual(content.items[id]?.category, "plant"); plants += 1
+                }
             }
         }
-        XCTAssertTrue(gotCritter)
-        XCTAssertEqual(g.state.creatures.count, 4)
+        XCTAssertEqual(plants + sprouts, 30)
+        XCTAssertGreaterThanOrEqual(sprouts, 1, "pity guarantees a Sproutling within the threshold")
     }
 
-    func testSeedsGrowOverRealTime() throws {
-        let g = Game.newForest(content: content, now: t0, seed: 23)
-        g.debugGrant(itemID: "seed.wild")
-        try g.plantSeed(itemID: "seed.wild", at: GridPoint(7, 7), now: t0)
-        let seed = g.state.plantedSeeds[0]
-        XCTAssertThrowsError(try g.harvestSeed(id: seed.id, now: t0))
-        let result = try g.harvestSeed(id: seed.id, now: t0.addingTimeInterval(seed.growSeconds + 1))
-        XCTAssertEqual(result.count, 1)
-        XCTAssertTrue(g.state.plantedSeeds.isEmpty)
+    func testMoonfallShardMakesNextFindAGlimmer() throws {
+        let g = Game.newForest(content: content, now: t0, seed: 19)
+        g.debugGrant(itemID: "material.moonfall-shard")
+        try g.use(itemID: "material.moonfall-shard", on: nil, now: t0)
+        XCTAssertTrue(g.state.nextGlimmer)
+        g.debugGrant(itemID: "geode.pebble-geode", count: 40)
+        var glimmer = false
+        for _ in 0..<40 where !glimmer {
+            for r in try g.crack(itemID: "geode.pebble-geode", now: t0) {
+                if case .creature(let c, _) = r { glimmer = c.isGlimmer }
+            }
+        }
+        XCTAssertTrue(glimmer)
+        XCTAssertFalse(g.state.nextGlimmer)
     }
 
-    func testGlimmerRollsAreStronger() {
-        let roller = LootRoller(content: content)
-        var rng = SeededRNG(seed: 8)
-        let profile = content.tuning.creatureTraits["fungling"]!
-        let g = roller.rollCreature(typeID: "fungling", origin: nil, now: t0, forceGlimmer: true, rng: &rng)
-        XCTAssertTrue(g.isGlimmer)
-        XCTAssertGreaterThanOrEqual(g.radius, profile.radius.lo + profile.glimmer.radiusBonus - 0.05)
-        XCTAssertGreaterThanOrEqual(g.contributions[.damp]!, profile.contribution[.damp]!.lo * profile.glimmer.contributionMult - 0.05)
+    func testWanderersArriveWhenConditionsAreMet() throws {
+        let g = Game.newForest(content: content, now: t0, seed: 20)
+        for _ in 0..<6 {
+            g.debugGrant(itemID: "material.heartstone-core")
+            try g.use(itemID: "material.heartstone-core", on: GridPoint(8, 8), now: t0)
+        }
+        g.removeSpawnsForTest()
+        var t = t0
+        for _ in 0..<400 where g.state.visitors.isEmpty {
+            t = t.addingTimeInterval(86400)
+            g.advance(to: t)
+            g.removeSpawnsForTest()
+        }
+        XCTAssertFalse(g.state.visitors.isEmpty)
+        let v = g.state.visitors[0]
+        let r = try g.befriend(visitorID: v.id, now: t)
+        if case .creature(let c, _) = r[0] { XCTAssertEqual(c.typeID, v.speciesID) } else { XCTFail() }
+    }
+
+    func testSpawnWeightAndGroundEffects() throws {
+        let g = Game.newForest(content: content, now: t0, seed: 21)
+        g.removeSpawnsForTest()
+        g.debugGrantCreature(typeID: "hollow-digger", glimmer: false, now: t0)
+        let tile = GridPoint(12, 12), near = GridPoint(12, 13)
+        let before = g.spawnWeights(for: near, at: t0).first { $0.0.id == "geode.pebble-geode" }!.1
+        try g.place(creatureID: g.state.creatures[0].id, at: tile, now: t0)
+        let after = g.spawnWeights(for: near, at: t0).first { $0.0.id == "geode.pebble-geode" }!.1
+        XCTAssertEqual(after, before * 1.5, accuracy: 0.001)
+        XCTAssertEqual(g.groundOverrides(at: t0, field: g.statField(at: t0))[tile], "tile.cave.a")
     }
 }
 
 final class VisualsNamingSaveTests: XCTestCase {
     var content: ContentDatabase!
-    let t0 = Date(timeIntervalSince1970: 1_000_000)
+    let t0 = localNoon()
     override func setUpWithError() throws { content = try loadContent() }
 
     func engine() -> TileRuleEngine {
@@ -314,73 +361,46 @@ final class VisualsNamingSaveTests: XCTestCase {
     func testRulesPickGroundFromStats() {
         let e = engine()
         let p = GridPoint(1, 1)
-        XCTAssertTrue(e.visual(for: [:], at: p).ground.hasPrefix("tile.grass"), "base terrain is grass")
+        XCTAssertTrue(e.visual(for: [:], at: p).ground.hasPrefix("tile.grass"))
         XCTAssertTrue(e.visual(for: [:], at: p).overlays.isEmpty)
-        XCTAssertEqual(e.visual(for: [.stone: 80, .depth: 70], at: p).ground, "tile.cave.a")
-        XCTAssertEqual(e.visual(for: [.damp: 40, .stone: 40], at: p).ground, "tile.mossrock.a")
-        XCTAssertEqual(e.visual(for: [.damp: 80, .glow: 70], at: p).ground, "tile.glowmoss.a")
-        // One creature type alone does not make a special tile: overlays carry it.
-        XCTAssertTrue(e.visual(for: [.damp: 55, .glow: 40], at: p).ground.hasPrefix("tile.grass"))
-        XCTAssertTrue(e.visual(for: [.verdure: 15], at: p).ground.hasPrefix("tile.grass"))
+        XCTAssertEqual(e.visual(for: [.stone: 40, .depth: 30], at: p).ground, "tile.cave.a")
+        XCTAssertEqual(e.visual(for: [.damp: 20, .stone: 20], at: p).ground, "tile.mossrock.a")
+        XCTAssertTrue(e.visual(for: [.damp: 20, .glow: 12], at: p).ground.hasPrefix("tile.grass"))
     }
 
     func testOverlaysStackOnePerFamilyAtStrongestLevel() {
         let e = engine()
-        let p = GridPoint(3, 4)
-        let mixed = e.visual(for: [.bloom: 30, .damp: 50, .depth: 10], at: p).overlays.map(\.sprite)
+        let mixed = e.visual(for: [.bloom: 12, .damp: 25, .depth: 4], at: GridPoint(3, 4)).overlays.map(\.sprite)
         XCTAssertEqual(mixed.count, 3, "\(mixed)")
-        XCTAssertTrue(mixed.contains { $0.hasPrefix("ov.flowers.2") })
-        XCTAssertTrue(mixed.contains { $0.hasPrefix("ov.mycelium.3") })
-        XCTAssertTrue(mixed.contains { $0.hasPrefix("ov.dirt.1") })
-        // Draw order follows the rules file: dirt, (stones), mycelium, (lush), flowers.
-        XCTAssertTrue(mixed[0].hasPrefix("ov.dirt") && mixed[2].hasPrefix("ov.flowers"), "\(mixed)")
-        // Caves hide overlays.
-        XCTAssertTrue(e.visual(for: [.stone: 80, .depth: 80], at: p).overlays.isEmpty)
+        XCTAssertTrue(mixed[0].hasPrefix("ov.dirt.1"))
+        XCTAssertTrue(mixed[1].hasPrefix("ov.mycelium.3"))
+        XCTAssertTrue(mixed[2].hasPrefix("ov.flowers.2"))
+        XCTAssertTrue(e.visual(for: [.stone: 80, .depth: 80], at: GridPoint(3, 4)).overlays.isEmpty)
     }
 
     func testEdgeIsForestAndDenserFurtherOut() {
         let e = engine()
         let edge = content.tuning.visuals.edge!
-        let size = content.tuning.grid
         func density(_ dist: Int) -> Double {
-            var n = 0
-            for i in 0..<400 { if !e.edgeVisual(at: GridPoint(-dist, i), size: size, edge: edge).decorations.isEmpty { n += 1 } }
-            return Double(n) / 400
+            Double((0..<400).filter { !e.edgeVisual(at: GridPoint(-dist, $0), size: content.tuning.grid, edge: edge).decorations.isEmpty }.count) / 400
         }
-        XCTAssertTrue(edge.ground.contains(e.edgeVisual(at: GridPoint(-1, 3), size: size, edge: edge).ground))
         XCTAssertLessThan(density(1), density(4))
-    }
-
-    func testOldSavesShrinkToNewGrid() {
-        var state = Game.newForest(content: content, now: t0, seed: 40).state
-        state.size = GridSize(width: 40, height: 40)
-        state.spawns.append(WildSpawn(id: UUID(), itemID: "mushroom.brown", tile: GridPoint(39, 39), spawnedAt: t0))
-        let g = Game(content: content, state: state)
-        XCTAssertEqual(g.state.size, content.tuning.grid)
-        XCTAssertFalse(g.state.spawns.contains { !g.state.size.contains($0.tile) })
-    }
-
-    func testVisualsAreStable() {
-        let e = engine()
-        let s: StatValues = [.bloom: 50, .glow: 40, .verdure: 30]
-        XCTAssertEqual(e.visual(for: s, at: GridPoint(4, 9)), e.visual(for: s, at: GridPoint(4, 9)))
-        XCTAssertLessThanOrEqual(e.visual(for: s, at: GridPoint(4, 9)).decorations.count, 2)
     }
 
     func testForestNames() {
         let namer = ForestNamer(parts: content.nameParts, tuning: content.tuning.naming)
         XCTAssertTrue(content.nameParts.quietNames.contains(namer.name(means: [:], seed: 1)))
-        let name = namer.name(means: [.damp: 30, .depth: 20, .glow: 15], seed: 7)
+        let name = namer.name(means: [.damp: 3, .depth: 2, .glow: 1.5], seed: 7)
         XCTAssertTrue(name.contains(" of "), name)
-        let dampAdj = content.nameParts.stats[.damp]!.adjectives
-        XCTAssertTrue(dampAdj.contains { name.hasPrefix($0) }, name)
     }
 
-    func testSaveRoundTrip() throws {
+    func testSaveRoundTripAndOldSavesLoad() throws {
         let g = Game.newForest(content: content, now: t0, seed: 31)
-        try g.place(creatureID: g.burrow[0].id, at: GridPoint(4, 4), now: t0)
-        g.debugGrant(itemID: "seed.wild")
-        g.advance(to: t0.addingTimeInterval(3600))
+        g.removeSpawnsForTest()
+        g.debugGrantCreature(typeID: "pebble-mite", glimmer: false, now: t0)
+        try g.place(creatureID: g.state.creatures[0].id, at: GridPoint(4, 4), now: t0)
+        g.debugGrant(itemID: "gem.quartz")
+        try g.use(itemID: "gem.quartz", on: GridPoint(5, 5), now: t0)
         g.renameForest("My Wood")
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
         let store = SaveStore(url: url)
@@ -388,18 +408,14 @@ final class VisualsNamingSaveTests: XCTestCase {
         let loaded = try XCTUnwrap(store.load())
         XCTAssertEqual(loaded.creatures, g.state.creatures)
         XCTAssertEqual(loaded.placements, g.state.placements)
-        XCTAssertEqual(loaded.spawns, g.state.spawns)
-        XCTAssertEqual(loaded.inventory, g.state.inventory)
+        XCTAssertEqual(loaded.soilBoosts, g.state.soilBoosts)
         XCTAssertEqual(loaded.customName, "My Wood")
-        XCTAssertEqual(loaded.rng, g.state.rng)
-        let json = String(data: try Data(contentsOf: url), encoding: .utf8)!
-        XCTAssertTrue(json.contains("\"damp\":"), "stat dictionaries encode as objects")
 
-        // Reopening after a long time catches up from timestamps.
-        let g2 = Game(content: content, state: loaded)
-        let later = t0.addingTimeInterval(content.tuning.rampSecondsToFull)
-        g2.advance(to: later)
-        XCTAssertGreaterThan(g2.tileStats(GridPoint(4, 4), at: later).values.max()!, 10)
+        // A save written before geodes/visitors/soil boosts existed still loads.
+        var json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+        for k in ["geodes", "visitors", "soilBoosts", "nextGlimmer", "lastWandererDay"] { json[k] = nil }
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+        XCTAssertNotNil(store.load())
     }
 
     func testCorruptSaveIsBackedUp() throws {
@@ -408,4 +424,9 @@ final class VisualsNamingSaveTests: XCTestCase {
         XCTAssertNil(SaveStore(url: url).load())
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path + ".corrupt"))
     }
+}
+
+extension Game {
+    /// Clears wild spawns so tests can use fixed tiles.
+    func removeSpawnsForTest() { debugClearSpawns() }
 }

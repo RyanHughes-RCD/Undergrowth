@@ -13,6 +13,18 @@ public enum LootResult: Hashable {
     }
 }
 
+public enum PendingLoot: Hashable {
+    case item(String, Int)
+    case creature(CreatureInstance)
+}
+
+/// Modifiers that creature effects apply to a single loot roll.
+public struct LootModifiers {
+    public var seedDropMult: Double = 1
+    public var gemUpgradeChance: Double = 0
+    public init() {}
+}
+
 /// Rolls creatures and loot tables, tracking pity counters in the forest state.
 public struct LootRoller {
     public let content: ContentDatabase
@@ -22,27 +34,36 @@ public struct LootRoller {
 
     // MARK: Creatures
 
+    /// A new individual of a species: rolls 60–100% of the species' maximum bonuses
+    /// (range from tuning); glimmers get +50% bonuses and +1 radius.
     public func rollCreature(typeID: String, origin: String?, now: Date,
                              forceGlimmer: Bool? = nil, rng: inout SeededRNG) -> CreatureInstance {
-        let profile = tuning.creatureTraits[typeID]
+        let def = content.creatures[typeID]
+        let roll = tuning.roll
         let glimmer = forceGlimmer ?? rng.chance(tuning.glimmerChance)
         var contributions: StatValues = [:]
-        let stats = content.creatures[typeID]?.stats ?? Array(profile?.contribution.keys ?? [:].keys)
-        for stat in stats {
-            let range = profile?.contribution[stat] ?? NumRange(10, 20)
-            var v = range.random(using: &rng)
-            if glimmer {
-                // Glimmers roll twice, keep the better roll, then get a multiplier.
-                v = max(v, range.random(using: &rng)) * (profile?.glimmer.contributionMult ?? 1)
+        if let bonuses = def?.bonuses {
+            for (stat, maxBonus) in bonuses {
+                var v = maxBonus * roll.bonusRange.random(using: &rng)
+                if glimmer { v *= roll.glimmerBonusMult }
+                contributions[stat] = (v * 10).rounded() / 10
             }
-            contributions[stat] = (v * 10).rounded() / 10
+        } else if let profile = tuning.creatureTraits?[typeID] {
+            // Legacy content: per-type ranges in tuning.
+            for (stat, range) in profile.contribution {
+                var v = range.random(using: &rng)
+                if glimmer { v = max(v, range.random(using: &rng)) * profile.glimmer.contributionMult }
+                contributions[stat] = (v * 10).rounded() / 10
+            }
         }
-        var radius = (profile?.radius ?? NumRange(3, 5)).random(using: &rng)
-        if glimmer { radius += profile?.glimmer.radiusBonus ?? 0 }
-        radius = (radius * 10).rounded() / 10
+        for (stat, v) in def?.extraContributions ?? [:] {
+            contributions[stat, default: 0] += glimmer ? v * roll.glimmerBonusMult : v
+        }
+        var radius = def?.radius ?? tuning.creatureTraits?[typeID]?.radius.random(using: &rng) ?? 2
+        if glimmer { radius += roll.glimmerRadiusBonus }
         return CreatureInstance(id: UUID(rng: &rng), typeID: typeID, contributions: contributions,
-                                radius: radius, isGlimmer: glimmer, obtainedAt: now,
-                                nickname: nil, origin: origin)
+                                radius: (radius * 10).rounded() / 10, isGlimmer: glimmer, obtainedAt: now,
+                                nickname: nil, origin: origin, rampHours: def?.rampHours)
     }
 
     // MARK: Pity
@@ -59,18 +80,27 @@ public struct LootRoller {
     // MARK: Tables
 
     /// Rolls a loot table. Results are not yet added to inventory.
-    public func roll(table id: String, origin: String?, now: Date,
+    public func roll(table id: String, origin: String?, now: Date, modifiers: LootModifiers = LootModifiers(),
                      pity: inout [String: Int], rng: inout SeededRNG) -> [PendingLoot] {
         guard let table = content.loot[id] else { return [] }
         var out: [PendingLoot] = []
         for r in table.rolls {
             let hit = pityRoll(chance: r.chance ?? 1, key: r.pity, pity: &pity, rng: &rng)
             guard hit else { continue }
-            let count = r.count?.randomInt(using: &rng) ?? 1
+            var count = r.count?.randomInt(using: &rng) ?? 1
+            if r.seedDrop == true { count = Int((Double(count) * modifiers.seedDropMult).rounded()) }
             if let c = r.creature {
                 out.append(.creature(rollCreature(typeID: c, origin: origin, now: now, rng: &rng)))
             } else if let item = r.item {
                 if count > 0 { out.append(.item(item, count)) }
+            } else if let list = r.pick {
+                if var picked = pickWeighted(list, rarityPity: r.rarityPity, rarityPityMin: r.rarityPityMin,
+                                             pity: &pity, rng: &rng) {
+                    if modifiers.gemUpgradeChance > 0, rng.chance(modifiers.gemUpgradeChance) {
+                        picked = upgrade(picked, rng: &rng)
+                    }
+                    out.append(.item(picked, max(1, count)))
+                }
             } else if let g = r.group {
                 if let picked = pickFromGroup(g, minRarity: r.minRarity, rarityPity: r.rarityPity,
                                               rarityPityMin: r.rarityPityMin, pity: &pity, rng: &rng),
@@ -81,6 +111,33 @@ public struct LootRoller {
             if r.exclusive == true { break }
         }
         return out
+    }
+
+    /// Weighted pick from an explicit list, with optional rarity pity.
+    func pickWeighted(_ list: [WeightedItem], rarityPity: String?, rarityPityMin: Rarity?,
+                      pity: inout [String: Int], rng: inout SeededRNG) -> String? {
+        var pool = list.filter { $0.weight > 0 && content.items[$0.item] != nil }
+        var forced = false
+        if let key = rarityPity, let target = rarityPityMin, let threshold = tuning.pity[key],
+           pity[key, default: 0] + 1 >= threshold {
+            let better = pool.filter { (content.items[$0.item]?.rarity ?? .common) >= target }
+            if !better.isEmpty { pool = better; forced = true }
+        }
+        guard let picked = weightedPick(pool.map { ($0.item, $0.weight) }, using: &rng) else { return nil }
+        if let key = rarityPity, let target = rarityPityMin,
+           pool.contains(where: { (content.items[$0.item]?.rarity ?? .common) >= target }) || forced {
+            let good = (content.items[picked]?.rarity ?? .common) >= target
+            pity[key] = (good || forced) ? 0 : pity[key, default: 0] + 1
+        }
+        return picked
+    }
+
+    /// Upgrade an item to a random item of the next rarity tier in the same category.
+    func upgrade(_ id: String, rng: inout SeededRNG) -> String {
+        guard let def = content.items[id], let next = def.rarity.next else { return id }
+        let options = content.orderedItems.filter { $0.category == def.category && $0.rarity == next }
+        guard !options.isEmpty else { return id }
+        return options[Int.random(in: 0..<options.count, using: &rng)].id
     }
 
     func pickFromGroup(_ group: String, minRarity: Rarity?, rarityPity: String?, rarityPityMin: Rarity?,
@@ -100,11 +157,6 @@ public struct LootRoller {
         }
         return picked.id
     }
-}
-
-public enum PendingLoot: Hashable {
-    case item(String, Int)
-    case creature(CreatureInstance)
 }
 
 extension UUID {

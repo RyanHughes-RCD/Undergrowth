@@ -136,7 +136,14 @@ public final class ContentDatabase {
         for c in orderedCreatures {
             sprite(c.sprite, "creature \(c.id)")
             sprite(c.glimmerSprite, "creature \(c.id)")
-            if tuning.creatureTraits[c.id] == nil { issues.append("creature \(c.id): no creatureTraits in tuning") }
+            if c.bonuses == nil && tuning.creatureTraits?[c.id] == nil { issues.append("creature \(c.id): no bonuses") }
+            for item in c.source?.items ?? [] where items[item] == nil {
+                issues.append("creature \(c.id): unknown source item '\(item)'")
+            }
+            for e in c.effects ?? [] {
+                table(e.table, "creature \(c.id) effect")
+                sprite(e.sprite, "creature \(c.id) effect")
+            }
         }
         for i in orderedItems {
             sprite(i.sprite, "item \(i.id)")
@@ -150,6 +157,7 @@ public final class ContentDatabase {
                 if let c = r.creature, creatures[c] == nil { issues.append("loot \(tid): unknown creature '\(c)'") }
                 if let it = r.item, items[it] == nil { issues.append("loot \(tid): unknown item '\(it)'") }
                 if let g = r.group, items(inGroup: g).isEmpty { issues.append("loot \(tid): empty group '\(g)'") }
+                for w in r.pick ?? [] where items[w.item] == nil { issues.append("loot \(tid): unknown item '\(w.item)'") }
                 if let p = r.pity, tuning.pity[p] == nil { issues.append("loot \(tid): no pity threshold '\(p)'") }
                 if let p = r.rarityPity, tuning.pity[p] == nil { issues.append("loot \(tid): no pity threshold '\(p)'") }
             }

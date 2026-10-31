@@ -897,5 +897,7 @@ if __name__ == "__main__":
     make_creatures()
     make_items()
     make_decorations()
+    import gen_content_sprites  # art for every entry in the spawn-table content
+    gen_content_sprites.main()
     count = sum(len(files) for _, _, files in os.walk(OUT))
     print("wrote %d sprite/palette files to %s" % (count, OUT))

@@ -10,11 +10,13 @@
  ],
  "palette": [
   "transparent",
-  "#1a1420",
+  "#22181a",
   "#dce8f0",
+  "#eef4f8",
+  "#8f979c",
   "#ffffff",
-  "#a8b8c8",
-  "#ffffff"
+  "#ff9ccf",
+  "#9ff4ff"
  ],
  "frames": [
   {

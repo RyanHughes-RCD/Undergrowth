@@ -140,10 +140,21 @@ public struct StatCondition: Codable, Hashable {
 // MARK: - Rarity
 
 public enum Rarity: String, Codable, CaseIterable, Comparable {
-    case common, uncommon, rare, epic
+    case common, uncommon, rare, veryRare, legendary
     var order: Int { Rarity.allCases.firstIndex(of: self)! }
     public static func < (a: Rarity, b: Rarity) -> Bool { a.order < b.order }
-    public var displayName: String { rawValue.capitalized }
+    public var displayName: String {
+        switch self {
+        case .veryRare: return "Very rare"
+        default: return rawValue.capitalized
+        }
+    }
+    /// The next tier up (for gem upgrades).
+    public var next: Rarity? {
+        let all = Rarity.allCases
+        let i = all.firstIndex(of: self)!
+        return i + 1 < all.count ? all[i + 1] : nil
+    }
 }
 
 // MARK: - RNG
