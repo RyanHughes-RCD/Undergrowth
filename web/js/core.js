@@ -208,6 +208,10 @@ export class TileRuleEngine {
       return pa !== pb ? pb - pa : a[1] - b[1];
     }).map(([r]) => r);
     this.ground = sorted.filter((r) => r.layer === 'ground');
+    // Overlay families in the order they first appear in the rules file; each family's rules by priority.
+    const groupOrder = [];
+    for (const r of rules) if (r.layer === 'overlay' && !groupOrder.includes(r.group || r.id)) groupOrder.push(r.group || r.id);
+    this.overlayGroups = groupOrder.map((g) => sorted.filter((r) => r.layer === 'overlay' && (r.group || r.id) === g));
     this.decorations = sorted.filter((r) => r.layer === 'decoration');
     this.tints = sorted.filter((r) => r.layer === 'tint');
     this.maxDecorations = maxDecorations;
@@ -220,6 +224,17 @@ export class TileRuleEngine {
     let ground = '__missing';
     const g = this.ground.find((r) => conditionMatches(r.when, r.any, stats));
     if (g && g.sprites && g.sprites.length) ground = g.sprites[this.h(x, y, 'g-' + g.id) % g.sprites.length];
+
+    // Overlays: the strongest matching level of each family, stacked bottom-up.
+    const overlays = [];
+    if (!(g && g.suppressOverlays)) {
+      for (const fam of this.overlayGroups) {
+        const r = fam.find((rule) => conditionMatches(rule.when, rule.any, stats));
+        if (!r || !r.sprites || !r.sprites.length) continue;
+        const h = this.h(x, y, 'o-' + (r.group || r.id));
+        overlays.push({ sprite: r.sprites[h % r.sprites.length], flip: ((h >>> 9) & 1) === 1 });
+      }
+    }
 
     const decorations = [];
     for (const r of this.decorations) {
@@ -251,7 +266,22 @@ export class TileRuleEngine {
       const amount = Math.round(Math.min(0.6, total) * 20) / 20;
       if (amount > 0) tint = [Math.round(r / total), Math.round(gg / total), Math.round(b / total), amount];
     }
-    return { ground, decorations, tint, key: ground + '|' + decorations.map((d) => d.sprite).join(',') + '|' + (tint ? tint.join(',') : '') };
+    return { ground, overlays, decorations, tint };
+  }
+
+  /** A decorative tile outside the map: forest edge, denser further out. */
+  edgeVisual(x, y, size, edge) {
+    const d = Math.max(0, -x, x - (size.width - 1), -y, y - (size.height - 1));
+    const h = this.h(x, y, 'edge');
+    const ground = edge.ground[h % edge.ground.length];
+    const decorations = [];
+    const density = Math.min(edge.maxDensity, edge.baseDensity + edge.densityPerTile * (d - 1));
+    const h2 = hash32(h, 1);
+    if (edge.decorations.length && h2 / 4294967296 < density) {
+      const h3 = hash32(h, 2);
+      decorations.push({ sprite: edge.decorations[h3 % edge.decorations.length], dx: ((h3 >>> 8) % 5) - 2, dy: ((h3 >>> 16) % 3) - 1, flip: ((h3 >>> 24) & 1) === 1 });
+    }
+    return { ground, overlays: [], decorations, tint: null };
   }
 }
 
@@ -277,6 +307,7 @@ export class Game {
     this.rng = new RNG(state);
     this.discovered = new Set(state.discovered);
     this.normalizeSlots();
+    this.fitToGrid();
     this.statCache = null;
   }
 
@@ -300,6 +331,20 @@ export class Game {
 
   /** Serializable snapshot. */
   toJSON() { return { ...this.state, discovered: [...this.discovered] }; }
+
+  /** If the configured map size changed since this forest was saved, shrink/grow it to fit. */
+  fitToGrid() {
+    const size = this.t.grid;
+    const s = this.state;
+    if (s.size.width === size.width && s.size.height === size.height) return;
+    s.size = { ...size };
+    const inside = (t) => t.x >= 0 && t.y >= 0 && t.x < size.width && t.y < size.height;
+    s.spawns = s.spawns.filter((x) => inside(x.tile));
+    s.plantedSeeds = s.plantedSeeds.filter((x) => inside(x.tile));
+    for (const p of s.placements) {
+      p.tile = { x: Math.min(Math.max(0, p.tile.x), size.width - 1), y: Math.min(Math.max(0, p.tile.y), size.height - 1) };
+    }
+  }
 
   normalizeSlots() {
     const normal = this.state.slots.filter((s) => s.kind === 'normal').length;

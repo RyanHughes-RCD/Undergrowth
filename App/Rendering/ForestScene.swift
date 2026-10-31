@@ -13,6 +13,9 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
 
     private var groundNodes: [GridPoint: SKSpriteNode] = [:]
     private var decoNodes: [GridPoint: [SKSpriteNode]] = [:]
+    private var overlayNodes: [GridPoint: [SKSpriteNode]] = [:]
+    /// How many tiles of decorative forest to build around the map.
+    private let apron = 14
     private var visuals: [GridPoint: TileVisual] = [:]
     private var spawnNodes: [UUID: SKSpriteNode] = [:]
     private var seedNodes: [UUID: (node: SKSpriteNode, sprite: String)] = [:]
@@ -79,10 +82,12 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
 
     private func clampCamera() {
         guard let size = builtSize else { return }
-        let b = Iso.worldBounds(size).insetBy(dx: -40, dy: -40)
-        var p = cam.position
-        p.x = min(max(p.x, b.minX), b.maxX)
-        p.y = min(max(p.y, b.minY), b.maxY)
+        // Keep the camera centre over the map; the edge forest fills the rest of the view.
+        let m = CGFloat(store?.tuning.visuals.cameraMarginTiles ?? 2)
+        let fx = cam.position.x / Iso.halfW, fy = -cam.position.y / Iso.halfH
+        let gx = min(max((fx + fy) / 2, m), CGFloat(size.width - 1) - m)
+        let gy = min(max((fy - fx) / 2, m), CGFloat(size.height - 1) - m)
+        var p = CGPoint(x: (gx - gy) * Iso.halfW, y: -(gx + gy) * Iso.halfH)
         // Snap so art pixels land on whole device pixels.
         let step = 1 / zoom
         p.x = (p.x / step).rounded() * step
@@ -103,11 +108,11 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
         case .began:
             pinchStartZoom = zoom
         case .changed:
-            zoom = min(8, max(1, pinchStartZoom * g.scale))
+            zoom = min(8, max(2, pinchStartZoom * g.scale))
             applyZoom()
         case .ended, .cancelled:
             // Snap to an integer scale for perfectly square pixels.
-            zoom = min(8, max(1, zoom.rounded()))
+            zoom = min(8, max(2, zoom.rounded()))
             cam.run(SKAction.scale(to: 1 / zoom, duration: 0.15)) { [weak self] in self?.clampCamera() }
         default:
             break
@@ -165,11 +170,36 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
 
     private func rebuild(size: GridSize, seed: UInt64, store: GameStore) {
         world.children.filter { $0 !== selectionNode }.forEach { $0.removeFromParent() }
-        groundNodes.removeAll(); decoNodes.removeAll(); visuals.removeAll()
+        groundNodes.removeAll(); decoNodes.removeAll(); overlayNodes.removeAll(); visuals.removeAll()
         spawnNodes.removeAll(); seedNodes.removeAll(); creatureNodes.removeAll(); ringNodes.removeAll()
         builtSize = size
         ruleEngine = TileRuleEngine(rules: store.content.tileRules,
                                     maxDecorations: store.tuning.visuals.maxDecorationsPerTile, seed: seed)
+        buildEdgeForest(size: size, store: store)
+    }
+
+    /// Static decorative forest around the map so the view never shows empty space.
+    private func buildEdgeForest(size: GridSize, store: GameStore) {
+        guard let engine = ruleEngine, let edge = store.tuning.visuals.edge else { return }
+        for y in -apron..<(size.height + apron) {
+            for x in -apron..<(size.width + apron) {
+                let p = GridPoint(x, y)
+                if size.contains(p) { continue }
+                let v = engine.edgeVisual(at: p, size: size, edge: edge)
+                let base = Iso.point(p)
+                let g = makeSprite(v.ground, store: store)
+                g.position = base
+                g.zPosition = -1000 + Iso.depth(p) * 0.1
+                world.addChild(g)
+                for d in v.decorations {
+                    let n = makeSprite(d.sprite, store: store)
+                    n.position = CGPoint(x: base.x + CGFloat(d.offsetX), y: base.y - CGFloat(d.offsetY))
+                    n.xScale = d.flipped ? -1 : 1
+                    n.zPosition = Iso.depth(p) + 0.1
+                    world.addChild(n)
+                }
+            }
+        }
     }
 
     private func makeSprite(_ id: String, variant: RenderVariant = .normal, store: GameStore) -> SKSpriteNode {
@@ -229,6 +259,19 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
                     world.addChild(ground)
                     groundNodes[p] = ground
                 }
+                // Overlays (stacked influence layers)
+                if old?.overlays != v.overlays {
+                    overlayNodes[p]?.forEach { $0.removeFromParent() }
+                    overlayNodes[p] = v.overlays.enumerated().map { i, o in
+                        let n = makeSprite(o.sprite, store: store)
+                        n.position = base
+                        n.xScale = o.flipped ? -1 : 1
+                        n.zPosition = ground.zPosition + 0.001 * CGFloat(i + 1)
+                        world.addChild(n)
+                        return n
+                    }
+                }
+
                 if overlay {
                     let (color, amount) = ForestScene.overlayColor(stats)
                     ground.color = color

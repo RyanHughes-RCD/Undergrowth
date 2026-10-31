@@ -70,6 +70,7 @@ for p in tiles {
     let v = rules.visual(for: field.stats(at: p), at: p)
     visuals[p] = v
     blit(v.ground, at: center(p), tint: v.tint, amount: v.tintAmount)
+    for o in v.overlays { blit(o.sprite, at: center(p), flip: o.flipped) }
 }
 for p in tiles {
     for d in visuals[p]!.decorations { blit(d.sprite, at: center(p), dx: d.offsetX, dy: d.offsetY, flip: d.flipped) }

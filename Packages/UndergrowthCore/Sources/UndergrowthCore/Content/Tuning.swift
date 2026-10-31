@@ -71,6 +71,20 @@ public struct Tuning: Codable {
     public struct VisualTuning: Codable {
         public var maxDecorationsPerTile: Int
         public var refreshSeconds: Double
+        /// Decorative forest drawn beyond the map edge so the view never shows a void.
+        public var edge: EdgeTuning?
+        /// How far (in tiles) inside the map the camera centre must stay.
+        public var cameraMarginTiles: Double?
+        /// Time multipliers offered by the debug speed control.
+        public var debugSpeeds: [Double]?
+    }
+
+    public struct EdgeTuning: Codable {
+        public var ground: [String]
+        public var decorations: [String]
+        public var baseDensity: Double
+        public var densityPerTile: Double
+        public var maxDensity: Double
     }
 
     public struct NamingTuning: Codable {

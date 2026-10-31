@@ -1,46 +1,139 @@
 {
-  "grid": { "width": 40, "height": 40 },
+  "grid": {
+    "width": 28,
+    "height": 28
+  },
   "placementSlots": 3,
-  "starterCreatures": ["fungling", "sproutling", "geodeCritter"],
+  "starterCreatures": [
+    "fungling",
+    "sproutling",
+    "geodeCritter"
+  ],
   "statCap": 100,
   "rampSecondsToFull": 21600,
   "decaySecondsToZero": 43200,
-  "falloff": { "curve": "smoothstep", "innerRadiusFraction": 0.25 },
+  "falloff": {
+    "curve": "smoothstep",
+    "innerRadiusFraction": 0.25
+  },
   "glimmerChance": 0.03,
   "creatureTraits": {
     "fungling": {
-      "contribution": { "damp": [40, 70], "glow": [25, 55] },
-      "radius": [6.0, 10.0],
-      "glimmer": { "contributionMult": 1.35, "radiusBonus": 2.0 }
+      "contribution": {
+        "damp": [
+          40,
+          70
+        ],
+        "glow": [
+          25,
+          55
+        ]
+      },
+      "radius": [
+        4.5,
+        7.5
+      ],
+      "glimmer": {
+        "contributionMult": 1.35,
+        "radiusBonus": 1.5
+      }
     },
     "sproutling": {
-      "contribution": { "verdure": [40, 70], "bloom": [25, 55] },
-      "radius": [6.0, 10.0],
-      "glimmer": { "contributionMult": 1.35, "radiusBonus": 2.0 }
+      "contribution": {
+        "verdure": [
+          40,
+          70
+        ],
+        "bloom": [
+          25,
+          55
+        ]
+      },
+      "radius": [
+        4.5,
+        7.5
+      ],
+      "glimmer": {
+        "contributionMult": 1.35,
+        "radiusBonus": 1.5
+      }
     },
     "geodeCritter": {
-      "contribution": { "stone": [40, 70], "depth": [25, 55] },
-      "radius": [5.5, 9.0],
-      "glimmer": { "contributionMult": 1.35, "radiusBonus": 2.0 }
+      "contribution": {
+        "stone": [
+          40,
+          70
+        ],
+        "depth": [
+          25,
+          55
+        ]
+      },
+      "radius": [
+        4.0,
+        7.0
+      ],
+      "glimmer": {
+        "contributionMult": 1.35,
+        "radiusBonus": 1.5
+      }
     }
   },
   "spawns": {
     "tickSeconds": 300,
     "attemptsPerTick": 3,
     "spawnChance": 0.5,
-    "maxTotal": 45,
+    "maxTotal": 30,
     "lifetimeSeconds": 28800,
     "maxCatchUpTicks": 288
   },
-  "seeds": { "growSeconds": [3600, 10800] },
-  "rarityWeights": { "common": 60, "uncommon": 25, "rare": 10, "epic": 3 },
+  "seeds": {
+    "growSeconds": [
+      3600,
+      10800
+    ]
+  },
+  "rarityWeights": {
+    "common": 60,
+    "uncommon": 25,
+    "rare": 10,
+    "epic": 3
+  },
   "pity": {
     "fungling": 15,
     "sproutling": 12,
     "geodeCritter": 12,
     "rareGem": 8
   },
-  "visuals": { "maxDecorationsPerTile": 2, "refreshSeconds": 5 },
-  "naming": { "quietThreshold": 0.6, "featureFraction": 0.45 },
+  "visuals": {
+    "maxDecorationsPerTile": 2,
+    "refreshSeconds": 5,
+    "edge": {
+      "ground": [
+        "tile.edge.a",
+        "tile.edge.b"
+      ],
+      "decorations": [
+        "deco.tree.a",
+        "deco.tree.b",
+        "deco.tree.a",
+        "deco.bush.a"
+      ],
+      "baseDensity": 0.3,
+      "densityPerTile": 0.2,
+      "maxDensity": 0.85
+    },
+    "cameraMarginTiles": 2,
+    "debugSpeeds": [
+      1,
+      60,
+      600,
+      3600
+    ]
+  },
+  "naming": {
+    "quietThreshold": 0.6,
+    "featureFraction": 0.45
+  },
   "debugTools": true
 }

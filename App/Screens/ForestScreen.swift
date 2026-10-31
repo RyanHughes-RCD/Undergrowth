@@ -97,7 +97,20 @@ struct ForestScreen: View {
             }
             .buttonStyle(.plain)
             Spacer()
-            if store.tuning.debugTools { DebugMenu() }
+            if store.tuning.debugTools {
+                Button { store.cycleSpeed() } label: {
+                    VStack(spacing: 0) {
+                        Text("⏩ \(Int(store.speed))×").font(.caption.bold())
+                        if store.state.debugTimeOffset > 0 {
+                            Text("+" + GameStore.duration(store.state.debugTimeOffset)).font(.system(size: 9))
+                        }
+                    }
+                    .padding(.horizontal, 10).frame(height: 40)
+                    .background(store.speed > 1 ? Color.orange.opacity(0.85) : Color.black.opacity(0.45), in: Capsule())
+                    .foregroundStyle(.white)
+                }
+                DebugMenu()
+            }
         }
     }
 

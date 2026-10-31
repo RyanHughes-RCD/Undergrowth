@@ -54,7 +54,11 @@ export class UI {
       h('button', { class: 'name-btn', onclick: () => this.open('rename') },
         h('div', { class: 'forest-name' }, g.forestName),
         h('div', { class: 'hint' }, 'Tap to rename')),
-      this.content.tuning.debugTools ? h('button', { class: 'round-btn', title: 'Debug', onclick: () => this.open('debug') }, '🐞') : null,
+      this.content.tuning.debugTools ? h('div', { class: 'dev' },
+        h('button', { class: 'speed-btn' + (this.app.speed > 1 ? ' on' : ''), title: 'Time speed', onclick: () => this.app.cycleSpeed() },
+          h('b', {}, `⏩ ${this.app.speed}×`),
+          g.state.debugTimeOffset > 0 ? h('span', {}, `+${duration(g.state.debugTimeOffset / 1000)}`) : null),
+        h('button', { class: 'round-btn', title: 'Debug', onclick: () => this.open('debug') }, '🐞')) : null,
     );
 
     const bottom = h('div', { class: 'hud-bottom' });
@@ -114,7 +118,7 @@ export class UI {
       const art = this.app.art(c);
       const lv = g.level(p, now);
       return h('button', { class: 'slot', onclick: () => { this.selectedTile = null; this.selectedCreatureID = c.id; this.open('creature', c.id); } },
-        this.sprites.element(art.sprite, art.variant, 2.5),
+        this.sprites.element(art.sprite, art.variant, 3),
         h('span', { class: 'mini-bar' }, h('span', { style: `width:${lv * 100}%` })));
     }));
   }
@@ -323,7 +327,10 @@ export class UI {
     const a = this.app;
     const b = (label, fn, cls = '') => h('button', { class: 'btn ' + cls, onclick: fn }, label);
     return [
-      h('div', { class: 'section' }, 'Time'),
+      h('div', { class: 'section' }, 'Time speed'),
+      h('div', { class: 'row gap wrap' }, a.speeds.map((v) => b(`${v}×`, () => { a.setSpeed(v); this.renderSheet(); }, v === a.speed ? 'green' : 'grey'))),
+      h('p', { class: 'sub' }, '60× = a minute per second · 3600× = an hour per second. Creatures reach full strength in 6 forest-hours.'),
+      h('div', { class: 'section' }, 'Skip ahead'),
       h('div', { class: 'row gap wrap' }, b('+1 hour', () => a.debugSkip(1)), b('+6 hours', () => a.debugSkip(6)), b('+1 day', () => a.debugSkip(24))),
       h('div', { class: 'section' }, 'View'),
       b(this.statOverlay ? 'Hide stat overlay' : 'Show stat overlay', () => { this.statOverlay = !this.statOverlay; a.changed(false); this.renderSheet(); }),

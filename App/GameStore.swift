@@ -40,6 +40,10 @@ final class GameStore: ObservableObject {
     @Published var selectedCreatureID: UUID?
     @Published var showStatOverlay = false
     @Published var crackingItemID: String?
+    /// Debug time multiplier (1 = real time).
+    @Published var speed: Double = 1
+    private var lastReal = Date()
+    private var sinceRefresh = 0.0
 
     private var timer: Timer?
     private var saveTask: Task<Void, Never>?
@@ -90,14 +94,37 @@ final class GameStore: ObservableObject {
 
     private func startClock() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: max(1, tuning.visuals.refreshSeconds), repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.tick() }
+        lastReal = Date()
+        sinceRefresh = 0
+        let refresh = max(1, tuning.visuals.refreshSeconds)
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                let real = Date()
+                let dt = real.timeIntervalSince(self.lastReal)
+                self.lastReal = real
+                if self.speed > 1 { self.game.debugSkip(seconds: dt * (self.speed - 1)) }
+                self.sinceRefresh += dt
+                if self.speed > 1 || self.sinceRefresh >= refresh {
+                    self.sinceRefresh = 0
+                    self.tick()
+                }
+            }
         }
     }
 
     func tick() {
         game.advance(to: now)
         changed(save: false)
+    }
+
+    var speeds: [Double] { tuning.visuals.debugSpeeds ?? [1, 60, 600, 3600] }
+
+    func cycleSpeed() {
+        let list = speeds
+        let i = list.firstIndex(of: speed) ?? 0
+        speed = list[(i + 1) % list.count]
+        showToast(speed == 1 ? "Time runs normally." : "Time ×\(Int(speed))")
     }
 
     func handleScenePhase(_ phase: ScenePhase) {

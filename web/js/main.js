@@ -20,6 +20,7 @@ class App {
     this.game = saved ? new Game(this.content, saved) : Game.newForest(this.content, real);
     const report = this.game.advance(this.game.now(real));
 
+    this.speed = this.loadSpeed();
     this.view = new ForestView(document.getElementById('forest'), this);
     this.view.sync();
     this.ui.render();
@@ -29,8 +30,22 @@ class App {
     if (!saved) this.ui.toast('Welcome! Open the Burrow and place a creature to start shaping your forest.');
     this.save();
 
-    setInterval(() => this.tick(), Math.max(1, this.content.tuning.visuals.refreshSeconds) * 1000);
+    // Clock: every second, apply the debug time speed; refresh the forest on its normal cadence
+    // (or every second while time is sped up).
+    this.lastReal = Date.now();
+    let sinceRefresh = 0;
+    const refresh = Math.max(1, this.content.tuning.visuals.refreshSeconds);
+    setInterval(() => {
+      const real = Date.now();
+      const dt = real - this.lastReal;
+      this.lastReal = real;
+      if (document.hidden) return;
+      if (this.speed > 1) this.game.state.debugTimeOffset += dt * (this.speed - 1);
+      sinceRefresh += dt / 1000;
+      if (this.speed > 1 || sinceRefresh >= refresh) { sinceRefresh = 0; this.tick(); }
+    }, 1000);
     document.addEventListener('visibilitychange', () => {
+      this.lastReal = Date.now();
       if (document.hidden) { this.save(); return; }
       const before = this.game.state.lastUpdated;
       const r = this.game.advance(this.game.now());
@@ -222,6 +237,25 @@ class App {
 
   // ---------------------------------------------------------------- debug
 
+  get speeds() { return this.content.tuning.visuals.debugSpeeds || [1, 60, 600, 3600]; }
+
+  loadSpeed() {
+    if (!this.content.tuning.debugTools) return 1;
+    try { const v = Number(localStorage.getItem('undergrowth.speed')); return this.speeds.includes(v) ? v : 1; } catch (_) { return 1; }
+  }
+
+  setSpeed(v) {
+    this.speed = v;
+    try { localStorage.setItem('undergrowth.speed', String(v)); } catch (_) { /* ignore */ }
+    this.ui.toast(v === 1 ? 'Time runs normally.' : `Time ×${v}: 1 second = ${speedText(v)}.`);
+    this.changed(false);
+  }
+
+  cycleSpeed() {
+    const list = this.speeds;
+    this.setSpeed(list[(list.indexOf(this.speed) + 1) % list.length]);
+  }
+
   debugSkip(hours) {
     this.game.debugSkip(hours * 3600);
     const r = this.game.advance(this.game.now());
@@ -251,6 +285,12 @@ class App {
     this.changed();
     this.ui.toast('A fresh forest.');
   }
+}
+
+function speedText(v) {
+  if (v >= 3600) return `${v / 3600} hour${v === 3600 ? '' : 's'}`;
+  if (v >= 60) return `${v / 60} minute${v === 60 ? '' : 's'}`;
+  return `${v} seconds`;
 }
 
 const app = new App();

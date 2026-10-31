@@ -9,7 +9,13 @@ public struct TileVisual: Hashable {
         public var offsetY: Int
         public var flipped: Bool
     }
+    public struct Overlay: Hashable {
+        public var sprite: String
+        public var flipped: Bool
+    }
     public var ground: String
+    /// Stacked full-tile layers, bottom first.
+    public var overlays: [Overlay]
     public var decorations: [Decoration]
     /// Blended tint color and strength (0...1).
     public var tint: RGBA?
@@ -20,6 +26,8 @@ public struct TileVisual: Hashable {
 /// Nothing here knows about specific biomes: blends emerge from overlapping stats.
 public struct TileRuleEngine {
     public let ground: [TileRule]
+    /// Overlay rules grouped by family, families in draw order, rules by priority.
+    public let overlayGroups: [[TileRule]]
     public let decorations: [TileRule]
     public let tints: [TileRule]
     public let maxDecorations: Int
@@ -31,6 +39,12 @@ public struct TileRuleEngine {
             return pa != pb ? pa > pb : $0.offset < $1.offset
         }.map(\.element)
         ground = sorted.filter { $0.layer == .ground }
+        var groupOrder: [String] = []
+        for r in rules where r.layer == .overlay {
+            let g = r.group ?? r.id
+            if !groupOrder.contains(g) { groupOrder.append(g) }
+        }
+        overlayGroups = groupOrder.map { g in sorted.filter { $0.layer == .overlay && ($0.group ?? $0.id) == g } }
         decorations = sorted.filter { $0.layer == .decoration }
         tints = sorted.filter { $0.layer == .tint }
         self.maxDecorations = maxDecorations
@@ -44,8 +58,20 @@ public struct TileRuleEngine {
     public func visual(for stats: StatValues, at tile: GridPoint) -> TileVisual {
         // Ground: highest-priority match.
         var groundID = SpriteRegistry.missingID
-        if let rule = ground.first(where: { $0.condition.matches(stats) }), let sprites = rule.sprites, !sprites.isEmpty {
+        let groundRule = ground.first(where: { $0.condition.matches(stats) })
+        if let rule = groundRule, let sprites = rule.sprites, !sprites.isEmpty {
             groundID = sprites[Int(hash(tile, "g-" + rule.id) % UInt64(sprites.count))]
+        }
+
+        // Overlays: one per family (its strongest matching level), stacked.
+        var overlays: [TileVisual.Overlay] = []
+        if groundRule?.suppressOverlays != true {
+            for family in overlayGroups {
+                guard let rule = family.first(where: { $0.condition.matches(stats) }),
+                      let sprites = rule.sprites, !sprites.isEmpty else { continue }
+                let h = hash(tile, "o-" + (rule.group ?? rule.id))
+                overlays.append(.init(sprite: sprites[Int(h % UInt64(sprites.count))], flipped: (h >> 32) & 1 == 1))
+            }
         }
 
         // Decorations: every matching rule may contribute, in priority order.
@@ -79,6 +105,24 @@ public struct TileRuleEngine {
             // Quantize so tiny stat changes don't churn the renderer.
             amount = (min(0.6, total) * 20).rounded() / 20
         }
-        return TileVisual(ground: groundID, decorations: decos, tint: amount > 0 ? tint : nil, tintAmount: amount)
+        return TileVisual(ground: groundID, overlays: overlays, decorations: decos, tint: amount > 0 ? tint : nil, tintAmount: amount)
+    }
+
+    /// Look of a decorative tile outside the map (a forest edge that gets denser further out).
+    public func edgeVisual(at p: GridPoint, size: GridSize, edge: Tuning.EdgeTuning) -> TileVisual {
+        let dx = max(0, -p.x, p.x - (size.width - 1))
+        let dy = max(0, -p.y, p.y - (size.height - 1))
+        let d = Double(max(dx, dy))
+        let h = hash(p, "edge")
+        let ground = edge.ground.isEmpty ? SpriteRegistry.missingID : edge.ground[Int(h % UInt64(edge.ground.count))]
+        var decos: [TileVisual.Decoration] = []
+        let density = min(edge.maxDensity, edge.baseDensity + edge.densityPerTile * (d - 1))
+        if !edge.decorations.isEmpty, StableHash.unit(StableHash.mix(h, 1)) < density {
+            let h2 = StableHash.mix(h, 2)
+            decos.append(.init(sprite: edge.decorations[Int(h2 % UInt64(edge.decorations.count))],
+                               offsetX: Int((h2 >> 16) % 5) - 2, offsetY: Int((h2 >> 24) % 3) - 1,
+                               flipped: (h2 >> 40) & 1 == 1))
+        }
+        return TileVisual(ground: ground, overlays: [], decorations: decos, tint: nil, tintAmount: 0)
     }
 }

@@ -1,0 +1,45 @@
+{
+ "id": "tile.edge.b",
+ "size": [
+  32,
+  24
+ ],
+ "anchor": [
+  16,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "...............7Z...............",
+    ".............7ZZZbZ.............",
+    "...........ZZ7ZZZb7ZZ...........",
+    ".........ZZZ7ZZZZZZZbZZ.........",
+    ".......ZZ7Z7Z7ZbZZZZZb7ZZ.......",
+    ".....ZZbZZZZZZZZZZZZZZZZZZZ.....",
+    "...ZZZbbZZZZbZ7ZZZZZZZZZZZZbZ...",
+    ".bZZZZZZZZZbbZZZbbZ7Z7ZbZbbb777.",
+    ".ZZZZZb7ZZ777Z7ZbZ777ZZb7ZZZZZb.",
+    ".77Z7ZZZZZZZZZZZZZ77ZbbbZZZbZZZ.",
+    ".7N77ZbZZ7ZZZbZZZZ7ZZ77ZZZbZZOO.",
+    ".NN7N77ZZZZZZ7ZZZZ77Zb7ZZZZOOOO.",
+    ".NNNN7777Z7ZZZ7ZZZ77ZZZZZZZOOOO.",
+    ".RRNNNN7N77ZZZZZ7ZZZZZZOZOOOOSO.",
+    ".NNNRNNNN7N77ZZZZZZZZOOOOOOSOOO.",
+    ".NNNNRRNNNNNN77ZZZZOOOOOOSOOOOO.",
+    ".NNNNNNNRNNNN777ZOOOOOOSSOOOOOO.",
+    "...NNNNNNNRNNNN7ZOOOOSSOOOOOO...",
+    ".....NNNNNNRRNNNOOOSSOOOOOO.....",
+    ".......NNNNNNRRNOSOOOOOOO.......",
+    ".........NNNNNNRSOOOOOO.........",
+    "...........NNNNNOOOOO...........",
+    ".............NNNOOO.............",
+    "...............NO..............."
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

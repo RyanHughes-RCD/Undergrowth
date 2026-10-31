@@ -166,6 +166,9 @@ public final class ContentDatabase {
         if !tileRules.contains(where: { $0.layer == .ground && ($0.when ?? [:]).isEmpty && $0.any == nil }) {
             issues.append("tile rules: no unconditional ground fallback")
         }
+        if let edge = tuning.visuals.edge {
+            (edge.ground + edge.decorations).forEach { sprite($0, "tuning visuals.edge") }
+        }
         for s in sprites.sprites.values { issues.append(contentsOf: s.problems()) }
         for id in tuning.starterCreatures where creatures[id] == nil {
             issues.append("tuning: unknown starter creature '\(id)'")

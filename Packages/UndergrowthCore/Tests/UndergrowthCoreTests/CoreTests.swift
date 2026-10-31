@@ -159,7 +159,8 @@ final class StatTests: XCTestCase {
         var rng = SeededRNG(seed: 9)
         let extra = g.loot.rollCreature(typeID: "fungling", origin: nil, now: t0, rng: &rng)
         g.addCreature(extra)
-        XCTAssertThrowsError(try g.place(creatureID: extra.id, at: GridPoint(30, 30), now: t0)) {
+        let freeTile = (0..<g.state.size.width).map { GridPoint($0, g.state.size.height - 1) }.first { g.isFree($0) }!
+        XCTAssertThrowsError(try g.place(creatureID: extra.id, at: freeTile, now: t0)) {
             XCTAssertEqual($0 as? GameError, .noFreeSlot)
         }
     }
@@ -313,11 +314,50 @@ final class VisualsNamingSaveTests: XCTestCase {
     func testRulesPickGroundFromStats() {
         let e = engine()
         let p = GridPoint(1, 1)
-        XCTAssertTrue(e.visual(for: [:], at: p).ground.hasPrefix("tile.soil"))
-        XCTAssertEqual(e.visual(for: [.stone: 70, .depth: 70], at: p).ground, "tile.cave.a")
+        XCTAssertTrue(e.visual(for: [:], at: p).ground.hasPrefix("tile.grass"), "base terrain is grass")
+        XCTAssertTrue(e.visual(for: [:], at: p).overlays.isEmpty)
+        XCTAssertEqual(e.visual(for: [.stone: 80, .depth: 70], at: p).ground, "tile.cave.a")
         XCTAssertEqual(e.visual(for: [.damp: 40, .stone: 40], at: p).ground, "tile.mossrock.a")
-        XCTAssertEqual(e.visual(for: [.damp: 50, .glow: 50], at: p).ground, "tile.glowmoss.a")
+        XCTAssertEqual(e.visual(for: [.damp: 80, .glow: 70], at: p).ground, "tile.glowmoss.a")
+        // One creature type alone does not make a special tile: overlays carry it.
+        XCTAssertTrue(e.visual(for: [.damp: 55, .glow: 40], at: p).ground.hasPrefix("tile.grass"))
         XCTAssertTrue(e.visual(for: [.verdure: 15], at: p).ground.hasPrefix("tile.grass"))
+    }
+
+    func testOverlaysStackOnePerFamilyAtStrongestLevel() {
+        let e = engine()
+        let p = GridPoint(3, 4)
+        let mixed = e.visual(for: [.bloom: 30, .damp: 50, .depth: 10], at: p).overlays.map(\.sprite)
+        XCTAssertEqual(mixed.count, 3, "\(mixed)")
+        XCTAssertTrue(mixed.contains { $0.hasPrefix("ov.flowers.2") })
+        XCTAssertTrue(mixed.contains { $0.hasPrefix("ov.mycelium.3") })
+        XCTAssertTrue(mixed.contains { $0.hasPrefix("ov.dirt.1") })
+        // Draw order follows the rules file: dirt, (stones), mycelium, (lush), flowers.
+        XCTAssertTrue(mixed[0].hasPrefix("ov.dirt") && mixed[2].hasPrefix("ov.flowers"), "\(mixed)")
+        // Caves hide overlays.
+        XCTAssertTrue(e.visual(for: [.stone: 80, .depth: 80], at: p).overlays.isEmpty)
+    }
+
+    func testEdgeIsForestAndDenserFurtherOut() {
+        let e = engine()
+        let edge = content.tuning.visuals.edge!
+        let size = content.tuning.grid
+        func density(_ dist: Int) -> Double {
+            var n = 0
+            for i in 0..<400 { if !e.edgeVisual(at: GridPoint(-dist, i), size: size, edge: edge).decorations.isEmpty { n += 1 } }
+            return Double(n) / 400
+        }
+        XCTAssertTrue(edge.ground.contains(e.edgeVisual(at: GridPoint(-1, 3), size: size, edge: edge).ground))
+        XCTAssertLessThan(density(1), density(4))
+    }
+
+    func testOldSavesShrinkToNewGrid() {
+        var state = Game.newForest(content: content, now: t0, seed: 40).state
+        state.size = GridSize(width: 40, height: 40)
+        state.spawns.append(WildSpawn(id: UUID(), itemID: "mushroom.brown", tile: GridPoint(39, 39), spawnedAt: t0))
+        let g = Game(content: content, state: state)
+        XCTAssertEqual(g.state.size, content.tuning.grid)
+        XCTAssertFalse(g.state.spawns.contains { !g.state.size.contains($0.tile) })
     }
 
     func testVisualsAreStable() {

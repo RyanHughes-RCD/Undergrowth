@@ -89,12 +89,15 @@ public struct LootRoll: Codable, Hashable {
 // MARK: - Tile rules
 
 public enum TileLayer: String, Codable {
-    case ground, decoration, tint
+    case ground, overlay, decoration, tint
 }
 
-/// A data-driven visual rule. Ground: highest matching priority wins.
-/// Decoration: every match may add one decoration (by `density`).
-/// Tint: color overlay whose strength scales with `stat`.
+/// A data-driven visual rule.
+/// - ground: highest matching priority wins (`suppressOverlays` hides overlays on it).
+/// - overlay: transparent full-tile layers that stack. Within one `group` only the
+///   highest-priority match draws; groups draw in the order they first appear.
+/// - decoration: every match may add one small sprite (by `density`).
+/// - tint: color wash whose strength scales with `stat`.
 public struct TileRule: Codable, Hashable, Identifiable {
     public var id: String
     public var layer: TileLayer
@@ -106,6 +109,8 @@ public struct TileRule: Codable, Hashable, Identifiable {
     public var color: String?
     public var stat: StatKey?
     public var strength: Double?
+    public var group: String?
+    public var suppressOverlays: Bool?
 
     public var condition: StatCondition { StatCondition(all: when ?? [:], any: any) }
 }

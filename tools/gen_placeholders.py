@@ -126,6 +126,8 @@ GROUND_PALETTE = [
     "#120c18", "#221a2c", "#342a40", "#0a070e",
     # 49-54 lips (soil left/right, rock left/right, dark left/right)
     "#4a3322", "#3a2719", "#5e5e68", "#4a4a54", "#2e1f22", "#22171a",
+    # 55-57 mycelium, 58-60 dirt patches, 61 deep grass
+    "#d9cfb3", "#b0a587", "#f2ecd9", "#7a5232", "#5b3c22", "#93683f", "#3f6a2a",
 ]
 P = {name: i for i, name in enumerate([
     "t", "soil", "soil_d", "soil_l", "leaf",
@@ -141,6 +143,7 @@ P = {name: i for i, name in enumerate([
     "cr_cyan", "cr_violet", "cr_white", "cr_dcyan",
     "cave", "cave_m", "cave_l", "cave_d",
     "lip_soil_l", "lip_soil_r", "lip_rock_l", "lip_rock_r", "lip_dark_l", "lip_dark_r",
+    "myc", "myc_d", "myc_hi", "dirt", "dirt_d", "dirt_l", "grass_dd",
 ])}
 
 
@@ -164,7 +167,9 @@ def ground_tile(sprite_id, base, specks, lip="soil", seed=0, extra=None, frames=
                     for d in range(1, 9):
                         if in_diamond(x, y - d):
                             side = "l" if x < 16 else "r"
-                            c.px[y][x] = P["lip_%s_%s" % (lip, side)]
+                            c.px[y][x] = P["lip_%s_%s" % ("soil" if lip == "grassy" else lip, side)]
+                            if lip == "grassy" and (d == 1 or (d == 2 and rng.random() < 0.35)):
+                                c.px[y][x] = P["grass_d"] if side == "l" else P["grass_dd"]
                             # a darker strata line
                             if d == 5 and rng.random() < 0.7:
                                 c.px[y][x] = P["lip_dark_" + side]
@@ -173,6 +178,145 @@ def ground_tile(sprite_id, base, specks, lip="soil", seed=0, extra=None, frames=
             extra(c, random.Random(zlib.crc32(sprite_id.encode()) % 1000 + f * 17), f)
         out.append(c)
     write(sprite_id, (32, 24), out, palette_ref="pal.ground", anchor=(16, 8), tags=["tile"], durations=durations)
+
+
+def grass_tufts(colors, n):
+    def fn(c, rng, f):
+        for _ in range(n):
+            x, y = rng.randint(3, 28), rng.randint(2, 13)
+            if in_diamond(x, y) and in_diamond(x + 1, y - 1):
+                col = P[rng.choice(colors)]
+                c.set(x, y, col)
+                c.set(x + 1, y - 1, col)
+                c.set(x + 1, y, col)
+    return fn
+
+
+# ------------------------------------------------------------ overlays
+# Transparent 32x24 layers drawn on top of the ground, one family per stat,
+# three strengths each (1 = faint ... 3 = heavy). They stack, so tiles with
+# several influences combine into unique looks.
+
+def rand_in(rng, inset=1):
+    for _ in range(200):
+        x, y = rng.randint(1, 30), rng.randint(1, 14)
+        if all(in_diamond(x + dx, y + dy) for dx in (-inset, inset) for dy in (-inset, inset)):
+            return x, y
+    return 16, 8
+
+
+def overlay(sprite_id, draw, frames=1, durations=None):
+    out = []
+    for f in range(frames):
+        c = Canvas(32, 24)
+        draw(c, random.Random(zlib.crc32(sprite_id.encode())), f)
+        for y in range(24):
+            for x in range(32):
+                if not in_diamond(x, y):
+                    c.px[y][x] = 0
+        out.append(c)
+    write(sprite_id, (32, 24), out, palette_ref="pal.ground", anchor=(16, 8), tags=["overlay"], durations=durations)
+
+
+def ov_flowers(level):
+    def draw(c, rng, f):
+        for i in range((3, 7, 13)[level - 1]):
+            x, y = rand_in(rng, 1)
+            petal = P[rng.choice(("pink", "white", "yellow", "violet", "pink", "white"))]
+            centre = P["yellow"] if petal != P["yellow"] else P["white"]
+            c.set(x, y + 1, P["grass_d"])
+            for dx, dy in ((1, 0), (-1, 0), (0, -1), (0, 1)):
+                c.set(x + dx, y + dy, petal)
+            c.set(x, y, centre)
+            if level == 3 and i % 4 == 0:
+                c.set(x + 2, y, petal); c.set(x - 2, y, petal)
+    return draw
+
+
+def ov_lush(level):
+    def draw(c, rng, f):
+        if level == 3:
+            for _ in range(3):
+                cx, cy = rand_in(rng, 2)
+                c.ellipse(cx + .5, cy + .5, 4, 2, P["lush"])
+        for _ in range((5, 12, 22)[level - 1]):
+            x, y = rand_in(rng, 2)
+            c.set(x - 1, y, P["lush_d"])
+            c.set(x, y, P["lush_l"]); c.set(x, y - 1, P["lush_l"])
+            c.set(x + 1, y, P["lush"]); c.set(x + 1, y - 1, P["lush"]); c.set(x + 1, y - 2, P["lush_ll"])
+    return draw
+
+
+def ov_dirt(level):
+    def draw(c, rng, f):
+        sizes = {1: [(2.5, 1.3)], 2: [(3.5, 1.8), (2.5, 1.3)], 3: [(6, 3), (4.5, 2.2), (3.5, 1.8), (3, 1.5)]}[level]
+        for rx, ry in sizes:
+            cx, cy = rand_in(rng, 2)
+            c.ellipse(cx + .5, cy + .5, rx + 0.8, ry + 0.6, P["dirt_d"])
+            c.ellipse(cx + .5, cy + .5, rx, ry, P["dirt"])
+            for _ in range(int(rx * 2)):
+                c.set(cx + rng.randint(-int(rx) + 1, int(rx) - 1), cy + rng.randint(-int(ry), int(ry)),
+                      P[rng.choice(("dirt_l", "dirt_d"))])
+    return draw
+
+
+def ov_stones(level):
+    def draw(c, rng, f):
+        if level >= 2:
+            for _ in range(level - 1):
+                cx, cy = rand_in(rng, 3)
+                c.ellipse(cx + .5, cy + .5, 4 + level, 2 + level / 2, P["rock"])
+                c.ellipse(cx - .5, cy - .5, 2.5 + level, 1.2, P["rock_l"])
+                c.set(cx + 2, cy + 1, P["rock_d"]); c.set(cx + 3, cy + 1, P["rock_d"])
+        for _ in range((3, 6, 9)[level - 1]):
+            x, y = rand_in(rng, 1)
+            c.set(x, y, P["rock"]); c.set(x + 1, y, P["rock_d"]); c.set(x, y - 1, P["rock_ll"])
+    return draw
+
+
+def ov_mycelium(level):
+    """Root-like strands that follow the isometric diagonals and branch."""
+    def strand(c, rng, x, y, dx, dy, steps, colour, branch):
+        for i in range(steps):
+            c.set(x, y, colour)
+            c.set(x + (1 if dx > 0 else -1), y, colour)
+            x += dx
+            y += dy
+            if rng.random() < 0.3:  # wobble: switch between the two diagonals
+                dy = -dy if rng.random() < 0.5 else dy
+            if branch and rng.random() < 0.25:
+                strand(c, rng, x, y, dx, -dy, rng.randint(1, 3), P["myc_d"], False)
+        c.set(x, y, P["myc_hi"])
+
+    def draw(c, rng, f):
+        for _ in range((1, 2, 4)[level - 1]):
+            x, y = rand_in(rng, 2)
+            strand(c, rng, x, y, rng.choice((-2, 2)), rng.choice((-1, 1)), rng.randint(3, 5) + level, P["myc"], True)
+    return draw
+
+
+def ov_glow(level):
+    def draw(c, rng, f):
+        for i in range((2, 5, 9)[level - 1]):
+            x, y = rand_in(rng, 1)
+            bright = (i + f) % 2 == 0
+            c.set(x, y, P["gm_hi"] if bright else P["gm_glow"])
+            if level == 3 and bright:
+                for dx, dy in ((1, 0), (-1, 0), (0, -1), (0, 1)):
+                    c.set(x + dx, y + dy, P["gm_glow"])
+    return draw
+
+
+def make_overlays():
+    families = {
+        "flowers": (ov_flowers, 1), "lush": (ov_lush, 1), "dirt": (ov_dirt, 1),
+        "stones": (ov_stones, 1), "mycelium": (ov_mycelium, 1), "glow": (ov_glow, 2),
+    }
+    for name, (fn, frames) in families.items():
+        for level in (1, 2, 3):
+            for v in "ab":
+                overlay("ov.%s.%d%s" % (name, level, v), fn(level), frames=frames,
+                        durations=[0.9, 0.9] if frames > 1 else None)
 
 
 def flowers_extra(colors, n):
@@ -282,8 +426,15 @@ def make_ground():
     ground_tile("tile.soil.pebbly", "soil", [("soil_d", .15), ("rock", .07), ("rock_l", .04)])
     ground_tile("tile.soil.dark", "soil_d", [("loam", .3), ("soil", .1), ("loam_root", .03)])
     ground_tile("tile.grass.sparse", "soil", [("grass", .35), ("grass_d", .1), ("grass_l", .08)])
-    ground_tile("tile.grass.a", "grass", [("grass_d", .15), ("grass_l", .15), ("soil", .03)])
-    ground_tile("tile.grass.b", "grass", [("grass_d", .10), ("grass_l", .2), ("grass_ll", .03)], seed=5)
+    # Base meadow grass: calm texture with small tufts (less single-pixel noise).
+    for i, sid in enumerate(("tile.grass.a", "tile.grass.b", "tile.grass.c")):
+        ground_tile(sid, "grass", [("grass_d", .05), ("grass_l", .04)], lip="grassy", seed=i * 7,
+                    extra=grass_tufts(("grass_l", "grass_d", "grass_ll"), 6 + i * 2))
+    # Forest edge beyond the map (deeper, darker grass).
+    for i, sid in enumerate(("tile.edge.a", "tile.edge.b")):
+        ground_tile(sid, "grass_dd", [("lush_d", .1), ("grass_d", .12)], lip="grassy", seed=i * 5,
+                    extra=grass_tufts(("grass_d", "lush_d"), 8))
+    make_overlays()
     ground_tile("tile.lush.a", "lush", [("lush_d", .2), ("lush_l", .18), ("lush_ll", .05)])
     ground_tile("tile.meadow.a", "grass", [("grass_d", .12), ("grass_l", .18)],
                 extra=flowers_extra(["pink", "white", "yellow"], 7))
@@ -612,6 +763,34 @@ def make_decorations():
         return draw
     deco("deco.grass.a", G, tuft(1))
     deco("deco.grass.b", G, tuft(2))
+
+    def tree_round(c, f):
+        c.rect(9, 20, 11, 28, 5)
+        c.set(12, 27, 6)
+        c.ellipse(10.5, 11, 8, 8.5, 2)
+        c.ellipse(8, 8, 4.5, 4, 3)
+        c.ellipse(13, 14, 4, 3, 4)
+        for (x, y) in ((6, 6), (9, 4), (12, 8), (5, 11)):
+            c.set(x, y, 7)
+    deco("deco.tree.a", ["transparent", "#142410", "#3f7a32", "#5ea347", "#2e5c26", "#5a3d26", "#3e2a19", "#7cc35a"],
+         tree_round, size=(21, 30), outline=True, anchor=(10, 28))
+
+    def tree_pine(c, f):
+        c.rect(9, 24, 11, 28, 5)
+        for i, (top, half) in enumerate(((2, 3), (8, 6), (14, 8))):
+            for y in range(top, top + 9):
+                w = int(half * (y - top + 1) / 9) + 1
+                c.rect(10 - w, y, 10 + w, y, 2 if i % 2 == 0 else 4)
+            c.line(10, top + 1, 10 - half // 2, top + 8, 3)
+    deco("deco.tree.b", ["transparent", "#0f1d12", "#2b5a33", "#3f7a46", "#234a2a", "#5a3d26", "#3e2a19"],
+         tree_pine, size=(21, 30), outline=True, anchor=(10, 28))
+
+    def bush(c, f):
+        c.ellipse(7, 7, 6, 4, 2)
+        c.ellipse(5, 5.5, 3, 2, 3)
+        c.set(9, 8, 4); c.set(3, 8, 4)
+    deco("deco.bush.a", ["transparent", "#142410", "#3f7a32", "#5ea347", "#2e5c26"], bush, size=(14, 11),
+         outline=True, anchor=(7, 10))
 
     def fern(c, f):
         for dx in (-4, -2, 0, 2, 4):

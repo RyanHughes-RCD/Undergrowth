@@ -53,6 +53,22 @@ public final class Game {
         self.stats = StatEngine(tuning: content.tuning)
         self.loot = LootRoller(content: content)
         normalizeSlots()
+        fitToGrid()
+    }
+
+    /// If the configured map size changed since this forest was saved, resize it,
+    /// keeping everything inside the new bounds.
+    func fitToGrid() {
+        let size = tuning.grid
+        guard state.size != size else { return }
+        state.size = size
+        func clamp(_ p: GridPoint) -> GridPoint {
+            GridPoint(min(max(0, p.x), size.width - 1), min(max(0, p.y), size.height - 1))
+        }
+        state.spawns.removeAll { !size.contains($0.tile) }
+        state.plantedSeeds.removeAll { !size.contains($0.tile) }
+        for i in state.placements.indices { state.placements[i].tile = clamp(state.placements[i].tile) }
+        state.statCache = nil
     }
 
     /// A brand-new forest with the starter creatures in the Burrow.
