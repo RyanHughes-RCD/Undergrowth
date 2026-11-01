@@ -250,7 +250,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
 - **Damp spreads and pools:**
   - An ambient Damp layer (`terrain.ambientDamp`, saved in `state.ambientDamp`) sits on top of creature Damp, so creature ramp-up and fading are unchanged.
   - Each spawn tick it seeps into wetter-to-drier neighbours, flows more easily downhill, and evaporates more slowly on low ground, so hollows turn boggy. High Stone blocks it.
-  - Damp tiles grow mushrooms faster: each wet tile gets an extra mushroom-only chance of (normal per-tile rate × min(2, Damp × 0.08)) per tick (`terrain.damp.mushroomGrowth`). It's proportional per tile, so a few wet tiles never hog the forest.
+  - Damp tiles grow mushrooms faster: each wet tile gets an extra mushroom-only chance of (normal per-tile rate × min(1, Damp × 0.08)), so at most ×2 its usual mushroom rate per tick (`terrain.damp.mushroomGrowth`). It's proportional per tile, so a few wet tiles never hog the forest.
 - **Glow follows the clock:**
   - Its effect on spawn weights, and on the forest's category and location weighting, is ×0.4 by day and ×1.6 at night (`terrain.glowCycle`, device local time).
   - Deep tiles glow at full strength even by day.
@@ -311,6 +311,8 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
   - **Developer mode** can open every entry (marked as a developer view) without marking it found.
 
 ## Named terrains (web)
+
+> Creature family balance: sproutlings (found only when a planted Mystery Seed finishes growing) have 3× the find chance of the other families (common 12%, uncommon 9%, rare 4.5%, very rare 1.5%, legendary 0.3%), since a forest yields far fewer harvests than mushroom picks or cracked geodes.
 
 Where two stats meet on a tile, the ground becomes a named terrain with its own art, Field Guide page and spawns (`tuning.terrains`, `Resources/Content/terrain.json`).
 

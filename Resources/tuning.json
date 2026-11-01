@@ -237,7 +237,7 @@
     "bloomCycle": { "openHour": 6, "peakHour": 12, "closeHour": 19, "minFactor": 0.15, "maxFactor": 1.3 },
     "bloom": { "varietyPerPoint": 0.012, "minVarietyExponent": 0.35, "wandererBonusPerPoint": 0.03 },
     "verdure": { "hideThreshold": 30, "seedGrowthPerPoint": 0.015, "extraSeedPerPoint": 0.008, "maxExtraSeedChance": 0.6 },
-    "damp": { "mushroomGrowth": { "_about": "Damp tiles grow mushrooms faster: extra mushroom chance per tile = normal per-tile rate x min(maxBonus, Damp x perPoint).", "minDamp": 6, "perPoint": 0.08, "maxBonus": 2 } }
+    "damp": { "mushroomGrowth": { "_about": "Damp tiles grow mushrooms faster: extra mushroom chance per tile = normal per-tile rate x min(maxBonus, Damp x perPoint).", "minDamp": 6, "perPoint": 0.08, "maxBonus": 1 } }
   },
   "debugTools": true,
   "clearing": {
