@@ -269,3 +269,6 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .req-mark { min-width: 52px; text-align: right; font-weight: 700; }
 .req-mark.ok { color: #8ad46b; }
 .req-mark.no { color: #e07a6a; }
+/* Meters without labels: aligned names, slightly larger pips. */
+.stat.meter .stat-name { min-width: 58px; }
+.stat.meter .pip { width: 6px; height: 9px; }

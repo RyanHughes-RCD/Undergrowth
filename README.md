@@ -291,7 +291,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
 - **Below 6 is inactive everywhere (`intensity.minInfluence`):** the game's tile stats (`statField`, `tileStats`) zero anything under 6, so it counts for nothing in visuals, item requirements, category and location spawn weighting, effect counts, combos, terrain and placement. Raw values stay in saves and in the ambient-Damp simulation.
   - Two thresholds that sat below 6 moved to 6: the Mossy bank combo (was 5 of each stat) and blend detection (was 3).
 - **Where it shows:**
-  - The tile card names the tile's terrain and shows each active stat as nine pips (filled vs hollow, not colour alone) plus its label.
+  - The tile card names the tile's terrain and shows each active stat as a nine-pip meter (filled vs hollow, not colour alone), with no words or numbers.
   - Creature traits show what the creature gives at full strength on its own tile.
   - Field Guide requirements read "Damp at mid Low or more": the band, plus where in it the true threshold sits, so 20 shows as "mid Moderate", not "Moderate".
   - Gem uses read "adds Stone (Low) to a tile for 24h".

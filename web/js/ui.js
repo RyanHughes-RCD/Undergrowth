@@ -169,15 +169,14 @@ export class UI {
           (b.expiresAt ? ` · ${duration((b.expiresAt - now) / 1000)} left` : ' · permanent'))));
   }
 
-  /** A stat's intensity: name, pips (filled = reached, hollow = not; not colour alone), band label. */
+  /** A stat's intensity as a meter: name and pips (filled = reached, hollow = not; not colour alone). */
   intensityRow(stat, value) {
     const it = intensityOf(value, this.content.tuning);
     const n = ((this.content.tuning.intensity || {}).bands || []).length || 9;
-    return h('div', { class: 'stat' },
+    return h('div', { class: 'stat meter' },
       h('span', { class: 'stat-name' }, cap(stat)),
-      h('span', { class: 'pips', title: it.label }, Array.from({ length: n }, (_, i) =>
-        h('i', { class: 'pip' + (i < it.level ? ' on' : ''), style: i < it.level ? `background:${STAT_COLORS[stat] || '#fff'}` : '' }))),
-      h('span', { class: 'stat-val' + (it.level ? '' : ' none') }, it.level ? it.label : '—'));
+      h('span', { class: 'pips', title: it.label, 'aria-label': `${cap(stat)}: ${it.label}` }, Array.from({ length: n }, (_, i) =>
+        h('i', { class: 'pip' + (i < it.level ? ' on' : ''), style: i < it.level ? `background:${STAT_COLORS[stat] || '#fff'}` : '' }))));
   }
 
   /** An amount a creature or gem adds, as intensity ("Stone (Low)"; below the floor: "a touch of Stone"). */
