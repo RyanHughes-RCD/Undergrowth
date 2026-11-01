@@ -213,7 +213,7 @@
       "clusterBonus": 2.5,
       "lilyPads": { "minTiles": 6, "chance": 0.75, "tilesPerExtraPad": 6, "maxPads": 5, "flowerChance": 0.3 },
       "splash": { "everySeconds": 0.65, "max": 24 } },
-    "moss": { "name": "Mossy bank", "requires": { "stone": { "min": 6 }, "damp": { "min": 6 }, "verdure": { "min": 6 } }, "bugsPerTile": 0.85, "maxBugs": 40 },
+    "moss": { "name": "Mossy bank", "requires": { "stone": { "min": 6 }, "damp": { "min": 6 }, "verdure": { "min": 6 } }, "tilesPerBug": 8, "maxBugs": 40, "_bugs": "Each connected moss patch gets one bug per tilesPerBug tiles (rounded, at least one): 1-2 per 12 tiles." },
     "meadow": { "name": "Wild meadow", "requires": { "bloom": { "min": 8 }, "verdure": { "min": 8 } }, "plantCategoryMult": 3, "plantGrowth": { "perPoint": 0.06, "maxBonus": 2.5 }, "flowerGrowthMult": 2.5 }
   },
   "terrain": {

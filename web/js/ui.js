@@ -510,6 +510,7 @@ export class UI {
         if (at(0, 0)) g.drawImage(paintWaterTile(at, x + 40, y + 40, this.content.tuning.visuals.water || {}), x * TS, y * TS + head);
       }
       if (art.overlay) g.drawImage(frame(art.overlay.replace('{n}', st).replace('{ab}', (x + y) % 2 ? 'b' : 'a')).canvas, x * TS, y * TS + head);
+      if (art.glow) g.drawImage(frame(art.glow.replace('{ab}', (x + y) % 2 ? 'b' : 'a')).canvas, x * TS, y * TS + head);
       if (art.deco) {
         const id = art.deco.replace('{n}', Math.max(st, def.kind === 'treeline' ? 1 : st));
         const f = frame(id), a = this.sprites.anchor(id);

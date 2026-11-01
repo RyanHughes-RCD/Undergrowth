@@ -293,8 +293,9 @@ export class TileRuleEngine {
       for (const fam of this.overlayGroups) {
         const r = fam.find((rule) => conditionMatches(rule.when, rule.any, stats));
         if (!r || !r.sprites || !r.sprites.length) continue;
-        const h = this.h(x, y, 'o-' + (r.group || r.id));
-        overlays.push({ sprite: r.sprites[h % r.sprites.length], flip: ((h >>> 9) & 1) === 1 });
+        // variantOf: use another family's choice (a glow layer lines up with the art under it).
+        const h = this.h(x, y, 'o-' + (r.variantOf || r.group || r.id));
+        overlays.push({ sprite: r.sprites[h % r.sprites.length], flip: ((h >>> 9) & 1) === 1, pulse: r.pulse || null });
       }
     }
 

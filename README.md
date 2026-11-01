@@ -273,7 +273,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
     - **Water Reed:** a new plant in the spreadsheet with the "Shallow water only" condition (`spawn.terrain: "pool"`). It spawns only on pool tiles, is likelier next to another reed ("Grows in clusters", ×2.5), and is flipped for variety.
     - **Splashes:** a creature wading through a pool splashes when it enters a pool tile, then every 0.65 s while moving. They're pooled and short-lived.
     - Only Damp-loving items spawn on water.
-  - **Mossy bank (Stone + Damp + Verdure):** moss grows over the ground and the stone spikes, and bugs gather (beetles by day, fireflies at night).
+  - **Mossy bank (Stone + Damp + Verdure):** moss grows over the ground and the stone spikes, and bugs gather (beetles by day, fireflies at night): each connected patch of moss gets one per `tilesPerBug` (8) tiles, rounded and at least one, so 1–2 per 12 tiles.
   - **Wild meadow (Bloom + Verdure):** a tangle of flowers in long grass. Plants are favoured ×3 in spawn rolls. Each meadow tile gets an extra plant-only chance per tick (normal rate × min(2.5, (Bloom + Verdure) × 0.06), `combos.meadow.plantGrowth`). Mystery Seeds grow ×2.5 faster there.
 - **Tile art:** `Resources/Content/tileRules.json`. A rule with `"staged": true` and `"stat"` expands into the 9 stages (`ov.<stat>.s1a`… / `deco.spikes.<n><v>`). Combo layers use `combo_<id>`. The art is made by `tools/gen_terrain.py`; the water is drawn by the renderer.
 - **Plants:** every plant has its own grown sprite and its own bud stage (`plant.bud.<id>`). A Mystery Seed shows planted, then sprout, then that plant's bud, then the plant itself.
@@ -355,6 +355,10 @@ Where two stats meet on a tile, the ground becomes a named terrain with its own 
   - Together with Pebble Cap (Stone 10) and Sorrel (Verdure 10), every stat now has a find that shows up around a single common creature.
 - **Loosened uncommons:** Blue Stain Cap now needs Damp 20 (was 30) and Wild Strawberry needs Verdure 20 (was 30), so a single rare creature unlocks an uncommon.
 - **Art:** `tools/gen_terrain.py` (`named_terrain_art`) draws `ov.terrain.<id>.a/b`. Glowing terrains twinkle. The tile rules put them in one overlay group, above Glow.
+- **Foxfire Fen** has static roots, plus a glow layer (`ov.terrain.foxfire-fen.glow.a/b`) traced over the same roots.
+  - The tile rule's `pulse` makes that layer's opacity breathe from 0.3 to 1 and back every 5 s.
+  - The pulse is offset per tile (`wave`), so it rolls slowly across the ground.
+  - `variantOf` keeps the glow on the same a/b variant and flip as the roots under it.
 - **Note on regenerating sprites:** creature sprites are kept as they are. Their colours come from their stats, and the rebalance changed those stats, so restore `Resources/Sprites/creature` after running `tools/gen_placeholders.py` unless you want them recoloured.
 
 ## Creature balance and interactions (web)

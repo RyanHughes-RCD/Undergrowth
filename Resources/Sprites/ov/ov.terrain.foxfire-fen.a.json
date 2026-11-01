@@ -13,44 +13,22 @@
   {
    "rows": [
     "................",
-    ".......s........",
-    ".......r........",
     "................",
-    "........ihhhi...",
-    ".......ihhhhhi..",
-    ".......hhhhrhh..",
-    ".......ihhrshi..",
-    "........ihhrii..",
-    "..iiiii...ihhhi.",
-    ".ihhrsri.ihhhhhi",
-    ".ihhhrhi..ihhhi.",
-    ".ihhrsri...iii..",
-    "..iiiii.........",
-    "........r.......",
-    "................"
-   ],
-   "duration": 0.9
-  },
-  {
-   "rows": [
     "................",
-    "..r....r........",
-    ".rsr............",
-    "................",
-    "........ihhhi...",
-    ".......ihhhhhi..",
-    ".......hhhhhhhr.",
-    ".......ihhhhhrs.",
-    "........ihhsri..",
-    "..iiiii...ihhhi.",
-    ".ihhhrhi.ihhhhhi",
-    ".ihhhhhi..ihhhr.",
-    ".ihhhrhi...iii..",
+    ".............z..",
+    "........ihhhiz..",
+    ".......ihhhhhyz.",
+    "..z...zhhhhhhhyz",
+    ".zz..zyihhhhhi.y",
+    "zyy..yz.ihhiii..",
+    "y.iiiiyz..ihhhi.",
+    ".ihhhhhz.ihhhhhi",
+    ".ihhhhzz..ihhhi.",
+    ".ihhhhyy...iii..",
     "..iiiii.........",
     "................",
     "................"
-   ],
-   "duration": 0.9
+   ]
   }
  ],
  "tags": [

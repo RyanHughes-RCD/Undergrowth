@@ -10,6 +10,13 @@ const FOOT = 5; // objects stand a little below the tile centre
 export const centre = (x, y) => ({ x: x * TS + TS / 2, y: y * TS + TS / 2 });
 export const tileAt = (wx, wy) => ({ x: Math.floor(wx / TS), y: Math.floor(wy / TS) });
 
+/** 0..1 breathing level for a pulsing overlay: min..1 over `seconds`, offset by `wave` per tile. */
+export function breathe(t, p, x, y) {
+  const k = 0.5 - 0.5 * Math.cos((2 * Math.PI * t) / Math.max(0.5, p.seconds || 5) + (x + y) * (p.wave || 0));
+  const lo = p.min ?? 0.2;
+  return lo + (1 - lo) * k * k * (3 - 2 * k);
+}
+
 export class ForestView {
   constructor(canvas, app) {
     this.canvas = canvas;
@@ -198,6 +205,7 @@ export class ForestView {
         this.visuals[y * s.size.width + x] = v;
       }
     }
+    this.visualsKey = (this.visualsKey || 0) + 1;
     this.rebuildObjects();
   }
 
@@ -325,6 +333,8 @@ export class ForestView {
         ctx.globalAlpha = 1;
         for (const o of v.overlays) {
           ctx.globalAlpha = fadeIn(v.since && v.since[o.sprite]);
+          // Pulsing layers (tileRules "pulse"): opacity breathes slowly, rolling across tiles as a wave.
+          if (o.pulse) ctx.globalAlpha *= breathe(t, o.pulse, x, y);
           this.blit(o.sprite, null, c.x, c.y, t + phase, o.flip);
         }
         ctx.globalAlpha = 1;
@@ -823,23 +833,48 @@ export class ForestView {
     ctx.globalAlpha = 1;
   }
 
-  /** Bugs drawn to mossy banks (Stone + Damp + Verdure combo): little flitting specks; fireflies at night. */
+  /**
+   * Where bugs sit over mossy banks (Stone + Damp + Verdure combo): each connected patch of moss gets
+   * one bug per tilesPerBug tiles (rounded, at least one), on tiles chosen by a stable hash.
+   */
+  bugTiles() {
+    const cfg = this.game.combo('moss');
+    if (this._bugTiles && this._bugTiles.visuals === this.visualsKey) return this._bugTiles.list;
+    const W = this.game.state.size.width, H = this.game.state.size.height;
+    const per = Math.max(1, cfg.tilesPerBug ?? 8), list = [];
+    const seen = new Uint8Array(W * H);
+    const isMoss = (x, y) => x >= 0 && y >= 0 && x < W && y < H && this.visuals[y * W + x] && this.visuals[y * W + x].moss && this.game.inClearing({ x, y });
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      if (seen[i] || !isMoss(x, y)) continue;
+      const patch = [], stack = [[x, y]];
+      seen[i] = 1;
+      while (stack.length) {
+        const [px, py] = stack.pop();
+        patch.push([px, py]);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = px + dx, ny = py + dy, j = ny * W + nx;
+          if (isMoss(nx, ny) && !seen[j]) { seen[j] = 1; stack.push([nx, ny]); }
+        }
+      }
+      const n = Math.max(1, Math.round(patch.length / per));
+      patch.sort((a, b) => hash32(a[0], a[1], 77) - hash32(b[0], b[1], 77));
+      list.push(...patch.slice(0, n));
+    }
+    this._bugTiles = { visuals: this.visualsKey, list: list.slice(0, cfg.maxBugs ?? 40) };
+    return this._bugTiles.list;
+  }
+
+  /** Bugs over mossy banks: little flitting beetles by day, fireflies at night. */
   drawBugs(ctx, view, t) {
     const cfg = this.game.combo('moss');
-    if (!(cfg.bugsPerTile > 0)) return;
-    const W = this.game.state.size.width;
-    const x0 = Math.max(0, Math.floor(view.minX / TS)), x1 = Math.min(W - 1, Math.floor(view.maxX / TS));
-    const y0 = Math.max(0, Math.floor(view.minY / TS)), y1 = Math.min(this.game.state.size.height - 1, Math.floor(view.maxY / TS));
+    if (cfg.tilesPerBug === 0) return;
     const night = this.game.isNight(this.game.now());
-    let drawn = 0;
-    this.bugCount = 0;
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const v = this.visuals[y * W + x];
-      if (!v || !v.moss || !this.game.inClearing({ x, y })) continue;
+    const tiles = this.bugTiles();
+    this.bugCount = tiles.length;
+    for (const [x, y] of tiles) {
+      if ((x + 1) * TS < view.minX || x * TS > view.maxX || (y + 1) * TS < view.minY || y * TS > view.maxY) continue;
       const h = hash32(x, y, 77);
-      if (h / 4294967296 >= cfg.bugsPerTile || drawn >= (cfg.maxBugs ?? 40)) continue;
-      drawn++;
-      this.bugCount = drawn;
       const ph = (h % 1000) / 160;
       const bx = x * TS + 8 + Math.sin(t * 0.9 + ph) * 5 + Math.sin(t * 2.3 + ph * 2) * 2;
       const by = y * TS + 6 + Math.cos(t * 0.7 + ph) * 4 + Math.sin(t * 3.1 + ph) * 1.5;

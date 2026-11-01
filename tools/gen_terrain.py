@@ -523,7 +523,6 @@ def named_terrain_art():
                 c.set(x - 2 + k * 2, y + int(rr * .6), P["moss"])
 
     A = {
-        "foxfire-fen": (2, lambda c, r, f: (patches(c, r, 3, "mud", "mud_d"), twinkle(c, r, f, 7))),
         "rain-garden": (1, lambda c, r, f: (puddles(c, r, 2), flowers(c, r, 4, ("pink", "violet", "white")), specks(c, r, 6, ("water_l",)))),
         "dripstone-ledge": (1, lambda c, r, f: (rocks(c, r, 3, (1.8, 2.6)), specks(c, r, 8, ("water_l", "water_hi")), puddles(c, r, 1))),
         "fernbrake": (1, lambda c, r, f: (patches(c, r, 2, "mud_m", "mud_d", (1.6, 2.4)), fronds(c, r, 7, "lush_l", "lush_ll", "grass_dd"))),
@@ -541,6 +540,42 @@ def named_terrain_art():
         "heartstone-vein": (2, lambda c, r, f: (rocks(c, r, 3, (2, 2.8)), roots(c, r, 2, "cr_violet", "cr_dcyan"), twinkle(c, r, f, 4, "cr_violet", "cr_white"))),
         "amethyst-seep": (2, lambda c, r, f: (puddles(c, r, 2), crystals(c, r, 4, ("cr_violet", "rock_d"), "cr_white", f=f))),
     }
+    # Foxfire Fen: static roots through wet mud; a matching glow layer traces the same roots and the
+    # renderer pulses its opacity (tileRules "pulse"), so the ground seems to breathe.
+    def foxfire_roots(rng):
+        paths = []
+        for _ in range(3):
+            x, y = rng.randint(1, 14), rng.randint(1, 6)
+            pts = []
+            for k in range(rng.randint(7, 11)):
+                pts.append((x, y))
+                x += rng.choice((-1, 0, 1, 1))
+                y += 1 if rng.random() < .75 else 0
+                if not (0 <= x < T and 0 <= y < T):
+                    break
+            paths.append(pts)
+        return paths
+
+    for v in "ab":
+        sid = "ov.terrain.foxfire-fen.%s" % v
+        paths = foxfire_roots(rng_for(sid, 5))
+
+        def base(c, rng, f, paths=paths):
+            patches(c, rng, 3, "mud", "mud_d")
+            for pts in paths:
+                for (x, y) in pts:
+                    c.set(x, y, P["loam_root"]); c.set(x, y + 1, P["loam_d"])
+
+        def glow(c, rng, f, paths=paths):
+            for pts in paths:
+                for i, (x, y) in enumerate(pts):
+                    c.set(x, y, P["gm_hi"] if i % 3 == 0 else P["gm_glow"])
+                    if i % 3 == 0:
+                        for dx, dy in ((1, 0), (-1, 0)):
+                            c.set(x + dx, y + dy, P["gm_glow"])
+        overlay(sid, base)
+        overlay("ov.terrain.foxfire-fen.glow.%s" % v, glow)
+
     for tid, (frames, fn) in A.items():
         for v in "ab":
             def draw(c, rng, f, fn=fn):
