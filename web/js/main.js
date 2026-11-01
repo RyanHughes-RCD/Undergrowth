@@ -93,6 +93,10 @@ class App {
       } else if (e.type === 'expansion') {
         this.view.highlight(e.tiles, 4, '170,255,150');
         ui.toast(ui.story('messages.expansion'));
+      } else if (e.type === 'taskDone') {
+        ui.toast(ui.story('messages.taskDone', { task: e.task.text }));
+      } else if (e.type === 'tasksIntro') {
+        ui.toast(ui.story('messages.tasksIntro'));
       } else if (e.type === 'uncommonHint') {
         this.view.highlight([e.tile], 6, '200,170,255');
         ui.toast(ui.story('messages.uncommonHint'));
@@ -103,6 +107,7 @@ class App {
 
   /** Call after any change. `persist=false` for pure UI changes. */
   changed(persist = true) {
+    this.game.checkTasks();
     this.view.sync();
     this.ui.render();
     this.processEvents();
@@ -297,6 +302,11 @@ class App {
       this.ui.toast(`${this.displayName(c)} heads back to the Burrow. The land will slowly settle.`);
       this.changed();
     }
+  }
+
+  claimTask(id) {
+    const results = this.attempt(() => this.game.claimTask(id, this.game.now()));
+    if (results) { this.present(results, 'a task reward'); this.changed(); }
   }
 
   renameForest(name) { this.game.renameForest(name); this.changed(); }

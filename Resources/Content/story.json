@@ -1,26 +1,54 @@
 {
   "_about": "All story, tutorial and hint text. Edit freely; {placeholders} are filled in by the game.",
-
   "tutorial": {
-    "forage":     { "title": "A quiet clearing", "text": "Only an old log remains of the forest that once grew here. Something small has sprouted beside it. Tap the mushroom to pick it." },
-    "pickClover": { "title": "Seeds of something", "text": "Lovely! It's in your Field Guide now. A clover has popped up too. Pick it. Clovers often drop seeds." },
-    "plant":      { "title": "Plant a seed", "text": "You found a Mystery Seed. Plant it on any open tile, and it'll grow while you're away.", "button": "Plant it" },
-    "dig":        { "title": "Something under the soil", "text": "See that wiggling patch? A geode is buried there. Tap it to dig it up." },
-    "crack":      { "title": "Crack it open", "text": "Geodes hide gems, and sometimes something alive. Crack it open!", "button": "Crack it", "choose": "Who's inside? Choose a friend:" },
-    "place":      { "title": "A new friend", "text": "Welcome your {creature}! Creatures slowly change the land around them. Place it on an open tile.", "button": "Place it" },
-    "watch":      { "title": "Watch the land change", "text": "Stay a moment… your {creature} is already changing the ground around it." },
-    "wrap":       { "title": "The forest remembers", "text": "The forest keeps growing while you're away. Your seed is still sprouting, and new things will appear. Come back and see what changes!", "button": "Let's go" }
+    "forage": {
+      "title": "A quiet clearing",
+      "text": "Only an old log remains of the forest that once grew here. Something small has sprouted beside it. Tap the mushroom to pick it."
+    },
+    "pickClover": {
+      "title": "Seeds of something",
+      "text": "Lovely! It's in your Field Guide now. A clover has popped up too. Pick it. Clovers often drop seeds."
+    },
+    "plant": {
+      "title": "Plant a seed",
+      "text": "You found a Mystery Seed. Plant it on any open tile, and it'll grow while you're away.",
+      "button": "Plant it"
+    },
+    "dig": {
+      "title": "Something under the soil",
+      "text": "See that wiggling patch? A geode is buried there. Tap it to dig it up."
+    },
+    "crack": {
+      "title": "Crack it open",
+      "text": "Geodes hide gems, and sometimes something alive. Crack it open!",
+      "button": "Crack it",
+      "choose": "Who's inside? Choose a friend:"
+    },
+    "place": {
+      "title": "A new friend",
+      "text": "Welcome your {creature}! Creatures slowly change the land around them. Place it on an open tile.",
+      "button": "Place it"
+    },
+    "watch": {
+      "title": "Watch the land change",
+      "text": "Stay a moment… your {creature} is already changing the ground around it."
+    },
+    "wrap": {
+      "title": "The forest remembers",
+      "text": "The forest keeps growing while you're away. Your seed is still sprouting, and new things will appear. Come back and see what changes!",
+      "button": "Let's go"
+    }
   },
-
   "messages": {
     "slotUnlocked": "A new creature slot has opened ({count} of {max}). There's room for another friend in the clearing.",
     "blend": "Two influences are meeting! Where they overlap, the land takes on a little of both.",
     "blendTitle": "The land is blending",
     "expansion": "The forest is spreading. The clearing has grown!",
     "uncommonHint": "Something new might grow here…",
-    "lockedSlot": "Day {day}"
+    "lockedSlot": "Day {day}",
+    "taskDone": "Task complete: {task}. Tap Tasks to claim your reward.",
+    "tasksIntro": "New: Tasks! Little goals to get your forest going, each with a reward."
   },
-
   "guide": {
     "landmarks": {
       "landmark.old-log": "The last remnant of an ancient forest. Moss still clings to it, and something in its rings remembers what this place used to be. The creatures you welcome are slowly bringing that forest back."

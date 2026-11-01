@@ -185,3 +185,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .rays-wrap.small { width: 120px; height: 120px; }
 .big-emoji { font-size: 40px; position: relative; }
 #toast.low { top: auto; bottom: calc(var(--safe-bottom) + 190px); }
+.task.done b { color: #9be89b; }
+.reward { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.reward-item { display: inline-flex; align-items: center; gap: 3px; }
+.reward-item canvas { display: inline-block; }

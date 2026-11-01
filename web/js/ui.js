@@ -76,6 +76,7 @@ export class UI {
       this.navButton('🏠', 'Burrow', g.burrow.length, () => this.open('burrow')),
       this.navButton('🎒', 'Bag', invCount, () => this.open('bag')),
       this.navButton('📖', 'Guide', 0, () => this.open('guide')),
+      g.inTutorial ? null : this.navButton('📜', 'Tasks', g.activeTasks().filter((t) => t.done).length, () => this.open('tasks')),
     ));
     this.root.replaceChildren(top, bottom);
     if (this.sheet && withSheet) this.renderSheet();
@@ -216,6 +217,7 @@ export class UI {
       guide: () => this.guideBody(),
       rename: () => ['Rename forest', this.renameBody()],
       debug: () => ['Debug', this.debugBody()],
+      tasks: () => ['Tasks', this.tasksBody()],
       entry: () => [arg.name, this.entryBody(arg)],
     }[type];
     if (!build) return;
@@ -408,6 +410,25 @@ export class UI {
       e.howFound ? h('p', { class: 'sub center' }, e.howFound) : null,
       e.text ? h('p', { class: 'sub center' }, e.text) : null,
       e.special ? h('p', { class: 'center' }, '✨ ' + e.special) : null,
+    ];
+  }
+
+  tasksBody() {
+    const g = this.game;
+    const tasks = g.activeTasks();
+    if (!tasks.length) return h('p', { class: 'sub' }, 'All tasks done. Your forest is on its way!');
+    return [
+      h('p', { class: 'sub' }, 'Little goals to get your forest going. New ones appear as you finish these.'),
+      ...tasks.map((t) => h('div', { class: 'list-row task' + (t.done ? ' done' : '') },
+        h('div', { class: 'grow' },
+          h('b', {}, t.text),
+          h('div', { class: 'progress' }, h('span', { style: `width:${Math.round(t.progress / t.target * 100)}%` })),
+          h('div', { class: 'sub reward' }, `${t.progress}/${t.target} · Reward: `,
+            ...(t.reward || []).map((r) => {
+              const def = this.content.items[r.item];
+              return h('span', { class: 'reward-item' }, def ? this.sprites.element(def.sprite, null, 1.5) : '', `${r.count || 1}× ${def ? def.name : r.item}`);
+            }))),
+        t.done ? h('button', { class: 'btn green small', onclick: () => this.app.claimTask(t.id) }, 'Claim') : null)),
     ];
   }
 

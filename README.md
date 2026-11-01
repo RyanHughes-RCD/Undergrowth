@@ -40,7 +40,7 @@ Then open <http://localhost:8000>.
 
 ## Opening and early progression (web version)
 
-- **New forest:** a 5×5 clearing in the middle of the 12×16 forest, with all stats at 0. The Old Log sits at its centre (`Content/landmarks.json`). Only spawns with no stat requirements can appear, straight from the normal spawn rules.
+- **New forest:** a 7×7 clearing in the middle of the 40×56 forest, with all stats at 0. The Old Log sits at its centre (`Content/landmarks.json`). Only spawns with no stat requirements can appear, straight from the normal spawn rules.
 - **Tutorial:** forage, then plant, dig, crack, place, and watch. The pointer and the coach card guide each step, and each step only advances when you do it.
   - The guaranteed results ride on the tutorial's own spawns: the Clover always drops a seed, and the Pebble Geode always holds a Common creature.
   - The creature's family is set by `tutorial.creatureFamily`: `"random"` or `"choose"`.
@@ -48,7 +48,9 @@ Then open <http://localhost:8000>.
   - Progress is saved, so quitting resumes at the same step. The 🐞 menu can replay or skip the tutorial.
 - **Slots:** 1 to start, then more on the days in `slotUnlocks.unlockDays` (counted from first play). Locked slots show their day.
 - **Blend celebration:** fires once, the first time two creatures each give a tile `blend.minEach` or more.
-- **Forest expansion:** the clearing grows by one ring when the `expansion` conditions are met, at most every `minHoursBetween` hours. Newly revealed tiles fade influence in over `revealRampSeconds`, and nothing reaches past the treeline.
+- **Forest expansion:** the clearing grows by `ringTiles` (2) tiles on each side when the `expansion` conditions are met, at most every `minHoursBetween` hours. Newly revealed tiles fade influence in over `revealRampSeconds`, and nothing reaches past the treeline.
+- **Starter tasks:** after the tutorial, a few goals at a time appear under Tasks. Examples are picking 5 mushrooms, harvesting a seed, cracking 3 geodes, and having two creatures out at once. Each gives a reward to claim. They're defined in `Content/tasks.json` (text, counter, target, reward).
+- **Spawns:** the cap is `spawns.maxPerOpenTile` × open tiles, at least `minCap` and at most `maxTotal`.
 - **First-Uncommon hint:** shows once, the first time any tile meets an Uncommon spawn's stat requirements.
 - **Story and hint text:** all in `Content/story.json`, including the Old Log's Field Guide entry and the Heartwood Sapling teaser.
 - **Older saves:** forests from before this update open fully, with the tutorial marked done.
@@ -57,7 +59,7 @@ The iOS app doesn't have these yet. It ignores the new data files.
 
 ## How to play
 
-The whole forest (12×16 tiles, set in `tuning.json`) fits the screen between the top bar and the bottom controls at a crisp whole-pixel scale, with a shrub treeline filling the edges. Pinch to zoom in; drag to look around while zoomed.
+The forest is 40×56 tiles (`tuning.json` → `grid`). You start in a small clearing that grows outward over time. The view fits the clearing between the top bar and the bottom controls at a crisp whole-pixel scale, and never zooms out past `visuals.minFitScale`. Once the clearing is bigger than the screen, drag to explore. Pinch to zoom in.
 
 
 - **You start with no creatures.** Tap things that grow in the forest:

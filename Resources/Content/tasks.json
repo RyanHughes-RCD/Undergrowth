@@ -1,0 +1,13 @@
+[
+  { "id": "pick-mushrooms",  "text": "Pick 5 mushrooms",                    "counter": "collect:mushroom", "target": 5,  "reward": [{ "item": "seed.mystery-seed", "count": 2 }] },
+  { "id": "pick-plants",     "text": "Pick 5 plants",                       "counter": "collect:plant",    "target": 5,  "reward": [{ "item": "geode.pebble-geode", "count": 1 }] },
+  { "id": "harvest-seed",    "text": "Harvest a seed you planted",          "counter": "harvest",          "target": 1,  "reward": [{ "item": "gem.quartz", "count": 1 }] },
+  { "id": "dig-geodes",      "text": "Dig up 3 geodes",                     "counter": "dig",              "target": 3,  "reward": [{ "item": "seed.mystery-seed", "count": 2 }] },
+  { "id": "crack-geodes",    "text": "Crack 3 geodes",                      "counter": "crack",            "target": 3,  "reward": [{ "item": "gem.agate", "count": 1 }] },
+  { "id": "crush-gem",       "text": "Crush a gem into the soil",           "counter": "use",              "target": 1,  "reward": [{ "item": "geode.mossy-geode", "count": 1 }] },
+  { "id": "guide-10",        "text": "Discover 10 Field Guide entries",     "counter": "guide",            "target": 10, "reward": [{ "item": "gem.jasper", "count": 1 }] },
+  { "id": "second-creature", "text": "Find a second creature",              "counter": "creatures",        "target": 2,  "reward": [{ "item": "seed.mystery-seed", "count": 3 }] },
+  { "id": "plant-5",         "text": "Plant 5 seeds",                       "counter": "plant",            "target": 5,  "reward": [{ "item": "gem.malachite", "count": 1 }] },
+  { "id": "two-placed",      "text": "Have two creatures out at once",      "counter": "placed",           "target": 2,  "reward": [{ "item": "geode.rootbound-geode", "count": 1 }] },
+  { "id": "pick-25",         "text": "Collect 25 things from the forest",   "counter": "collect",          "target": 25, "reward": [{ "item": "material.moonfall-shard", "count": 1 }] }
+]

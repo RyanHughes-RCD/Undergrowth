@@ -83,8 +83,10 @@ export class ForestView {
     if (!this.app.game) return Math.round(2 * this.dpr);
     const a = this.area();
     const pad = 4;
-    const maxScale = this.app.content.tuning.visuals.maxFitScale || 4;
-    const k = Math.floor(this.dpr * Math.min((a.w - 8) / (this.mapW + pad), a.h / (this.mapH + pad), maxScale));
+    // Fit the whole clearing, but never zoom out past minFitScale: big clearings are explored by dragging.
+    const v = this.app.content.tuning.visuals;
+    const fit = Math.min((a.w - 8) / (this.mapW + pad), a.h / (this.mapH + pad), v.maxFitScale || 4);
+    const k = Math.max(Math.floor(this.dpr * fit), Math.ceil(this.dpr * (v.minFitScale || 0)));
     return Math.max(1, k);
   }
 
@@ -143,8 +145,8 @@ export class ForestView {
     }
     const ck = JSON.stringify(s.clearing);
     if (this.clearingKey !== ck) {
-      // The clearing grew: re-fit and re-centre (the treeline steps back).
-      if (this.clearingKey) { this.k = 0; this.fit(); this.cam = { x: this.rect.x + this.mapW / 2, y: this.rect.y + this.mapH / 2 }; }
+      // The clearing grew: re-fit (the treeline steps back); keep looking at the same spot.
+      if (this.clearingKey) { this.k = 0; this.fit(); }
       this.clearingKey = ck;
       this.edgeCache.clear();
     }

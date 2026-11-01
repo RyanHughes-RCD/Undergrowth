@@ -1,7 +1,7 @@
 {
   "grid": {
-    "width": 12,
-    "height": 16
+    "width": 40,
+    "height": 56
   },
   "placementSlots": 3,
   "starterCreatures": [],
@@ -23,12 +23,14 @@
     "glimmerRadiusBonus": 1
   },
   "spawns": {
-    "tickSeconds": 300,
+    "tickSeconds": 180,
     "attemptsPerTick": 3,
     "spawnChance": 0.5,
-    "maxTotal": 18,
+    "maxTotal": 160,
     "lifetimeSeconds": 172800,
-    "maxCatchUpTicks": 288
+    "maxCatchUpTicks": 288,
+    "maxPerOpenTile": 0.14,
+    "minCap": 5
   },
   "seeds": {
     "growSeconds": [
@@ -76,7 +78,8 @@
       3600
     ],
     "maxFitScale": 3,
-    "overlayFadeSeconds": 0.6
+    "overlayFadeSeconds": 0.6,
+    "minFitScale": 1.6
   },
   "naming": {
     "quietThreshold": 0.3,
@@ -93,8 +96,8 @@
   },
   "debugTools": true,
   "clearing": {
-    "startWidth": 5,
-    "startHeight": 5
+    "startWidth": 7,
+    "startHeight": 7
   },
   "tutorial": {
     "enabled": true,
@@ -131,10 +134,15 @@
         "count": 3
       }
     ],
-    "minHoursBetween": 24,
-    "revealRampSeconds": 600
+    "minHoursBetween": 12,
+    "revealRampSeconds": 600,
+    "ringTiles": 2
   },
   "uncommonHint": {
     "rarity": "uncommon"
+  },
+  "tasks": {
+    "visibleAtOnce": 3,
+    "startAfterTutorial": true
   }
 }

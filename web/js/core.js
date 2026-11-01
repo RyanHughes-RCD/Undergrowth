@@ -347,6 +347,8 @@ export class Game {
     s.milestones = s.milestones || {};
     s.tutorial = s.tutorial || { step: 'done' };
     s.landmarks = s.landmarks || [];
+    s.counters = s.counters || {};
+    s.tasks = s.tasks || { claimed: [], announced: [] };
     if (s.lastExpansionAt == null) s.lastExpansionAt = s.createdAt;
     if (s.announcedSlots == null) s.announcedSlots = this.unlockedSlots(s.lastUpdated || s.createdAt);
     s.version = SAVE_VERSION;
@@ -496,6 +498,43 @@ export class Game {
   finishTutorial() {
     this.state.tutorial = { step: 'done' };
     this.events.push({ type: 'tutorial', step: 'done' });
+    if ((this.content.tasks || []).length) this.events.push({ type: 'tasksIntro' });
+  }
+
+  // ---- starter tasks (Content/tasks.json)
+  bump(counter, n = 1) { this.state.counters[counter] = (this.state.counters[counter] || 0) + n; }
+
+  counterValue(name) {
+    if (name === 'guide') return this.discovered.size;
+    if (name === 'creatures') return this.state.creatures.length;
+    if (name === 'placed') return this.activePlacements.length;
+    return this.state.counters[name] || 0;
+  }
+
+  /** The next few unclaimed tasks, with progress. */
+  activeTasks() {
+    const cfg = this.t.tasks || {};
+    if (cfg.startAfterTutorial !== false && this.inTutorial) return [];
+    const claimed = new Set(this.state.tasks.claimed);
+    return (this.content.tasks || []).filter((t) => !claimed.has(t.id)).slice(0, cfg.visibleAtOnce || 3)
+      .map((t) => { const v = Math.min(t.target, this.counterValue(t.counter)); return { ...t, progress: v, done: v >= t.target }; });
+  }
+
+  claimTask(id, now) {
+    const task = this.activeTasks().find((t) => t.id === id);
+    if (!task) throw new GameError('That task isn\'t available.');
+    if (!task.done) throw new GameError('Not finished yet.');
+    this.state.tasks.claimed.push(id);
+    return this.grant((task.reward || []).map((r) => ({ item: r.item, count: r.count || 1 })));
+  }
+
+  checkTasks() {
+    for (const t of this.activeTasks()) {
+      if (t.done && !this.state.tasks.announced.includes(t.id)) {
+        this.state.tasks.announced.push(t.id);
+        this.events.push({ type: 'taskDone', task: t });
+      }
+    }
   }
 
   /** Keeps the tutorial on track (e.g. a tutorial item went missing) and advances timed steps. */
@@ -704,6 +743,7 @@ export class Game {
       if (tiles.length) { s.milestones.blend = now; this.events.push({ type: 'blend', tiles }); }
     }
     if (!this.inTutorial) this.checkExpansion(now);
+    this.checkTasks();
     if (!s.milestones.uncommonHint) {
       const tile = this.firstUncommonTile(now);
       if (tile) { s.milestones.uncommonHint = now; this.events.push({ type: 'uncommonHint', tile }); }
@@ -752,7 +792,8 @@ export class Game {
   /** Grows the clearing by one ring (clipped to the full forest). New tiles fade in from 0. */
   expand(now) {
     const c = this.clearing, s = this.state.size;
-    const next = { x0: Math.max(0, c.x0 - 1), y0: Math.max(0, c.y0 - 1), x1: Math.min(s.width - 1, c.x1 + 1), y1: Math.min(s.height - 1, c.y1 + 1) };
+    const r = (this.t.expansion && this.t.expansion.ringTiles) || 1;
+    const next = { x0: Math.max(0, c.x0 - r), y0: Math.max(0, c.y0 - r), x1: Math.min(s.width - 1, c.x1 + r), y1: Math.min(s.height - 1, c.y1 + r) };
     const added = [];
     for (let y = next.y0; y <= next.y1; y++) for (let x = next.x0; x <= next.x1; x++) {
       if (!this.inClearing({ x, y })) { this.state.revealed[x + ',' + y] = now; added.push({ x, y }); }
@@ -797,7 +838,7 @@ export class Game {
     const st = this.t.spawns;
     // The spawn cap scales with how much of the forest is open.
     const c = this.clearing, area = (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1);
-    const cap = Math.max(3, Math.round(st.maxTotal * area / (this.state.size.width * this.state.size.height)));
+    const cap = Math.min(st.maxTotal, Math.max(st.minCap || 3, Math.round(area * (st.maxPerOpenTile || 0.1))));
     for (let i = 0; i < st.attemptsPerTick; i++) {
       if (this.state.spawns.length >= cap) break;
       if (!this.rng.chance(st.spawnChance)) continue;
@@ -992,6 +1033,7 @@ export class Game {
     };
     this.state.placements.push(p);
     slot.placementID = p.id;
+    this.bump('place');
     this.statCache = this.statField(now);
     const tut = this.state.tutorial;
     if (tut.step === 'place' && tut.creatureID === creatureID) {
@@ -1139,6 +1181,9 @@ export class Game {
       if (!pending.some((x) => x.item === f.item)) pending.push({ item: f.item, count: f.count || 1 });
     }
     if (def.inGuide !== false) this.discover('item:' + def.id);
+    this.bump('collect');
+    this.bump('collect:' + def.category);
+    if (def.category === 'geode') this.bump('dig');
     const results = this.grant(pending);
     const tut = this.state.tutorial;
     if (spawn.tutorial && spawn.id === tut.spawnID) {
@@ -1159,6 +1204,7 @@ export class Game {
     const speed = this.mult(this.effects('seedGrowth', tile));
     const grow = this.rng.range(...range(this.t.seeds.growSeconds)) / Math.max(0.01, speed);
     this.state.plantedSeeds.push({ id: this.rng.uuid(), seedItemID: itemID, tile: { ...tile }, plantedAt: now, growSeconds: grow });
+    this.bump('plant');
     if (this.state.tutorial.step === 'plant') this.enterTutorialStep('dig', now);
   }
 
@@ -1169,6 +1215,7 @@ export class Game {
     const seed = this.state.plantedSeeds[i];
     if (this.seedProgress(seed, now) < 1) throw new GameError("It isn't ready yet.");
     this.state.plantedSeeds.splice(i, 1);
+    this.bump('harvest');
     const c = this.findCreature('seed', seed.seedItemID, seed.tile, this.tileStats(seed.tile, now), now, seed.plantedAt);
     if (c) return this.grant([{ creature: c }]);
     const table = this.content.items[seed.seedItemID]?.onGrow;
@@ -1182,6 +1229,7 @@ export class Game {
     if (!def.onCrack) throw new GameError("That can't be cracked.");
     if (!(this.state.inventory[itemID] > 0)) throw new GameError("You don't have that.");
     this.consume(itemID);
+    this.bump('crack');
     // Geodes with a guaranteed creature (the tutorial geode) are cracked first.
     let gi = this.state.geodes.findIndex((g) => g.itemID === itemID && g.forcedCreature);
     if (gi < 0) gi = this.state.geodes.findIndex((g) => g.itemID === itemID);
@@ -1225,6 +1273,7 @@ export class Game {
     if (use.type === 'soilBoost') {
       if (!tile || !this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
       this.consume(itemID);
+      this.bump('use');
       this.state.soilBoosts.push({
         id: this.rng.uuid(), tile: { ...tile }, stats: { ...use.stats }, appliedAt: now,
         expiresAt: use.permanent ? null : now + (use.hours || 24) * HOUR,
@@ -1277,6 +1326,7 @@ export class Content {
     this.spawnableItems = bundle.items.filter((i) => i.spawn);
     this.landmarks = bundle.landmarks || [];
     this.story = bundle.story || {};
+    this.tasks = bundle.tasks || [];
   }
   familyName(id) { return this.creatureList.find((c) => c.family === id)?.familyName || id; }
   itemsInGroup(g) { return this.itemList.filter((i) => i.groups && i.groups.includes(g)); }
