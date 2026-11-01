@@ -224,6 +224,7 @@ export class UI {
       rename: () => ['Rename forest', this.renameBody()],
       debug: () => ['Debug', this.debugBody()],
       tasks: () => ['Tasks', this.tasksBody()],
+      inspect: () => [`Spawns · tile ${arg.x}, ${arg.y}`, this.inspectBody(arg)],
       entry: () => [arg.name, this.entryBody(arg)],
     }[type];
     if (!build) return;
@@ -438,6 +439,44 @@ export class UI {
     ];
   }
 
+  /** Debug: the spawn maths for one tile, right now. */
+  inspectBody(tile) {
+    const g = this.game, now = g.now();
+    const stats = g.tileStats(tile, now);
+    const details = g.spawnDetails(tile, now);
+    const odds = g.categoryOdds(details);
+    const fmt = (n) => (n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2));
+    const table = (list, catShare) => {
+      const total = list.reduce((a, d) => a + d.weight, 0) || 1;
+      return list.sort((a, b) => b.weight - a.weight).map((d) => h('div', { class: 'inspect-row' },
+        this.sprites.element(d.item.sprite, null, 1),
+        h('span', { class: 'grow' }, d.item.name, h('span', { class: 'sub', style: `color:${RARITY_COLORS[d.item.rarity]}` }, ' ' + rarityName(d.item.rarity))),
+        h('span', { class: 'num' }, fmt(d.base)),
+        h('span', { class: 'num' + (d.clamped ? ' clamped' : '') }, '×' + d.mult.toFixed(2) + (d.clamped ? '*' : '') + (d.fx !== 1 ? ` ×${d.fx}` : '')),
+        h('span', { class: 'num' }, fmt(d.weight)),
+        h('b', { class: 'num' }, (d.weight / total * 100).toFixed(1) + '%')));
+    };
+    const cats = ['mushroom', 'plant', 'geode'];
+    const seed = g.seedDetails(tile, now);
+    return [
+      h('div', { class: 'stat-grid' }, CORE_STATS.map((k) => this.statBar(k, stats[k] || 0))),
+      h('p', { class: 'sub' }, `${g.isNight(now) ? 'Night' : 'Day'}${g.isRaining(now) ? ', raining' : ''} · ` +
+        (g.inClearing(tile) ? (g.isFree(tile) ? 'open tile' : 'tile is occupied (nothing spawns here now)') : 'outside the clearing')),
+      h('div', { class: 'inspect-head' }, h('span', { class: 'grow' }, 'Item'), h('span', { class: 'num' }, 'Base'),
+        h('span', { class: 'num' }, 'Mult'), h('span', { class: 'num' }, 'Weight'), h('span', { class: 'num' }, 'Chance')),
+      ...cats.map((cat) => {
+        const list = details.filter((d) => d.item.category === cat);
+        return [
+          h('div', { class: 'section' }, `${catTitle(cat)} · ${odds[cat] ? (odds[cat] * 100).toFixed(0) + '% of rolls' : 'none qualify'}`),
+          list.length ? table(list) : h('p', { class: 'sub' }, 'Nothing qualifies here.'),
+        ];
+      }),
+      h('div', { class: 'section' }, 'A Mystery Seed planted here now could grow into'),
+      seed.length ? table(seed) : h('p', { class: 'sub' }, 'No plant qualifies.'),
+      h('p', { class: 'sub' }, '* multiplier clamped to the configured range. Chance is within the category; the category itself is picked first by spawns.categoryWeights.'),
+    ];
+  }
+
   renameBody() {
     const g = this.game;
     const input = h('input', { type: 'text', value: g.state.customName || '', placeholder: g.generatedName, maxlength: 40 });
@@ -460,7 +499,10 @@ export class UI {
       h('div', { class: 'section' }, 'Skip ahead'),
       h('div', { class: 'row gap wrap' }, b('+1 hour', () => a.debugSkip(1)), b('+6 hours', () => a.debugSkip(6)), b('+1 day', () => a.debugSkip(24))),
       h('div', { class: 'section' }, 'View'),
-      b(this.statOverlay ? 'Hide stat overlay' : 'Show stat overlay', () => { this.statOverlay = !this.statOverlay; a.changed(false); this.renderSheet(); }),
+      h('div', { class: 'row gap wrap' },
+        b(this.statOverlay ? 'Hide stat overlay' : 'Show stat overlay', () => { this.statOverlay = !this.statOverlay; a.changed(false); this.renderSheet(); }),
+        b(this.spawnInspector ? 'Spawn inspector: ON' : 'Spawn inspector: off', () => { this.spawnInspector = !this.spawnInspector; a.changed(false); this.renderSheet(); }, this.spawnInspector ? 'orange' : '')),
+      h('p', { class: 'sub' }, 'Spawn inspector: while on, tapping a tile shows its stats and every qualifying wild spawn with its effective weight and odds.'),
       h('div', { class: 'section' }, 'Give'),
       h('div', { class: 'row gap wrap' },
         b('3 Mystery Seeds', () => a.debugGive('seed.mystery-seed', 3)),

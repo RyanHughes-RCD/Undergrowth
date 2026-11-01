@@ -30,7 +30,16 @@
     "lifetimeSeconds": 172800,
     "maxCatchUpTicks": 288,
     "maxPerOpenTile": 0.14,
-    "minCap": 5
+    "minCap": 5,
+    "scaling": {
+      "minMultiplier": 0.25,
+      "maxMultiplier": 4
+    },
+    "categoryWeights": {
+      "mushroom": 1,
+      "plant": 1,
+      "geode": 1
+    }
   },
   "seeds": {
     "growSeconds": [

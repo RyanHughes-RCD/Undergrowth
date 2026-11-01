@@ -221,3 +221,11 @@ button { border: 0; background: none; cursor: pointer; padding: 0; }
 .reward { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .reward-item { display: inline-flex; align-items: center; gap: 4px; }
 .reward-item canvas { display: inline-block; }
+
+/* debug spawn inspector */
+.inspect-head, .inspect-row { display: flex; align-items: center; gap: 6px; font-size: var(--t-tiny); padding: 4px 0; }
+.inspect-head { color: var(--dim); border-bottom: var(--px) solid var(--panel-lo); margin-top: 8px; }
+.inspect-row { border-bottom: var(--px) dashed #2c3a28; }
+.inspect-row .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.num { width: 46px; text-align: right; flex: none; }
+.num.clamped { color: var(--gold); }

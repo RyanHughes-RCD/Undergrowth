@@ -183,6 +183,13 @@ class App {
   handleTap(tile) {
     const g = this.game, ui = this.ui, now = g.now();
     if (!g.inBounds(tile)) return;
+    if (ui.spawnInspector && !ui.mode) {
+      // Debug: inspect the spawn maths for this tile instead of interacting with it.
+      ui.selectedTile = tile;
+      ui.open('inspect', tile);
+      this.changed(false);
+      return;
+    }
     if (ui.mode && ui.mode.type === 'place') {
       const ok = this.attempt(() => { g.place(ui.mode.creatureID, tile, now); return true; });
       if (ok) {

@@ -108,6 +108,13 @@ python3 tools/gen_placeholders.py
 - **Special effects:** creature "Special effect" text can't be read automatically, so its rules live in `design/creature_effects.json`, keyed by creature name. Anything not built yet is listed in a creature's details as "Not in the game yet". Right now that covers fossils, the underground layer, hybrid plants and visible fairy rings.
 - **Gem effects** ("Crush into soil: +5 Stone on a tile for 24h") are read from the text.
 - **Extra conditions** that are understood: night only, daytime only, during rain, only one per forest, planted during the day or at night, and checked once per day. Notes like "melts if left unpicked for a day" set a 24h lifetime.
+- **Spawn stat scaling** (columns W–AB, "Damp scaling %/pt" … "Depth scaling %/pt"): each number is the % change in that item's spawn weight per point a tile stat sits above the item's minimum for it (0 if the item has no minimum). Negative numbers make an item rarer as that stat rises.
+  - Multiplier = 1 + Σ (scaling ÷ 100) × max(0, stat − min). It is clamped to `spawns.scaling.minMultiplier`..`maxMultiplier` in `tuning.json` (0.25..4). Effective weight = base weight × multiplier.
+  - Minimums, time of day, rain and one-at-a-time still gate whether an item can spawn at all.
+  - If every scaling cell is left blank, the importer falls back to a rate per required stat by rarity: Common 1, Uncommon 1.5, Rare 2, Very rare 2.5, Legendary 3.
+  - **Category first:** each spawn first picks mushroom, plant or geode (weighted by `spawns.categoryWeights`, among categories that have something qualifying on that tile), then an item within it by effective weight.
+  - **Seeds** choose their plant when planted, using the same weights for that tile at that time. The choice is saved on the seed, so a plant item can carry its own `growthSprites` (otherwise the stages are the generic seed stages ending in the plant's sprite).
+  - **Spawn inspector:** in 🐞 Debug, turn on "Spawn inspector", then tap any tile. It shows the tile's stats and every qualifying item with its base, multiplier, weight and % within its category, plus what a Mystery Seed planted there now could grow into.
 - **Unclear sheet entries** and how I read them:
   - "Turns low ground into pond tiles" (Bog Wisp): Damp 25+ in its radius.
   - "Use on a creature source item" (Moonfall Shard): the next creature you find is a Glimmer.

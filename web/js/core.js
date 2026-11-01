@@ -865,7 +865,7 @@ export class Game {
       if (!this.rng.chance(st.spawnChance)) continue;
       const tile = { x: this.rng.int(c.x0, c.x1), y: this.rng.int(c.y0, c.y1) };
       if (!this.isFree(tile)) continue;
-      const item = weightedPick(this.spawnWeights(tile, t), this.rng);
+      const item = this.pickSpawn(tile, t);
       if (item) {
         this.state.spawns.push({ id: this.rng.uuid(), itemID: item.id, tile, spawnedAt: t });
         made++;
@@ -874,8 +874,17 @@ export class Game {
     return made;
   }
 
-  /** What could spawn on a tile at time `t` (stats, day/night, rain, one-at-a-time, creature effects). */
-  spawnWeights(tile, t) {
+  /**
+   * Effective spawn weight for every item that qualifies on a tile at time `t`.
+   *  - Gates (weight 0): minimum stats, day/night, and for wild spawns rain + one-at-a-time.
+   *  - Multiplier = 1 + Σ statScaling% × max(0, tile stat − item minimum), clamped to
+   *    spawns.scaling.minMultiplier..maxMultiplier. Effective = base × multiplier.
+   *  - Creature effects (spawn-weight bonuses) multiply after the clamp; minimum-lowering and
+   *    stat-substitute effects also apply to the scaling.
+   * opts.seed: choosing what a Mystery Seed grows into (rain/one-at-a-time don't apply).
+   * opts.items: limit to these items.
+   */
+  spawnDetails(tile, t, opts = {}) {
     const s = this.tileStats(tile, t);
     const night = this.isNight(t, tile);
     const raining = this.isRaining(t);
@@ -883,28 +892,80 @@ export class Game {
     const offsetFx = this.effects('requirementOffset', tile);
     const subFx = this.effects('statSubstitute', tile);
     const onMap = new Set(this.state.spawns.map((x) => x.itemID));
+    const sc = (this.t.spawns && this.t.spawns.scaling) || {};
+    const lo = sc.minMultiplier ?? 0.25, hi = sc.maxMultiplier ?? 4;
     const out = [];
-    for (const item of this.content.spawnableItems) {
+    for (const item of opts.items || this.content.spawnableItems) {
       const rule = item.spawn;
+      if (!rule) continue;
       if (rule.time === 'night' && !night) continue;
       if (rule.time === 'day' && night) continue;
-      if (rule.rain && !raining) continue;
-      if (rule.oneAtATime && onMap.has(item.id)) continue;
+      if (!opts.seed && rule.rain && !raining) continue;
+      if (!opts.seed && rule.oneAtATime && onMap.has(item.id)) continue;
+      const req = rule.requires || {};
+      const stats = new Set([...Object.keys(req), ...Object.keys(rule.statScaling || {})]);
       let ok = true;
-      for (const stat in rule.requires || {}) {
-        const b = { ...rule.requires[stat] };
+      const mins = {}, vals = {};
+      for (const stat of stats) {
+        const b = { ...(req[stat] || {}) };
         for (const e of offsetFx) if (e.stat === stat && Game.effectMatches(e, item) && b.min != null) b.min = Math.max(0, b.min + (e.offset || 0));
         let v = s[stat] || 0;
         for (const e of subFx) if (e.from === stat && Game.effectMatches(e, item) && e.to) v = Math.max(v, s[e.to] || 0);
-        if (!boundMatches(b, v)) { ok = false; break; }
+        if (req[stat] && !boundMatches(b, v)) { ok = false; break; }
+        mins[stat] = b.min || 0;
+        vals[stat] = v;
       }
       if (!ok) continue;
-      let w = rule.baseWeight;
-      for (const k in rule.statWeights || {}) w *= 1 + rule.statWeights[k] * (s[k] || 0) / 100;
-      for (const e of weightFx) if (Game.effectMatches(e, item)) w *= e.mult ?? 1;
-      if (w > 0) out.push([item, w]);
+      let raw = 1;
+      for (const stat in rule.statScaling || {}) raw += (rule.statScaling[stat] / 100) * Math.max(0, vals[stat] - mins[stat]);
+      const mult = Math.min(hi, Math.max(lo, raw));
+      let fx = 1;
+      for (const e of weightFx) if (Game.effectMatches(e, item)) fx *= e.mult ?? 1;
+      const weight = rule.baseWeight * mult * fx;
+      if (weight > 0) out.push({ item, base: rule.baseWeight, rawMult: raw, mult, clamped: raw !== mult, fx, weight });
     }
     return out;
+  }
+
+  spawnWeights(tile, t) { return this.spawnDetails(tile, t).map((d) => [d.item, d.weight]); }
+
+  /** Category odds for a tile: configurable weights over categories with something qualifying. */
+  categoryOdds(details) {
+    const cw = (this.t.spawns && this.t.spawns.categoryWeights) || {};
+    const cats = [...new Set(details.map((d) => d.item.category))];
+    const total = cats.reduce((a, c) => a + (cw[c] ?? 1), 0) || 1;
+    return Object.fromEntries(cats.map((c) => [c, (cw[c] ?? 1) / total]));
+  }
+
+  /** Category first (mushroom / plant / geode), then the item within it by effective weight. */
+  pickSpawn(tile, t) {
+    const details = this.spawnDetails(tile, t);
+    if (!details.length) return null;
+    const cw = (this.t.spawns && this.t.spawns.categoryWeights) || {};
+    const cats = [...new Set(details.map((d) => d.item.category))];
+    const cat = weightedPick(cats.map((c) => [c, cw[c] ?? 1]), this.rng);
+    return weightedPick(details.filter((d) => d.item.category === cat).map((d) => [d.item, d.weight]), this.rng);
+  }
+
+  /** What a Mystery Seed planted on this tile now would grow into (plants it qualifies for). */
+  seedDetails(tile, t) {
+    const pool = this.content.itemsInGroup('plants').filter((i) => i.spawn);
+    return this.spawnDetails(tile, t, { seed: true, items: pool });
+  }
+
+  choosePlant(tile, t) {
+    const picked = weightedPick(this.seedDetails(tile, t).map((d) => [d.item, d.weight]), this.rng);
+    return picked ? picked.id : null;
+  }
+
+  /** Growth-stage sprites for a planted seed: the chosen plant's own, else seed stages ending in the plant. */
+  seedStages(seed) {
+    const seedDef = this.content.items[seed.seedItemID];
+    const base = (seedDef && seedDef.growthSprites) || ['__missing'];
+    const plant = seed.plantID && this.content.items[seed.plantID];
+    if (!plant) return base;
+    if (plant.growthSprites && plant.growthSprites.length) return plant.growthSprites;
+    return [...base.slice(0, -1), plant.sprite];
   }
 
   // ---- wanderers
@@ -1224,7 +1285,9 @@ export class Game {
     this.consume(itemID);
     const speed = this.mult(this.effects('seedGrowth', tile));
     const grow = this.rng.range(...range(this.t.seeds.growSeconds)) / Math.max(0.01, speed);
-    this.state.plantedSeeds.push({ id: this.rng.uuid(), seedItemID: itemID, tile: { ...tile }, plantedAt: now, growSeconds: grow });
+    // The plant is chosen now (tile stats + time of day at planting), so its growth stages can show it.
+    const plantID = this.choosePlant(tile, now);
+    this.state.plantedSeeds.push({ id: this.rng.uuid(), seedItemID: itemID, tile: { ...tile }, plantedAt: now, growSeconds: grow, plantID });
     this.bump('plant');
     if (this.state.tutorial.step === 'plant') this.enterTutorialStep('dig', now);
   }
@@ -1239,6 +1302,8 @@ export class Game {
     this.bump('harvest');
     const c = this.findCreature('seed', seed.seedItemID, seed.tile, this.tileStats(seed.tile, now), now, seed.plantedAt);
     if (c) return this.grant([{ creature: c }]);
+    if (seed.plantID && this.content.items[seed.plantID]) return this.grant([{ item: seed.plantID, count: 1 }]);
+    // Seeds planted before plants were chosen at planting time: fall back to the seed's loot table.
     const table = this.content.items[seed.seedItemID]?.onGrow;
     return table ? this.grant(this.rollTable(table, seed.seedItemID, now)) : [];
   }

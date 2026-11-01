@@ -34,6 +34,8 @@ EFFECTS = os.path.join(ROOT, "design", "creature_effects.json")
 
 STATS = ["damp", "glow", "bloom", "verdure", "stone", "depth"]
 RARITY = {"common": "common", "uncommon": "uncommon", "rare": "rare", "very rare": "veryRare", "legendary": "legendary"}
+# Default spawn scaling (% per point above the minimum) by rarity, used when the sheet leaves it blank.
+RARITY_RATE = {"common": 1, "uncommon": 1.5, "rare": 2, "veryRare": 2.5, "legendary": 3}
 FAMILY = {"Fungling": "fungling", "Sproutling": "sproutling", "Geode Critter": "geodeCritter", "Wanderer": "wanderer"}
 CATEGORY = {"Mushroom": "mushroom", "Plant": "plant", "Seed": "seed", "Geode": "geode", "Gem": "gem", "Material": "material"}
 
@@ -106,6 +108,13 @@ def main():
     ws = wb.worksheets[0]
     rows = [r for r in ws.iter_rows(values_only=True)]
     header = next(i for i, r in enumerate(rows) if r[0] == "Name")
+    # Optional spawn-scaling columns ("Damp scaling %/pt" ... "Depth scaling %/pt").
+    scale_cols = {}
+    for ci, title in enumerate(rows[header]):
+        if isinstance(title, str) and "scaling" in title.lower():
+            stat = title.split()[0].lower()
+            if stat in STATS:
+                scale_cols[stat] = ci
     loot_start = next(i for i, r in enumerate(rows) if r[0] and str(r[0]).startswith("Geode loot table"))
     entries = [r for r in rows[header + 1:loot_start] if r[0]]
 
@@ -176,6 +185,17 @@ def main():
             flags["oneAtATime"] = True
         if weight is not None:
             spawn = {"baseWeight": weight, "requires": requires(r)}
+            # % change in spawn weight per point a tile stat sits above this item's minimum.
+            scaling = {}
+            for stat, ci in scale_cols.items():
+                v = r[ci] if ci < len(r) else None
+                if isinstance(v, (int, float)) and v != 0:
+                    scaling[stat] = v
+            if not scale_cols or all((r[ci] if ci < len(r) else None) is None for ci in scale_cols.values()):
+                rate = RARITY_RATE[rarity]
+                scaling = {stat: rate for stat in spawn["requires"]}
+            if scaling:
+                spawn["statScaling"] = scaling
             for k in ("time", "rain", "oneAtATime"):
                 if k in flags:
                     spawn[k] = flags[k]

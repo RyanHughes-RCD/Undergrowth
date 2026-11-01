@@ -211,7 +211,7 @@ export class ForestView {
       objs.push({ sprite: def.sprite, ...at(l.tile), tile: l.tile, kind: 'landmark', key: l.id, phase: 0 });
     }
     for (const seed of s.plantedSeeds) {
-      const stages = this.app.content.items[seed.seedItemID]?.growthSprites || ['__missing'];
+      const stages = g.seedStages(seed);
       const p = g.seedProgress(seed, now);
       const idx = p >= 1 ? stages.length - 1 : Math.min(stages.length - 2, Math.floor(p * Math.max(1, stages.length - 1)));
       objs.push({ sprite: stages[Math.max(0, idx)], ...at(seed.tile), tile: seed.tile, kind: 'seed', key: seed.id, phase: 0 });
