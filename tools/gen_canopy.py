@@ -29,7 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "web", "img", "canopy-region.png")
 FLECKS_OUT = os.path.join(ROOT, "web", "img", "canopy.png")
 SOURCE = os.path.join(ROOT, "design", "canopy_source.webp")
-FLECK_W = 240   # tile width in world pixels for the fleck layer (height keeps the source aspect)
+FLECK_W = 600   # tile width in world pixels for the fleck layer (bigger = fewer, larger patches of light)
 STEPS = 6
 
 
