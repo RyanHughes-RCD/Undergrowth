@@ -45,6 +45,13 @@ def name_colour(name):
     return hexc((r * 255, g * 255, b * 255))
 
 
+def hue_shift(c, dh, dv=0.0):
+    r, g, b = [v / 255 for v in rgb(c)]
+    h, sat, v = colorsys.rgb_to_hsv(r, g, b)
+    r, g, b = colorsys.hsv_to_rgb((h + dh) % 1, sat, max(0, min(1, v + dv)))
+    return hexc((r * 255, g * 255, b * 255))
+
+
 def shiny(c):
     r, g, b = [v / 255 for v in rgb(c)]
     h, s, v = colorsys.rgb_to_hsv(r, g, b)
@@ -438,9 +445,12 @@ RANK = {"common": 0, "uncommon": 1, "rare": 2, "veryRare": 3, "legendary": 4}
 def creature_palette(c):
     fam = c["family"]
     s1, s2 = c["stats"][0], c["stats"][1]
-    main = mix(FAMILY_BASE[fam], STAT_COLOURS.get(s2, "#888888"), 0.5)
+    main = mix(FAMILY_BASE[fam], STAT_COLOURS.get(s2, "#888888"), 0.25)
     if fam == "wanderer":
         main = mix(STAT_COLOURS.get(s1, "#ffffff"), "#ffffff", 0.35)
+    # Species in a family share stats, so give each its own hue/brightness from its name.
+    h = zlib.crc32(c["id"].encode())
+    main = hue_shift(main, ((h % 9) - 4) * 0.05, (((h >> 8) % 5) - 2) * 0.06)
     accent = STAT_COLOURS.get(s1, "#ffffff")
     if RANK[c["rarity"]] >= 4:
         accent = "#ffd84a"
