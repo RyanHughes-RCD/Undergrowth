@@ -462,12 +462,14 @@ export class Game {
   }
 
   // ---- slots
+  /** Total creature slots: tuning.placementSlots (a developer test forest can raise it). */
+  get maxSlots() { return (this.state.dev && this.state.dev.slots) || this.t.placementSlots; }
   /** How many creature slots are open: by days since the forest began (configurable). */
   unlockedSlots(now) {
     const days = (now - this.state.createdAt) / DAY;
     const unlockDays = (this.t.slotUnlocks && this.t.slotUnlocks.unlockDays) || [];
-    const byAge = unlockDays.length ? unlockDays.filter((d) => days >= d).length : this.t.placementSlots;
-    return Math.min(this.t.placementSlots, Math.max(this.state.minUnlockedSlots || 0, byAge, 1));
+    const byAge = unlockDays.length ? unlockDays.filter((d) => days >= d).length : this.maxSlots;
+    return Math.min(this.maxSlots, Math.max(this.state.minUnlockedSlots || 0, byAge, 1));
   }
   /** Day (1-based, as players count) a slot index opens on. */
   slotUnlockDay(i) {
@@ -590,8 +592,8 @@ export class Game {
 
   normalizeSlots() {
     const normal = this.state.slots.filter((s) => s.kind === 'normal').length;
-    for (let i = normal; i < this.t.placementSlots; i++) this.state.slots.push({ kind: 'normal', placementID: null });
-    let excess = normal - this.t.placementSlots;
+    for (let i = normal; i < this.maxSlots; i++) this.state.slots.push({ kind: 'normal', placementID: null });
+    let excess = normal - this.maxSlots;
     if (excess > 0) {
       this.state.slots = this.state.slots.filter((s) => {
         if (excess > 0 && s.kind === 'normal' && !s.placementID) { excess--; return false; }
@@ -757,7 +759,7 @@ export class Game {
     const open = this.unlockedSlots(now);
     if (open > (s.announcedSlots || 0)) {
       s.announcedSlots = open;
-      this.events.push({ type: 'slotUnlocked', count: open, max: this.t.placementSlots });
+      this.events.push({ type: 'slotUnlocked', count: open, max: this.maxSlots });
     }
     if (!s.milestones.blend) {
       const tiles = this.blendedTiles(now);
@@ -860,11 +862,16 @@ export class Game {
     // The spawn cap scales with how much of the forest is open.
     const c = this.clearing, area = (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1);
     const cap = Math.min(st.maxTotal, Math.max(st.minCap || 3, Math.round(area * (st.maxPerOpenTile || 0.1))));
+    let loc = null;
     for (let i = 0; i < st.attemptsPerTick; i++) {
       if (this.state.spawns.length >= cap) break;
       if (!this.rng.chance(st.spawnChance)) continue;
-      const tile = { x: this.rng.int(c.x0, c.x1), y: this.rng.int(c.y0, c.y1) };
-      if (!this.isFree(tile)) continue;
+      // Where: weighted towards tiles with active effects (see spawnLocations). The free/area
+      // check keeps the overall spawn rate the same as picking any tile at random.
+      loc = loc || this.spawnLocations(t);
+      if (!loc.tiles.length || !this.rng.chance(loc.tiles.length / area)) continue;
+      const tile = weightedPick(loc.tiles.map((x) => [x.tile, x.weight]), this.rng);
+      if (!tile || !this.isFree(tile)) continue;
       const item = this.pickSpawn(tile, t);
       if (item) {
         this.state.spawns.push({ id: this.rng.uuid(), itemID: item.id, tile, spawnedAt: t });
@@ -872,6 +879,58 @@ export class Game {
       }
     }
     return made;
+  }
+
+  /**
+   * Spawn-location weights for every free tile in the clearing, from the garden's live effect data:
+   *   weight = base + perStatPoint × (sum of the tile's six stats)
+   *               + perSource × (creatures whose influence reaches the tile + active soil boosts on it)
+   *               + perEffect × (creature special effects whose area covers it)
+   * capped at maxWeight (spawns.locationWeighting in tuning.json). With nothing active every tile
+   * weighs `base`, which is the old uniform pick. Recomputed per spawn tick, so it follows effects
+   * as they ramp, decay, move or expire.
+   */
+  spawnLocations(t, field = null) {
+    const lw = (this.t.spawns && this.t.spawns.locationWeighting) || {};
+    const on = lw.enabled !== false;
+    const base = lw.base ?? 1, perPt = lw.perStatPoint ?? 0, perSrc = lw.perSource ?? 0, perFx = lw.perEffect ?? 0, max = lw.maxWeight ?? Infinity;
+    const W = this.state.size.width, H = this.state.size.height, c = this.clearing;
+    const sources = new Float32Array(W * H), fx = new Float32Array(W * H);
+    if (on) {
+      field = field || this.statField(t);
+      for (const p of this.effectivePlacements()) {
+        if (this.stats.level(p, t) <= 0.01) continue;
+        const reach = this.stats.reach(p.radius), r = Math.ceil(reach);
+        const sp = this.species(p);
+        const areaFx = (p.removedAt == null && sp && sp.effects ? sp.effects : []).filter((e) => e.scope !== 'forest' && e.scope !== 'tile').length;
+        for (let y = Math.max(c.y0, p.tile.y - r); y <= Math.min(c.y1, p.tile.y + r); y++) {
+          for (let x = Math.max(c.x0, p.tile.x - r); x <= Math.min(c.x1, p.tile.x + r); x++) {
+            if (Math.hypot(x - p.tile.x, y - p.tile.y) >= reach) continue;
+            sources[y * W + x] += 1;
+            fx[y * W + x] += areaFx;
+          }
+        }
+      }
+      for (const b of this.activeBoosts(t)) if (this.inBounds(b.tile)) sources[b.tile.y * W + b.tile.x] += 1;
+    }
+    const tiles = [];
+    let total = 0;
+    for (let y = c.y0; y <= c.y1; y++) {
+      for (let x = c.x0; x <= c.x1; x++) {
+        const tile = { x, y };
+        if (!this.isFree(tile)) continue;
+        let weight = base, intensity = 0;
+        const i = y * W + x;
+        if (on) {
+          const st = field.statsAt(x, y);
+          for (const k of CORE_STATS) intensity += st[k] || 0;
+          weight = Math.min(max, base + perPt * intensity + perSrc * sources[i] + perFx * fx[i]);
+        }
+        tiles.push({ tile, weight, intensity, sources: sources[i], effects: fx[i] });
+        total += weight;
+      }
+    }
+    return { tiles, total };
   }
 
   /**
@@ -989,6 +1048,7 @@ export class Game {
 
   checkWanderers(t) {
     const field = this.statField(t);
+    const loc = new Map(this.spawnLocations(t, field).tiles.map((x) => [x.tile.x + ',' + x.tile.y, x.weight]));
     let arrived = 0;
     for (const def of this.content.creatureList) {
       if (def.source?.kind !== 'wanderer') continue;
@@ -999,7 +1059,8 @@ export class Game {
         if (this.isFree({ x, y }) && groupMatches(def.requires || {}, field.statsAt(x, y))) tiles.push({ x, y });
       }
       if (!tiles.length) continue;
-      const tile = tiles[this.rng.int(0, tiles.length - 1)];
+      // Wanderers also favour tiles with active effects (same weights as wild spawns).
+      const tile = weightedPick(tiles.map((x) => [x, loc.get(x.x + ',' + x.y) ?? 1]), this.rng);
       const chance = (def.chance || 0) * this.mult(this.effects('creatureChance', tile).filter((e) => !e.family || e.family === def.family));
       if (this.rng.chance(chance)) {
         this.state.visitors.push({ id: this.rng.uuid(), speciesID: def.id, tile, arrivedAt: t });
@@ -1408,6 +1469,83 @@ export class Game {
   }
 
   // ---- debug
+  // ---- developer test forest (only ever called on the separate dev save; see main.js)
+  get isDev() { return !!this.state.dev; }
+
+  /** One of every species in the content (plus glimmers if asked), straight to the Burrow. */
+  devUnlockCreatures(now, { glimmers = false } = {}) {
+    const pending = [];
+    for (const def of this.content.creatureList) {
+      for (const g of glimmers ? [false, true] : [false]) {
+        if (this.state.creatures.some((c) => c.typeID === def.id && !!c.isGlimmer === g)) continue;
+        pending.push({ creature: this.rollCreature(def.id, 'debug', now, g) });
+      }
+    }
+    return this.grant(pending).length;
+  }
+
+  /** `count` of every item in the content (mushrooms, plants, seeds, geodes, gems, materials). */
+  devGrantItems(count = 5) {
+    const list = Object.values(this.content.items);
+    this.grant(list.map((it) => ({ item: it.id, count })));
+    return list.length;
+  }
+
+  /** Every Field Guide entry (items, creatures and their glimmers) marked as found. */
+  devFillGuide() {
+    for (const it of Object.values(this.content.items)) if (it.inGuide !== false) this.discover('item:' + it.id);
+    for (const def of this.content.creatureList) { this.discover('creature:' + def.id); this.discover('creature:' + def.id + ':glimmer'); }
+  }
+
+  /** Grow the clearing to the whole forest (one expansion message instead of one per ring). */
+  devOpenForest(now) {
+    const s = this.state.size;
+    let guard = 100;
+    const before = this.events.length;
+    while (guard-- > 0) {
+      const c = this.clearing;
+      if (c.x0 === 0 && c.y0 === 0 && c.x1 === s.width - 1 && c.y1 === s.height - 1) break;
+      this.expand(now);
+    }
+    this.events.splice(before);
+  }
+
+  /** Creature slots for testing combinations (all open at once). */
+  devSetSlots(n) {
+    this.state.dev = { ...(this.state.dev || {}), slots: Math.max(1, Math.min(30, n)) };
+    this.state.minUnlockedSlots = this.maxSlots;
+    this.normalizeSlots();
+    this.state.announcedSlots = this.unlockedSlots(Date.now() + (this.state.debugTimeOffset || 0));
+  }
+
+  /** Place a fresh creature of any species on a tile, optionally at full strength. */
+  devPlace(typeID, tile, now, { full = true, glimmer = false } = {}) {
+    if (!this.isFree(tile)) throw new GameError('Something is already there.');
+    if (!this.openSlots(now).some((x) => !x.placementID)) this.devSetSlots(this.maxSlots + 1);
+    const c = this.rollCreature(typeID, 'debug', now, glimmer);
+    this.grant([{ creature: c }]);
+    this.place(c.id, tile, now);
+    const placed = this.activePlacement(c.id);
+    if (full && placed) { placed.startLevel = 1; this.statCache = this.statField(now); }
+    return placed;
+  }
+
+  /** Take every creature out of the forest at once (no fade), freeing all slots. */
+  devClearPlacements(now) {
+    this.state.placements = [];
+    for (const sl of this.state.slots) sl.placementID = null;
+    this.statCache = this.statField(now);
+  }
+
+  devClearSpawns() { this.state.spawns = []; this.state.visitors = []; }
+
+  /** Run `ticks` spawn ticks right now (to see where things turn up). */
+  devSpawnTicks(now, ticks) {
+    let made = 0;
+    for (let i = 0; i < ticks; i++) made += this.spawnTick(now);
+    return made;
+  }
+
   debugGrant(itemID, count = 1) { this.state.inventory[itemID] = (this.state.inventory[itemID] || 0) + count; }
   debugGrantCreature(typeID, glimmer, now) { return this.grant([{ creature: this.rollCreature(typeID, 'debug', now, glimmer) }]); }
 }

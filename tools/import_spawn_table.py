@@ -215,6 +215,8 @@ def main():
             # Geode art: pixel crack stages (frames) in two patterns, and the opened geode.
             it["crackSprites"] = ["geode.crack.%s.a" % slug(name), "geode.crack.%s.b" % slug(name)]
             it["openSprite"] = "geode.open." + slug(name)
+            # In the forest the geode sits half-buried in a dirt mound (bag/guide keep the plain ball).
+            it["worldSprite"] = "geode.world." + slug(name)
         elif category == "seed":
             seed_id = iid
             it["onGrow"] = "loot.grow." + slug(name)

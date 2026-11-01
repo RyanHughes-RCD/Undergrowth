@@ -35,6 +35,14 @@
       "minMultiplier": 0.25,
       "maxMultiplier": 4
     },
+    "locationWeighting": {
+      "enabled": true,
+      "base": 1,
+      "perStatPoint": 0.3,
+      "perSource": 3,
+      "perEffect": 1.5,
+      "maxWeight": 40
+    },
     "categoryScaling": {
       "minMultiplier": 0.25,
       "maxMultiplier": 6,

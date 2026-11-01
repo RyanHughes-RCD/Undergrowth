@@ -70,7 +70,8 @@ export class UI {
         h('button', { class: 'speed-btn' + (this.app.speed > 1 ? ' on' : ''), title: 'Time speed', onclick: () => this.app.cycleSpeed() },
           h('b', {}, ic('fast', 1), `${this.app.speed}×`),
           g.state.debugTimeOffset > 0 ? h('span', {}, `+${duration(g.state.debugTimeOffset / 1000)}`) : null),
-        h('button', { class: 'round-btn', title: 'Debug', onclick: () => this.open('debug') }, ic('bug', 2))) : null,
+        h('button', { class: 'round-btn' + (this.app.devMode ? ' dev-on' : ''), title: this.app.devMode ? 'Developer mode' : 'Debug', onclick: () => this.open('debug') },
+          ic('bug', 2), this.app.devMode ? h('span', { class: 'dev-tag' }, 'DEV') : null)) : null,
     ), this.coachCard());
 
     const bottom = h('div', { class: 'hud-bottom' });
@@ -134,6 +135,11 @@ export class UI {
   modeBanner() {
     const g = this.game;
     let text;
+    if (this.mode.type === 'devPlace') {
+      text = `Dev: tap tiles to place ${this.content.creatures[this.mode.typeID]?.name || 'creatures'}`;
+      return h('div', { class: 'banner dev' }, h('span', {}, text),
+        h('button', { class: 'btn small grey', onclick: () => { this.mode = null; this.app.changed(false); } }, 'Done'));
+    }
     if (this.mode.type === 'place') {
       const c = g.creature(this.mode.creatureID);
       text = `Tap an empty tile to place ${c ? this.app.displayName(c) : 'creature'}`;
@@ -167,7 +173,7 @@ export class UI {
 
   slotsBar() {
     const g = this.game, now = g.now();
-    return h('div', { class: 'slots' }, g.state.slots.map((slot) => {
+    return h('div', { class: 'slots' + (g.state.slots.length > 3 ? ' many' : '') }, g.state.slots.map((slot) => {
       const p = slot.placementID && g.state.placements.find((x) => x.id === slot.placementID);
       const c = p && g.creature(p.creatureID);
       const open = g.unlockedSlots(now);
@@ -222,7 +228,7 @@ export class UI {
       bag: () => ['Bag', this.bagBody()],
       guide: () => this.guideBody(),
       rename: () => ['Rename forest', this.renameBody()],
-      debug: () => ['Debug', this.debugBody()],
+      debug: () => [this.app.devMode ? 'Developer mode' : 'Debug', this.debugBody()],
       tasks: () => ['Tasks', this.tasksBody()],
       inspect: () => [`Spawns · tile ${arg.x}, ${arg.y}`, this.inspectBody(arg)],
       entry: () => [arg.name, this.entryBody(arg)],
@@ -462,6 +468,17 @@ export class UI {
       h('div', { class: 'stat-grid' }, CORE_STATS.map((k) => this.statBar(k, stats[k] || 0))),
       h('p', { class: 'sub' }, `${g.isNight(now) ? 'Night' : 'Day'}${g.isRaining(now) ? ', raining' : ''} · ` +
         (g.inClearing(tile) ? (g.isFree(tile) ? 'open tile' : 'tile is occupied (nothing spawns here now)') : 'outside the clearing')),
+      (() => {
+        // Where-to-spawn weight for this tile (effect-aware), and its share of all spawn locations.
+        const loc = g.spawnLocations(now);
+        const me = loc.tiles.find((x) => x.tile.x === tile.x && x.tile.y === tile.y);
+        if (!me) return null;
+        const lw = this.content.tuning.spawns.locationWeighting || {};
+        return h('p', { class: 'sub' }, h('b', {}, `Location weight ${me.weight.toFixed(1)}`),
+          ` = ${lw.base ?? 1} + ${lw.perStatPoint}×${me.intensity.toFixed(0)} stat pts + ${lw.perSource}×${me.sources} sources` +
+          (me.effects ? ` + ${lw.perEffect}×${me.effects} effects` : '') +
+          ` · ${(me.weight / loc.total * 100).toFixed(2)}% of spawn picks (uniform would be ${(100 / loc.tiles.length).toFixed(2)}%)`);
+      })(),
       h('div', { class: 'inspect-head' }, h('span', { class: 'grow' }, 'Item'), h('span', { class: 'num' }, 'Base'),
         h('span', { class: 'num' }, 'Mult'), h('span', { class: 'num' }, 'Weight'), h('span', { class: 'num' }, 'Chance')),
       ...cats.map((cat) => {
@@ -489,7 +506,8 @@ export class UI {
     ];
   }
 
-  debugBody() {
+  /** Time + view tools shared by the normal debug menu and developer mode. */
+  timeAndViewTools() {
     const a = this.app;
     const b = (label, fn, cls = '') => h('button', { class: 'btn ' + cls, onclick: fn }, label);
     return [
@@ -501,29 +519,98 @@ export class UI {
       h('div', { class: 'section' }, 'View'),
       h('div', { class: 'row gap wrap' },
         b(this.statOverlay ? 'Hide stat overlay' : 'Show stat overlay', () => { this.statOverlay = !this.statOverlay; a.changed(false); this.renderSheet(); }),
+        b(this.spawnHeatmap ? 'Spawn heatmap: ON' : 'Spawn heatmap: off', () => { this.spawnHeatmap = !this.spawnHeatmap; a.changed(false); this.renderSheet(); }, this.spawnHeatmap ? 'orange' : ''),
         b(this.spawnInspector ? 'Spawn inspector: ON' : 'Spawn inspector: off', () => { this.spawnInspector = !this.spawnInspector; a.changed(false); this.renderSheet(); }, this.spawnInspector ? 'orange' : '')),
-      h('p', { class: 'sub' }, 'Spawn inspector: while on, tapping a tile shows its stats and every qualifying wild spawn with its effective weight and odds.'),
-      h('div', { class: 'section' }, 'Give'),
+      h('p', { class: 'sub' }, 'Spawn heatmap: tints each open tile by how likely wild spawns are to land there (brighter = likelier). Spawn inspector: tap a tile for its stats, its location weight, and every item that can spawn there with its odds.'),
+    ];
+  }
+
+  debugBody() {
+    const a = this.app;
+    if (a.devMode) return this.devBody();
+    const b = (label, fn, cls = '') => h('button', { class: 'btn ' + cls, onclick: fn }, label);
+    return [
+      h('div', { class: 'section' }, 'Developer mode'),
+      h('p', { class: 'sub' }, 'Test everything in a separate test forest: unlock all creatures, items, slots and the whole map, and try any combination. Your real forest is saved first and is never changed while developer mode is on.'),
       h('div', { class: 'row gap wrap' },
-        b('3 Mystery Seeds', () => a.debugGive('seed.mystery-seed', 3)),
-        b('3 Pebble Geodes', () => a.debugGive('geode.pebble-geode', 3)),
-        b('1 Deep Geode', () => a.debugGive('geode.deep-geode', 1)),
-        b('Heartstone Core', () => a.debugGive('material.heartstone-core', 1)),
-        b('Moonfall Shard', () => a.debugGive('material.moonfall-shard', 1))),
-      (() => {
-        const sel = h('select', { class: 'select' }, FAMILY_TABS.map(([fid, fname]) =>
-          h('optgroup', { label: fname }, this.content.creatureList.filter((c) => c.family === fid)
-            .map((c) => h('option', { value: c.id }, `${c.name} (${rarityName(c.rarity)})`)))));
-        return h('div', { class: 'row gap wrap' }, sel,
-          b('Give', () => a.debugGiveCreature(sel.value, false)),
-          b('Give glimmer', () => a.debugGiveCreature(sel.value, true)));
-      })(),
+        b('Enter developer mode', () => a.enterDevMode('resume'), 'orange'),
+        b('…with a copy of my forest', () => a.enterDevMode('copy'))),
+      ...this.timeAndViewTools(),
+      h('p', { class: 'sub' }, 'Time tools here change your real forest. Item and creature gifts are in developer mode.'),
       h('div', { class: 'section' }, 'Tutorial'),
       h('div', { class: 'row gap wrap' },
         b('Replay tutorial (new forest)', () => { if (confirm('Start a fresh forest and replay the tutorial?')) a.resetForest(); }),
         this.game.inTutorial ? b('Skip tutorial', () => { this.game.finishTutorial(); this.sheet = null; this.close(); a.changed(); }) : null),
       h('div', { class: 'section' }, 'Danger'),
       b('Reset forest', () => { if (confirm('Start a brand-new forest? This erases your progress.')) a.resetForest(); }, 'red'),
+    ];
+  }
+
+  /** Developer mode: unlocks and combination tools for the separate test forest. */
+  devBody() {
+    const a = this.app, g = this.game;
+    const b = (label, fn, cls = '') => h('button', { class: 'btn ' + cls, onclick: fn }, label);
+    const done = () => { this.sheet = null; this.close(); };
+    const speciesSelect = () => h('select', { class: 'select' }, FAMILY_TABS.map(([fid, fname]) =>
+      h('optgroup', { label: fname }, this.content.creatureList.filter((c) => c.family === fid)
+        .map((c) => h('option', { value: c.id }, `${c.name} (${rarityName(c.rarity)}, r${c.radius})`)))));
+    const place = speciesSelect();
+    const full = h('input', { type: 'checkbox', checked: true });
+    const glim = h('input', { type: 'checkbox' });
+    const give = speciesSelect();
+    const itemSel = h('select', { class: 'select' }, ['mushroom', 'plant', 'seed', 'geode', 'gem', 'material'].map((cat) =>
+      h('optgroup', { label: catTitle(cat) }, Object.values(this.content.items).filter((i) => i.category === cat)
+        .map((i) => h('option', { value: i.id }, i.name)))));
+    const setupName = h('input', { type: 'text', placeholder: 'Setup name', maxlength: 30 });
+    const setups = a.devSetups();
+    const slots = [3, 6, 9, 12];
+    return [
+      h('div', { class: 'dev-note' }, h('b', {}, 'Developer mode is on'),
+        h('span', {}, ` · test forest (${g.state.dev?.createdFrom === 'copy' ? 'copied from your forest' : 'separate'}). Nothing here touches your real forest.`)),
+      h('div', { class: 'row gap wrap' },
+        b('Back to my forest', () => a.exitDevMode(), 'green'),
+        b('New blank test forest', () => { if (confirm('Replace the test forest with a blank one?')) a.resetDevForest('blank'); }),
+        b('Copy my forest in', () => { if (confirm('Replace the test forest with a copy of your real forest?')) a.resetDevForest('copy'); })),
+
+      h('div', { class: 'section' }, 'Unlock'),
+      h('div', { class: 'row gap wrap' },
+        b('Unlock everything', () => a.dev((gm, t) => { gm.finishTutorial(); gm.devUnlockCreatures(t, { glimmers: true }); gm.devGrantItems(5); gm.devFillGuide(); gm.devSetSlots(Math.max(gm.maxSlots, 6)); gm.devOpenForest(t); },
+          'Unlocked: all creatures + glimmers, 5 of every item, the whole Field Guide, 6 slots, the whole forest.'), 'orange'),
+        b('All creatures', () => a.dev((gm, t) => gm.devUnlockCreatures(t), (n) => `+${n} creatures in the Burrow.`)),
+        b('+ glimmers', () => a.dev((gm, t) => gm.devUnlockCreatures(t, { glimmers: true }), (n) => `+${n} creatures in the Burrow.`)),
+        b('5 of every item', () => a.dev((gm) => gm.devGrantItems(5), (n) => `+5 of ${n} items.`)),
+        b('Fill Field Guide', () => a.dev((gm) => gm.devFillGuide(), 'Field Guide complete.')),
+        b('Whole forest open', () => a.dev((gm, t) => gm.devOpenForest(t), 'The clearing now covers the whole forest.')),
+        g.inTutorial ? b('Finish tutorial', () => a.dev((gm) => gm.finishTutorial(), 'Tutorial finished.')) : null),
+      h('div', { class: 'row gap wrap' }, h('span', { class: 'sub' }, 'Creature slots:'),
+        slots.map((n) => b(String(n), () => { a.dev((gm) => gm.devSetSlots(n), `${n} slots open.`); this.renderSheet(); }, g.maxSlots === n ? 'green' : 'grey'))),
+
+      h('div', { class: 'section' }, 'Try combinations'),
+      h('p', { class: 'sub' }, 'Pick a species, then tap tiles to place new ones. A slot is added if they\'re all full.'),
+      h('div', { class: 'row gap wrap' }, place,
+        h('label', { class: 'check' }, full, ' full strength'), h('label', { class: 'check' }, glim, ' glimmer'),
+        b('Place on tiles', () => { this.mode = { type: 'devPlace', typeID: place.value, full: full.checked, glimmer: glim.checked }; this.selectedTile = null; done(); a.changed(false); }, 'orange')),
+      h('div', { class: 'row gap wrap' },
+        b('Remove all creatures', () => a.dev((gm, t) => gm.devClearPlacements(t), 'All creatures back in the Burrow (instantly, no fade).')),
+        b('Max strength now', () => a.dev((gm, t) => { for (const p of gm.activePlacements) p.startLevel = 1; gm.statCache = gm.statField(t); }, 'All placed creatures at full strength.')),
+        b('Clear wild spawns', () => a.dev((gm) => gm.devClearSpawns(), 'Wild spawns cleared.')),
+        b('Run 20 spawn ticks', () => a.dev((gm, t) => gm.devSpawnTicks(t, 20), (n) => `${n} new spawns.`))),
+
+      h('div', { class: 'section' }, 'Saved setups'),
+      h('div', { class: 'row gap wrap' }, h('div', { class: 'field grow' }, setupName), b('Save setup', () => { a.saveDevSetup(setupName.value.trim()); this.renderSheet(); }, 'green')),
+      Object.keys(setups).length ? Object.entries(setups).sort((x, y) => y[1].savedAt - x[1].savedAt).map(([name, st]) => h('div', { class: 'row gap setup-row' },
+        h('span', { class: 'grow' }, name, h('span', { class: 'sub' }, ' · ' + new Date(st.savedAt).toLocaleString())),
+        b('Load', () => { a.loadDevSetup(name); }),
+        b('Delete', () => { if (confirm(`Delete setup “${name}”?`)) { a.deleteDevSetup(name); this.renderSheet(); } }, 'grey'))) : h('p', { class: 'sub' }, 'No saved setups yet. Save the current test forest to come back to it.'),
+
+      h('div', { class: 'section' }, 'Give'),
+      h('div', { class: 'row gap wrap' }, give,
+        b('Give', () => a.debugGiveCreature(give.value, false)),
+        b('Give glimmer', () => a.debugGiveCreature(give.value, true))),
+      h('div', { class: 'row gap wrap' }, itemSel,
+        b('+1', () => a.debugGive(itemSel.value, 1)), b('+5', () => a.debugGive(itemSel.value, 5))),
+
+      ...this.timeAndViewTools(),
     ];
   }
 

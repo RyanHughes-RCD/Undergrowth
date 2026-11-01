@@ -5,6 +5,15 @@ import { ForestView } from './render.js';
 import { UI } from './ui.js';
 
 const SAVE_KEY = 'undergrowth.forest.v1';
+// Developer mode plays a separate test forest under its own key; the real save is never written while it's on.
+const DEV_SAVE_KEY = 'undergrowth.forest.dev';
+const DEV_MODE_KEY = 'undergrowth.devMode';
+const DEV_SETUPS_KEY = 'undergrowth.dev.setups';
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { console.warn('Storage failed', e); return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch (_) { /* ignore */ } },
+};
 
 class App {
   async boot() {
@@ -16,8 +25,13 @@ class App {
     this.ui = new UI(this);
 
     const real = Date.now();
+    // Developer mode: ?dev=1 turns it on, ?dev=0 off (or use the Debug menu). It sticks until turned off.
+    const q = new URLSearchParams(location.search).get('dev');
+    if (q === '1' && this.content.tuning.debugTools) store.set(DEV_MODE_KEY, '1');
+    if (q === '0') store.del(DEV_MODE_KEY);
+    this.devMode = !!this.content.tuning.debugTools && store.get(DEV_MODE_KEY) === '1';
     const saved = this.load();
-    this.game = saved ? new Game(this.content, saved) : Game.newForest(this.content, real);
+    this.game = saved ? new Game(this.content, saved) : (this.devMode ? this.newDevForest(real) : Game.newForest(this.content, real));
     const report = this.game.advance(this.game.now(real));
 
     this.speed = this.loadSpeed();
@@ -119,11 +133,16 @@ class App {
     this.saveTimer = setTimeout(() => this.save(), 600);
   }
 
+  get saveKey() { return this.devMode ? DEV_SAVE_KEY : SAVE_KEY; }
+
   save() {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.game.toJSON())); } catch (e) { console.warn('Save failed', e); }
+    // Belt and braces: a test forest (state.dev) can never be written over the real save.
+    if (!this.devMode && this.game.state.dev) { console.warn('Refusing to save a test forest as the real one'); return; }
+    store.set(this.saveKey, JSON.stringify(this.game.toJSON()));
   }
 
   load() {
+    const SAVE_KEY = this.saveKey;
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return null;
@@ -188,6 +207,13 @@ class App {
       ui.selectedTile = tile;
       ui.open('inspect', tile);
       this.changed(false);
+      return;
+    }
+    if (ui.mode && ui.mode.type === 'devPlace') {
+      // Developer: drop a creature of any species here; stays in this mode for quick combinations.
+      const m = ui.mode;
+      this.dev((gm, t) => gm.devPlace(m.typeID, tile, t, { full: m.full, glimmer: m.glimmer }),
+        () => `Placed ${this.content.creatures[m.typeID]?.name || m.typeID}${m.full ? ' at full strength' : ''}.`);
       return;
     }
     if (ui.mode && ui.mode.type === 'place') {
@@ -326,16 +352,123 @@ class App {
 
   // ---------------------------------------------------------------- debug
 
+  get speedKey() { return this.devMode ? 'undergrowth.speed.dev' : 'undergrowth.speed'; }
+
+  // ---------------------------------------------------------------- developer mode
+
+  /** A blank test forest: tutorial done, marked as a test forest. */
+  newDevForest(real) {
+    const g = Game.newForest(this.content, real);
+    g.finishTutorial();
+    g.state.dev = { createdFrom: 'blank' };
+    return g;
+  }
+
+  /** Switch the running game to another forest (keeps the view; clears selections). */
+  swapGame(game) {
+    this.game = game;
+    this.game.advance(this.game.now());
+    Object.assign(this.ui, { mode: null, selectedTile: null, selectedCreatureID: null, sheet: null });
+    this.ui.close();
+    this.speed = this.loadSpeed();
+    this.view.k = 0;
+    this.view.fit();
+    this.changed();
+  }
+
+  /**
+   * Enter developer mode. The real forest is saved (and a backup copy kept) first, then a separate
+   * test forest is used: a blank one, a copy of the real forest, or the last test forest.
+   */
+  enterDevMode(from = 'resume') {
+    if (this.devMode) return;
+    this.save();
+    const real = store.get(SAVE_KEY);
+    if (real) store.set(SAVE_KEY + '.backup', real);
+    this.devMode = true;
+    store.set(DEV_MODE_KEY, '1');
+    let game = null;
+    if (from === 'copy' && real) {
+      const s = JSON.parse(real);
+      s.dev = { createdFrom: 'copy' };
+      game = new Game(this.content, s);
+    } else if (from === 'resume') {
+      const s = this.load();
+      game = s ? new Game(this.content, s) : null;
+    }
+    this.swapGame(game || this.newDevForest(Date.now()));
+    this.save();
+    this.ui.toast('Developer mode: this is a test forest. Your real forest is saved separately.');
+  }
+
+  /** Leave developer mode: save the test forest, reload the real one exactly as it was. */
+  exitDevMode() {
+    if (!this.devMode) return;
+    this.save();
+    this.devMode = false;
+    store.del(DEV_MODE_KEY);
+    const s = this.load();
+    this.swapGame(s ? new Game(this.content, s) : Game.newForest(this.content, Date.now()));
+    this.ui.toast('Back in your forest.');
+  }
+
+  /** Replace the test forest (blank, or a fresh copy of the real one). */
+  resetDevForest(from = 'blank') {
+    if (!this.devMode) return;
+    let game;
+    const real = store.get(SAVE_KEY);
+    if (from === 'copy' && real) { const s = JSON.parse(real); s.dev = { createdFrom: 'copy' }; game = new Game(this.content, s); }
+    else game = this.newDevForest(Date.now());
+    this.swapGame(game);
+    this.save();
+    this.ui.toast(from === 'copy' ? 'Test forest is now a copy of your forest.' : 'A blank test forest.');
+  }
+
+  // Saved test setups (whole test-forest snapshots), for flipping between garden configurations.
+  devSetups() { try { return JSON.parse(store.get(DEV_SETUPS_KEY) || '{}'); } catch (_) { return {}; } }
+  saveDevSetup(name) {
+    if (!this.devMode || !name) return;
+    const all = this.devSetups();
+    all[name] = { savedAt: Date.now(), state: this.game.toJSON() };
+    if (store.set(DEV_SETUPS_KEY, JSON.stringify(all))) this.ui.toast(`Saved setup “${name}”.`);
+  }
+  loadDevSetup(name) {
+    const set = this.devSetups()[name];
+    if (!this.devMode || !set) return;
+    const s = JSON.parse(JSON.stringify(set.state));
+    s.dev = s.dev || { createdFrom: 'setup' };
+    this.swapGame(new Game(this.content, s));
+    this.save();
+    this.ui.toast(`Loaded setup “${name}”.`);
+  }
+  deleteDevSetup(name) {
+    const all = this.devSetups();
+    delete all[name];
+    store.set(DEV_SETUPS_KEY, JSON.stringify(all));
+  }
+
+  /** Run a developer action on the test forest, then refresh. */
+  dev(fn, message) {
+    if (!this.devMode) return;
+    try {
+      const r = fn(this.game, this.game.now());
+      if (message) this.ui.toast(typeof message === 'function' ? message(r) : message);
+    } catch (e) {
+      if (e instanceof GameError) this.ui.toast(e.message); else throw e;
+    }
+    this.changed();
+  }
+
   get speeds() { return this.content.tuning.visuals.debugSpeeds || [1, 60, 600, 3600]; }
 
   loadSpeed() {
     if (!this.content.tuning.debugTools) return 1;
-    try { const v = Number(localStorage.getItem('undergrowth.speed')); return this.speeds.includes(v) ? v : 1; } catch (_) { return 1; }
+    const v = Number(store.get(this.speedKey)); return this.speeds.includes(v) ? v : 1;
   }
 
   setSpeed(v) {
     this.speed = v;
-    try { localStorage.setItem('undergrowth.speed', String(v)); } catch (_) { /* ignore */ }
+    store.set(this.speedKey, String(v));
     this.ui.toast(v === 1 ? 'Time runs normally.' : `Time ×${v}: 1 second = ${speedText(v)}.`);
     this.changed(false);
   }
@@ -366,6 +499,7 @@ class App {
   }
 
   resetForest() {
+    if (this.devMode) { this.resetDevForest('blank'); return; }
     this.game = Game.newForest(this.content, Date.now());
     this.game.advance(this.game.now());
     Object.assign(this.ui, { mode: null, selectedTile: null, selectedCreatureID: null, sheet: null });

@@ -5,6 +5,8 @@ For every geode in Resources/Content/items.json this writes:
   item.geode.<id>            unopened stone ball (map + bag)            16x16
   geode.crack.<id>.a / .b    crack overlay, 5 frames = 5 crack stages   16x16
   geode.open.<id>            opened geode: hollow lined with crystals   16x16
+  geode.world.<id>           in the forest: the stone pushing up out of a
+                             raised dirt mound (map only; linked as worldSprite) 20x16
 The importer links them from the item data (openSprite, crackSprites).
 
 Style rules: light from the top-left everywhere; 5 stone tones with 2x2 ordered
@@ -275,6 +277,83 @@ def opened(gid, base, inner, kind):
     return c
 
 
+# Soil for the world mound, matched to the ground palette's soil/dirt tones (gen_placeholders GROUND_PALETTE).
+SOIL = ["#2a1b10", "#3a2719", "#5a3d26", "#6b4a2f", "#86603d", "#a37a4e", "#4a7330", "#79a94a"]
+WW, WH = 20, 16
+
+
+def world(gid, kind):
+    """The geode half-buried in a small raised mound of dirt (16x16 ball → 20x16 world sprite).
+
+    Palette = geode palette + SOIL at 15..22: 15 seam (darkest), 16 shadow, 17 soil dark, 18 soil,
+    19 soil light, 20 crest highlight, 21/22 grass tufts.
+    """
+    stone, inside = ball(gid, kind, 0)
+    rng = random.Random(zlib.crc32(("world" + gid).encode()))
+    ox, oy = 2, 1
+    c = Canvas(WW, WH)
+    # Mound: dirt heaped up against the stone (high shoulders, steep ends) with a jagged pixel top edge.
+    top = {}
+    for x in range(WW):
+        u = (x + 0.5 - 10) / 9.8
+        if abs(u) >= 1:
+            continue
+        h = 1.6 + 4.2 * (1 - u ** 4)                         # rows above the bottom of the sprite
+        top[x] = int(round(15.5 - h)) + (1 if rng.random() < 0.25 else 0) - (1 if 0.35 < abs(u) < 0.75 and rng.random() < 0.3 else 0)
+    mound = {(x, y) for x, t in top.items() for y in range(max(0, t), WH)}
+    # Front lip of soil in front of the stone's base (jagged); below it the stone is buried.
+    lip = {x: min(12, top[x] + 1) + (1 if rng.random() < 0.3 else 0) for x in top}
+    stone_px = {(x + ox, y + oy) for (x, y) in inside if y + oy < lip.get(x + ox, 99)}
+    # Paint the mound with light from the top-left: crest highlight, soil body, darker toward the bottom-right.
+    def body(x, y, crest_row):
+        d = y - crest_row
+        if d == 0:
+            return 20 if x < 10 else 19
+        if d == 1:
+            return 19 if x < 8 else 18
+        if y == WH - 1:
+            return 17 if x < 10 else 16
+        return 18 if (x - 6) / 12 + d / 6 < 0.7 else 17
+    for (x, y) in mound:
+        c.set(x, y, body(x, y, top[x]))
+    # Dirt texture: a few clods (one light pixel over a dark one) and specks.
+    pts = sorted(p for p in mound if p[1] > top[p[0]] + 1 and p[1] < WH - 1)
+    for _ in range(4):
+        x, y = rng.choice(pts)
+        if (x, y + 1) in mound:
+            c.set(x, y, 19); c.set(x, y + 1, 16)
+    for _ in range(3):
+        c.set(*rng.choice(pts), 17)
+    # The stone, emerging from the soil.
+    for (x, y) in stone_px:
+        c.set(x, y, stone.get(x - ox, y - oy))
+    # Where the stone meets the earth: a dark seam right under/beside it, then a lit crest of pushed-up
+    # soil just below, so the rim reads as raised and the stone as coming up out of the ground.
+    for (x, y) in sorted(mound):
+        if (x, y) in stone_px:
+            continue
+        under = (x, y - 1) in stone_px
+        beside = (x - 1, y) in stone_px or (x + 1, y) in stone_px
+        if under or beside:
+            c.set(x, y, 15)
+            if under and (x, y + 1) in mound and (x, y + 2) in mound:
+                c.set(x, y + 1, 20 if x < 10 else 19)
+                c.set(x, y + 2, 18 if x < 10 else 17)
+    # Grass tufts creeping onto the mound edges.
+    for x in (min(top), max(top)):
+        t = top[x]
+        c.set(x, t, 22); c.set(x, t + 1, 21)
+    # Outline: stone everywhere it meets air; mound along its top and sides (not the bottom row).
+    solid = mound | stone_px
+    for y in range(WH):
+        for x in range(WW):
+            if (x, y) in solid:
+                continue
+            if any((x + dx, y + dy) in solid for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                c.set(x, y, 1)
+    return c
+
+
 def main():
     items = json.load(open(os.path.join(CONTENT, "items.json")))
     made = 0
@@ -295,6 +374,8 @@ def main():
                   palette=crack_pal, anchor=(8, 15), tags=["geode", "crack"])
         write("geode.open.%s" % key, (S, S), [opened(key, base, inner, kind)], palette=pal, anchor=(8, 15),
               tags=["geode", "open"])
+        write("geode.world.%s" % key, (WW, WH), [world(key, kind)], palette=pal + SOIL, anchor=(10, 15),
+              tags=["geode", "world"])
         made += 1
     print("geodes: %d types (ball, 2 crack sets x 5 stages, opened)" % made)
 

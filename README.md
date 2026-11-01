@@ -114,6 +114,12 @@ python3 tools/gen_placeholders.py
   - If every scaling cell is left blank, the importer falls back to a rate per required stat by rarity: Common 1, Uncommon 1.5, Rare 2, Very rare 2.5, Legendary 3.
   - **Category first:** each spawn first picks mushroom, plant or geode (among categories that have something qualifying on that tile), then an item within it by effective weight.
   - **Category tilt:** a category's weight is `spawns.categoryWeights` × a multiplier from the tile's own-family stats (`spawns.categoryScaling`, % per point, clamped to 0.25..6). The default is +10% per point of Damp/Glow for mushrooms, Bloom/Verdure for plants and Stone/Depth for geodes. So an area full of Geode Critters turns up mostly geodes: one Common critter nearby gives about 50% geodes and 25% each of the others.
+  - **Where spawns land (effect-aware):** each spawn attempt picks a free tile in the clearing by weight instead of uniformly. The weight is `base + perStatPoint × (sum of the tile's six stats) + perSource × (creatures whose influence reaches the tile + active soil boosts on it) + perEffect × (creature special effects covering it)`, capped at `maxWeight` (`spawns.locationWeighting` in `tuning.json`, defaults 1 / 0.3 / 3 / 1.5 / 40).
+    - Overlapping creatures add up. With nothing active every tile weighs 1, which is the old uniform pick.
+    - It is recomputed every spawn tick, so it follows creatures as they ramp, decay or move, and boosts as they expire.
+    - Occupied tiles, landmarks and the treeline are never candidates. The overall spawn rate is unchanged.
+    - Wanderers arriving use the same weights.
+    - In testing, about 5× as many spawns landed near creatures as their share of the map; in the starting clearing it was about 3×.
   - **Seeds** choose their plant when planted, using the same weights for that tile at that time. The choice is saved on the seed, so a plant item can carry its own `growthSprites` (otherwise the stages are the generic seed stages ending in the plant's sprite).
   - **Spawn inspector:** in 🐞 Debug, turn on "Spawn inspector", then tap any tile. It shows the tile's stats and every qualifying item with its base, multiplier, weight and % within its category, plus what a Mystery Seed planted there now could grow into.
 - **Unclear sheet entries** and how I read them:
@@ -214,12 +220,40 @@ This command builds a forest, places the starter creatures, simulates 24 hours, 
 - **New stats and resident animals:** stats and item categories are data strings.
 - **Sprite editor:** this would use the user content root and `TextureCache.invalidate()`.
 
+## Developer mode (web)
+
+A separate test forest for trying any content or combination without touching your real save.
+
+- **Turn it on:** tap 🐞 (top right), then **Enter developer mode** (or **…with a copy of my forest**). You can also open the game with `?dev=1` in the URL; `?dev=0` turns it off. It stays on across reloads until you turn it off. The 🐞 button turns orange with a **DEV** tag while it's on.
+- **Save isolation:**
+  - The real forest lives in `localStorage` key `undergrowth.forest.v1`; the test forest in `undergrowth.forest.dev`.
+  - Entering developer mode saves the real forest and keeps a backup copy (`undergrowth.forest.v1.backup`).
+  - While it's on, nothing is written to the real key. Test forests are marked (`state.dev`), and saving one over the real forest is refused.
+  - **Back to my forest** reloads the real forest exactly as it was. Time speed is remembered separately for each.
+- **Unlock:**
+  - **Unlock everything:** every species and its glimmer, 5 of every item, the whole Field Guide, 6 slots, and the clearing grown to the whole map.
+  - Or each part on its own. Creature slots can be set to 3, 6, 9 or 12.
+- **Try combinations:**
+  - Pick any species, choose full strength and/or glimmer, then tap tiles to place them. A slot is added if all are full.
+  - **Remove all creatures** (instantly), **Max strength now**, **Clear wild spawns** and **Run 20 spawn ticks** (to see where things turn up).
+- **Saved setups:** name and save the current test forest, then load it back later to flip between garden configurations.
+- **Views** (both modes):
+  - **Spawn heatmap:** tints tiles by spawn-location weight.
+  - **Spawn inspector:** tap a tile for its stats, location weight breakdown and item odds.
+  - **Stat overlay.**
+- Normal mode keeps only time speed, skip ahead, views and the tutorial/reset tools. Giving items and creatures is in developer mode only.
+
 ## Look and feel (web)
 
 - **Font:** all text uses Pixelify Sans (SIL OFL), self-hosted in `web/fonts/` with its licence. The sizes are `--t-title` / `--t-head` / `--t-body` / `--t-small` / `--t-tiny` in `style.css`.
 - **Pixel frames:** panels, buttons, tabs and cards use stepped, notched-corner frames built from box-shadows. There are no rounded corners or blur effects.
 - **Treeline:** the edge bushes and the ground under them use deep, shadowed greens (`SHRUB_PALETTES` and the edge palette in `tools/gen_topdown.py`), so the clearing has a clear dark border.
 - **Movement:** wild spawns (mushrooms, plants, geodes, seed stages) stand still and show their first frame. Placed creatures keep their animation and wander inside their influence radius around the tile they were placed on: walk, pause, repeat, staying in the clearing. This is visual only; their influence still comes from the placement tile, and tapping a creature wherever it is selects it.
+- **Numbers:** UG Numerals (`tools/gen_numeral_font.py`, `web/fonts/ug-numerals-*.woff2`) is a tiny pixel font on Pixelify Sans' grid that covers only digits and number punctuation (`% + , . / : × −`), via `unicode-range`.
+  - Slashed 0, flat-topped open 3, square-cornered 5, footed 1.
+  - Every digit is the same width, so counters and timers don't shift.
+  - All other text is still Pixelify Sans.
+- **Geodes in the forest:** each geode has a world sprite (`geode.world.*`, linked as `worldSprite`): the stone half-buried in a raised dirt mound with a dark seam at its base. The bag, guide and cracking screens keep the plain stone. Tap targets and rewards are unchanged.
 - **Icons:** pixel sprites in the registry (`ui.icon.*`, `ui.burst`), drawn by `tools/gen_ui.py`. There are no emoji.
 - **Geodes:** each geode type has three data sprites, linked from its item (`crackSprites`, `openSprite`):
   - `item.geode.*`: a rounded stone ball.

@@ -164,6 +164,13 @@ export class ForestView {
     }
     const field = g.field(g.now());
     const overlay = this.app.ui.statOverlay;
+    // Dev view: where wild spawns are likely to land (the same weights spawnTick uses).
+    this.heat = null;
+    if (this.app.ui.spawnHeatmap) {
+      const loc = g.spawnLocations(g.now(), field);
+      const max = loc.tiles.reduce((m, x) => Math.max(m, x.weight), 1);
+      this.heat = { tiles: loc.tiles, max, min: (this.app.content.tuning.spawns.locationWeighting || {}).base ?? 1 };
+    }
     const overrides = g.groundOverrides(field);
     for (let y = 0; y < s.size.height; y++) {
       for (let x = 0; x < s.size.width; x++) {
@@ -215,7 +222,8 @@ export class ForestView {
     for (const sp of s.spawns) {
       const def = this.app.content.items[sp.itemID];
       if (!def) continue;
-      objs.push({ sprite: def.sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: true, phase: 0 });
+      // Items may have a separate in-world look (geodes: half-buried in a dirt mound).
+      objs.push({ sprite: def.worldSprite || def.sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: true, phase: 0 });
     }
     for (const l of s.landmarks || []) {
       const def = (this.app.content.landmarks || []).find((d) => d.id === l.id);
@@ -312,6 +320,17 @@ export class ForestView {
         if (!inside) {
           for (const d of v.decorations) edgeObjs.push({ sprite: d.sprite, x: c.x + d.dx, y: c.y + TS / 2 + d.dy, flip: d.flip, phase: 0 });
         }
+      }
+    }
+
+    if (this.heat) {
+      // Cool, faint for ordinary tiles; warm and strong where effects pull spawns in.
+      const { tiles, max, min } = this.heat;
+      for (const x of tiles) {
+        const k = max > min ? (x.weight - min) / (max - min) : 0;
+        const r = Math.round(60 + 195 * k), gg = Math.round(120 + 80 * k * (1 - k) * 2), bb = Math.round(255 * (1 - k));
+        ctx.fillStyle = `rgba(${r},${gg},${bb},${0.12 + 0.5 * k})`;
+        ctx.fillRect(x.tile.x * TS, x.tile.y * TS, TS, TS);
       }
     }
 
@@ -470,7 +489,7 @@ export class ForestView {
       const p = g.activePlacement(ui.selectedCreatureID);
       return p ? [p] : [];
     }
-    if (ui.mode && ui.mode.type === 'place') return g.activePlacements;
+    if (ui.mode && (ui.mode.type === 'place' || ui.mode.type === 'devPlace')) return g.activePlacements;
     return [];
   }
 
