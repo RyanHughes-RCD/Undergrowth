@@ -900,5 +900,7 @@ if __name__ == "__main__":
     make_decorations()
     import gen_content_sprites  # art for every entry in the spawn-table content
     gen_content_sprites.main()
+    import gen_ui  # pixel-art UI icons and effects
+    gen_ui.main()
     count = sum(len(files) for _, _, files in os.walk(OUT))
     print("wrote %d sprite/palette files to %s" % (count, OUT))

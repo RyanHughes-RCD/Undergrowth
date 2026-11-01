@@ -32,6 +32,10 @@ const LANDMARK_TAB = 'landmarks';
 const FAMILY_TABS = [['fungling', 'Funglings'], ['sproutling', 'Sproutlings'], ['geodeCritter', 'Geode Critters'], ['wanderer', 'Wanderers']];
 const catTitle = (c) => CATEGORY_TITLES[c] || cap(c);
 
+/** Pixel-art icon from the sprite registry ("ui.icon.<name>"); scale = CSS px per art px. */
+let SPRITES = null;
+export const ic = (name, scale = 2, cls = '') => SPRITES.element('ui.icon.' + name, null, scale, 'icon ' + cls);
+
 export class UI {
   constructor(app) {
     this.app = app;
@@ -42,6 +46,7 @@ export class UI {
     this.sheet = null;           // { type, arg }
     this.guideTab = 'fungling';
     this.root = document.getElementById('ui');
+    SPRITES = app.sprites;
     this.toastTimer = null;
   }
 
@@ -55,16 +60,17 @@ export class UI {
     const g = this.game;
     const now = g.now();
     const d = new Date(now);
-    const clock = `${g.isNight(now) ? '🌙' : '☀️'} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}${g.isRaining(now) ? ' 🌧' : ''}${g.state.nextGlimmer ? ' ✨' : ''}`;
+    const clock = [ic(g.isNight(now) ? 'moon' : 'sun', 1), ` ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+      g.isRaining(now) ? ic('rain', 1) : null, g.state.nextGlimmer ? ic('glimmer', 1) : null];
     const top = h('div', { class: 'hud-top' }, h('div', { class: 'hud-row' },
       h('button', { class: 'name-btn', onclick: () => this.open('rename') },
         h('div', { class: 'forest-name' }, g.forestName),
-        h('div', { class: 'hint' }, `${clock} · tap to rename`)),
+        h('div', { class: 'hint' }, ...clock, ' · tap to rename')),
       this.content.tuning.debugTools ? h('div', { class: 'dev' },
         h('button', { class: 'speed-btn' + (this.app.speed > 1 ? ' on' : ''), title: 'Time speed', onclick: () => this.app.cycleSpeed() },
-          h('b', {}, `⏩ ${this.app.speed}×`),
+          h('b', {}, ic('fast', 1), `${this.app.speed}×`),
           g.state.debugTimeOffset > 0 ? h('span', {}, `+${duration(g.state.debugTimeOffset / 1000)}`) : null),
-        h('button', { class: 'round-btn', title: 'Debug', onclick: () => this.open('debug') }, '🐞')) : null,
+        h('button', { class: 'round-btn', title: 'Debug', onclick: () => this.open('debug') }, ic('bug', 2))) : null,
     ), this.coachCard());
 
     const bottom = h('div', { class: 'hud-bottom' });
@@ -73,10 +79,10 @@ export class UI {
     bottom.append(this.slotsBar());
     const invCount = Object.values(g.state.inventory).reduce((a, b) => a + b, 0);
     bottom.append(h('div', { class: 'nav' },
-      this.navButton('🏠', 'Burrow', g.burrow.length, () => this.open('burrow')),
-      this.navButton('🎒', 'Bag', invCount, () => this.open('bag')),
-      this.navButton('📖', 'Guide', 0, () => this.open('guide')),
-      g.inTutorial ? null : this.navButton('📜', 'Tasks', g.activeTasks().filter((t) => t.done).length, () => this.open('tasks')),
+      this.navButton('burrow', 'Burrow', g.burrow.length, () => this.open('burrow')),
+      this.navButton('bag', 'Bag', invCount, () => this.open('bag')),
+      this.navButton('guide', 'Guide', 0, () => this.open('guide')),
+      g.inTutorial ? null : this.navButton('tasks', 'Tasks', g.activeTasks().filter((t) => t.done).length, () => this.open('tasks')),
     ));
     this.root.replaceChildren(top, bottom);
     if (this.sheet && withSheet) this.renderSheet();
@@ -121,7 +127,7 @@ export class UI {
 
   navButton(icon, label, badge, onclick) {
     return h('button', { class: 'nav-btn', onclick },
-      h('span', { class: 'icon' }, icon), h('span', {}, label),
+      ic(icon, 2), h('span', {}, label),
       badge > 0 ? h('span', { class: 'badge' }, badge) : null);
   }
 
@@ -145,10 +151,10 @@ export class UI {
     const stats = this.game.tileStats(tile, this.game.now());
     return h('div', { class: 'card' },
       h('div', { class: 'row space' }, h('b', {}, `Tile ${tile.x}, ${tile.y}`),
-        h('button', { class: 'x', onclick: () => { this.selectedTile = null; this.app.changed(false); } }, '✕')),
+        h('button', { class: 'x', onclick: () => { this.selectedTile = null; this.app.changed(false); } }, ic('close', 1))),
       h('div', { class: 'stat-grid' }, CORE_STATS.map((k) => this.statBar(k, stats[k] || 0))),
       ...this.game.activeBoosts(this.game.now()).filter((b) => b.tile.x === tile.x && b.tile.y === tile.y).map((b) =>
-        h('div', { class: 'sub' }, '💎 ' + Object.entries(b.stats).map(([k, v]) => `+${v} ${cap(k)}`).join(', ') +
+        h('div', { class: 'sub boost' }, ic('gem', 1), Object.entries(b.stats).map(([k, v]) => `+${v} ${cap(k)}`).join(', ') +
           (b.expiresAt ? ` · ${duration((b.expiresAt - this.game.now()) / 1000)} left` : ' · permanent'))));
   }
 
@@ -167,10 +173,10 @@ export class UI {
       const open = g.unlockedSlots(now);
       const index = g.state.slots.indexOf(slot);
       if (index >= open) {
-        return h('div', { class: 'slot locked' }, '🔒',
+        return h('div', { class: 'slot locked' }, ic('lock', 2),
           h('span', { class: 'slot-day' }, this.story('messages.lockedSlot', { day: g.slotUnlockDay(index) ?? '?' })));
       }
-      if (!c) return h('div', { class: 'slot empty' }, '+');
+      if (!c) return h('div', { class: 'slot empty' }, ic('plus', 2));
       const art = this.app.art(c);
       const lv = g.level(p, now);
       return h('button', { class: 'slot', onclick: () => { this.selectedTile = null; this.selectedCreatureID = c.id; this.open('creature', c.id); } },
@@ -225,7 +231,7 @@ export class UI {
     const scrollTop = el.querySelector('.sheet-body')?.scrollTop || 0;
     el.replaceChildren(h('div', { class: 'sheet-panel' },
       h('div', { class: 'sheet-head' },
-        this.sheet.stack ? h('button', { class: 'btn small grey', onclick: () => this.close() }, '‹ Back') : h('span'),
+        this.sheet.stack ? h('button', { class: 'btn small grey', onclick: () => this.close() }, ic('back', 1), 'Back') : h('span'),
         h('b', {}, title),
         h('button', { class: 'btn small', onclick: () => { this.sheet = null; this.close(); } }, 'Done')),
       h('div', { class: 'sheet-body' }, body)));
@@ -246,11 +252,11 @@ export class UI {
     return h('button', { class: 'list-row', onclick: () => this.open('creature', c.id) },
       h('div', { class: 'thumb' }, this.sprites.element(art.sprite, art.variant, 3)),
       h('div', { class: 'grow' },
-        h('div', {}, h('b', {}, this.app.displayName(c)), c.isGlimmer ? h('span', { class: 'glimmer' }, ' ✦ Glimmer') : null),
+        h('div', {}, h('b', {}, this.app.displayName(c)), c.isGlimmer ? h('span', { class: 'glimmer' }, ' ', ic('glimmer', 1), 'Glimmer') : null),
         h('div', { class: 'sub' }, this.speciesLine(c)),
         h('div', { class: 'sub' }, this.traitSummary(c)),
         p ? h('div', { class: 'sub' }, `Influence ${Math.round(g.level(p, g.now()) * 100)}%`) : null),
-      h('span', { class: 'chev' }, '›'));
+      h('span', { class: 'chev' }, ic('chevron', 2)));
   }
 
   speciesLine(c) {
@@ -297,7 +303,7 @@ export class UI {
       const free = g.freeSlotCount > 0;
       status = [
         h('div', { class: 'sub' }, 'Resting in the Burrow.'),
-        h('button', { class: 'btn green', disabled: !free, onclick: () => { this.app.beginPlacing(c.id); } }, free ? '🌿 Place in forest' : 'All slots are full'),
+        h('button', { class: 'btn green', disabled: !free, onclick: () => { this.app.beginPlacing(c.id); } }, ...(free ? [ic('leaf', 1), 'Place in forest'] : ['All slots are full'])),
       ];
     }
     const origin = c.origin === 'starter' ? 'Was here from the start' : c.origin === 'wanderer' ? 'Wandered in on its own'
@@ -305,8 +311,8 @@ export class UI {
     return [this.app.displayName(c), [
       h('div', { class: 'hero' }, this.sprites.element(art.sprite, art.variant, 7)),
       h('p', { class: 'sub center' }, this.speciesLine(c)),
-      c.isGlimmer ? h('p', { class: 'glimmer' }, '✦ A glimmer! +50% bonuses and +1 radius.') : null,
-      def && def.special ? h('div', { class: 'card special' }, h('b', {}, '✨ Special: '), def.special,
+      c.isGlimmer ? h('p', { class: 'glimmer' }, ic('glimmer', 1), `A glimmer! +50% bonuses and +${(this.content.tuning.creatureRoll || {}).glimmerRadiusBonus ?? 1} radius.`) : null,
+      def && def.special ? h('div', { class: 'card special' }, h('b', {}, ic('sparkle', 1), 'Special: '), def.special,
         def.notYet ? h('div', { class: 'sub' }, `Not in the game yet: ${def.notYet}`) : null) : null,
       h('label', { class: 'field' }, 'Name', name),
       h('div', { class: 'section' }, 'Traits'),
@@ -397,8 +403,8 @@ export class UI {
           onclick: () => { if (known) this.open('entry', e); else if (teaser) this.open('entry', { name: '???', sprite: e.sprite, variant: sil, text: e.teaser }); },
         },
           this.sprites.element(e.sprite, known ? e.variant : sil, 4),
-          h('span', {}, known ? e.name : teaser ? '??? ✨' : '???'),
-          e.rarity ? h('i', { class: 'dot', style: `background:${RARITY_COLORS[e.rarity]}` }) : e.glimmer ? h('i', { class: 'glimmer' }, '✦') : null);
+          h('span', {}, known ? e.name : '???', teaser ? ic('sparkle', 1) : null),
+          e.rarity ? h('i', { class: 'dot', style: `background:${RARITY_COLORS[e.rarity]}` }) : e.glimmer ? ic('glimmer', 1) : null);
       })),
     ]];
   }
@@ -409,7 +415,7 @@ export class UI {
       e.rarity ? h('p', { class: 'rarity', style: `color:${RARITY_COLORS[e.rarity]}` }, rarityName(e.rarity).toUpperCase()) : null,
       e.howFound ? h('p', { class: 'sub center' }, e.howFound) : null,
       e.text ? h('p', { class: 'sub center' }, e.text) : null,
-      e.special ? h('p', { class: 'center' }, '✨ ' + e.special) : null,
+      e.special ? h('p', { class: 'center' }, ic('sparkle', 1), ' ' + e.special) : null,
     ];
   }
 
@@ -426,7 +432,7 @@ export class UI {
           h('div', { class: 'sub reward' }, `${t.progress}/${t.target} · Reward: `,
             ...(t.reward || []).map((r) => {
               const def = this.content.items[r.item];
-              return h('span', { class: 'reward-item' }, def ? this.sprites.element(def.sprite, null, 1.5) : '', `${r.count || 1}× ${def ? def.name : r.item}`);
+              return h('span', { class: 'reward-item' }, def ? this.sprites.element(def.sprite, null, 1) : '', `${r.count || 1}× ${def ? def.name : r.item}`);
             }))),
         t.done ? h('button', { class: 'btn green small', onclick: () => this.app.claimTask(t.id) }, 'Claim') : null)),
     ];
@@ -481,13 +487,19 @@ export class UI {
 
   // -------------------------------------------------------------- reveals
 
+  /** Stepped pixel rays behind a reveal, tinted via a palette swap (data sprite "ui.burst"). */
+  burst(color, scale = 5) {
+    const variant = color ? { swap: { 2: '#ffffff', 3: color } } : null;
+    return this.sprites.element('ui.burst', variant, scale, 'burst', true);
+  }
+
   /** A short celebratory card (blend moment). */
   celebrate(title, text) {
     const ov = document.getElementById('overlay');
     if (ov.classList.contains('show')) { this.toast(text); return; }
     const done = () => { ov.classList.remove('show'); ov.replaceChildren(); };
     ov.replaceChildren(h('div', { class: 'reveal-card pop' },
-      h('div', { class: 'rays-wrap small' }, h('div', { class: 'rays gold' }), h('div', { class: 'big-emoji' }, '🌿✨')),
+      h('div', { class: 'rays-wrap small' }, this.burst(null, 2.5), h('span', { class: 'row' }, ic('leaf', 4), ic('sparkle', 4))),
       h('h2', {}, title), h('p', { class: 'sub' }, text),
       h('button', { class: 'btn green', onclick: done }, 'Lovely')));
     ov.onclick = (e) => { if (e.target === ov) done(); };
@@ -499,9 +511,9 @@ export class UI {
     const ov = document.getElementById('overlay');
     const done = () => { ov.classList.remove('show'); ov.replaceChildren(); };
     ov.replaceChildren(h('div', { class: 'reveal-card pop' },
-      h('h2', { class: creature.isGlimmer ? 'glimmer' : '' }, creature.isGlimmer ? `✦ A glimmer ${this.app.displayName(creature)}! ✦` : `You found a ${this.app.displayName(creature)}!`),
+      h('h2', { class: creature.isGlimmer ? 'glimmer' : '' }, creature.isGlimmer ? [ic('glimmer', 2), `A glimmer ${this.app.displayName(creature)}!`, ic('glimmer', 2)] : `You found a ${this.app.displayName(creature)}!`),
       h('p', { class: 'sub' }, `It came from ${source}.`),
-      h('div', { class: 'rays-wrap' }, h('div', { class: 'rays' + (creature.isGlimmer ? ' gold' : '') }), this.sprites.element(art.sprite, art.variant, 8, 'grow-in')),
+      h('div', { class: 'rays-wrap' }, this.burst(creature.isGlimmer ? null : '#ffffff'), this.sprites.element(art.sprite, art.variant, 8, 'grow-in', true)),
       h('p', { class: 'sub' }, this.traitSummary(creature)),
       isNew ? h('p', { class: 'new' }, 'New Field Guide entry!') : null,
       h('button', { class: 'btn green', onclick: done }, 'Welcome to the Burrow')));
@@ -558,16 +570,16 @@ export class UI {
         text = h('p', { class: 'hint-big' }, 'Just dust this time.');
       } else if (r.creature) {
         const art = app.art(r.creature);
-        revealEl = h('div', { class: 'rays-wrap' }, h('div', { class: 'rays gold' }), this.sprites.element(art.sprite, art.variant, 10, 'grow-in'));
+        revealEl = h('div', { class: 'rays-wrap' }, this.burst(null), this.sprites.element(art.sprite, art.variant, 10, 'grow-in', true));
         text = h('div', { class: 'center' },
-          h('h2', { class: 'glimmer' }, r.creature.isGlimmer ? `✦ A glimmer ${app.displayName(r.creature)} was inside! ✦` : `A ${app.displayName(r.creature)} was curled up inside!`),
+          h('h2', { class: 'glimmer' }, r.creature.isGlimmer ? [ic('glimmer', 2), `A glimmer ${app.displayName(r.creature)} was inside!`, ic('glimmer', 2)] : `A ${app.displayName(r.creature)} was curled up inside!`),
           h('p', { class: 'sub' }, this.traitSummary(r.creature)),
           h('p', { class: 'sub' }, "It's waiting in your Burrow."),
           r.isNew ? h('p', { class: 'new' }, 'New Field Guide entry!') : null);
       } else {
         const gem = this.content.items[r.item];
         const color = RARITY_COLORS[gem?.rarity] || '#fff';
-        revealEl = h('div', { class: 'rays-wrap' }, h('div', { class: 'rays', style: `--ray:${color}` }), this.sprites.element(gem?.sprite || '__missing', null, 10, 'grow-in'));
+        revealEl = h('div', { class: 'rays-wrap' }, this.burst(color), this.sprites.element(gem?.sprite || '__missing', null, 10, 'grow-in', true));
         text = h('div', { class: 'center' },
           h('h2', {}, gem ? gem.name : r.item),
           gem ? h('p', { class: 'rarity', style: `color:${color}` }, rarityName(gem.rarity).toUpperCase()) : null,

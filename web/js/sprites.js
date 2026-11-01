@@ -99,14 +99,28 @@ export class SpriteRegistry {
   }
 
   /** A crisp, CSS-scaled canvas element for the UI. */
-  element(id, variant, scale = 3, className = '') {
-    const f = this.frames(id, variant)[0];
+  element(id, variant, scale = 3, className = '', animate = false) {
+    const frames = this.frames(id, variant);
+    const f = frames[0];
     const c = document.createElement('canvas');
     c.width = f.w; c.height = f.h;
-    c.getContext('2d').drawImage(f.canvas, 0, 0);
+    const ctx = c.getContext('2d');
+    ctx.drawImage(f.canvas, 0, 0);
     c.style.width = f.w * scale + 'px';
     c.style.height = f.h * scale + 'px';
     c.className = 'px ' + className;
+    if (animate && frames.length > 1) {
+      // Step through the sprite's own frames while the element is on screen.
+      const start = performance.now();
+      let shown = 0;
+      const step = (now) => {
+        if (!c.isConnected && now - start > 1000) return;
+        const i = this.frameIndex(id, (now - start) / 1000);
+        if (i !== shown) { shown = i; ctx.clearRect(0, 0, f.w, f.h); ctx.drawImage(frames[i].canvas, 0, 0); }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
     return c;
   }
 }
