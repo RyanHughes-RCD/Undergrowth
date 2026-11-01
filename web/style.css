@@ -250,3 +250,7 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .field.grow { flex: 1 1 140px; }
 .slots.many { justify-content: flex-start; overflow-x: auto; pointer-events: auto; padding: 4px 4px 6px; scrollbar-width: none; }
 .slots.many .slot { flex: none; }
+.inspect-terrain { margin: 6px 0 4px; }
+.inspect-kv { display: flex; justify-content: space-between; gap: 10px; font-size: var(--t-small); padding: 2px 0; }
+.inspect-kv b { text-align: right; }
+.tag { font-size: var(--t-tiny); color: #ffd84a; margin-left: 6px; text-transform: uppercase; letter-spacing: 1px; }

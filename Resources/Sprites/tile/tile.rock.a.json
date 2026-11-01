@@ -1,0 +1,37 @@
+{
+ "id": "tile.rock.a",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "22v2222222112222",
+    "222vv2vvvvv12222",
+    "22221vtutttvvvv2",
+    "22122vtttttvuttv",
+    "22222vtttttvtttv",
+    "22v222vvvvvvvttv",
+    "2v2222121vuttvvv",
+    "22222v222ttttttv",
+    "2222vv2vvvtttvtt",
+    "22222221v2vvvttv",
+    "2221222vv2221222",
+    "2212222222222222",
+    "12212222222v2v22",
+    "22222122222v2222",
+    "22222vv1222222v2",
+    "2222222v22222222"
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

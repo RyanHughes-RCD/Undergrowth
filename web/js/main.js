@@ -274,8 +274,20 @@ class App {
     const spawn = g.spawnAt(tile);
     if (spawn) {
       const name = this.content.items[spawn.itemID]?.name || 'something';
+      const view = g.spawnView(spawn, now);
+      if (view === 'hidden') {
+        // Tall grass (high Verdure): the first tap parts the grass and shows what's there.
+        this.attempt(() => g.revealSpawn(spawn.id));
+        this.ui.toast(`Something was hiding in the tall grass: ${name}.`, this.content.items[spawn.itemID]?.sprite);
+        this.changed();
+        return;
+      }
       const results = this.attempt(() => g.collect(spawn.id, now));
-      if (results) { this.present(results, `a ${name}`); this.changed(); }
+      if (results) {
+        if (view === 'buried') this.view.dustAt(spawn.tile);
+        this.present(results, view === 'buried' ? `a ${name}, dug up from the earth` : `a ${name}`);
+        this.changed();
+      }
       return;
     }
     const seed = g.seedAt(tile);

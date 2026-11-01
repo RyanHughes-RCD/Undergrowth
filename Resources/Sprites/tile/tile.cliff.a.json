@@ -1,0 +1,37 @@
+{
+ "id": "tile.cliff.a",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "uwwwwwwwwwwwwwww",
+    "uvwtutvttttvttut",
+    "uttttttuttvvuwtt",
+    "uwtttttttuuttttt",
+    "utttvtuttvututtt",
+    "uttttwtttttttttt",
+    "uttvttttvutttttt",
+    "uttttttttvvuvutt",
+    "utvvttttvvvutttt",
+    "uvttttttttvttttt",
+    "uttvttttttvvvvtv",
+    "uttttttttvvtuvtv",
+    "ututttttvttvtvtt",
+    "uutvtttttttwtttw",
+    "uututttttvuttvvt",
+    "uuttttttuttttvtt"
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

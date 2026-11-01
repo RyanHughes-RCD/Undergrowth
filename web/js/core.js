@@ -111,17 +111,26 @@ export class StatEngine {
   }
 
   /** Ramp level 0..1 while placed; fades over the same time after removal. */
-  level(p, now) {
+  level(p, now, stat = null) {
     const ramp = Math.max(1, p.rampSeconds ?? this.t.rampSecondsToFull) * 1000;
-    const decay = Math.max(1, p.rampSeconds ?? this.t.decaySecondsToZero) * 1000;
+    const decay = Math.max(1, p.rampSeconds ?? this.t.decaySecondsToZero) * 1000 / this.decayRate(stat);
     const rampAt = (t) => Math.min(1, p.startLevel + Math.max(0, t - p.placedAt) / ramp);
     if (p.removedAt == null || now <= p.removedAt) return rampAt(now);
     return Math.max(0, rampAt(p.removedAt) - (now - p.removedAt) / decay);
   }
 
+  /** Fade-rate multiplier for a stat after its creature leaves (terrain.statDecayRate; Stone lingers). */
+  decayRate(stat) {
+    const r = (this.t.terrain && this.t.terrain.statDecayRate) || {};
+    return Math.max(0.01, stat && r[stat] != null ? r[stat] : 1);
+  }
+
   fullyDecayedAt(p) {
     if (p.removedAt == null) return null;
-    return p.removedAt + this.level(p, p.removedAt) * Math.max(1, p.rampSeconds ?? this.t.decaySecondsToZero) * 1000;
+    // The slowest-fading stat this creature gave decides when its placement is finally gone.
+    let rate = 1;
+    for (const k in p.contributions || {}) rate = Math.min(rate, this.decayRate(k));
+    return p.removedAt + this.level(p, p.removedAt) * Math.max(1, p.rampSeconds ?? this.t.decaySecondsToZero) * 1000 / rate;
   }
 
   /** Raw (unclamped) sums; the Game adds soil boosts and clamps. */
@@ -129,11 +138,12 @@ export class StatEngine {
     const out = {};
     for (const k of CORE_STATS) out[k] = 0;
     for (const p of placements) {
-      const lv = this.level(p, now);
-      if (lv <= 0) continue;
       const f = this.falloff(dist(tile, p.tile), p.radius);
       if (f <= 0) continue;
-      for (const k in p.contributions) out[k] = (out[k] || 0) + p.contributions[k] * lv * f;
+      for (const k in p.contributions) {
+        const lv = this.level(p, now, p.removedAt == null ? null : k);
+        if (lv > 0) out[k] = (out[k] || 0) + p.contributions[k] * lv * f;
+      }
     }
     return out;
   }
@@ -145,16 +155,18 @@ export class StatEngine {
     const K = keys.length;
     const values = new Float64Array(size.width * size.height * K);
     for (const p of placements) {
-      const lv = this.level(p, now);
-      if (lv <= 0) continue;
+      // Per stat: after removal each stat fades at its own rate (Stone slowest).
+      const contribs = Object.entries(p.contributions)
+        .map(([k, v]) => [keys.indexOf(k), v * this.level(p, now, p.removedAt == null ? null : k)])
+        .filter(([, v]) => v !== 0);
+      if (!contribs.length) continue;
       const r = Math.ceil(this.reach(p.radius));
-      const contribs = Object.entries(p.contributions).map(([k, v]) => [keys.indexOf(k), v]);
       for (let y = Math.max(0, p.tile.y - r); y <= Math.min(size.height - 1, p.tile.y + r); y++) {
         for (let x = Math.max(0, p.tile.x - r); x <= Math.min(size.width - 1, p.tile.x + r); x++) {
           const f = this.falloff(Math.hypot(x - p.tile.x, y - p.tile.y), p.radius);
           if (f <= 0) continue;
           const o = (y * size.width + x) * K;
-          for (const [ki, v] of contribs) values[o + ki] += v * lv * f;
+          for (const [ki, v] of contribs) values[o + ki] += v * f;
         }
       }
     }
@@ -322,6 +334,7 @@ export class Game {
     state.geodes = state.geodes || [];
     state.visitors = state.visitors || [];
     state.soilBoosts = state.soilBoosts || [];
+    state.ambientDamp = state.ambientDamp || {};
     state.nextGlimmer = !!state.nextGlimmer;
     this.t = content.tuning;
     this.stats = new StatEngine(this.t);
@@ -495,7 +508,7 @@ export class Game {
       if (!this.isFree(tile)) tile = this.freeNear(centre);
     }
     if (!tile) return null;
-    const spawn = { id: this.rng.uuid(), itemID, tile, spawnedAt: now, keep: true, tutorial: true, ...extra };
+    const spawn = { id: this.rng.uuid(), itemID, tile, spawnedAt: now, keep: true, tutorial: true, placement: 'surface', ...extra };
     this.state.spawns.push(spawn);
     return spawn;
   }
@@ -667,17 +680,210 @@ export class Game {
     });
   }
 
+  // ---- terrain: each stat's own identity (tuning.terrain)
+  get terrain() { return this.t.terrain || {}; }
+
+  /** Elevation -1..1 from a tile's stats: Stone raises the ground, Depth sinks it. */
+  elevationOf(stats) {
+    const e = this.terrain.elevation || {};
+    const v = (stats.stone || 0) * (e.stonePerPoint ?? 0.025) - (stats.depth || 0) * (e.depthPerPoint ?? 0.025);
+    const m = e.max ?? 1;
+    return Math.max(-m, Math.min(m, v));
+  }
+
+  /** Each core stat's share of the tile's total, and the dominant stat (share ≥ terrain.dominantShare). */
+  shares(stats) {
+    let total = 0;
+    for (const k of CORE_STATS) total += stats[k] || 0;
+    const out = { total, dominant: null, top: null };
+    let best = 0;
+    for (const k of CORE_STATS) {
+      const sh = total > 0 ? (stats[k] || 0) / total : 0;
+      out[k] = sh;
+      if (sh > best) { best = sh; out.top = k; }
+    }
+    if (total >= 1 && best >= (this.terrain.dominantShare ?? 0.35)) out.dominant = out.top;
+    return out;
+  }
+
+  /** Glow's day/night factor by local time: weak by day, strong at night; deep tiles glow even by day. */
+  glowFactor(t, stats = {}, kind = 'spawn') {
+    const g = this.terrain.glowCycle || {};
+    const night = kind === 'visual' ? (g.visualNight ?? 1.5) : (g.nightFactor ?? 1.6);
+    const day = kind === 'visual' ? (g.visualDay ?? 0.35) : (g.dayFactor ?? 0.4);
+    if (this.isNight(t)) return night;
+    const k = Math.min(1, (stats.depth || 0) / Math.max(1, g.depthForFullGlow ?? 40));
+    return day + (night - day) * k;
+  }
+
+  /** Bloom's daily cycle by local time: opens in the morning, peaks at midday, closes at dusk. */
+  bloomFactor(t) {
+    const b = this.terrain.bloomCycle || {};
+    const d = new Date(t), h = d.getHours() + d.getMinutes() / 60;
+    const open = b.openHour ?? 6, peak = b.peakHour ?? 12, close = b.closeHour ?? 19;
+    const lo = b.minFactor ?? 0.15, hi = b.maxFactor ?? 1.3;
+    let k = 0;
+    if (h > open && h <= peak) k = 0.5 - 0.5 * Math.cos(Math.PI * (h - open) / Math.max(0.01, peak - open));
+    else if (h > peak && h < close) k = 0.5 + 0.5 * Math.cos(Math.PI * (h - peak) / Math.max(0.01, close - peak));
+    return lo + (hi - lo) * k;
+  }
+
+  /** How much each stat counts toward spawn weights right now (Glow by day/night, Bloom by its cycle). */
+  statFactors(t, stats) { return { glow: this.glowFactor(t, stats), bloom: this.bloomFactor(t) }; }
+
+  /** High Bloom flattens plant weights (exponent < 1), so more kinds of plant turn up. */
+  varietyExponent(stats, t) {
+    const b = this.terrain.bloom || {};
+    const eff = (stats.bloom || 0) * this.bloomFactor(t);
+    return Math.max(b.minVarietyExponent ?? 0.35, 1 - (b.varietyPerPoint ?? 0) * eff);
+  }
+
+  /**
+   * Stats plus derived values for the tile-art rules table: share_<stat> (0..1 of the tile's
+   * total), elev (-100..100), glowVis / bloomVis (Glow and Bloom as they look right now).
+   */
+  visualStats(stats, t) {
+    const sh = this.shares(stats);
+    const out = { ...stats, total: sh.total, elev: Math.round(this.elevationOf(stats) * 100) };
+    for (const k of CORE_STATS) out['share_' + k] = sh[k];
+    out.glowVis = (stats.glow || 0) * this.glowFactor(t, stats, 'visual');
+    out.bloomVis = (stats.bloom || 0) * this.bloomFactor(t);
+    return out;
+  }
+
+  /** "x,y" tile keys by grid index and back, built once per grid size (hot loops avoid string churn). */
+  get tileKeys() {
+    const W = this.state.size.width, H = this.state.size.height;
+    if (!this._keys || this._keys.w !== W || this._keys.h !== H) {
+      const names = new Array(W * H), index = new Map();
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const k = x + ',' + y; names[y * W + x] = k; index.set(k, y * W + x); }
+      this._keys = { w: W, h: H, names, index };
+    }
+    return this._keys;
+  }
+
+  /** Ambient Damp (seeped/pooled water), separate from creature contributions. */
+  ambientAt(x, y) { return (this.state.ambientDamp && this.state.ambientDamp[x + ',' + y]) || 0; }
+
+  /**
+   * One step of Damp spreading (per spawn tick). Each clearing tile takes in water from wetter
+   * neighbours (spreadRate × difference), more easily downhill (downhillBoost) and hardly uphill
+   * (uphillPenalty); water also runs down slopes on its own (gravityPerTick). High-Stone tiles
+   * block seepage across them (none at stoneBlocksAt). It evaporates (evaporation), less on low
+   * ground (lowGroundRetention), so hollows turn boggy. Creature Damp is a source; only this
+   * ambient layer changes, so creature ramp/decay stays as it is.
+   */
+  ambientTick(t) {
+    const cfg = this.terrain.ambientDamp || {};
+    if (cfg.enabled === false) return;
+    const W = this.state.size.width, c = this.clearing;
+    const amb = this.state.ambientDamp || {};
+    const field = this.statField(t);
+    const n = W * this.state.size.height;
+    const D = new Float32Array(n), E = new Float32Array(n), S = new Float32Array(n);
+    let any = false;
+    const K = field.keys.length, kd = field.keys.indexOf('damp'), ks = field.keys.indexOf('stone'), kp = field.keys.indexOf('depth');
+    const el = this.terrain.elevation || {}, sp = el.stonePerPoint ?? 0.025, dp = el.depthPerPoint ?? 0.025, em = el.max ?? 1;
+    for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+      const i = y * W + x, o = i * K;
+      D[i] = field.values[o + kd]; S[i] = field.values[o + ks];
+      E[i] = Math.max(-em, Math.min(em, S[i] * sp - field.values[o + kp] * dp));
+      if (D[i] > 0) any = true;
+    }
+    if (!any) { this.state.ambientDamp = {}; return; }
+    const rate = cfg.spreadRate ?? 0.05, down = cfg.downhillBoost ?? 2.5, up = cfg.uphillPenalty ?? 0.8;
+    const grav = cfg.gravityPerTick ?? 0, block = Math.max(1, cfg.stoneBlocksAt ?? 40);
+    const evap = cfg.evaporation ?? 0.06, keep = cfg.lowGroundRetention ?? 0.7, max = cfg.max ?? 45, minKeep = cfg.minKeep ?? 0.05;
+    const next = {}, names = this.tileKeys.names;
+    for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+      const i = y * W + x;
+      let inflow = 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < c.x0 || nx > c.x1 || ny < c.y0 || ny > c.y1) continue;
+        const j = ny * W + nx;
+        const dz = E[j] - E[i];                      // > 0: the neighbour is higher, water runs down to us
+        let f = 0;
+        if (D[j] > D[i]) f += rate * (D[j] - D[i]);
+        if (dz > 0 && D[j] > 0) f += grav * D[j] * dz;
+        if (f <= 0) continue;
+        f *= dz >= 0 ? 1 + down * dz : Math.max(0, 1 + up * dz);
+        f *= 1 - Math.min(1, Math.max(S[i], S[j]) / block);
+        inflow += f;
+      }
+      const key = names[i];
+      const a = amb[key] || 0;
+      if (!inflow && !a) continue;
+      const e = evap * (E[i] < 0 ? 1 - keep * Math.min(1, -E[i]) : 1);
+      const v = Math.min(max, a + inflow - e * a);
+      if (v >= minKeep) next[key] = Math.round(v * 100) / 100;
+    }
+    this.state.ambientDamp = next;
+  }
+
+  /** Where a new spawn sits. Item data spawn.placement: surface | buried | auto (default). Auto:
+   *  items whose highest requirement is Depth are buried; geodes are buried on Depth-dominant
+   *  tiles and exposed on Stone-dominant ones; everything else is on the surface. */
+  resolvePlacement(item, stats) {
+    const p = (item.spawn && item.spawn.placement) || 'auto';
+    if (p === 'surface' || p === 'buried') return p;
+    const req = (item.spawn && item.spawn.requires) || {};
+    let top = null, best = -1;
+    for (const k in req) { const m = req[k].min ?? 0; if (m > best) { best = m; top = k; } }
+    if (top === 'depth') return 'buried';
+    if (item.category === 'geode' && this.shares(stats).dominant === 'depth') return 'buried';
+    return 'surface';
+  }
+
+  /** How a spawn shows right now: 'surface', 'exposed' (geode on Stone), 'buried', or 'hidden' (tall grass). */
+  spawnView(spawn, t, stats = null) {
+    if (spawn.placement === 'buried') return 'buried';
+    const st = stats || this.tileStats(spawn.tile, t);
+    if (!spawn.tutorial && !spawn.revealed && (st.verdure || 0) >= ((this.terrain.verdure || {}).hideThreshold ?? 30)) return 'hidden';
+    const def = this.content.items[spawn.itemID];
+    if (def && def.category === 'geode' && this.shares(st).dominant === 'stone') return 'exposed';
+    return 'surface';
+  }
+
+  /** Tap a rustling patch of tall grass: what was hiding there shows itself. */
+  revealSpawn(id) {
+    const sp = this.state.spawns.find((x) => x.id === id);
+    if (!sp) throw new GameError('Unknown item.');
+    sp.revealed = true;
+    return sp;
+  }
+
+  /** A wild spawn record (placement decided now from the tile). */
+  newSpawn(item, tile, t) {
+    return { id: this.rng.uuid(), itemID: item.id, tile, spawnedAt: t, placement: this.resolvePlacement(item, this.tileStats(tile, t)) };
+  }
+
   // ---- stats
   activeBoosts(now) { return this.state.soilBoosts.filter((b) => now >= b.appliedAt && (b.expiresAt == null || now < b.expiresAt)); }
 
   statField(now) {
     const f = this.stats.field(this.state.size, this.effectivePlacements(), now);
     for (const b of this.activeBoosts(now)) if (this.inBounds(b.tile)) f.add(b.tile.x, b.tile.y, b.stats);
+    // Ambient Damp (seeped and pooled water) on top of what creatures give.
+    const amb = this.state.ambientDamp || {}, kd = f.keys.indexOf('damp'), KK = f.keys.length, idx = this.tileKeys.index;
+    for (const key in amb) {
+      const i = idx.get(key);
+      if (i != null) f.values[i * KK + kd] += amb[key];
+    }
     // Nothing reaches past the treeline; newly revealed tiles fade in.
-    const K = f.keys.length, W = this.state.size.width;
+    const K = f.keys.length, W = this.state.size.width, c = this.state.clearing;
+    const ramp = ((this.t.expansion && this.t.expansion.revealRampSeconds) || 0) * 1000;
+    const rev = this.state.revealed || {};
     for (let y = 0; y < this.state.size.height; y++) for (let x = 0; x < W; x++) {
-      const m = this.revealFactor(x, y, now);
+      if (x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1) { x = c.x1; continue; }   // skip across the clearing
+      const o = (y * W + x) * K;
+      for (let i = 0; i < K; i++) f.values[o + i] = 0;
+    }
+    if (ramp > 0) for (const key in rev) {
+      const m = Math.min(1, Math.max(0, (now - rev[key]) / ramp));
       if (m >= 1) continue;
+      const [x, y] = key.split(',').map(Number);
+      if (x < c.x0 || x > c.x1 || y < c.y0 || y > c.y1) continue;
       const o = (y * W + x) * K;
       for (let i = 0; i < K; i++) f.values[o + i] *= m;
     }
@@ -689,6 +895,7 @@ export class Game {
   tileStats(tile, now) {
     const s = this.stats.statsAt(tile, this.effectivePlacements(), now);
     for (const b of this.activeBoosts(now)) if (sameTile(b.tile, tile)) for (const k in b.stats) s[k] = (s[k] || 0) + b.stats[k];
+    s.damp = (s.damp || 0) + this.ambientAt(tile.x, tile.y);
     const m = this.revealFactor(tile.x, tile.y, now);
     for (const k in s) s[k] = Math.min(this.t.statCap, Math.max(0, s[k] * m));
     return s;
@@ -718,6 +925,9 @@ export class Game {
   // ---- time passing
   advance(now) {
     const report = { spawned: 0, despawned: 0, ticks: 0, visitors: 0 };
+    // Revealed tiles that have finished fading in no longer need tracking (keeps per-tile scans fast).
+    const ramp = ((this.t.expansion && this.t.expansion.revealRampSeconds) || 0) * 1000;
+    for (const k in this.state.revealed || {}) if (now - this.state.revealed[k] >= ramp) delete this.state.revealed[k];
     this.state.placements = this.state.placements.filter((p) => {
       const end = this.stats.fullyDecayedAt(p);
       return end == null || end > now;
@@ -733,6 +943,7 @@ export class Game {
     for (let i = 0; i < ticks; i++) {
       const t = this.state.lastSpawnTick + tick;
       report.despawned += this.expireSpawns(t);
+      this.ambientTick(t);
       report.spawned += this.spawnTick(t);
       this.state.lastSpawnTick = t;
       report.ticks++;
@@ -862,21 +1073,49 @@ export class Game {
     // The spawn cap scales with how much of the forest is open.
     const c = this.clearing, area = (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1);
     const cap = Math.min(st.maxTotal, Math.max(st.minCap || 3, Math.round(area * (st.maxPerOpenTile || 0.1))));
-    let loc = null;
+    let loc = null, field = null;
+    const shared = () => field || (field = this.statField(t));
     for (let i = 0; i < st.attemptsPerTick; i++) {
       if (this.state.spawns.length >= cap) break;
       if (!this.rng.chance(st.spawnChance)) continue;
       // Where: weighted towards tiles with active effects (see spawnLocations). The free/area
       // check keeps the overall spawn rate the same as picking any tile at random.
-      loc = loc || this.spawnLocations(t);
+      loc = loc || this.spawnLocations(t, shared());
       if (!loc.tiles.length || !this.rng.chance(loc.tiles.length / area)) continue;
       const tile = weightedPick(loc.tiles.map((x) => [x.tile, x.weight]), this.rng);
       if (!tile || !this.isFree(tile)) continue;
       const item = this.pickSpawn(tile, t);
       if (item) {
-        this.state.spawns.push({ id: this.rng.uuid(), itemID: item.id, tile, spawnedAt: t });
+        this.state.spawns.push(this.newSpawn(item, tile, t));
         made++;
       }
+    }
+    made += this.mushroomGrowth(t, cap, shared());
+    return made;
+  }
+
+  /** Damp grows mushrooms faster: extra mushroom-only attempts, weighted to wetter tiles
+   *  (terrain.damp.mushroomGrowth: chance = Damp × chancePerPoint, up to maxChance). */
+  mushroomGrowth(t, cap, field = null) {
+    const mg = this.terrain.damp && this.terrain.damp.mushroomGrowth;
+    if (!mg || !(mg.attemptsPerTick > 0)) return 0;
+    field = field || this.statField(t);
+    const c = this.clearing, wet = [], occ = this.occupied(), di = field.keys.indexOf('damp'), K = field.keys.length, W = this.state.size.width;
+    for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+      const d = field.values[(y * W + x) * K + di] || 0;
+      if (d >= (mg.minDamp ?? 6) && !occ.has(x + ',' + y)) wet.push([{ x, y }, d]);
+    }
+    let made = 0;
+    for (let i = 0; i < mg.attemptsPerTick && wet.length; i++) {
+      if (this.state.spawns.length >= cap) break;
+      const tile = weightedPick(wet, this.rng);
+      if (!tile || !this.isFree(tile)) continue;
+      const d = wet.find(([tl]) => tl === tile)[1];
+      if (!this.rng.chance(Math.min(mg.maxChance ?? 0.6, d * (mg.chancePerPoint ?? 0.01)))) continue;
+      const item = weightedPick(this.spawnDetails(tile, t).filter((x) => x.item.category === 'mushroom').map((x) => [x.item, x.weight]), this.rng);
+      if (!item) continue;
+      this.state.spawns.push(this.newSpawn(item, tile, t));
+      made++;
     }
     return made;
   }
@@ -915,15 +1154,28 @@ export class Game {
     }
     const tiles = [];
     let total = 0;
+    const occ = this.occupied();
+    // Per-tick constants (Glow by day/night and Depth, Bloom's cycle) instead of per tile.
+    const K = on ? field.keys.length : 0;
+    const coreIdx = on ? CORE_STATS.map((k) => field.keys.indexOf(k)) : [];
+    const depthIdx = on ? field.keys.indexOf('depth') : -1;
+    const bloomF = this.bloomFactor(t), gc = this.terrain.glowCycle || {}, night = this.isNight(t);
+    const gN = gc.nightFactor ?? 1.6, gD = gc.dayFactor ?? 0.4, gFull = Math.max(1, gc.depthForFullGlow ?? 40);
+    const glowAt = (depth) => (night ? gN : gD + (gN - gD) * Math.min(1, depth / gFull));
     for (let y = c.y0; y <= c.y1; y++) {
       for (let x = c.x0; x <= c.x1; x++) {
         const tile = { x, y };
-        if (!this.isFree(tile)) continue;
+        if (occ.has(x + ',' + y) || !this.inBounds(tile)) continue;
         let weight = base, intensity = 0;
         const i = y * W + x;
         if (on) {
-          const st = field.statsAt(x, y);
-          for (const k of CORE_STATS) intensity += st[k] || 0;
+          const o = i * K;
+          for (let ki = 0; ki < coreIdx.length; ki++) {
+            const v = field.values[o + coreIdx[ki]] || 0;
+            if (!v) continue;
+            const k = CORE_STATS[ki];
+            intensity += v * (k === 'glow' ? glowAt(field.values[o + depthIdx] || 0) : k === 'bloom' ? bloomF : 1);
+          }
           weight = Math.min(max, base + perPt * intensity + perSrc * sources[i] + perFx * fx[i]);
         }
         tiles.push({ tile, weight, intensity, sources: sources[i], effects: fx[i] });
@@ -953,6 +1205,9 @@ export class Game {
     const onMap = new Set(this.state.spawns.map((x) => x.itemID));
     const sc = (this.t.spawns && this.t.spawns.scaling) || {};
     const lo = sc.minMultiplier ?? 0.25, hi = sc.maxMultiplier ?? 4;
+    // Glow counts for more at night (and in Depth), Bloom follows its daily cycle.
+    const fac = this.statFactors(t, s);
+    const varietyExp = this.varietyExponent(s, t);
     const out = [];
     for (const item of opts.items || this.content.spawnableItems) {
       const rule = item.spawn;
@@ -976,12 +1231,15 @@ export class Game {
       }
       if (!ok) continue;
       let raw = 1;
-      for (const stat in rule.statScaling || {}) raw += (rule.statScaling[stat] / 100) * Math.max(0, vals[stat] - mins[stat]);
+      for (const stat in rule.statScaling || {}) raw += (rule.statScaling[stat] / 100) * Math.max(0, vals[stat] - mins[stat]) * (fac[stat] ?? 1);
       const mult = Math.min(hi, Math.max(lo, raw));
       let fx = 1;
       for (const e of weightFx) if (Game.effectMatches(e, item)) fx *= e.mult ?? 1;
-      const weight = rule.baseWeight * mult * fx;
-      if (weight > 0) out.push({ item, base: rule.baseWeight, rawMult: raw, mult, clamped: raw !== mult, fx, weight });
+      let weight = rule.baseWeight * mult * fx;
+      // High Bloom: a wider variety of plants (weights flattened toward each other).
+      const variety = item.category === 'plant' ? varietyExp : 1;
+      if (variety !== 1 && weight > 0) weight = Math.pow(weight, variety);
+      if (weight > 0) out.push({ item, base: rule.baseWeight, rawMult: raw, mult, clamped: raw !== mult, fx, variety, weight });
     }
     return out;
   }
@@ -993,14 +1251,15 @@ export class Game {
    * stats (spawns.categoryScaling, % per point) make it likelier there. E.g. Stone/Depth from
    * Geode Critters tilt the area towards geodes. Clamped to categoryScaling.min/maxMultiplier.
    */
-  categoryDetails(details, stats) {
+  categoryDetails(details, stats, t = null) {
+    const fac = t != null && stats ? this.statFactors(t, stats) : {};
     const cw = (this.t.spawns && this.t.spawns.categoryWeights) || {};
     const cs = (this.t.spawns && this.t.spawns.categoryScaling) || {};
     const lo = cs.minMultiplier ?? 0.25, hi = cs.maxMultiplier ?? 6;
     const cats = [...new Set(details.map((d) => d.item.category))];
     const rows = cats.map((c) => {
       let raw = 1;
-      for (const stat in cs[c] || {}) raw += (cs[c][stat] / 100) * ((stats && stats[stat]) || 0);
+      for (const stat in cs[c] || {}) raw += (cs[c][stat] / 100) * ((stats && stats[stat]) || 0) * (fac[stat] ?? 1);
       const mult = Math.min(hi, Math.max(lo, raw));
       return { category: c, base: cw[c] ?? 1, mult, weight: (cw[c] ?? 1) * mult };
     });
@@ -1009,15 +1268,15 @@ export class Game {
     return rows;
   }
 
-  categoryOdds(details, stats) {
-    return Object.fromEntries(this.categoryDetails(details, stats).map((r) => [r.category, r.share]));
+  categoryOdds(details, stats, t = null) {
+    return Object.fromEntries(this.categoryDetails(details, stats, t).map((r) => [r.category, r.share]));
   }
 
   /** Category first (mushroom / plant / geode, tilted by the tile's stats), then the item within it by effective weight. */
   pickSpawn(tile, t) {
     const details = this.spawnDetails(tile, t);
     if (!details.length) return null;
-    const cats = this.categoryDetails(details, this.tileStats(tile, t));
+    const cats = this.categoryDetails(details, this.tileStats(tile, t), t);
     const cat = weightedPick(cats.map((r) => [r.category, r.weight]), this.rng);
     return weightedPick(details.filter((d) => d.item.category === cat).map((d) => [d.item, d.weight]), this.rng);
   }
@@ -1060,8 +1319,11 @@ export class Game {
       }
       if (!tiles.length) continue;
       // Wanderers also favour tiles with active effects (same weights as wild spawns).
-      const tile = weightedPick(tiles.map((x) => [x, loc.get(x.x + ',' + x.y) ?? 1]), this.rng);
-      const chance = (def.chance || 0) * this.mult(this.effects('creatureChance', tile).filter((e) => !e.family || e.family === def.family));
+      // Bloom attracts wanderers: blooming tiles draw them, and raise the arrival chance.
+      const bonus = (this.terrain.bloom || {}).wandererBonusPerPoint ?? 0;
+      const bloomAt = (tl) => 1 + bonus * (field.statsAt(tl.x, tl.y).bloom || 0);
+      const tile = weightedPick(tiles.map((x) => [x, (loc.get(x.x + ',' + x.y) ?? 1) * bloomAt(x)]), this.rng);
+      const chance = (def.chance || 0) * bloomAt(tile) * this.mult(this.effects('creatureChance', tile).filter((e) => !e.family || e.family === def.family));
       if (this.rng.chance(chance)) {
         this.state.visitors.push({ id: this.rng.uuid(), speciesID: def.id, tile, arrivedAt: t });
         arrived++;
@@ -1135,6 +1397,17 @@ export class Game {
   creatureAt(t) { return this.state.placements.find((p) => p.removedAt == null && sameTile(p.tile, t)) || null; }
   spawnAt(t) { return this.state.spawns.find((s) => sameTile(s.tile, t)) || null; }
   seedAt(t) { return this.state.plantedSeeds.find((s) => sameTile(s.tile, t)) || null; }
+  /** Every occupied tile ("x,y"), built once so whole-map scans don't search lists per tile. */
+  occupied() {
+    const s = this.state, out = new Set();
+    for (const l of s.landmarks || []) out.add(l.tile.x + ',' + l.tile.y);
+    for (const p of this.activePlacements) out.add(p.tile.x + ',' + p.tile.y);
+    for (const x of s.spawns) out.add(x.tile.x + ',' + x.tile.y);
+    for (const x of s.plantedSeeds) out.add(x.tile.x + ',' + x.tile.y);
+    for (const x of s.visitors || []) out.add(x.tile.x + ',' + x.tile.y);
+    return out;
+  }
+
   isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t); }
   seedProgress(seed, now) { return Math.min(1, Math.max(0, (now - seed.plantedAt) / (Math.max(1, seed.growSeconds) * 1000))); }
 
@@ -1331,7 +1604,15 @@ export class Game {
         const c = this.findCreature('mushroom', def.id, spawn.tile, stats, now);
         if (c) pending.push({ creature: c });
       }
+      // Verdure: plants on lush tiles drop extra seeds.
+      if (def.category === 'plant') {
+        const v = this.terrain.verdure || {};
+        const chance = Math.min(v.maxExtraSeedChance ?? 0.6, (stats.verdure || 0) * (v.extraSeedPerPoint ?? 0));
+        const seed = Object.values(this.content.items).find((i) => i.category === 'seed');
+        if (seed && chance > 0 && this.rng.chance(chance)) pending.push({ item: seed.id, count: 1, extraSeed: true });
+      }
     }
+    if (spawn.placement === 'buried') this.bump('dig');
     for (const e of this.effects('bonusDrop', spawn.tile)) {
       if ((e.items || []).includes(def.id) && e.table && this.rng.chance(e.chance || 0)) pending.push(...this.rollTable(e.table, def.id, now));
     }
@@ -1360,7 +1641,9 @@ export class Game {
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
     this.consume(itemID);
-    const speed = this.mult(this.effects('seedGrowth', tile));
+    // Verdure: plants grow faster on lush tiles.
+    const verdure = this.tileStats(tile, now).verdure || 0;
+    const speed = this.mult(this.effects('seedGrowth', tile)) * (1 + verdure * ((this.terrain.verdure || {}).seedGrowthPerPoint ?? 0));
     const grow = this.rng.range(...range(this.t.seeds.growSeconds)) / Math.max(0.01, speed);
     // The plant is chosen now (tile stats + time of day at planting), so its growth stages can show it.
     const plantID = this.choosePlant(tile, now);

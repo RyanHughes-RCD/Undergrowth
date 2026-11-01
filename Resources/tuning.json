@@ -102,6 +102,9 @@
       3600
     ],
     "viewBorderTiles": 0.5,
+    "elevation": { "threshold": 0.15, "facePx": 7, "faceColor": "#5e5e68", "faceDark": "#3a3a44", "lipColor": "#c8c8d0", "pitPx": 6, "pitColor": "rgba(14,8,18,0.55)" },
+    "glowLight": { "enabled": true, "minGlow": 6, "alphaPerPoint": 0.0125, "maxAlpha": 0.5, "radius": 14, "color": "#7cf2ff" },
+    "petals": { "enabled": true, "minBloom": 12, "ratePerPoint": 0.0004, "max": 50, "lifeSeconds": 5, "windX": 8, "windY": 3, "colors": ["#ff9ccf", "#fff3c4", "#c58cff"] },
     "sunlight": {
       "enabled": true,
       "image": "img/sunlight.png",
@@ -127,6 +130,29 @@
   },
   "wanderers": {
     "maxCatchUpDays": 7
+  },
+  "terrain": {
+    "_about": "Each stat's identity. Elevation: Stone raises, Depth lowers (-1..1). Shares = a stat's fraction of the tile's total.",
+    "elevation": { "stonePerPoint": 0.025, "depthPerPoint": 0.025, "max": 1 },
+    "statDecayRate": { "stone": 0.25 },
+    "dominantShare": 0.35,
+    "ambientDamp": {
+      "enabled": true,
+      "spreadRate": 0.07,
+      "downhillBoost": 2.5,
+      "uphillPenalty": 0.8,
+      "gravityPerTick": 0.03,
+      "lowGroundRetention": 0.7,
+      "evaporation": 0.06,
+      "stoneBlocksAt": 40,
+      "max": 30,
+      "minKeep": 0.05
+    },
+    "glowCycle": { "dayFactor": 0.4, "nightFactor": 1.6, "depthForFullGlow": 40, "visualDay": 0.35, "visualNight": 1.5 },
+    "bloomCycle": { "openHour": 6, "peakHour": 12, "closeHour": 19, "minFactor": 0.15, "maxFactor": 1.3 },
+    "bloom": { "varietyPerPoint": 0.012, "minVarietyExponent": 0.35, "wandererBonusPerPoint": 0.03 },
+    "verdure": { "hideThreshold": 30, "seedGrowthPerPoint": 0.015, "extraSeedPerPoint": 0.008, "maxExtraSeedChance": 0.6 },
+    "damp": { "mushroomGrowth": { "attemptsPerTick": 2, "minDamp": 6, "chancePerPoint": 0.012, "maxChance": 0.6 } }
   },
   "debugTools": true,
   "clearing": {

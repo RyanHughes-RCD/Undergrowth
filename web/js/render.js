@@ -145,6 +145,7 @@ export class ForestView {
   sync() {
     const g = this.game;
     const s = g.state;
+    const now = g.now();
     if (this.engineFor !== s.forestID + s.size.width + 'x' + s.size.height) {
       this.engineFor = s.forestID + s.size.width + 'x' + s.size.height;
       this.engine = new TileRuleEngine(this.app.content.tileRules, this.app.content.tuning.visuals.maxDecorationsPerTile, s.seed);
@@ -175,7 +176,12 @@ export class ForestView {
     for (let y = 0; y < s.size.height; y++) {
       for (let x = 0; x < s.size.width; x++) {
         const stats = field.statsAt(x, y);
-        const v = this.engine.visual(stats, x, y);
+        // Shares, elevation and time-of-day Glow/Bloom drive the look (see tileRules.json).
+        const vs = g.visualStats(stats, now);
+        const v = this.engine.visual(vs, x, y);
+        v.elev = vs.elev / 100;
+        v.glowVis = vs.glowVis;
+        v.bloomVis = vs.bloomVis;
         const forced = overrides.get(x + ',' + y);
         if (forced) { v.ground = forced; v.overlays = []; }
         if (overlay) v.overlay = overlayColor(stats);
@@ -206,6 +212,7 @@ export class ForestView {
 
   rebuildObjects() {
     const g = this.game, s = g.state, now = g.now();
+    const field = g.field(now);
     const objs = [];
     const at = (t) => { const c = centre(t.x, t.y); return { x: c.x, y: c.y + FOOT }; };
     for (let y = 0; y < s.size.height; y++) {
@@ -222,8 +229,11 @@ export class ForestView {
     for (const sp of s.spawns) {
       const def = this.app.content.items[sp.itemID];
       if (!def) continue;
-      // Items may have a separate in-world look (geodes: half-buried in a dirt mound).
-      objs.push({ sprite: def.worldSprite || def.sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: true, phase: 0 });
+      // How it shows depends on the tile: buried (loose soil), hidden in tall grass (a rustling clump),
+      // a geode exposed on rock (the bare stone), or on the surface (geodes half-sunk in a dirt mound).
+      const view = g.spawnView(sp, now, field.statsAt(sp.tile.x, sp.tile.y));
+      const sprite = view === 'buried' ? 'spawn.buried.a' : view === 'hidden' ? 'spawn.rustle.a' : view === 'exposed' ? def.sprite : (def.worldSprite || def.sprite);
+      objs.push({ sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: view !== 'hidden', rustle: view === 'hidden', view, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100 });
     }
     for (const l of s.landmarks || []) {
       const def = (this.app.content.landmarks || []).find((d) => d.id === l.id);
@@ -323,6 +333,8 @@ export class ForestView {
       }
     }
 
+    this.drawElevation(ctx, x0, y0, x1, y1);
+
     if (this.heat) {
       // Cool, faint for ordinary tiles; warm and strong where effects pull spawns in.
       const { tiles, max, min } = this.heat;
@@ -382,6 +394,13 @@ export class ForestView {
       if (o.bob && (t + o.phase) % 4 < 0.3) y -= 1;
       let x = o.x;
       let flip = o.flip;
+      let ft = o.still ? 0 : t + o.phase;
+      if (o.rustle) {
+        // Hidden in tall grass: still most of the time, with a short rustle every few seconds.
+        const cyc = (t + o.phase) % 3.4;
+        ft = cyc < 0.6 ? t : 0;
+        if (cyc < 0.6) x += Math.round(Math.sin(t * 30));
+      }
       if (o.roam) {
         const w = this.roamStep(o, now);
         x = w.x; y = w.y; flip = w.flip;
@@ -393,12 +412,15 @@ export class ForestView {
       }
       o.drawX = x; o.drawY = y;
       ctx.globalAlpha = alpha;
-      this.blit(o.sprite, o.variant, x, y, o.still ? 0 : t + o.phase, flip);
+      this.blit(o.sprite, o.variant, x, y, ft, flip);
       ctx.globalAlpha = 1;
       if (o.glimmer) this.sparkles(x, y, t + o.phase);
     }
 
     this.drawSunlight(ctx, view, t);
+    this.drawGlowLight(ctx, x0, y0, x1, y1, t);
+    this.drawPetals(ctx, view, t);
+    this.drawDust(ctx);
 
     // Tutorial pointer: a bouncing arrow and a soft ring on the thing to tap.
     const target = this.game.inTutorial ? this.game.tutorialTarget() : null;
@@ -458,6 +480,127 @@ export class ForestView {
     if (Math.abs(dx) > 0.5) w.flip = dx < 0;
     w.moving = true;
     return w;
+  }
+
+  /**
+   * Elevation (Stone up, Depth down; visuals.elevation): a raised tile casts a rock face onto the
+   * tile below it and gets a lit lip where the ground in front of it is lower; a sunken tile gets a
+   * shadowed back wall where the ground behind it is higher.
+   */
+  drawElevation(ctx, x0, y0, x1, y1) {
+    const cfg = this.app.content.tuning.visuals.elevation || {};
+    const thr = cfg.threshold ?? 0.15, W = this.game.state.size.width;
+    const el = (x, y) => {
+      if (x < 0 || y < 0 || x >= W || y >= this.game.state.size.height || !this.game.inClearing({ x, y })) return null;
+      const v = this.visuals[y * W + x];
+      return v ? v.elev || 0 : null;
+    };
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const e = el(x, y);
+        if (e == null) continue;
+        const below = el(x, y + 1), above = el(x, y - 1);
+        if (e > thr && below != null && e - below > thr) {
+          // Rock face hanging down over the lower tile.
+          const h = Math.max(1, Math.min(TS - 2, Math.round((e - below) * (cfg.facePx ?? 7))));
+          ctx.fillStyle = cfg.faceColor || '#5e5e68';
+          ctx.fillRect(x * TS, (y + 1) * TS, TS, h);
+          ctx.fillStyle = cfg.faceDark || '#3a3a44';
+          ctx.fillRect(x * TS, (y + 1) * TS + h - 1, TS, 1);
+          for (let i = 2; i < TS; i += 5) ctx.fillRect(x * TS + i, (y + 1) * TS + 1, 1, Math.max(1, h - 2));
+        }
+        if (e > thr && above != null && e - above > thr) {
+          ctx.fillStyle = cfg.lipColor || '#c8c8d0';
+          ctx.fillRect(x * TS, y * TS, TS, 1);
+        }
+        if (e < -thr && above != null && above - e > thr) {
+          // Back wall of a hollow, in shadow.
+          const h = Math.max(1, Math.min(TS - 2, Math.round((above - e) * (cfg.pitPx ?? 6))));
+          ctx.fillStyle = cfg.pitColor || 'rgba(14,8,18,0.55)';
+          ctx.fillRect(x * TS, y * TS, TS, h);
+        }
+      }
+    }
+  }
+
+  /** Glow light: a soft pixel halo on glowing tiles, strong at night, faint by day (deep tiles glow anyway). */
+  drawGlowLight(ctx, x0, y0, x1, y1, t) {
+    const cfg = this.app.content.tuning.visuals.glowLight;
+    if (!cfg || cfg.enabled === false) return;
+    if (!this.glowHalo) {
+      const r = cfg.radius || 14, c = document.createElement('canvas');
+      c.width = c.height = r * 2;
+      const x = c.getContext('2d'), col = parseHexRGB(cfg.color || '#7cf2ff');
+      for (let yy = 0; yy < r * 2; yy++) for (let xx = 0; xx < r * 2; xx++) {
+        const d = Math.hypot(xx + 0.5 - r, yy + 0.5 - r) / r;
+        if (d >= 1) continue;
+        const a = Math.round((1 - d) * 4) / 4;   // stepped falloff, pixel style
+        x.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${a})`;
+        x.fillRect(xx, yy, 1, 1);
+      }
+      this.glowHalo = c;
+    }
+    const W = this.game.state.size.width, r = this.glowHalo.width / 2;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (x < 0 || y < 0 || x >= W || y >= this.game.state.size.height || !this.game.inClearing({ x, y })) continue;
+      const v = this.visuals[y * W + x];
+      if (!v || !(v.glowVis >= (cfg.minGlow ?? 6))) continue;
+      const pulse = 0.85 + 0.15 * Math.sin(t * 1.3 + x * 1.7 + y);
+      ctx.globalAlpha = Math.min(cfg.maxAlpha ?? 0.5, v.glowVis * (cfg.alphaPerPoint ?? 0.0125)) * pulse;
+      ctx.drawImage(this.glowHalo, x * TS + TS / 2 - r, y * TS + TS / 2 - r);
+    }
+    ctx.restore();
+  }
+
+  /** Petals drifting on the wind from blooming tiles (more while Bloom is open). */
+  drawPetals(ctx, view, t) {
+    const cfg = this.app.content.tuning.visuals.petals;
+    if (!cfg || cfg.enabled === false) return;
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - (this.petalLast || now)) / 1000);
+    this.petalLast = now;
+    this.petals = (this.petals || []).filter((p) => now - p.born < p.life * 1000);
+    const W = this.game.state.size.width, colors = cfg.colors || ['#ff9ccf', '#fff3c4', '#c58cff'];
+    const x0 = Math.max(0, Math.floor(view.minX / TS)), x1 = Math.min(W - 1, Math.floor(view.maxX / TS));
+    const y0 = Math.max(0, Math.floor(view.minY / TS)), y1 = Math.min(this.game.state.size.height - 1, Math.floor(view.maxY / TS));
+    for (let y = y0; y <= y1 && this.petals.length < (cfg.max ?? 50); y++) for (let x = x0; x <= x1; x++) {
+      const v = this.visuals[y * W + x];
+      if (!v || !(v.bloomVis >= (cfg.minBloom ?? 12))) continue;
+      if (Math.random() < v.bloomVis * (cfg.ratePerPoint ?? 0.0004) * dt * 60) {
+        this.petals.push({ x: x * TS + Math.random() * TS, y: y * TS + Math.random() * TS, born: now, life: cfg.lifeSeconds ?? 5,
+          c: colors[Math.floor(Math.random() * colors.length)], ph: Math.random() * 6 });
+      }
+    }
+    const wx = cfg.windX ?? 8, wy = cfg.windY ?? 3;
+    for (const p of this.petals) {
+      p.x += (wx + Math.sin(t * 2 + p.ph) * 4) * dt;
+      p.y += (wy + Math.cos(t * 1.6 + p.ph) * 2) * dt;
+      const age = (now - p.born) / (p.life * 1000);
+      ctx.globalAlpha = age < 0.15 ? age / 0.15 : age > 0.8 ? (1 - age) / 0.2 : 1;
+      ctx.fillStyle = p.c;
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), Math.sin(t * 5 + p.ph) > 0 ? 2 : 1, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** A puff of soil where something was dug up. */
+  dustAt(tile) { (this.dust = this.dust || []).push({ x: tile.x * TS + TS / 2, y: tile.y * TS + TS / 2 + FOOT, start: performance.now() }); }
+
+  drawDust(ctx) {
+    const now = performance.now();
+    this.dust = (this.dust || []).filter((d) => now - d.start < 600);
+    for (const d of this.dust) {
+      const k = (now - d.start) / 600;
+      ctx.globalAlpha = 1 - k;
+      for (let i = 0; i < 10; i++) {
+        const a = i / 10 * Math.PI * 2;
+        ctx.fillStyle = i % 2 ? '#7a5232' : '#a37a4e';
+        ctx.fillRect(Math.round(d.x + Math.cos(a) * (3 + 9 * k)), Math.round(d.y + Math.sin(a) * (2 + 5 * k) - 6 * k * (1 - k) * 4), 1, 1);
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   /**
@@ -638,4 +781,9 @@ function overlayColor(stats) {
   }
   if (total < 0.5) return [0, 0, 0, 0.55];
   return [Math.round(r / total), Math.round(g / total), Math.round(b / total), Math.min(0.9, 0.35 + max / 150)];
+}
+
+function parseHexRGB(h) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(h || '');
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [255, 255, 255];
 }

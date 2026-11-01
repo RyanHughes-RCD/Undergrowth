@@ -1,0 +1,37 @@
+{
+ "id": "tile.wet.a",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "hnhhihhihnhhikhh",
+    "hhkhhkhhihhkhkih",
+    "hkihhhhEkihhhiih",
+    "khknkikhhhihhEhk",
+    "ihhkkhhhkhihkkki",
+    "hhihkhhhkhhhnhkh",
+    "nhhhhhihhhhkhhhh",
+    "hhkhhhihhhihhhhi",
+    "inhihihnhhhhhhhk",
+    "hhhhikhhhkhniihk",
+    "hhhEhhiikihhhhkh",
+    "hhhhkhhhnhhhihhn",
+    "hhhhihkihikhhhhh",
+    "ikhihkkhkhkhihki",
+    "hhihhhhhhhhhhihh",
+    "hhhhhhhhhkhhkhhh"
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

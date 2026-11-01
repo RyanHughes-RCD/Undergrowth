@@ -1,0 +1,37 @@
+{
+ "id": "tile.cavern.a",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "xyyyyxyxyxyxyyxy",
+    "yyyyyyyyyyyxyyyy",
+    "yxyyxAAAAAAyyyyy",
+    "yxyyAAALLAAAyyyy",
+    "yyAALLLLLLLLAAxy",
+    "yxALLLKKKKLLLAyy",
+    "xALLKKKKKKKKLLAy",
+    "yALKKJJJJJJKKLAy",
+    "yALKJJJMMJJJKLAy",
+    "yALKJJMMMMJJKLAy",
+    "yALKJMMMMMMJKLAy",
+    "yyAKKJMMMMJKKAyy",
+    "yyALzzJJJJzzLAyy",
+    "yyyyALzzzzLAyxxx",
+    "yyyyyAAAAAAxyxyy",
+    "yyyyyyyxyyxyxyyy"
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

@@ -115,6 +115,8 @@ def main():
             stat = title.split()[0].lower()
             if stat in STATS:
                 scale_cols[stat] = ci
+    # Optional placement column ("Placement": surface / buried / auto); blank = auto.
+    place_col = next((ci for ci, title in enumerate(rows[header]) if isinstance(title, str) and title.strip().lower().startswith("placement")), None)
     loot_start = next(i for i, r in enumerate(rows) if r[0] and str(r[0]).startswith("Geode loot table"))
     entries = [r for r in rows[header + 1:loot_start] if r[0]]
 
@@ -199,6 +201,8 @@ def main():
             for k in ("time", "rain", "oneAtATime"):
                 if k in flags:
                     spawn[k] = flags[k]
+            pv = r[place_col] if place_col is not None and place_col < len(r) else None
+            spawn["placement"] = str(pv).strip().lower() if pv and str(pv).strip().lower() in ("surface", "buried", "auto") else "auto"
             if notes and re.search(r"unpicked for a day", notes, re.I):
                 spawn["lifetimeHours"] = 24
             it["spawn"] = spawn

@@ -450,13 +450,14 @@ export class UI {
     const g = this.game, now = g.now();
     const stats = g.tileStats(tile, now);
     const details = g.spawnDetails(tile, now);
-    const catRows = Object.fromEntries(g.categoryDetails(details, stats).map((r) => [r.category, r]));
+    const catRows = Object.fromEntries(g.categoryDetails(details, stats, now).map((r) => [r.category, r]));
     const fmt = (n) => (n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2));
     const table = (list, catShare) => {
       const total = list.reduce((a, d) => a + d.weight, 0) || 1;
       return list.sort((a, b) => b.weight - a.weight).map((d) => h('div', { class: 'inspect-row' },
         this.sprites.element(d.item.sprite, null, 1),
-        h('span', { class: 'grow' }, d.item.name, h('span', { class: 'sub', style: `color:${RARITY_COLORS[d.item.rarity]}` }, ' ' + rarityName(d.item.rarity))),
+        h('span', { class: 'grow' }, d.item.name, h('span', { class: 'sub', style: `color:${RARITY_COLORS[d.item.rarity]}` }, ' ' + rarityName(d.item.rarity)),
+          (() => { const v = g.spawnView({ itemID: d.item.id, tile, placement: g.resolvePlacement(d.item, stats) }, now, stats); return v === 'surface' ? null : h('span', { class: 'tag' }, v); })()),
         h('span', { class: 'num' }, fmt(d.base)),
         h('span', { class: 'num' + (d.clamped ? ' clamped' : '') }, '×' + d.mult.toFixed(2) + (d.clamped ? '*' : '') + (d.fx !== 1 ? ` ×${d.fx}` : '')),
         h('span', { class: 'num' }, fmt(d.weight)),
@@ -468,6 +469,23 @@ export class UI {
       h('div', { class: 'stat-grid' }, CORE_STATS.map((k) => this.statBar(k, stats[k] || 0))),
       h('p', { class: 'sub' }, `${g.isNight(now) ? 'Night' : 'Day'}${g.isRaining(now) ? ', raining' : ''} · ` +
         (g.inClearing(tile) ? (g.isFree(tile) ? 'open tile' : 'tile is occupied (nothing spawns here now)') : 'outside the clearing')),
+      (() => {
+        // Each stat's identity on this tile: elevation, seeped Damp, Glow/Bloom time factors, placement.
+        const e = g.elevationOf(stats), sh = g.shares(stats);
+        const amb = g.ambientAt(tile.x, tile.y);
+        const gf = g.glowFactor(now, stats), bf = g.bloomFactor(now);
+        const hideAt = (this.content.tuning.terrain?.verdure || {}).hideThreshold ?? 30;
+        const surface = (stats.verdure || 0) >= hideAt ? 'hidden in tall grass (tap to reveal)' : 'on the surface';
+        const geode = sh.dominant === 'depth' ? 'buried' : sh.dominant === 'stone' ? 'exposed on the rock' : 'half-sunk in a mound';
+        const row = (k, v) => h('div', { class: 'inspect-kv' }, h('span', { class: 'sub' }, k), h('b', {}, v));
+        return h('div', { class: 'inspect-terrain' },
+          row('Elevation', `${e >= 0 ? '+' : ''}${e.toFixed(2)} ${e > 0.15 ? '(raised)' : e < -0.15 ? '(sunken)' : '(level)'}`),
+          row('Dominant stat', sh.dominant ? `${cap(sh.dominant)} (${Math.round(sh[sh.dominant] * 100)}%)` : 'none'),
+          row('Ambient Damp', `${amb.toFixed(1)} (seeped / pooled)`),
+          row('Glow factor', `×${gf.toFixed(2)} ${g.isNight(now) ? '(night)' : (stats.depth || 0) > 0 ? '(day, deep tiles glow more)' : '(day)'}`),
+          row('Bloom cycle', `×${bf.toFixed(2)}`),
+          row('Spawns here', `${surface}; geodes ${geode}; Depth items buried`));
+      })(),
       (() => {
         // Where-to-spawn weight for this tile (effect-aware), and its share of all spawn locations.
         const loc = g.spawnLocations(now);

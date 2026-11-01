@@ -904,5 +904,7 @@ if __name__ == "__main__":
     gen_ui.main()
     import gen_geodes  # stone-ball geodes, pixel crack stages, opened geodes
     gen_geodes.main()
+    import gen_terrain  # each stat's terrain: rocks/cliffs, holes/caverns, wet/bog, tall grass, spawn markers
+    gen_terrain.main()
     count = sum(len(files) for _, _, files in os.walk(OUT))
     print("wrote %d sprite/palette files to %s" % (count, OUT))

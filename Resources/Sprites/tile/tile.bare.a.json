@@ -1,0 +1,37 @@
+{
+ "id": "tile.bare.a",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "yyxxyxxyxxxxxxyx",
+    "xxxAxxxxxAAxxxxx",
+    "xxxxAAxxyAxxAxxy",
+    "xxAxAxxxxxxxxxxx",
+    "xyxxyxxxxxxxxxxA",
+    "yAxxyxxyyxxxxxAx",
+    "xyxxxxxxxAxxxxxx",
+    "xxyyxxxxxxxxxxAA",
+    "xxyxxyxxxyxxxxxx",
+    "xxxAxAxxxyxxxxyx",
+    "yxxyzzzzAxyxyAxx",
+    "xxxxAxxxxxxxxxxx",
+    "AyxAAxxxxxxxxxxx",
+    "xxxxxAxzzxxyxxyx",
+    "xxxAxxxxyzzzxxxx",
+    "xxxAxxxxxAxyxxxx"
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

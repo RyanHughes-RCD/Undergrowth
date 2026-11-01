@@ -1,0 +1,37 @@
+{
+ "id": "tile.cliff.moss",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "uwwwwwwwwwwwwwww",
+    "uttnnntvtvvttttt",
+    "unnlllnnttttuvtt",
+    "unlolllnvltvtttt",
+    "ullllllltltttttt",
+    "unlllllnvttttvvt",
+    "unnlllnntvtuttlt",
+    "uttnnntttnnlnnlt",
+    "uttvvtttnlolllnt",
+    "utttvvttnlllllnt",
+    "uttttnnnnlllllnt",
+    "uttvnollnnnlnntt",
+    "utlllllllvtvtttt",
+    "utulnlllntvvtltv",
+    "utttvnnnuvttttut",
+    "uttvtttttttvtttt"
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}
