@@ -335,7 +335,7 @@ A separate test forest for trying any content or combination without touching yo
 - **Tree shadows (canopy):**
   - **Source:** your asset, `design/canopy_source.webp`, is a black shade layer whose see-through holes are sunlight.
   - **Processing:** `tools/gen_canopy.py` turns it into `web/img/canopy.png` (a 600×475 seamless light mask; `FLECK_W` sets the size, bigger means fewer, larger patches of light). It scales the flecks to a few art pixels, removes any fleck touching the tile edge so tiles join with no seams, and quantises the soft edges into pixel steps.
-  - **Hiding the repeat:** the renderer adds a faint second copy (×1.21, flipped, offset, 35%). A large soft "clearings" layer (`web/img/canopy-region.png`, ×5) lifts the shade in some areas.
+  - **One layer:** every light patch comes straight from your asset, with even shade around it. The texture is large (about 37 × 30 tiles), so repeats are rare. An optional faint second fleck layer (`visuals.canopy.second.alpha`) and a soft "clearings" layer (`region.strength`) can be turned back on to hide repetition. Both are off (0), because they made some patches fade in more softly than others.
   - **Rendering:** it's built each frame at one buffer pixel per art pixel for just the view, then scaled up without smoothing, so it's crisp at any zoom with no moiré. It's world-anchored, so it stays stable while panning, with only a slow 3 px sway.
   - **Settings:** `visuals.canopy`.
 - **Day and night (real local clock):** the hours are in `clock` in `tuning.json`: dawn 5:00–7:00, day 7:00–17:00, dusk 17:00–19:00, night 19:00–5:00. Lighting blends across 50 minutes around each boundary (`clock.transitionMinutes`). The same night range drives night-only spawns and Glow.

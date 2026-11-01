@@ -112,8 +112,8 @@
       "enabled": true,
       "image": "img/canopy.png",
       "scale": 1,
-      "second": { "scale": 1.21, "offset": [233, 151], "flip": true, "alpha": 0.35 },
-      "region": { "image": "img/canopy-region.png", "scale": 5, "strength": 0.4, "offset": [211, 47] },
+      "second": { "scale": 1.21, "offset": [233, 151], "flip": true, "alpha": 0 },
+      "region": { "image": "img/canopy-region.png", "scale": 5, "strength": 0, "offset": [211, 47] },
       "swayPx": 3,
       "swaySeconds": 23
     },

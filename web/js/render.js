@@ -874,10 +874,12 @@ export class ForestView {
     const sec = cfg.second || {};
     lg.fillStyle = pat(lg, C.flecks, cfg.scale || 1, Math.round(Math.sin(a) * sw), Math.round(Math.sin(a * 0.7 + 1) * sw * 0.6), false);
     lg.fillRect(0, 0, w, h);
+    if ((sec.alpha ?? 0.7) > 0) {                     // optional second layer (0 = off)
     lg.globalCompositeOperation = 'lighter';
     lg.globalAlpha = sec.alpha ?? 0.7;
     lg.fillStyle = pat(lg, C.flecks, sec.scale || 1.37, (sec.offset || [0, 0])[0] + Math.round(Math.sin(a * 0.8 + 2) * sw), (sec.offset || [0, 0])[1] + Math.round(Math.cos(a * 0.6) * sw * 0.6), !!sec.flip);
     lg.fillRect(0, 0, w, h);
+    }
     // Shade: everything except the light, with large regions lifted (clearings).
     const [sb, sg] = buf('shade');
     sg.fillStyle = L.shadeColor;
@@ -885,8 +887,10 @@ export class ForestView {
     sg.globalCompositeOperation = 'destination-out';
     sg.drawImage(lb, 0, 0);
     const reg = cfg.region || {};
-    sg.fillStyle = pat(sg, C.region, reg.scale || 2.6, (reg.offset || [0, 0])[0], (reg.offset || [0, 0])[1], false);
-    sg.fillRect(0, 0, w, h);
+    if ((reg.strength ?? 0.4) > 0) {                  // optional soft "clearings" layer (0 = off)
+      sg.fillStyle = pat(sg, C.region, reg.scale || 2.6, (reg.offset || [0, 0])[0], (reg.offset || [0, 0])[1], false);
+      sg.fillRect(0, 0, w, h);
+    }
     // Tint the light to the time of day (warm sun, silver moon).
     lg.globalCompositeOperation = 'source-in';
     lg.globalAlpha = 1;
