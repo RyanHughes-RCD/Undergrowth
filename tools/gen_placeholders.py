@@ -902,5 +902,7 @@ if __name__ == "__main__":
     gen_content_sprites.main()
     import gen_ui  # pixel-art UI icons and effects
     gen_ui.main()
+    import gen_geodes  # stone-ball geodes, pixel crack stages, opened geodes
+    gen_geodes.main()
     count = sum(len(files) for _, _, files in os.walk(OUT))
     print("wrote %d sprite/palette files to %s" % (count, OUT))

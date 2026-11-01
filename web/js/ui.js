@@ -527,9 +527,11 @@ export class UI {
     const def = this.content.items[itemID];
     let hits = 0;
     const needed = 3 + Math.floor(Math.random() * 3);
-    const cracks = [
-      'M50 30 L45 45 L52 55 L47 70', 'M45 45 L32 50 L25 62', 'M52 55 L65 52 L72 62', 'M50 30 L60 40 L70 38', 'M47 70 L38 80',
-    ];
+    // Pixel crack stages: a data sprite whose frames are the stages (two patterns per geode type).
+    const crackSets = (def.crackSprites || []).filter((id) => this.sprites.has(id));
+    const crackSprite = crackSets.length ? crackSets[Math.floor(Math.random() * crackSets.length)] : null;
+    const crackFrames = crackSprite ? this.sprites.frames(crackSprite) : [];
+    const stoneColour = (() => { const pal = this.sprites.palette(this.sprites.sprite(def.sprite)); const c = pal[4] || pal[2]; return `rgb(${c[0]},${c[1]},${c[2]})`; })();
     const rockWrap = h('div', { class: 'rock-wrap' });
     const hint = h('p', { class: 'hint-big' }, 'Tap the rock to crack it open');
     const stage = h('div', { class: 'crack-stage' }, rockWrap);
@@ -539,15 +541,25 @@ export class UI {
     const needsChoice = cfg.creatureFamily === 'choose' && app.game.hasGuaranteedGeode(itemID);
 
     const drawRock = () => {
-      const svg = `<svg viewBox="0 0 100 100" class="cracks">${cracks.slice(0, hits).map((d) => `<path d="${d}"/>`).join('')}</svg>`;
-      rockWrap.replaceChildren(this.sprites.element(def.sprite, null, 12));
-      rockWrap.insertAdjacentHTML('beforeend', svg);
+      const rock = this.sprites.element(def.sprite, null, 12, '', true);
+      const layers = [rock];
+      const stage = Math.min(crackFrames.length, Math.ceil(hits * crackFrames.length / needed));
+      if (stage > 0) {
+        const f = crackFrames[stage - 1];
+        const c = document.createElement('canvas');
+        c.width = f.w; c.height = f.h;
+        c.getContext('2d').drawImage(f.canvas, 0, 0);
+        c.style.width = f.w * 12 + 'px'; c.style.height = f.h * 12 + 'px';
+        c.className = 'px crack-layer';
+        layers.push(c);
+      }
+      rockWrap.replaceChildren(...layers);
     };
     drawRock();
 
     const chips = () => {
       for (let i = 0; i < 4; i++) {
-        const c = h('i', { class: 'chip' });
+        const c = h('i', { class: 'chip', style: `background:${stoneColour}` });
         c.style.setProperty('--dx', `${Math.random() * 280 - 140}px`);
         c.style.setProperty('--dy', `${Math.random() * 180 - 140}px`);
         stage.append(c);
@@ -561,8 +573,10 @@ export class UI {
       ov.append(flash);
       setTimeout(() => flash.remove(), 700);
       if (navigator.vibrate) navigator.vibrate([20, 40, 60]);
-      const left = this.sprites.element(def.sprite, null, 12, 'half left');
-      const right = this.sprites.element(def.sprite, null, 12, 'half right');
+      // The opened geode (hollow lined with crystals) splits into two halves.
+      const openID = def.openSprite && this.sprites.has(def.openSprite) ? def.openSprite : def.sprite;
+      const left = this.sprites.element(openID, null, 12, 'half left');
+      const right = this.sprites.element(openID, null, 12, 'half right');
       const r = results[0];
       let revealEl, text;
       if (!r) {

@@ -40,7 +40,7 @@ Then open <http://localhost:8000>.
 
 ## Opening and early progression (web version)
 
-- **New forest:** a 7×7 clearing in the middle of the 40×56 forest, with all stats at 0. The Old Log sits at its centre (`Content/landmarks.json`). Only spawns with no stat requirements can appear, straight from the normal spawn rules.
+- **New forest:** a 7×14 clearing in the middle of the 40×56 forest, with all stats at 0. The Old Log sits at its centre (`Content/landmarks.json`). Only spawns with no stat requirements can appear, straight from the normal spawn rules.
 - **Tutorial:** forage, then plant, dig, crack, place, and watch. The pointer and the coach card guide each step, and each step only advances when you do it.
   - The guaranteed results ride on the tutorial's own spawns: the Clover always drops a seed, and the Pebble Geode always holds a Common creature.
   - The creature's family is set by `tutorial.creatureFamily`: `"random"` or `"choose"`.
@@ -138,7 +138,9 @@ Resources/                      all data, copied into the app as a folder
   Content/*.json                creatures, items, loot, tile rules, name parts
   Sprites/**/*.json             one sprite per file; Sprites/Palettes/ for shared palettes
 tools/gen_placeholders.py       regenerates the placeholder art (+ gen_topdown.py for tiles/overlays/shrubs,
-                                gen_content_sprites.py for spawn-table entries)
+                                gen_content_sprites.py for spawn-table entries, gen_ui.py for pixel UI
+                                icons, gen_geodes.py for geode balls/crack stages/opened geodes)
+web/fonts/                      Pixelify Sans (SIL OFL, licence included) for all UI text
 tools/import_spawn_table.py     spreadsheet → Resources/Content JSON
 design/                         the spawn table + creature effect definitions
 ```
@@ -203,3 +205,14 @@ This command builds a forest, places the starter creatures, simulates 24 hours, 
 - **Keystone slot:** `slots` is a list of `{kind, placementID}`, so a keystone is just another kind.
 - **New stats and resident animals:** stats and item categories are data strings.
 - **Sprite editor:** this would use the user content root and `TextureCache.invalidate()`.
+
+## Look and feel (web)
+
+- **Font:** all text uses Pixelify Sans (SIL OFL), self-hosted in `web/fonts/` with its licence. The sizes are `--t-title` / `--t-head` / `--t-body` / `--t-small` / `--t-tiny` in `style.css`.
+- **Pixel frames:** panels, buttons, tabs and cards use stepped, notched-corner frames built from box-shadows. There are no rounded corners or blur effects.
+- **Icons:** pixel sprites in the registry (`ui.icon.*`, `ui.burst`), drawn by `tools/gen_ui.py`. There are no emoji.
+- **Geodes:** each geode type has three data sprites, linked from its item (`crackSprites`, `openSprite`):
+  - `item.geode.*`: a rounded stone ball.
+  - `geode.crack.<id>.a` and `.b`: five crack stages as frames.
+  - `geode.open.<id>`: the opened geode.
+- **Creature radius:** every radius was doubled in the spreadsheet, and the glimmer radius bonus is now +2. Save version 4 doubles the radius of creatures you already own.
