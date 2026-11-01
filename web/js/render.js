@@ -3,7 +3,7 @@
 // The forest is fitted into the space between the HUD bars at a whole number of device
 // pixels per art pixel (crisp), and everything beyond the map is a shrub treeline, so the
 // screen edges are always framed by hedge. Pinch to zoom in; pan is clamped to the map.
-import { TileRuleEngine, hash32 } from './core.js';
+import { TileRuleEngine, hash32, decorVariant } from './core.js';
 
 export const TS = 16;
 const FOOT = 5; // objects stand a little below the tile centre
@@ -251,6 +251,12 @@ export class ForestView {
       const def = (this.app.content.landmarks || []).find((d) => d.id === l.id);
       if (!def) continue;
       objs.push({ sprite: def.sprite, ...at(l.tile), tile: l.tile, kind: 'landmark', key: l.id, phase: 0 });
+    }
+    // Decor props from the Old Log (purely visual), in their chosen colour.
+    for (const d of (s.decor && s.decor.placed) || []) {
+      const def = g.decorDef(d.decorID);
+      if (!def) continue;
+      objs.push({ sprite: def.sprite, variant: decorVariant(def, d.color), ...at(d.tile), tile: d.tile, kind: 'decor', key: d.id, phase: hash32(d.tile.x, d.tile.y, 5) % 1000 / 250 });
     }
     for (const seed of s.plantedSeeds) {
       const stages = g.seedStages(seed);

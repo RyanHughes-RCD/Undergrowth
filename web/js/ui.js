@@ -1,5 +1,5 @@
 // DOM user interface: HUD, sheets (Creatures, Bag, Field Guide), geode cracking, reveals.
-import { CORE_STATS, RARITIES, RARITY_NAMES, rarityIndex, intensityOf, requirementOf } from './core.js';
+import { CORE_STATS, RARITIES, RARITY_NAMES, rarityIndex, intensityOf, requirementOf, decorVariant, itemHint } from './core.js';
 import { paintWaterTile } from './render.js';
 
 export function h(tag, attrs = {}, ...children) {
@@ -149,6 +149,13 @@ export class UI {
     if (this.mode.type === 'place') {
       const c = g.creature(this.mode.creatureID);
       text = `Tap an empty tile to place ${c ? this.app.displayName(c) : 'creature'}`;
+    } else if (this.mode.type === 'decor') {
+      text = `Tap an open tile to place the ${this.game.decorDef(this.mode.decorID)?.name || 'decoration'}`;
+    } else if (this.mode.type === 'decorMove') {
+      text = 'Tap an open tile to move it there';
+    } else if (this.mode.type === 'trowel') {
+      const c = g.creature(this.mode.creatureID);
+      text = `Tap an open tile to move ${c ? this.app.displayName(c) : 'it'} with the trowel`;
     } else if (this.mode.type === 'use') {
       const def = this.content.items[this.mode.itemID];
       text = `Tap a tile: ${def?.use?.verb || 'Use'} ${def?.name || ''} (${g.state.inventory[this.mode.itemID] || 0} left)`;
@@ -273,6 +280,8 @@ export class UI {
       inspect: () => [`Spawns · tile ${arg.x}, ${arg.y}`, this.inspectBody(arg)],
       entry: () => [arg.name, this.entryBody(arg)],
       terrain: () => [(this.terrainDef(arg) || {}).name || 'Terrain', this.terrainBody(arg)],
+      offerings: () => ['The Old Log', this.offeringsBody()],
+      decor: () => this.decorBody(arg),
     }[type];
     if (!build) return;
     const [title, body] = build();
@@ -346,7 +355,9 @@ export class UI {
         h('div', { class: 'sub' }, lv < 1 ? `Influence ${Math.round(lv * 100)}% · full strength in about ${duration((1 - lv) * (p.rampSeconds || this.content.tuning.rampSecondsToFull))}` : 'At full strength.'),
         h('div', { class: 'row gap' },
           h('button', { class: 'btn', onclick: () => { this.app.view.centerOn(p.tile); this.selectedCreatureID = c.id; this.sheet = null; this.close(); } }, 'Show in forest'),
+          g.state.unlocks.trowel ? h('button', { class: 'btn green', onclick: () => this.app.beginTrowel(c.id) }, 'Move (trowel)') : null,
           h('button', { class: 'btn red', onclick: () => { this.app.recall(c.id); this.sheet = null; this.close(); } }, 'Bring home')),
+        g.state.unlocks.trowel ? h('div', { class: 'sub' }, 'The trowel moves it without losing any of its influence.') : null,
       ];
     } else {
       status = [
@@ -377,11 +388,21 @@ export class UI {
     const g = this.game;
     const owned = Object.entries(g.state.inventory).filter(([, n]) => n > 0)
       .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def);
-    if (!owned.length) return h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms, plants and geodes in the forest to collect them.');
+    const decor = Object.entries(g.state.decor.owned).filter(([, n]) => n > 0).map(([id, n]) => ({ def: g.decorDef(id), n })).filter((e) => e.def);
+    const head = [h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
+      h('span', { class: 'sub' }, 'Spare finds turn into compost.'))];
+    if (decor.length) {
+      head.push(h('div', { class: 'section' }, 'Decor'), ...decor.map(({ def, n }) => h('div', { class: 'list-row' },
+        h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)),
+        h('div', { class: 'grow' }, h('b', {}, def.name), def.text ? h('div', { class: 'sub' }, def.text) : null),
+        h('b', {}, `×${n}`),
+        h('button', { class: 'btn green small', onclick: () => this.app.beginDecor(def.id) }, 'Place'))));
+    }
+    if (!owned.length) return [...head, h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms, plants and geodes in the forest to collect them.')];
     const order = ['seed', 'geode', 'material', 'gem', 'plant', 'mushroom'];
     const cats = [...new Set(owned.map((e) => e.def.category))].sort((a, b) =>
       ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
-    return cats.map((cat) => [
+    return [...head, ...cats.map((cat) => [
       h('div', { class: 'section' }, catTitle(cat)),
       ...owned.filter((e) => e.def.category === cat)
         .sort((a, b) => rarityIndex(b.def.rarity) - rarityIndex(a.def.rarity) || a.def.name.localeCompare(b.def.name))
@@ -395,8 +416,87 @@ export class UI {
           def.onCrack ? h('div', { class: 'crack-btns' },
             h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack'),
             n > 1 ? h('button', { class: 'btn orange small', title: `Crack ${Math.min(n, this.batchMax)} at once`, onclick: () => { this.sheet = null; this.close(); this.openBatchCrack(def.id, Math.min(n, this.batchMax)); } }, `×${Math.min(n, this.batchMax)}`) : null) : null,
-          def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : 'Crush') : 'Use') : null)),
-    ]);
+          def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : 'Crush') : 'Use') : null,
+          g.compostValue(def.id) ? h('button', { class: 'btn grey small', title: `Compost one for ${g.compostValue(def.id)}`, onclick: () => this.app.compostItem(def.id) }, `+${g.compostValue(def.id)}`) : null)),
+    ])];
+  }
+
+  // -------------------------------------------------------------- offerings (the Old Log board)
+
+  /** An item in a request: its art (a silhouette until it's in the Field Guide), name or hint, and have/need. */
+  offerItemRow(x) {
+    const def = this.content.items[x.item];
+    const known = this.game.discovered.has('item:' + x.item);
+    const art = def ? this.sprites.element(def.sprite, known ? null : { silhouette: [40, 52, 36] }, 2) : '';
+    const need = def && def.spawn && def.spawn.requires && Object.keys(def.spawn.requires).length
+      ? this.joinNodes(Object.entries(def.spawn.requires).map(([k, v]) => this.requirementText(k, v.min)), ' ') : (def && def.spawn ? 'Grows anywhere.' : null);
+    return h('div', { class: 'offer-item' + (x.owned >= x.count ? ' met' : '') },
+      h('div', { class: 'thumb small' }, art),
+      h('div', { class: 'grow' }, h('b', {}, known ? def.name : '???'),
+        h('div', { class: 'sub' }, known ? need : (def ? itemHint(def, this.content.story) : x.item))),
+      h('b', { class: 'count' }, `${Math.min(x.owned, x.count)}/${x.count}`));
+  }
+
+  rewardText(r) {
+    const g = this.game;
+    if (r.type === 'cosmetic') return [this.sprites.element(g.decorDef(r.id)?.sprite || 'ui.icon.board', null, 2), ` ${g.decorDef(r.id)?.name || r.id}`];
+    if (r.type === 'compost') return `${r.count} compost`;
+    if (r.type === 'egg') { const d = this.content.items[r.id]; return d ? [this.sprites.element(d.sprite, null, 2), ` ${d.name}`] : r.id; }
+    const u = { trowel: "The gardener's trowel: move creatures without losing influence", slot: 'Another creature slot', nest: 'Another nest', expansion: 'The treeline steps back' };
+    return u[r.id] || r.id;
+  }
+
+  offerCard(st) {
+    const r = st.req, a = this.app;
+    const lockText = st.locks.map((l) => (l.type === 'guide' ? `${l.need} Field Guide entries (${l.have} so far)` : l.type === 'request' ? `after “${l.name}”` : `forest day ${l.need}`)).join(', ');
+    return h('div', { class: 'card offer' + (st.locks.length ? ' locked' : '') + (st.ready ? ' ready' : '') },
+      h('div', { class: 'row space' }, h('b', {}, r.name), h('span', { class: 'sub reward' }, this.rewardText(r.reward))),
+      r.text ? h('p', { class: 'sub' }, r.text) : null,
+      st.locks.length ? h('p', { class: 'sub lock' }, ic('lock', 1), ` Opens with ${lockText}.`) : st.items.map((x) => this.offerItemRow(x)),
+      st.locks.length ? null : h('div', { class: 'row end' },
+        h('button', { class: 'btn ' + (st.ready ? 'green' : 'grey'), disabled: !st.ready, onclick: () => a.deliverRequest(r.id) }, 'Deliver')));
+  }
+
+  offeringsBody() {
+    const g = this.game, now = g.now();
+    const board = g.requestBoard(now);
+    const open = board.filter((s) => !s.done && !s.locks.length);
+    const locked = board.filter((s) => !s.done && s.locks.length);
+    const done = board.filter((s) => s.done);
+    const shop = (this.content.cosmetics || []).filter((c) => c.compost != null);
+    return [
+      h('p', { class: 'sub center' }, this.story('messages.offeringsIntro')),
+      h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
+        h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Old Log', sprite: 'landmark.old-log', variant: null, text: this.content.story?.guide?.landmarks?.['landmark.old-log'] }) }, 'About the log')),
+      h('div', { class: 'section' }, 'Requests'),
+      open.length ? open.map((st) => this.offerCard(st)) : h('p', { class: 'sub' }, 'Nothing open right now. New requests open as your Field Guide grows.'),
+      locked.length ? [h('div', { class: 'section' }, 'Coming later'), ...locked.map((st) => this.offerCard(st))] : null,
+      shop.length ? [h('div', { class: 'section' }, 'Compost heap'), h('p', { class: 'sub' }, this.story('messages.compostIntro')),
+        ...shop.map((c) => h('div', { class: 'list-row' },
+          h('div', { class: 'thumb' }, this.sprites.element(c.sprite, null, 3)),
+          h('div', { class: 'grow' }, h('b', {}, c.name), c.text ? h('div', { class: 'sub' }, c.text) : null),
+          h('button', { class: 'btn small ' + (g.state.compost >= c.compost ? 'green' : 'grey'), disabled: g.state.compost < c.compost, onclick: () => this.app.buyDecor(c.id) }, `${c.compost} compost`)))] : null,
+      done.length ? [h('div', { class: 'section' }, `Delivered (${done.length})`), h('p', { class: 'sub' }, done.map((st) => st.req.name).join(' · '))] : null,
+    ];
+  }
+
+  /** A placed decoration: move it, recolour it, or put it back in the Bag. */
+  decorBody(placedID) {
+    const g = this.game, a = this.app;
+    const d = g.state.decor.placed.find((x) => x.id === placedID);
+    if (!d) return ['Decoration', h('p', { class: 'sub' }, 'Gone.')];
+    const def = g.decorDef(d.decorID) || { name: d.decorID, sprite: 'ui.icon.board' };
+    const cols = def.colors || [];
+    const cost = (this.content.tuning.offerings || {}).recolorCost ?? 0;
+    return [def.name, [
+      h('div', { class: 'hero' }, this.sprites.element(def.sprite, decorVariant(def, d.color), 6)),
+      def.text ? h('p', { class: 'sub center' }, def.text) : null,
+      cols.length > 1 ? h('p', { class: 'sub center' }, `Colour: ${cols[d.color || 0].name}`) : null,
+      h('div', { class: 'row gap wrap center' },
+        h('button', { class: 'btn green', onclick: () => a.beginDecorMove(d.id) }, 'Move'),
+        cols.length > 1 ? h('button', { class: 'btn', disabled: g.state.compost < cost, onclick: () => a.recolorDecor(d.id) }, `Recolour (${cost} compost)`) : null,
+        h('button', { class: 'btn grey', onclick: () => a.removeDecor(d.id) }, 'Put away')),
+    ]];
   }
 
   guideEntries(tab) {
@@ -891,6 +991,14 @@ export class UI {
         h('span', { class: 'grow' }, name, h('span', { class: 'sub' }, ' · ' + new Date(st.savedAt).toLocaleString())),
         b('Load', () => { a.loadDevSetup(name); }),
         b('Delete', () => { if (confirm(`Delete setup “${name}”?`)) { a.deleteDevSetup(name); this.renderSheet(); } }, 'grey'))) : h('p', { class: 'sub' }, 'No saved setups yet. Save the current test forest to come back to it.'),
+
+      h('div', { class: 'section' }, 'Offerings'),
+      h('div', { class: 'row gap wrap' },
+        b('+50 compost', () => a.dev((gm) => { gm.state.compost += 50; }, '+50 compost.')),
+        b('Complete open requests', () => a.dev((gm, t) => gm.devCompleteRequests(t), (n) => `${n} request(s) completed.`)),
+        b('Complete all requests', () => a.dev((gm, t) => gm.devCompleteRequests(t, true), (n) => `${n} request(s) completed.`)),
+        b('Reset requests', () => a.dev((gm) => gm.devResetRequests(), 'Requests reset (rewards kept).')),
+        b('One of every decor', () => a.dev((gm) => gm.devGrantDecor(), (n) => `+${n} decor.`))),
 
       h('div', { class: 'section' }, 'Give'),
       h('div', { class: 'row gap wrap' }, give,

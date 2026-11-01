@@ -279,6 +279,32 @@ class App {
       }
       return;
     }
+    if (ui.mode && ui.mode.type === 'decor') {
+      const id = ui.mode.decorID;
+      const ok = this.attempt(() => g.placeDecor(id, tile));
+      if (ok) {
+        if (!(g.state.decor.owned[id] > 0)) ui.mode = null;
+        this.ui.toast(`${g.decorDef(id)?.name || 'Decoration'} placed. Tap it to move or recolour it.`, g.decorDef(id)?.sprite);
+        this.changed();
+      }
+      return;
+    }
+    if (ui.mode && ui.mode.type === 'decorMove') {
+      const ok = this.attempt(() => g.moveDecor(ui.mode.placedID, tile));
+      if (ok) { ui.mode = null; this.changed(); }
+      return;
+    }
+    if (ui.mode && ui.mode.type === 'trowel') {
+      const id = ui.mode.creatureID;
+      const ok = this.attempt(() => g.moveCreature(id, tile, now));
+      if (ok) {
+        ui.mode = null;
+        const c = g.creature(id);
+        this.ui.toast(`${this.displayName(c)} moved, influence and all.`, this.art(c).sprite);
+        this.changed();
+      }
+      return;
+    }
     if (ui.mode && ui.mode.type === 'plant') {
       const item = ui.mode.itemID;
       const ok = this.attempt(() => { g.plantSeed(item, tile, now); return true; });
@@ -292,9 +318,13 @@ class App {
     const landmark = g.landmarkAt(tile);
     if (landmark) {
       const def = (this.content.landmarks || []).find((l) => l.id === landmark.id);
+      // The Old Log is the trading place: its Offerings board (requests, compost heap).
+      if (landmark.id === 'landmark.old-log' && (this.content.requests || []).length) { ui.selectedTile = null; ui.open('offerings'); this.changed(false); return; }
       if (def) ui.open('entry', { name: def.name, sprite: def.sprite, variant: null, text: this.content.story?.guide?.landmarks?.[def.id] });
       return;
     }
+    const decor = g.decorAt(tile);
+    if (decor) { ui.selectedTile = null; ui.open('decor', decor.id); this.changed(false); return; }
     const p = g.creatureAt(tile);
     if (p) {
       ui.selectedTile = null;
@@ -353,6 +383,46 @@ class App {
     this.ui.selectedCreatureID = null;
     this.ui.mode = { type: 'place', creatureID };
     this.changed(false);
+  }
+
+  // ---- offerings
+  deliverRequest(id) {
+    const g = this.game;
+    const first = !Object.keys(g.state.offerings.delivered).length;
+    const r = this.attempt(() => g.deliver(id, g.now()));
+    if (!r) return;
+    const req = g.requestDef(id);
+    const what = r.type === 'cosmetic' ? `${g.decorDef(r.id)?.name || r.id} (in your Bag, under Decor)`
+      : r.type === 'compost' ? `${r.count} compost`
+        : r.type === 'egg' ? (this.content.items[r.id]?.name || r.id)
+          : { trowel: 'the gardener\'s trowel: open a placed creature to move it', slot: 'another creature slot', nest: 'another nest', expansion: 'more room: the treeline stepped back' }[r.id] || r.id;
+    this.ui.toast(`${req.name}: delivered! You got ${what}.`, r.type === 'cosmetic' ? g.decorDef(r.id)?.sprite : 'ui.icon.board');
+    if (first) this.ui.celebrate('The old log creaks', this.ui.story('messages.firstDelivery'));
+    this.changed();
+  }
+
+  compostItem(itemID) {
+    const n = this.attempt(() => this.game.compost(itemID, 1));
+    if (n) { this.ui.toast(`+${n} compost (${this.game.state.compost} in all).`, this.content.items[itemID]?.sprite); this.changed(); }
+  }
+
+  buyDecor(id) {
+    const ok = this.attempt(() => { this.game.buyDecor(id); return true; });
+    if (ok) { this.ui.toast(`${this.game.decorDef(id)?.name} is in your Bag, under Decor.`, this.game.decorDef(id)?.sprite); this.changed(); }
+  }
+
+  beginDecor(id) { this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'decor', decorID: id }; this.changed(false); }
+  beginDecorMove(placedID) { this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'decorMove', placedID }; this.changed(false); }
+  beginTrowel(creatureID) { this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'trowel', creatureID }; this.changed(false); }
+
+  recolorDecor(placedID) {
+    const ok = this.attempt(() => { this.game.recolorDecor(placedID); return true; });
+    if (ok) this.changed();
+  }
+
+  removeDecor(placedID) {
+    const ok = this.attempt(() => { this.game.removeDecor(placedID); return true; });
+    if (ok) { this.ui.sheet = null; this.ui.close(); this.ui.toast('Put away in your Bag.'); this.changed(); }
   }
 
   beginUsing(itemID) {

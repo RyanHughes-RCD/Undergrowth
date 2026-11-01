@@ -186,6 +186,16 @@
       { "min": 86, "label": "Maximum" }
     ]
   },
+  "offerings": {
+    "_about": "The Old Log board (Resources/Content/requests.json, cosmetics.json from design/Undergrowth_Offerings.xlsx). Compost: spare items of these categories turn into points by rarity; compost only buys recolours, visitor rerolls and cheap decor.",
+    "compostCategories": ["mushroom", "plant", "geode", "gem", "seed"],
+    "compost": {"common": 1, "uncommon": 3, "rare": 8, "veryRare": 20, "legendary": 50},
+    "recolorCost": 4
+  },
+  "creatureCap": {
+    "_about": "Off by default (no creature cap). When enabled, placed creatures are limited to the day-based slots (slotUnlocks) plus slots earned at the Old Log (unlock 'slot').",
+    "enabled": false
+  },
   "terrains": {
     "_about": "Named terrains formed by stat pairs (Low intensity, 10+ each, so two neighbouring commons make one) and triples (30+ each, for the legendary ones). A tile shows one: the most specific match (more stats first), then the one with the highest total of its stats. Its home items get x homeMult; its rule adds: night / day / rain (home items x that at those times), category (that category likelier to be chosen there), location (spawns land there x that often). The tile also counts one extra effect for where spawns land.",
     "homeMult": 3,

@@ -328,6 +328,46 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
   - **Each page:** what makes the terrain appear (as intensities), what can spawn there, the spawn bonuses (named as bonuses, at named intensities), other properties, and the selected tile's current intensity against what's needed. All of it is computed from `tuning.json`.
   - **Developer mode** can open every entry (marked as a developer view) without marking it found.
 
+## Offerings: the Old Log board (web)
+
+Mushrooms, plants and geodes now pay for things. Tap the **Old Log** to open its board.
+
+- **Requests** (`Resources/Content/requests.json`) each ask for specific items, usually from two or three kinds of ground. Items are recipes for terrain (their stat minimums), so a request means building several terrains.
+  - Each card shows the items with have/need and the reward, plus a Deliver button.
+  - Items not yet in the Field Guide show as a silhouette with a hint made from their stat minimums, e.g. "Grows where Stone meets deep soil". The phrases are in `story.json` → `hints`.
+  - Gating: a Field Guide count (items and creatures found), another request delivered, and/or a forest day. Locked requests show what opens them.
+- **Rewards:**
+  - `cosmetic`: a decor prop for the Bag's Decor section.
+  - `unlock`: one of
+    - `trowel`: move a placed creature, influence and all.
+    - `expansion`: the treeline steps back one ring now, on top of the automatic expansion.
+    - `slot`: one more creature slot (see the note below).
+    - `nest`: phase 2.
+  - `egg`: phase 2.
+  - `compost`: points.
+- **Decor** (`cosmetics.json`) is purely visual:
+  - Place it from the Bag on an open tile. Tap a placed prop to move it, recolour it, or put it back.
+  - Recolouring cycles the prop's listed colours (`colors`; the first is the art's own) by swapping its main palette indices 2–4. Each change costs `offerings.recolorCost` compost.
+  - Placed props take up their tile, so nothing spawns there.
+- **Compost** is a soft currency:
+  - Spare items of `offerings.compostCategories` turn into points by rarity (`offerings.compost`), using the "+N" button in the Bag.
+  - Compost only buys recolours, cheap decor (props with a `compost` price, on the board's Compost heap) and, in phase 3, visitor rerolls. It never buys unlocks or eggs.
+- **Creature slots:** the game has no creature cap (an earlier decision). `tuning.creatureCap.enabled` (false by default) turns on a cap of the day-based slots (`slotUnlocks`) plus slots bought at the Old Log. The two slot requests are in the spreadsheet with Status "Off" until you turn the cap on.
+- **Timing:** with the current spawn rates, the first requests take a few hours of forest time with the right one or two creatures. Mid-game ones need items with a stat minimum of 20 or more, which means stacking creatures or rarer ones. Late ones need rare finds.
+- **Spreadsheet:** `design/Undergrowth_Offerings.xlsx` has these sheets:
+  - **Requests:** status, id, name, kind, up to four items with counts, reward, gating, text, art notes.
+  - **Cosmetics:** id, name, sprite, size, compost price, colours.
+  - **Eggs:** phase 2.
+  - **How to use**.
+  - **Lists:** valid ids, refreshed on import.
+
+  Blue cells on yellow are editable. Each row's Check column flags unknown item, decor, unlock, egg or request ids, missing counts, missing sprites and duplicates.
+  - `python3 tools/import_offerings_table.py` writes `requests.json` and `cosmetics.json` (and `eggs.json`). Only "In game" rows are exported, and importing the unedited sheet reproduces the JSON exactly.
+  - `--check` previews; `--stubs` writes placeholder sprites for new sprite ids.
+  - `tools/gen_offerings_sprites.py` draws the placeholder decor and the board icon.
+- **Save** (older saves get empty defaults): `offerings.delivered`, `unlocks` (slots, nests, expansions, trowel), `decor` (owned, placed with colour) and `compost`.
+- **Developer mode → Offerings:** +50 compost, complete open or all requests, reset requests, one of every decor.
+
 ## Named terrains (web)
 
 > Creature family balance: sproutlings (found only when a planted Mystery Seed finishes growing) have 3× the find chance of the other families (common 12%, uncommon 9%, rare 4.5%, very rare 1.5%, legendary 0.3%), since a forest yields far fewer harvests than mushroom picks or cracked geodes.

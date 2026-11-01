@@ -48,6 +48,8 @@ def main():
         "story": load(os.path.join(content, "story.json")),
         "tasks": load(os.path.join(content, "tasks.json")),
         "terrain": load(os.path.join(content, "terrain.json")),
+        # Offerings (tools/import_offerings_table.py); optional so older checkouts still build.
+        **{k: load(os.path.join(content, k + ".json")) for k in ("requests", "cosmetics", "eggs") if os.path.exists(os.path.join(content, k + ".json"))},
         "sprites": sprites,
         "palettes": palettes,
     }

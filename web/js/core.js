@@ -364,6 +364,44 @@ export function parseHex(s) {
 
 // ---------------------------------------------------------------- game
 
+/**
+ * A placed decor prop's colour: cosmetics.json "colors" lists named colours (the first is the art's
+ * own). Any other colour swaps the prop's main palette indices 2 (dark), 3 (mid) and 4 (light).
+ */
+export function decorVariant(def, colorIndex = 0) {
+  const c = def && def.colors && def.colors[colorIndex];
+  if (!c || !colorIndex) return null;
+  const [r, g, b] = parseHex(c.color);
+  const tone = (k) => '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k))).toString(16).padStart(2, '0')).join('');
+  return { swap: { 2: tone(-0.35), 3: c.color, 4: tone(0.3) } };
+}
+
+/**
+ * A readable hint for where an item grows, from its stat minimums (story.json "hints"), e.g.
+ * "Grows where Stone meets deep soil." Used for items not yet in the Field Guide.
+ */
+export function itemHint(item, story) {
+  const H = (story && story.hints) || {};
+  const sp = item.spawn || {};
+  const req = Object.entries(sp.requires || {}).filter(([, b]) => (b.min || 0) > 0).sort((a, b) => b[1].min - a[1].min);
+  const words = req.map(([k]) => (H.stats || {})[k] || k);
+  const verb = (H.verbs || {})[item.category] || 'Found';
+  const fill = (tpl) => tpl.replace('{verb}', verb).replace('{a}', words[0]).replace('{b}', words[1]).replace('{c}', words[2]);
+  let out;
+  if (sp.terrain === 'pool') out = fill(H.pool || '{verb} in shallow pools');
+  else if (!words.length) out = fill(H.none || '{verb} almost anywhere');
+  else if (words.length === 1) out = fill(H.one || '{verb} on {a}');
+  else if (words.length === 2) out = fill(H.two || '{verb} where {a} meets {b}');
+  else out = fill(H.three || '{verb} where {a}, {b} and {c} come together');
+  const top = req.length ? req[0][1].min : 0;
+  if (top >= ((H.strongAt) ?? 46)) out += H.strong || ', where it is strongest';
+  else if (top >= ((H.richAt) ?? 26)) out += H.rich || ', where it has grown in';
+  if (sp.time === 'night') out += H.night || ', at night';
+  if (sp.time === 'day') out += H.day || ', by day';
+  if (sp.rain) out += H.rain || ', in the rain';
+  return out.charAt(0).toUpperCase() + out.slice(1) + '.';
+}
+
 const HOUR = 3600 * 1000;
 const DAY = 24 * HOUR;
 
@@ -376,6 +414,14 @@ export class Game {
     state.soilBoosts = state.soilBoosts || [];
     state.ambientDamp = state.ambientDamp || {};
     state.nextGlimmer = !!state.nextGlimmer;
+    // Offerings (older saves start empty).
+    state.offerings = state.offerings || { delivered: {} };
+    state.offerings.delivered = state.offerings.delivered || {};
+    state.unlocks = { slots: 0, nests: 0, expansions: 0, trowel: false, ...(state.unlocks || {}) };
+    state.decor = state.decor || { owned: {}, placed: [] };
+    state.decor.owned = state.decor.owned || {};
+    state.decor.placed = state.decor.placed || [];
+    state.compost = state.compost || 0;
     this.t = content.tuning;
     this.stats = new StatEngine(this.t);
     this.rng = new RNG(state);
@@ -1686,6 +1732,7 @@ export class Game {
   creatureAt(t) { return this.state.placements.find((p) => p.removedAt == null && sameTile(p.tile, t)) || null; }
   spawnAt(t) { return this.state.spawns.find((s) => sameTile(s.tile, t)) || null; }
   seedAt(t) { return this.state.plantedSeeds.find((s) => sameTile(s.tile, t)) || null; }
+  decorAt(t) { return this.state.decor.placed.find((d) => sameTile(d.tile, t)) || null; }
   /** Every occupied tile ("x,y"), built once so whole-map scans don't search lists per tile. */
   occupied() {
     const s = this.state, out = new Set();
@@ -1694,10 +1741,11 @@ export class Game {
     for (const x of s.spawns) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.plantedSeeds) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.visitors || []) out.add(x.tile.x + ',' + x.tile.y);
+    for (const x of (s.decor && s.decor.placed) || []) out.add(x.tile.x + ',' + x.tile.y);
     return out;
   }
 
-  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t); }
+  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t); }
   seedProgress(seed, now) { return Math.min(1, Math.max(0, (now - seed.plantedAt) / (Math.max(1, seed.growSeconds) * 1000))); }
 
   // ---- creatures
@@ -1770,6 +1818,8 @@ export class Game {
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (this.activePlacement(creatureID)) throw new GameError('That creature is already out in the forest.');
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
+    const cap = this.creatureCap(now);
+    if (cap != null && this.activePlacements.length >= cap) throw new GameError('Every creature slot is in use. Bring one home, or earn another slot at the Old Log.');
     let startLevel = 0;
     const old = this.state.placements.findIndex((p) => p.creatureID === creatureID && p.removedAt != null && sameTile(p.tile, tile));
     if (old >= 0) {
@@ -2139,6 +2189,172 @@ export class Game {
     throw new GameError("That can't be used.");
   }
 
+  // ---- offerings (the Old Log board: requests, rewards, decor, compost)
+  get offeringsCfg() { return this.t.offerings || {}; }
+
+  /** How many creature placements are allowed, or null when uncapped (tuning.creatureCap.enabled false). */
+  creatureCap(now) {
+    const c = this.t.creatureCap || {};
+    if (!c.enabled) return null;
+    return this.unlockedSlots(now) + (this.state.unlocks.slots || 0);
+  }
+
+  /** Field Guide entries found (items and creatures), for request gating. */
+  get guideCount() { return [...this.discovered].filter((k) => k.startsWith('item:') || k.startsWith('creature:')).length; }
+  forestDay(now) { return Math.floor((now - this.state.createdAt) / DAY) + 1; }
+  requestDef(id) { return (this.content.requests || []).find((r) => r.id === id) || null; }
+  isDelivered(id) { return !!this.state.offerings.delivered[id]; }
+
+  /** A request right now: what it needs (have / need), what still locks it, and whether it can be delivered. */
+  requestStatus(req, now) {
+    const need = req.requires || {};
+    const locks = [];
+    if (need.guide && this.guideCount < need.guide) locks.push({ type: 'guide', need: need.guide, have: this.guideCount });
+    if (need.request && !this.isDelivered(need.request)) locks.push({ type: 'request', id: need.request, name: this.requestDef(need.request)?.name || need.request });
+    if (need.day && this.forestDay(now) < need.day) locks.push({ type: 'day', need: need.day, have: this.forestDay(now) });
+    const items = req.items.map((x) => ({ item: x.item, count: x.count, have: Math.min(x.count, this.state.inventory[x.item] || 0), owned: this.state.inventory[x.item] || 0 }));
+    const done = this.isDelivered(req.id);
+    return { req, done, locks, items, ready: !done && !locks.length && items.every((x) => x.owned >= x.count) };
+  }
+
+  /** Every request with its status: open ones first, then locked, then delivered. */
+  requestBoard(now) {
+    const list = (this.content.requests || []).filter((r) => r.kind !== 'visitor').map((r) => this.requestStatus(r, now));
+    const rank = (s) => (s.done ? 2 : s.locks.length ? 1 : 0);
+    return list.sort((a, b) => rank(a) - rank(b));
+  }
+
+  /** Deliver a request: the items are taken and the reward given. */
+  deliver(id, now) {
+    const req = this.requestDef(id);
+    if (!req) throw new GameError('Unknown request.');
+    const st = this.requestStatus(req, now);
+    if (st.done) throw new GameError('Already delivered.');
+    if (st.locks.length) throw new GameError("That request isn't open yet.");
+    if (!st.ready) throw new GameError('You need more of the items it asks for.');
+    for (const x of req.items) for (let i = 0; i < x.count; i++) this.consume(x.item);
+    this.state.offerings.delivered[id] = now;
+    this.bump('deliver');
+    const reward = this.grantReward(req.reward, now);
+    this.events.push({ type: 'delivered', id, reward });
+    return reward;
+  }
+
+  /** Gives a request's reward. Returns { type, id, count, text } for the UI. */
+  grantReward(r, now) {
+    const out = { ...r };
+    if (r.type === 'cosmetic') {
+      this.state.decor.owned[r.id] = (this.state.decor.owned[r.id] || 0) + (r.count || 1);
+    } else if (r.type === 'compost') {
+      this.state.compost += r.count || 0;
+    } else if (r.type === 'unlock') {
+      const u = this.state.unlocks;
+      if (r.id === 'trowel') u.trowel = true;
+      else if (r.id === 'slot') u.slots += r.count || 1;
+      else if (r.id === 'nest') u.nests += r.count || 1;
+      else if (r.id === 'expansion') {
+        u.expansions += r.count || 1;
+        for (let i = 0; i < (r.count || 1); i++) out.tiles = (out.tiles || 0) + this.expand(now).length;
+      }
+    } else if (r.type === 'egg') {
+      out.results = this.grant([{ item: r.id, count: r.count || 1 }]);
+    }
+    return out;
+  }
+
+  /** Compost value of one of an item (tuning.offerings.compost by rarity), or 0 if it can't be composted. */
+  compostValue(itemID) {
+    const def = this.content.items[itemID];
+    const cfg = this.offeringsCfg;
+    if (!def || !(cfg.compostCategories || []).includes(def.category)) return 0;
+    return (cfg.compost || {})[def.rarity || 'common'] || 0;
+  }
+
+  /** Compost `count` of a spare item for points. */
+  compost(itemID, count = 1) {
+    const v = this.compostValue(itemID);
+    if (!v) throw new GameError("That can't be composted.");
+    const n = Math.min(count, this.state.inventory[itemID] || 0);
+    if (n < 1) throw new GameError("You don't have that.");
+    for (let i = 0; i < n; i++) this.consume(itemID);
+    this.state.compost += v * n;
+    this.bump('compost', n);
+    return v * n;
+  }
+
+  spendCompost(n) {
+    if (this.state.compost < n) throw new GameError(`That needs ${n} compost (you have ${this.state.compost}).`);
+    this.state.compost -= n;
+  }
+
+  decorDef(id) { return (this.content.cosmetics || []).find((c) => c.id === id) || null; }
+
+  /** Basic decor bought with compost (cosmetics.json "compost" price). */
+  buyDecor(id) {
+    const def = this.decorDef(id);
+    if (!def || def.compost == null) throw new GameError("That can't be bought with compost.");
+    this.spendCompost(def.compost);
+    this.state.decor.owned[id] = (this.state.decor.owned[id] || 0) + 1;
+  }
+
+  placeDecor(id, tile) {
+    if (!(this.state.decor.owned[id] > 0)) throw new GameError("You don't have that.");
+    if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
+    if (!this.isFree(tile)) throw new GameError('Something is already there.');
+    this.state.decor.owned[id]--;
+    if (!this.state.decor.owned[id]) delete this.state.decor.owned[id];
+    const d = { id: this.rng.uuid(), decorID: id, tile: { ...tile }, color: 0 };
+    this.state.decor.placed.push(d);
+    return d;
+  }
+
+  moveDecor(placedID, tile) {
+    const d = this.state.decor.placed.find((x) => x.id === placedID);
+    if (!d) throw new GameError('Unknown decoration.');
+    if (sameTile(d.tile, tile)) return d;
+    if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
+    if (!this.isFree(tile)) throw new GameError('Something is already there.');
+    d.tile = { ...tile };
+    return d;
+  }
+
+  removeDecor(placedID) {
+    const i = this.state.decor.placed.findIndex((x) => x.id === placedID);
+    if (i < 0) throw new GameError('Unknown decoration.');
+    const [d] = this.state.decor.placed.splice(i, 1);
+    this.state.decor.owned[d.decorID] = (this.state.decor.owned[d.decorID] || 0) + 1;
+  }
+
+  /** Recolour a placed prop to its next colour (costs compost, tuning.offerings.recolorCost). */
+  recolorDecor(placedID) {
+    const d = this.state.decor.placed.find((x) => x.id === placedID);
+    if (!d) throw new GameError('Unknown decoration.');
+    const def = this.decorDef(d.decorID);
+    const n = (def && def.colors && def.colors.length) || 1;
+    if (n < 2) throw new GameError('That only comes in one colour.');
+    this.spendCompost(this.offeringsCfg.recolorCost ?? 0);
+    d.color = ((d.color || 0) + 1) % n;
+    return d;
+  }
+
+  /** The trowel (an Offerings unlock): move a placed creature; its influence keeps its strength. */
+  moveCreature(creatureID, tile, now) {
+    if (!this.state.unlocks.trowel) throw new GameError('You need the trowel for that.');
+    const p = this.activePlacement(creatureID);
+    if (!p) throw new GameError('That creature is resting at home.');
+    if (sameTile(p.tile, tile)) return p;
+    if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
+    if (!this.isFree(tile)) throw new GameError('Something is already there.');
+    // Keep its strength: the ramp carries on from the level it had reached.
+    p.startLevel = this.stats.level(p, now);
+    p.placedAt = now;
+    p.tile = { ...tile };
+    this.bump('trowel');
+    this.statCache = this.statField(now);
+    this.checkProgress(now);
+    return p;
+  }
+
   consume(itemID) {
     const n = (this.state.inventory[itemID] || 0) - 1;
     if (n > 0) this.state.inventory[itemID] = n; else delete this.state.inventory[itemID];
@@ -2170,6 +2386,21 @@ export class Game {
     }
     return this.grant(pending).length;
   }
+
+  /** Deliver requests without their items (open ones, or every one ignoring locks). Returns how many. */
+  devCompleteRequests(now, all = false) {
+    let n = 0;
+    for (const r of this.content.requests || []) {
+      if (r.kind === 'visitor' || this.isDelivered(r.id)) continue;
+      if (!all && this.requestStatus(r, now).locks.length) continue;
+      this.state.offerings.delivered[r.id] = now;
+      this.grantReward(r.reward, now);
+      n++;
+    }
+    return n;
+  }
+  devResetRequests() { this.state.offerings.delivered = {}; }
+  devGrantDecor() { for (const c of this.content.cosmetics || []) this.state.decor.owned[c.id] = (this.state.decor.owned[c.id] || 0) + 1; return (this.content.cosmetics || []).length; }
 
   /** `count` of every item in the content (mushrooms, plants, seeds, geodes, gems, materials). */
   devGrantItems(count = 5) {
@@ -2255,6 +2486,9 @@ export class Content {
     this.story = bundle.story || {};
     this.tasks = bundle.tasks || [];
     this.terrain = bundle.terrain || [];
+    this.requests = bundle.requests || [];
+    this.cosmetics = bundle.cosmetics || [];
+    this.eggs = bundle.eggs || [];
   }
   familyName(id) { return this.creatureList.find((c) => c.family === id)?.familyName || id; }
   itemsInGroup(g) { return this.itemList.filter((i) => i.groups && i.groups.includes(g)); }

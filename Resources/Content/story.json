@@ -47,7 +47,10 @@
     "lockedSlot": "Day {day}",
     "taskDone": "Task complete: {task}. Tap Tasks to claim your reward.",
     "tasksIntro": "New: Tasks! Little goals to get your forest going, each with a reward.",
-    "welcome": "Welcome to your clearing. A few things are waiting by the old log, and one of them has a creature inside."
+    "welcome": "Welcome to your clearing. A few things are waiting by the old log, and one of them has a creature inside.",
+    "offeringsIntro": "The old log remembers what this forest used to hold. Bring it what it asks for, and it gives something back.",
+    "firstDelivery": "The old log creaks happily. Come back as the forest grows: it will ask for new things.",
+    "compostIntro": "Spare finds can go on the compost heap. Compost buys small things: recolouring decor and simple props."
   },
   "guide": {
     "landmarks": {
@@ -56,5 +59,36 @@
     "teasers": {
       "plant.heartwood-sapling": "Some say the old forest's heart could sprout again, if the land were ever rich enough."
     }
+  },
+  "hints": {
+    "_about": "Hints for items not yet in the Field Guide, built from their stat minimums (strongest first). {verb}, {a}, {b}, {c} are filled in.",
+    "stats": {
+      "damp": "wet ground",
+      "glow": "glowing ground",
+      "bloom": "flowers",
+      "verdure": "long grass",
+      "stone": "Stone",
+      "depth": "deep soil"
+    },
+    "verbs": {
+      "mushroom": "grows",
+      "plant": "grows",
+      "geode": "lies buried",
+      "gem": "hides inside geodes",
+      "seed": "drops from plants",
+      "material": "hides inside geodes"
+    },
+    "none": "{verb} almost anywhere",
+    "one": "{verb} on {a}",
+    "two": "{verb} where {a} meets {b}",
+    "three": "{verb} where {a}, {b} and {c} come together",
+    "pool": "{verb} in shallow pools",
+    "richAt": 26,
+    "rich": ", once it has grown in",
+    "strongAt": 46,
+    "strong": ", only where it is strong",
+    "night": ", at night",
+    "day": ", by day",
+    "rain": ", in the rain"
   }
 }
