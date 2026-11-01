@@ -28,9 +28,17 @@ REQ_HEADERS = ["Status", "ID", "Name", "Kind", "Item 1", "Count 1", "Item 2", "C
                "Text", "Art notes", "Check"]
 COS_HEADERS = ["Status", "ID", "Name", "Sprite", "Size", "Compost price", "Colours", "Text", "Art notes", "Check"]
 EGG_HEADERS = ["Status", "ID", "Family", "Tier", "Name", "Sprite", "Hatch hours", "Foraging weight", "Text", "Check"]
+SUP_HEADERS = ["Status", "ID", "Name", "Sprite", "Stats", "Hours", "Text", "Check"]
 UNLOCKS = ["slot", "nest", "expansion", "trowel"]
-KINDS = ["cosmetic", "unlock", "egg", "visitor"]
-REWARDS = ["cosmetic", "unlock", "egg", "compost"]
+KINDS = ["cosmetic", "unlock", "egg", "visitor", "shop", "upgrade"]
+REWARDS = ["cosmetic", "unlock", "egg", "compost", "item", "upgrade"]
+STATS = ["damp", "glow", "bloom", "verdure", "stone", "depth"]
+TUNING = os.path.join(ROOT, "Resources", "tuning.json")
+
+
+def upgrade_ids():
+    with open(TUNING) as f:
+        return [k for k, v in json.load(f).get("upgrades", {}).items() if isinstance(v, dict)]
 TIERS = ["common", "uncommon", "rare", "veryRare", "legendary"]
 
 
@@ -49,6 +57,8 @@ def request_check_formula(r):
     parts.append(f'IF(M{r}="cosmetic",IF(COUNTIF(Cosmetics!$B:$B,N{r})=0,"Unknown decor "&N{r}&". ",""),"")')
     parts.append(f'IF(M{r}="unlock",IF(COUNTIF(Lists!$D:$D,N{r})=0,"Unknown unlock "&N{r}&". ",""),"")')
     parts.append(f'IF(M{r}="egg",IF(COUNTIF(Lists!$E:$E,N{r})=0,"Unknown egg "&N{r}&". ",""),"")')
+    parts.append(f'IF(M{r}="upgrade",IF(COUNTIF(Lists!$G:$G,N{r})=0,"Unknown upgrade "&N{r}&". ",""),"")')
+    parts.append(f'IF(M{r}="item",IF(COUNTIF(Lists!$A:$A,N{r})+COUNTIF(Lists!$E:$E,N{r})+COUNTIF(Lists!$H:$H,N{r})=0,"Unknown item "&N{r}&". ",""),"")')
     parts.append(f'IF(AND(Q{r}<>"",COUNTIF($B:$B,Q{r})=0),"Unknown request "&Q{r}&". ","")')
     parts.append(f'IF(COUNTIF($B:$B,B{r})>1,"Duplicate id. ","")')
     s = "&".join(parts)
@@ -56,6 +66,11 @@ def request_check_formula(r):
 
 
 def cosmetic_check_formula(r):
+    return (f'=IF(OR(B{r}="",A{r}="Off"),"",IF(COUNTIF(Lists!$C:$C,D{r})=0,"Missing sprite "&D{r}&" (import with --stubs)",'
+            f'IF(COUNTIF($B:$B,B{r})>1,"Duplicate id","OK")))')
+
+
+def supply_check_formula(r):
     return (f'=IF(OR(B{r}="",A{r}="Off"),"",IF(COUNTIF(Lists!$C:$C,D{r})=0,"Missing sprite "&D{r}&" (import with --stubs)",'
             f'IF(COUNTIF($B:$B,B{r})>1,"Duplicate id","OK")))')
 
@@ -147,6 +162,25 @@ def read(wb, errors):
             eggs.append(e)
     egg_ids = {e["id"] for e in eggs}
 
+    supplies = []
+    if "Supplies" in wb.sheetnames:
+        for r, v in rows(wb["Supplies"], len(SUP_HEADERS)):
+            if text(v[0]) != "In game":
+                continue
+            stats = {}
+            for part in (text(v[4]) or "").split(","):
+                bits = part.strip().split()
+                if len(bits) != 2 or bits[0].lower() not in STATS:
+                    errors.append(f"Supplies row {r}: stats should look like 'Damp 12, Glow 6' (got {part.strip()!r})")
+                    continue
+                stats[bits[0].lower()] = num(bits[1])
+            sp = {"id": text(v[1]), "name": text(v[2]), "sprite": text(v[3]), "stats": stats, "hours": num(v[5])}
+            if text(v[6]):
+                sp["text"] = text(v[6])
+            supplies.append(sp)
+    supply_ids = {x["id"] for x in supplies}
+    ups = set(upgrade_ids())
+
     cosmetics = []
     for r, v in rows(wb["Cosmetics"], len(COS_HEADERS)):
         if text(v[0]) != "In game":
@@ -196,6 +230,10 @@ def read(wb, errors):
             errors.append(f"Requests row {r} ({rid}): unlock must be one of {', '.join(UNLOCKS)}")
         if rtype == "egg" and rref not in egg_ids:
             errors.append(f"Requests row {r} ({rid}): unknown egg {rref!r}")
+        if rtype == "upgrade" and rref not in ups:
+            errors.append(f"Requests row {r} ({rid}): unknown upgrade {rref!r} (tuning.json upgrades)")
+        if rtype == "item" and rref not in items and rref not in egg_ids and rref not in supply_ids:
+            errors.append(f"Requests row {r} ({rid}): unknown item {rref!r}")
         reward = {"type": rtype}
         if rref:
             reward["id"] = rref
@@ -217,7 +255,7 @@ def read(wb, errors):
         requests.append(out)
     if len({x["id"] for x in requests}) != len(requests):
         errors.append("Requests: duplicate ids")
-    return requests, cosmetics, eggs
+    return requests, cosmetics, eggs, supplies
 
 
 # ------------------------------------------------------------------ sheet upkeep
@@ -235,7 +273,15 @@ def refresh_lists(wb):
     families = sorted({c["family"] for c in load("creatures.json")})
     cols = [("Item ids", [i["id"] for i in items]), ("Item names", [i["name"] for i in items]),
             ("Sprite ids", sorted(sprite_ids())), ("Unlock ids", UNLOCKS),
-            ("Egg ids", sorted(set(eggs_sheet) | {e["id"] for e in eggs})), ("Families", families)]
+            ("Egg ids", sorted(set(eggs_sheet) | {e["id"] for e in eggs})), ("Families", families),
+            ("Upgrade ids", upgrade_ids()),
+            ("Supply ids", [text(v[1]) for _, v in rows(wb["Supplies"], len(SUP_HEADERS))] if "Supplies" in wb.sheetnames else [])]
+    # Keep every row's Check formula current (new checks reach rows added before them).
+    for name, ncol, fn in (("Requests", len(REQ_HEADERS), request_check_formula), ("Cosmetics", len(COS_HEADERS), cosmetic_check_formula),
+                           ("Eggs", len(EGG_HEADERS), egg_check_formula), ("Supplies", len(SUP_HEADERS), supply_check_formula)):
+        if name in wb.sheetnames:
+            for r, _ in rows(wb[name], ncol):
+                wb[name].cell(r, ncol).value = fn(r)
     for c, (head, vals) in enumerate(cols, start=1):
         ws.cell(1, c, head).font = Font(name="Arial", bold=True)
         for r, v in enumerate(vals, start=2):
@@ -292,13 +338,13 @@ def main(argv):
     stubs = "--stubs" in argv
     wb = openpyxl.load_workbook(SHEET)
     errors = []
-    requests, cosmetics, eggs = read(wb, errors)
+    requests, cosmetics, eggs, supplies = read(wb, errors)
     if stubs and not check:
-        made = write_stubs(cosmetics, eggs)
+        made = write_stubs(cosmetics, eggs + supplies)
         if made:
             print("placeholder sprites:", ", ".join(made))
     have = sprite_ids()
-    for x in cosmetics + eggs:
+    for x in cosmetics + eggs + supplies:
         if x.get("sprite") and x["sprite"] not in have:
             errors.append(f"{x['id']}: sprite {x['sprite']} doesn't exist (run with --stubs for a placeholder)")
     if errors:
@@ -309,6 +355,8 @@ def main(argv):
     outputs = [("requests.json", requests), ("cosmetics.json", cosmetics)]
     if "Eggs" in wb.sheetnames:
         outputs.append(("eggs.json", eggs))
+    if "Supplies" in wb.sheetnames:
+        outputs.append(("supplies.json", supplies))
     for name, data in outputs:
         path = os.path.join(CONTENT, name)
         new = "[\n" + ",\n".join("  " + json.dumps(x, ensure_ascii=False) for x in data) + "\n]\n"

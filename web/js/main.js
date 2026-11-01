@@ -409,10 +409,12 @@ class App {
     const req = g.requestDef(id);
     const what = r.type === 'cosmetic' ? `${g.decorDef(r.id)?.name || r.id} (in your Bag, under Decor)`
       : r.type === 'compost' ? `${r.count} compost`
-        : r.type === 'egg' ? (this.content.items[r.id]?.name || r.id)
+        : r.type === 'egg' || r.type === 'item' ? `${(r.count || 1) > 1 ? r.count + ' × ' : ''}${this.content.items[r.id]?.name || r.id}`
+          : r.type === 'upgrade' ? `${g.upgradeDef(r.id)?.name || r.id}${r.tier > 1 ? ' ' + ['', 'I', 'II', 'III', 'IV', 'V'][r.tier] : ''}: ${(g.upgradeDef(r.id)?.text || '').toLowerCase()}`
           : { trowel: 'the gardener\'s trowel: open a placed creature to move it', slot: 'another creature slot', nest: 'another nest', expansion: 'more room: the treeline stepped back' }[r.id] || r.id;
-    this.ui.toast(`${req.name}: delivered! You got ${what}.`, r.type === 'cosmetic' ? g.decorDef(r.id)?.sprite : 'ui.icon.board');
-    if (first) this.ui.celebrate('The old log creaks', this.ui.story('messages.firstDelivery'));
+    const sprite = r.type === 'cosmetic' ? g.decorDef(r.id)?.sprite : (r.type === 'item' || r.type === 'egg') ? this.content.items[r.id]?.sprite : r.type === 'upgrade' ? g.upgradeDef(r.id)?.sprite : 'ui.icon.board';
+    this.ui.toast(req.kind === 'shop' ? `Traded for ${what}.` : `${req.name}: done! You got ${what}.`, sprite);
+    if (first && req.kind !== 'shop') this.ui.celebrate('The old log creaks', this.ui.story('messages.firstDelivery'));
     this.changed();
   }
 

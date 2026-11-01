@@ -1,0 +1,8 @@
+[
+  {"id": "supply.dew-moss", "name": "Dew moss", "sprite": "supply.damp", "stats": {"damp": 14}, "hours": 24, "text": "Damp moss that keeps a patch of ground wet."},
+  {"id": "supply.glow-dust", "name": "Glow dust", "sprite": "supply.glow", "stats": {"glow": 14}, "hours": 24, "text": "Shimmering dust from the foxfire."},
+  {"id": "supply.petal-mulch", "name": "Petal mulch", "sprite": "supply.bloom", "stats": {"bloom": 14}, "hours": 24, "text": "Old petals that wake flowers up."},
+  {"id": "supply.leaf-mould", "name": "Leaf mould", "sprite": "supply.verdure", "stats": {"verdure": 14}, "hours": 24, "text": "Rich leaf litter for long grass."},
+  {"id": "supply.grit", "name": "River grit", "sprite": "supply.stone", "stats": {"stone": 14}, "hours": 24, "text": "Coarse grit that lets stone push through."},
+  {"id": "supply.loose-loam", "name": "Loose loam", "sprite": "supply.depth", "stats": {"depth": 14}, "hours": 24, "text": "Soft loam that's easy to dig into."}
+]

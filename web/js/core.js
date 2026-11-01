@@ -418,7 +418,9 @@ export class Game {
     // Offerings (older saves start empty).
     state.offerings = state.offerings || { delivered: {} };
     state.offerings.delivered = state.offerings.delivered || {};
+    state.offerings.bought = state.offerings.bought || {};
     state.unlocks = { slots: 0, nests: 0, expansions: 0, trowel: false, ...(state.unlocks || {}) };
+    state.unlocks.upgrades = state.unlocks.upgrades || {};
     state.decor = state.decor || { owned: {}, placed: [] };
     state.decor.owned = state.decor.owned || {};
     state.decor.placed = state.decor.placed || [];
@@ -1089,12 +1091,23 @@ export class Game {
   }
 
   // ---- stats
+  /** Tiles a soil boost reaches: its own tile, plus its radius (a square) when it has one (Wide Spread). */
+  boostTiles(b) {
+    const r = b.radius || 0;
+    if (!r) return this.inBounds(b.tile) ? [b.tile] : [];
+    const out = [];
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      const t = { x: b.tile.x + dx, y: b.tile.y + dy };
+      if (this.inBounds(t)) out.push(t);
+    }
+    return out;
+  }
   activeBoosts(now) { return this.state.soilBoosts.filter((b) => now >= b.appliedAt && (b.expiresAt == null || now < b.expiresAt)); }
 
   /** Tile stats for every tile. Values below intensity.minInfluence are 0 (inactive) unless opts.raw. */
   statField(now, opts = {}) {
     const f = this.stats.field(this.state.size, this.effectivePlacements(), now);
-    for (const b of this.activeBoosts(now)) if (this.inBounds(b.tile)) f.add(b.tile.x, b.tile.y, b.stats);
+    for (const b of this.activeBoosts(now)) for (const t of this.boostTiles(b)) f.add(t.x, t.y, b.stats);
     // Ambient Damp (seeped and pooled water) on top of what creatures give.
     const amb = this.state.ambientDamp || {}, kd = f.keys.indexOf('damp'), KK = f.keys.length, idx = this.tileKeys.index;
     for (const key in amb) {
@@ -1131,7 +1144,7 @@ export class Game {
 
   tileStats(tile, now, opts = {}) {
     const s = this.stats.statsAt(tile, this.effectivePlacements(), now);
-    for (const b of this.activeBoosts(now)) if (sameTile(b.tile, tile)) for (const k in b.stats) s[k] = (s[k] || 0) + b.stats[k];
+    for (const b of this.activeBoosts(now)) if (Math.max(Math.abs(b.tile.x - tile.x), Math.abs(b.tile.y - tile.y)) <= (b.radius || 0)) for (const k in b.stats) s[k] = (s[k] || 0) + b.stats[k];
     s.damp = (s.damp || 0) + this.ambientAt(tile.x, tile.y);
     const m = this.revealFactor(tile.x, tile.y, now);
     const floor = opts.raw ? 0 : this.minInfluence;
@@ -1440,7 +1453,7 @@ export class Game {
           }
         }
       }
-      for (const b of this.activeBoosts(t)) if (this.inBounds(b.tile)) sources[b.tile.y * W + b.tile.x] += 1;
+      for (const b of this.activeBoosts(t)) for (const bt of this.boostTiles(b)) sources[bt.y * W + bt.x] += 1;
     }
     const tiles = [];
     let total = 0;
@@ -1538,6 +1551,8 @@ export class Game {
     const cs = (this.t.spawns && this.t.spawns.categoryScaling) || {};
     const favoured = new Set(Object.keys(cs).filter((cat) => typeof cs[cat] === 'object' && Object.keys(cs[cat]).some((k) => lvl[k] > 0)));
     const pool = isPool && this.combo('pool').onlyDampItems;
+    const keenFor = {};
+    for (const [id, u] of Object.entries(this.t.upgrades || {})) if (u && u.category && this.upgradeTier(id)) keenFor[u.category] = (keenFor[u.category] || 0) + this.upgradeTier(id) * (u.perTierPerRarity ?? 0);
     for (const item of opts.items || this.content.spawnableItems) {
       const rule = item.spawn;
       if (!rule) continue;
@@ -1592,6 +1607,9 @@ export class Game {
       }
       const home = ter && ter.home.has(item.id) ? homeMult : 1;
       weight *= home;
+      // Keen Eye upgrades: that category's uncommon and rarer finds weigh more, more for rarer ones.
+      const keen = keenFor[item.category];
+      if (keen && rarityIndex(item.rarity) > 0) weight *= 1 + keen * rarityIndex(item.rarity);
       // Clustering plants (reeds): likelier next to one of their own.
       if (rule.cluster && this.state.spawns.some((x) => x.itemID === item.id && Math.max(Math.abs(x.tile.x - tile.x), Math.abs(x.tile.y - tile.y)) === 1)) {
         weight *= this.combo('pool').clusterBonus ?? 2.5;
@@ -1807,7 +1825,7 @@ export class Game {
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
     this.consume(eggID);
-    let hatchSeconds = (egg.hatchHours || 6) * 3600;
+    let hatchSeconds = (egg.hatchHours || 6) * 3600 / (1 + this.upgradeTier('hatchSpeed') * ((this.upgradeDef('hatchSpeed') || {}).perTier ?? 0));   // Warm Nest
     // The opening's egg hatches while the player is away the first time (tuning.start.firstEggHatchMinutes).
     if (this.state.quickEggs > 0) { this.state.quickEggs--; hatchSeconds = ((this.t.start || {}).firstEggHatchMinutes ?? 45) * 60; }
     const n = { id: this.rng.uuid(), eggID, tile: { ...tile }, startedAt: now, hatchSeconds, glimmer: false };
@@ -2204,7 +2222,8 @@ export class Game {
     const verdure = this.tileStats(tile, now).verdure || 0;
     const meadow = this.combosAt(this.tileStats(tile, now)).includes('meadow') ? (this.combo('meadow').flowerGrowthMult ?? 1) : 1;
     const speed = this.mult(this.effects('seedGrowth', tile)) * (1 + verdure * ((this.terrain.verdure || {}).seedGrowthPerPoint ?? 0)) * meadow;
-    const grow = this.rng.range(...range(this.t.seeds.growSeconds)) / Math.max(0.01, speed);
+    const quick = 1 + this.upgradeTier('seedSpeed') * ((this.upgradeDef('seedSpeed') || {}).perTier ?? 0);   // Quick Roots
+    const grow = this.rng.range(...range(this.t.seeds.growSeconds)) / Math.max(0.01, speed * quick);
     // The plant is chosen now (tile stats + time of day at planting), so its growth stages can show it.
     const plantID = this.choosePlant(tile, now);
     const seed = { id: this.rng.uuid(), seedItemID: itemID, tile: { ...tile }, plantedAt: now, growSeconds: grow, plantID, ...extra };
@@ -2358,6 +2377,7 @@ export class Game {
       this.bump('use');
       this.state.soilBoosts.push({
         id: this.rng.uuid(), tile: { ...tile }, stats: { ...use.stats }, appliedAt: now,
+        radius: (use.radius || 0) + this.upgradeTier('wideSpread') * ((this.upgradeDef('wideSpread') || {}).radiusPerTier ?? 1),
         expiresAt: use.permanent ? null : now + (use.hours || 24) * HOUR,
       });
       this.statCache = this.statField(now);
@@ -2392,7 +2412,7 @@ export class Game {
     const visitor = req.kind === 'visitor';
     const locks = visitor ? [] : this.requestLocks(req, now);
     const items = req.items.map((x) => ({ item: x.item, count: x.count, have: Math.min(x.count, this.state.inventory[x.item] || 0), owned: this.state.inventory[x.item] || 0 }));
-    const done = visitor ? this.visitorsToday(now).done.includes(req.id) : this.isDelivered(req.id);
+    const done = visitor ? this.visitorsToday(now).done.includes(req.id) : req.kind === 'shop' ? false : this.isDelivered(req.id);
     return { req, done, locks, items, ready: !done && !locks.length && items.every((x) => x.owned >= x.count) };
   }
 
@@ -2465,7 +2485,8 @@ export class Game {
     if (st.locks.length) throw new GameError("That request isn't open yet.");
     if (!st.ready) throw new GameError('You need more of the items it asks for.');
     for (const x of req.items) for (let i = 0; i < x.count; i++) this.consume(x.item);
-    this.state.offerings.delivered[id] = now;
+    // Shop listings can be bought again and again; everything else is a one-off.
+    if (req.kind === 'shop') { const b = this.state.offerings.bought; b[id] = (b[id] || 0) + 1; } else this.state.offerings.delivered[id] = now;
     this.bump('deliver');
     const reward = this.grantReward(req.reward, now);
     this.events.push({ type: 'delivered', id, reward });
@@ -2502,11 +2523,19 @@ export class Game {
         u.expansions += r.count || 1;
         for (let i = 0; i < (r.count || 1); i++) out.tiles = (out.tiles || 0) + this.expand(now).length;
       }
-    } else if (r.type === 'egg') {
+    } else if (r.type === 'egg' || r.type === 'item') {
       out.results = this.grant([{ item: r.id, count: r.count || 1 }]);
+    } else if (r.type === 'upgrade') {
+      const u = this.state.unlocks.upgrades;
+      const max = (this.upgradeDef(r.id) || {}).maxTier ?? Infinity;
+      u[r.id] = Math.min(max, (u[r.id] || 0) + (r.count || 1));
+      out.tier = u[r.id];
     }
     return out;
   }
+
+  upgradeDef(id) { const u = (this.t.upgrades || {})[id]; return u && typeof u === 'object' ? u : null; }
+  upgradeTier(id) { return (this.state.unlocks.upgrades || {})[id] || 0; }
 
   /** Compost value of one of an item (tuning.offerings.compost by rarity), or 0 if it can't be composted. */
   compostValue(itemID) {
@@ -2638,7 +2667,7 @@ export class Game {
   devCompleteRequests(now, all = false) {
     let n = 0;
     for (const r of this.content.requests || []) {
-      if (r.kind === 'visitor' || this.isDelivered(r.id)) continue;
+      if (r.kind === 'visitor' || r.kind === 'shop' || this.isDelivered(r.id)) continue;
       if (!all && this.requestStatus(r, now).locks.length) continue;
       this.state.offerings.delivered[r.id] = now;
       this.grantReward(r.reward, now);
@@ -2744,6 +2773,15 @@ export class Content {
     this.requests = bundle.requests || [];
     this.cosmetics = bundle.cosmetics || [];
     this.eggs = bundle.eggs || [];
+    this.supplies = bundle.supplies || [];
+    // Soil packs (supplies.json) are Bag items you spread on a tile.
+    for (const sp of this.supplies) {
+      if (this.items[sp.id]) continue;
+      const it = { id: sp.id, category: 'supply', name: sp.name, rarity: 'common', sprite: sp.sprite, inGuide: false, guideText: sp.text,
+        use: { type: 'soilBoost', verb: 'Spread', stats: { ...sp.stats }, hours: sp.hours, permanent: sp.hours == null, radius: 0 } };
+      this.itemList.push(it);
+      this.items[sp.id] = it;
+    }
     // Eggs are Bag items (category "egg"), built from eggs.json.
     for (const e of this.eggs) {
       if (this.items[e.id]) continue;

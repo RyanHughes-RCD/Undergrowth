@@ -180,6 +180,26 @@ def eggs():
     sprite("egg.nest", WOOD + ["#3a2616"], nest)
 
 
+SUPPLY = {   # stat: (band colour, sparkle)
+    "damp": ("#4a7dff", "#a8c8ff"), "glow": ("#4fe3f0", "#e8ffff"), "bloom": ("#ff79b8", "#ffd0e8"),
+    "verdure": ("#4fcf4f", "#c8f8a8"), "stone": ("#a0a0b0", "#e0e0e8"), "depth": ("#9a5ad8", "#d8b8ff"),
+}
+
+
+def supplies():
+    """Soil packs from the Old Log's shop: a small burlap sack with the stat's colour on its tie."""
+    for stat, (band, light) in SUPPLY.items():
+        def sack(c, f, band=band):
+            c.ellipse(8, 10.5, 5, 4.4, 3)
+            c.ellipse(6.5, 9, 1.8, 2, 4)
+            c.rect(6, 4, 10, 6, 3)
+            c.rect(5, 6, 11, 6, 5)                 # the tie, in the stat's colour
+            c.set(7, 3, 6); c.set(9, 2, 6); c.set(8, 3, 5)
+            for (x, y) in ((6, 12), (10, 11), (9, 13)):
+                c.set(x, y, 2)
+        sprite(f"supply.{stat}", ["#6a4a2a", "#a07848", "#c8a070", band, light], sack, tags=("supply",))
+
+
 def board_icon():
     def board(c, f):
         c.rect(1, 2, 10, 8, 3)
@@ -193,5 +213,6 @@ def board_icon():
 if __name__ == "__main__":
     decor()
     eggs()
+    supplies()
     board_icon()
     print("wrote Offerings sprites")

@@ -2,6 +2,8 @@
 import { CORE_STATS, RARITIES, RARITY_NAMES, rarityIndex, intensityOf, requirementOf, decorVariant, itemHint } from './core.js';
 import { paintWaterTile } from './render.js';
 
+const g0 = (ui) => ui.game;
+
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -28,7 +30,7 @@ export function duration(seconds) {
   return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
 }
 
-const CATEGORY_TITLES = { egg: 'Eggs', seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
+const CATEGORY_TITLES = { egg: 'Eggs', supply: 'Soil packs', seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
 const LANDMARK_TAB = 'landmarks';
 const TERRAIN_TAB = 'terrain';
 const FAMILY_TABS = [['fungling', 'Funglings'], ['sproutling', 'Sproutlings'], ['geodeCritter', 'Geode Critters'], ['wanderer', 'Wanderers']];
@@ -229,7 +231,10 @@ export class UI {
     if (use.type !== 'soilBoost' || !use.stats) return use.text;
     const all = Object.keys(use.stats).length === CORE_STATS.length;
     const amount = all ? ['every stat ', this.miniMeter('stone', Object.values(use.stats)[0])] : this.joinNodes(Object.entries(use.stats).map(([k, v]) => this.amountText(k, v)), ' and ');
-    return [`${use.verb}: adds `, amount, ` to a tile ${use.permanent ? 'for good' : use.hours ? `for ${use.hours}h` : ''}`.trimEnd() + '.'];
+    const g = this.game;
+    const r = use.verb === 'Spread' && g ? (use.radius || 0) + g.upgradeTier('wideSpread') * ((g.upgradeDef('wideSpread') || {}).radiusPerTier ?? 1) : 0;
+    const where = r ? `a tile and the ${(2 * r + 1) ** 2 - 1} around it` : 'a tile';
+    return [`${use.verb}: adds `, amount, ` to ${where} ${use.permanent ? 'for good' : use.hours ? `for ${use.hours}h` : ''}`.trimEnd() + '.'];
   }
 
   /** Developer-only: a raw stat value (with its intensity label). */
@@ -419,7 +424,7 @@ export class UI {
         h('button', { class: 'btn green small', onclick: () => this.app.beginDecor(def.id) }, 'Place'))));
     }
     if (!owned.length) return [...head, h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms, plants and geodes in the forest to collect them.')];
-    const order = ['egg', 'seed', 'geode', 'material', 'gem', 'plant', 'mushroom'];
+    const order = ['egg', 'seed', 'supply', 'geode', 'material', 'gem', 'plant', 'mushroom'];
     const cats = [...new Set(owned.map((e) => e.def.category))].sort((a, b) =>
       ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
     return [...head, ...cats.map((cat) => [
@@ -439,7 +444,7 @@ export class UI {
           def.onCrack ? h('div', { class: 'crack-btns' },
             h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack'),
             n > 1 ? h('button', { class: 'btn orange small', title: `Crack ${Math.min(n, this.batchMax)} at once`, onclick: () => { this.sheet = null; this.close(); this.openBatchCrack(def.id, Math.min(n, this.batchMax)); } }, `×${Math.min(n, this.batchMax)}`) : null) : null,
-          def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : 'Crush') : 'Use') : null,
+          def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : def.use.verb === 'Spread' ? 'Spread' : 'Crush') : 'Use') : null,
           compostOn && g.compostValue(def.id) ? h('button', { class: 'btn grey small', title: `Compost one for ${g.compostValue(def.id)}`, onclick: () => this.app.compostItem(def.id) }, `+${g.compostValue(def.id)}`) : null)),
     ])];
   }
@@ -464,7 +469,8 @@ export class UI {
     const g = this.game;
     if (r.type === 'cosmetic') return [this.sprites.element(g.decorDef(r.id)?.sprite || 'ui.icon.board', null, 2), ` ${g.decorDef(r.id)?.name || r.id}`];
     if (r.type === 'compost') return `${r.count} compost`;
-    if (r.type === 'egg') { const d = this.content.items[r.id]; return d ? [this.sprites.element(d.sprite, null, 2), ` ${d.name}`] : r.id; }
+    if (r.type === 'egg' || r.type === 'item') { const d = this.content.items[r.id]; return d ? [this.sprites.element(d.sprite, null, 2), ` ${d.name}${(r.count || 1) > 1 ? ' ×' + r.count : ''}`] : r.id; }
+    if (r.type === 'upgrade') { const u = g.upgradeDef(r.id) || {}; return [u.sprite ? this.sprites.element(u.sprite, null, 2) : '', ` ${u.text || u.name || r.id}`]; }
     const u = { trowel: "The gardener's trowel: move creatures without losing influence", slot: 'Another creature slot', nest: 'Another nest', expansion: 'The treeline steps back' };
     return u[r.id] || r.id;
   }
@@ -480,9 +486,43 @@ export class UI {
         h('button', { class: 'btn ' + (st.ready ? 'green' : 'grey'), disabled: !st.ready, onclick: () => a.deliverRequest(r.id) }, 'Deliver')));
   }
 
+  /** A shop listing or upgrade tier: what you give (have/need) and what you get, in one compact card. */
+  shopCard(st, label = 'Trade') {
+    const r = st.req, a = this.app;
+    return h('div', { class: 'card offer shop' + (st.ready ? ' ready' : '') + (st.locks.length ? ' locked' : '') },
+      h('div', { class: 'row space' }, h('b', {}, r.name), h('span', { class: 'sub reward' }, this.rewardText(r.reward))),
+      st.locks.length ? h('p', { class: 'sub lock' }, ic('lock', 1), ' Opens with ', st.locks.map((l) => (l.type === 'guide' ? `${l.need} Field Guide entries (${l.have} so far)` : l.type === 'request' ? `“${l.name}” first` : `forest day ${l.need}`)).join(', '), '.')
+        : h('div', { class: 'price' }, st.items.map((x) => {
+          const d = this.content.items[x.item], known = g0(this).discovered.has('item:' + x.item);
+          return h('span', { class: 'price-item' + (x.owned >= x.count ? ' met' : ''), title: known && d ? d.name : (d ? itemHint(d, this.content.story) : x.item) },
+            d ? this.sprites.element(d.sprite, known ? null : { silhouette: [40, 52, 36] }, 2) : '', h('b', {}, `${Math.min(x.owned, x.count)}/${x.count}`));
+        }), h('span', { class: 'grow' }),
+        h('button', { class: 'btn small ' + (st.ready ? 'green' : 'grey'), disabled: !st.ready, onclick: () => a.deliverRequest(r.id) }, label)));
+  }
+
+  /** Upgrade lines: each upgrade's next tier (or that it's maxed), with the tier reached so far. */
+  upgradeSection(board) {
+    const g = this.game;
+    const ups = board.filter((s) => s.req.kind === 'upgrade');
+    const lines = [...new Set(ups.map((s) => s.req.reward.id))];
+    if (!lines.length) return [];
+    return [h('div', { class: 'section' }, 'Upgrades'), ...lines.map((id) => {
+      const u = g.upgradeDef(id) || { name: id };
+      const tier = g.upgradeTier(id);
+      const next = ups.find((s) => s.req.reward.id === id && !s.done);
+      const roman = ['', 'I', 'II', 'III', 'IV', 'V'];
+      if (!next) return h('div', { class: 'card offer shop locked' }, h('div', { class: 'row space' }, h('b', {}, `${u.name} ${roman[tier] || tier}`), h('span', { class: 'sub' }, 'Complete')));
+      const card = this.shopCard(next, 'Upgrade');
+      if (tier) card.prepend(h('div', { class: 'sub' }, `You have ${u.name} ${roman[tier] || tier}.`));
+      return card;
+    })];
+  }
+
   offeringsBody() {
     const g = this.game, now = g.now();
-    const board = g.requestBoard(now);
+    const all = g.requestBoard(now);
+    const shopList = all.filter((s) => s.req.kind === 'shop');
+    const board = all.filter((s) => s.req.kind !== 'shop' && s.req.kind !== 'upgrade');
     const open = board.filter((s) => !s.done && !s.locks.length);
     const locked = board.filter((s) => !s.done && s.locks.length);
     const done = board.filter((s) => s.done);
@@ -493,6 +533,10 @@ export class UI {
       h('div', { class: 'row space compost-row' }, compostOn ? h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`) : h('span'),
         h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Old Log', sprite: 'landmark.old-log', variant: null, text: this.content.story?.guide?.landmarks?.['landmark.old-log'] }) }, 'About the log')),
       ...this.visitorSection(),
+      shopList.length ? [h('div', { class: 'section' }, 'Shop'), h('p', { class: 'sub' }, 'Trade your finds. These can be bought again whenever you like.'),
+        ...shopList.filter((s) => !s.locks.length).map((st) => this.shopCard(st)),
+        ...shopList.filter((s) => s.locks.length).map((st) => this.shopCard(st))] : null,
+      ...this.upgradeSection(all),
       h('div', { class: 'section' }, 'Requests'),
       open.length ? open.map((st) => this.offerCard(st)) : h('p', { class: 'sub' }, 'Nothing open right now. New requests open as your Field Guide grows.'),
       locked.length ? [h('div', { class: 'section' }, 'Coming later'), ...locked.map((st) => this.offerCard(st))] : null,

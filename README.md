@@ -379,6 +379,28 @@ Mushrooms, plants and geodes now pay for things. Tap the **Old Log** to open its
   - `tools/gen_offerings_sprites.py` draws the placeholder decor and the board icon.
 - **Save** (older saves get empty defaults): `offerings.delivered`, `unlocks` (slots, nests, expansions, trowel), `decor` (owned, placed with colour) `compost` and `nests`.
 
+### The Old Log shop (web)
+
+The board's **Shop** and **Upgrades** sections sell things for bundles of specific items (as with requests), paid from what you've collected, gems included.
+
+- **Shop** (kind `shop`): listings you can buy again and again (`offerings.bought` counts them):
+  - Six **soil packs**: Dew moss, Glow dust, Petal mulch, Leaf mould, River grit and Loose loam. Each adds 14 of its stat to a tile for 24h (`Resources/Content/supplies.json`, from the spreadsheet's **Supplies** sheet), spread from the Bag.
+  - Two Mystery Seeds.
+  - Common eggs of each family (from 3 Field Guide entries).
+
+  The soil packs replace gems as the way to give a tile a trait. Cheap ones pair commons with a matching common gem: quartz Stone, flint Depth, mica Glow, agate Bloom, pyrite Damp.
+- **Upgrades** (kind `upgrade`, reward `upgrade`): one tier per listing, bought once, with tiers chained in the spreadsheet ("Needs request done"). The board shows each line's next tier and the tier you have. Defined in `tuning.upgrades`:
+  - **Quick Roots** I–III: seeds grow 25% faster per tier.
+  - **Warm Nest** I–III: eggs hatch 25% faster per tier.
+  - **Keen Eye: mushrooms / plants / geodes** I–III: that category's uncommon and rarer finds weigh ×(1 + 0.35 × tier × rarity step). For plants this is the flowers seeds grow into.
+  - **Wide Spread** (late: 35 Field Guide entries, day 10): soil packs reach the 3×3 around their tile (saved as the boost's `radius`).
+- In simulation:
+  - Quick Roots I: seeds 130 → 104 minutes on average.
+  - Warm Nest II: a common egg hatches in 4h instead of 6.
+  - Keen Eye: geodes III: rarer geodes 70% → 88% of geodes on Stone + Depth ground.
+  - Keen Eye: plants III: uncommon+ flowers from seeds 26% → 35% on Bloom ground.
+- **Spreadsheet:** `Requests` kinds `shop` and `upgrade`, reward types `item` (any item, egg or supply id, with a count) and `upgrade` (an id from `tuning.upgrades`). The new **Supplies** sheet sets id, name, sprite, stats ("Damp 14") and hours. The importer refreshes every row's Check formula on import.
+
 ### Visitors (web)
 
 - **Wanderers stop by the Old Log to trade items for eggs** (requests of kind `visitor`).

@@ -206,6 +206,15 @@
     "sameTierBoost": 8,
     "tierBelowBoost": 2
   },
+  "upgrades": {
+    "_about": "Bought at the Old Log (reward type 'upgrade', one tier per listing, chained in the Offerings spreadsheet). seedSpeed/hatchSpeed: timers run perTier faster per tier. keen*: that category's uncommon-and-rarer spawns (and, for plants, the flowers seeds grow into) weigh x(1 + perTierPerRarity x tier x rarity step). wideSpread: soil packs reach radiusPerTier more tiles around where they're used.",
+    "seedSpeed": {"name": "Quick Roots", "text": "Seeds grow faster", "perTier": 0.25, "maxTier": 3, "sprite": "seed.stage.sprout"},
+    "hatchSpeed": {"name": "Warm Nest", "text": "Eggs hatch faster", "perTier": 0.25, "maxTier": 3, "sprite": "egg.nest"},
+    "keenMushroom": {"name": "Keen Eye: mushrooms", "text": "Rarer mushrooms", "category": "mushroom", "perTierPerRarity": 0.35, "maxTier": 3, "sprite": "item.mushroom.glowcap"},
+    "keenPlant": {"name": "Keen Eye: plants", "text": "Rarer plants and flowers", "category": "plant", "perTierPerRarity": 0.35, "maxTier": 3, "sprite": "item.plant.foxglove"},
+    "keenGeode": {"name": "Keen Eye: geodes", "text": "Rarer geodes", "category": "geode", "perTierPerRarity": 0.35, "maxTier": 3, "sprite": "item.geode.mossy-geode"},
+    "wideSpread": {"name": "Wide Spread", "text": "Soil packs reach the tiles around them too", "radiusPerTier": 1, "maxTier": 1, "sprite": "supply.verdure"}
+  },
   "visitors": {
     "_about": "Wanderers at the Old Log asking for items, paying in eggs (requests of kind 'visitor'). perDay of them each local day, chosen from the ones whose gating is met; a visitor can be swapped for another for rerollCost compost, up to maxRerolls a day.",
     "perDay": 2,
