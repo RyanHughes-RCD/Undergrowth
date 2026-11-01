@@ -252,6 +252,13 @@ export class ForestView {
       if (!def) continue;
       objs.push({ sprite: def.sprite, ...at(l.tile), tile: l.tile, kind: 'landmark', key: l.id, phase: 0 });
     }
+    // Nests: the nest, with its egg on top (it wobbles once it's ready to hatch).
+    for (const n of s.nests || []) {
+      const egg = this.app.content.items[n.eggID];
+      const pos = at(n.tile);
+      objs.push({ sprite: 'egg.nest', ...pos, tile: n.tile, kind: 'nest', key: n.id + ':nest', phase: 0, still: true });
+      if (egg) objs.push({ sprite: egg.sprite, x: pos.x, y: pos.y - 3, tile: n.tile, kind: 'nest', key: n.id, phase: hash32(n.tile.x, n.tile.y, 9) % 1000 / 250, dig: g.nestProgress(n, now) >= 1 });
+    }
     // Decor props from the Old Log (purely visual), in their chosen colour.
     for (const d of (s.decor && s.decor.placed) || []) {
       const def = g.decorDef(d.decorID);

@@ -422,6 +422,7 @@ export class Game {
     state.decor.owned = state.decor.owned || {};
     state.decor.placed = state.decor.placed || [];
     state.compost = state.compost || 0;
+    state.nests = state.nests || [];
     this.t = content.tuning;
     this.stats = new StatEngine(this.t);
     this.rng = new RNG(state);
@@ -1714,7 +1715,135 @@ export class Game {
       }
       if (hit) this.state.pity[key] = 0;
     }
-    return hit ? this.makeCreature(hit.id, sourceItem, now) : null;
+    return hit ? this.findResult(hit, sourceItem, now) : null;
+  }
+
+  // ---- eggs (tuning.creatureFinds "egg"): finds give eggs; eggs hatch in nests from the nest tile's stats
+  get eggMode() { return (this.t.creatureFinds || 'egg') === 'egg' && (this.content.eggs || []).length > 0; }
+  get eggCfg() { return this.t.eggs || {}; }
+  eggDef(id) { return (this.content.eggs || []).find((e) => e.id === id) || null; }
+
+  /** What a find gives: the creature itself ("instant"), or an egg of its family and tier. Pending loot. */
+  findResult(def, sourceItem, now) {
+    if (!this.eggMode) return { creature: this.makeCreature(def.id, sourceItem, now) };
+    return { item: this.eggFor(def.family, def.rarity), count: 1 };
+  }
+
+  /**
+   * The egg for a foraged find. Its tier is the found species' rarity, but rare and rarer tiers are
+   * kept only with that egg's foraging weight (otherwise it's an uncommon egg); a per-family pity
+   * (tuning.pity.rareEgg) keeps the tier after a run of misses.
+   */
+  eggFor(family, rarity) {
+    const eggs = (this.content.eggs || []).filter((e) => e.family === family);
+    let tier = rarity;
+    if (rarityIndex(tier) >= rarityIndex('rare')) {
+      const egg = eggs.find((e) => e.tier === tier);
+      const key = 'rareEgg:' + family, threshold = this.t.pity.rareEgg || 0;
+      const misses = this.state.pity[key] || 0;
+      const keep = (threshold > 0 && misses + 1 >= threshold) || this.rng.chance(egg ? egg.foragingWeight ?? 1 : 1);
+      this.state.pity[key] = keep ? 0 : misses + 1;
+      if (!keep) tier = 'uncommon';
+    }
+    const pick = eggs.find((e) => e.tier === tier)
+      || eggs.filter((e) => rarityIndex(e.tier) <= rarityIndex(tier)).sort((a, b) => rarityIndex(b.tier) - rarityIndex(a.tier))[0] || eggs[0];
+    return pick ? pick.id : null;
+  }
+
+  get nestSlots() { return (this.eggCfg.baseNests ?? 1) + (this.state.unlocks.nests || 0); }
+  nestAt(t) { return this.state.nests.find((n) => sameTile(n.tile, t)) || null; }
+  nestProgress(n, now) { return Math.min(1, Math.max(0, (now - n.startedAt) / (Math.max(1, n.hatchSeconds) * 1000))); }
+
+  /** Put an egg from the Bag in a nest on an open tile. */
+  nestEgg(eggID, tile, now) {
+    const egg = this.eggDef(eggID);
+    if (!egg) throw new GameError("That isn't an egg.");
+    if (!(this.state.inventory[eggID] > 0)) throw new GameError("You don't have that.");
+    if (this.state.nests.length >= this.nestSlots) throw new GameError('Every nest is in use. Earn another nest at the Old Log.');
+    if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
+    if (!this.isFree(tile)) throw new GameError('Something is already there.');
+    this.consume(eggID);
+    const n = { id: this.rng.uuid(), eggID, tile: { ...tile }, startedAt: now, hatchSeconds: (egg.hatchHours || 6) * 3600, glimmer: false };
+    this.state.nests.push(n);
+    this.bump('nest');
+    return n;
+  }
+
+  /**
+   * Species an egg could hatch into on a tile right now, with weights: its family, at or below its
+   * tier, whose tile conditions the stats meet. Weight = the species' find chance, boosted for the
+   * egg's own tier (eggs.sameTierBoost) and the tier just below (eggs.tierBelowBoost). If nothing
+   * qualifies, the family's most common species with no conditions (so an egg never fails).
+   */
+  hatchCandidates(eggID, stats, t, startedAt = t) {
+    const egg = this.eggDef(eggID);
+    if (!egg) return [];
+    const cfg = this.eggCfg, top = rarityIndex(egg.tier);
+    const fam = this.content.creatureList.filter((d) => d.family === egg.family && !d.notYet && rarityIndex(d.rarity) <= top);
+    const out = [];
+    for (const d of fam) {
+      if (!groupMatches(d.requires || {}, stats)) continue;
+      if (d.plantedTime && (d.plantedTime === 'night') !== this.isNight(startedAt)) continue;
+      if (d.unique && this.ownsSpecies(d.id)) continue;
+      const ri = rarityIndex(d.rarity);
+      const boost = ri === top ? (cfg.sameTierBoost ?? 1) : ri === top - 1 ? (cfg.tierBelowBoost ?? 1) : 1;
+      out.push({ def: d, weight: (d.chance || 0.01) * boost });
+    }
+    if (!out.length) {
+      const plain = fam.filter((d) => !d.requires || !Object.keys(d.requires).length).sort((a, b) => (b.chance || 0) - (a.chance || 0));
+      const fb = plain[0] || fam[0];
+      if (fb) out.push({ def: fb, weight: 1, fallback: true });
+    }
+    return out;
+  }
+
+  /** Hatch odds for an egg on a tile (same maths as hatching, incl. the new-species pity). */
+  hatchPreview(eggID, tile, t, startedAt = t) {
+    let list = this.hatchCandidates(eggID, this.tileStats(tile, t), t, startedAt);
+    const egg = this.eggDef(eggID);
+    if (egg && this.newSpeciesPityDue(egg.family)) {
+      const fresh = list.filter((x) => !this.discovered.has('creature:' + x.def.id));
+      if (fresh.length) list = fresh;
+    }
+    const tot = list.reduce((a, x) => a + x.weight, 0) || 1;
+    return list.map((x) => ({ def: x.def, p: x.weight / tot, fallback: !!x.fallback })).sort((a, b) => b.p - a.p);
+  }
+
+  newSpeciesPityDue(family) {
+    const n = this.t.pity.hatchNewSpecies || 0;
+    return n > 0 && (this.state.pity['hatch:' + family] || 0) >= n;
+  }
+
+  /** Hatch a ready nest: the species comes from the nest tile's stats now. */
+  hatch(nestID, now) {
+    const i = this.state.nests.findIndex((n) => n.id === nestID);
+    if (i < 0) throw new GameError('Unknown nest.');
+    const n = this.state.nests[i];
+    if (this.nestProgress(n, now) < 1) throw new GameError("It isn't ready to hatch yet.");
+    const egg = this.eggDef(n.eggID);
+    const list = this.hatchPreview(n.eggID, n.tile, now, n.startedAt);
+    if (!list.length) throw new GameError('Nothing can hatch from that egg.');
+    const def = weightedPick(list.map((x) => [x.def, x.p]), this.rng);
+    const key = 'hatch:' + egg.family;
+    const isNewSpecies = !this.discovered.has('creature:' + def.id);
+    this.state.pity[key] = isNewSpecies ? 0 : (this.state.pity[key] || 0) + 1;
+    const creature = n.glimmer ? this.rollCreature(def.id, 'egg', now, true) : this.makeCreature(def.id, 'egg', now);
+    this.state.nests.splice(i, 1);
+    this.bump('hatch');
+    const results = this.grant([{ creature }]);
+    this.events.push({ type: 'hatched', creatureID: creature.id, tile: n.tile });
+    return results;
+  }
+
+  /** A Moonfall Shard on a nest: what hatches there is a Glimmer. */
+  shardNest(nestID) {
+    const n = this.state.nests.find((x) => x.id === nestID);
+    if (!n) throw new GameError('Unknown nest.');
+    if (n.glimmer) throw new GameError('This nest already holds a Glimmer.');
+    const shard = Object.values(this.content.items).find((i) => i.use && i.use.type === 'nextGlimmer');
+    if (!shard || !(this.state.inventory[shard.id] > 0)) throw new GameError("You don't have a Moonfall Shard.");
+    this.consume(shard.id);
+    n.glimmer = true;
   }
 
   // ---- queries
@@ -1742,10 +1871,11 @@ export class Game {
     for (const x of s.plantedSeeds) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.visitors || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of (s.decor && s.decor.placed) || []) out.add(x.tile.x + ',' + x.tile.y);
+    for (const x of s.nests || []) out.add(x.tile.x + ',' + x.tile.y);
     return out;
   }
 
-  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t); }
+  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t) && !this.nestAt(t); }
   seedProgress(seed, now) { return Math.min(1, Math.max(0, (now - seed.plantedAt) / (Math.max(1, seed.growSeconds) * 1000))); }
 
   // ---- creatures
@@ -1971,9 +2101,10 @@ export class Game {
         ? this.rollTable(def.onCollect, def.id, now, { seedDropMult: this.mult(this.effects('seedDrops', spawn.tile)) })
         : [{ item: def.id, count: 1 }];
       if (def.category === 'mushroom') {
-        const c = (spawn.forcedCreature && this.guaranteedCreature('mushroom', def.id, spawn.forcedCreature.rarity, now))
-          || this.findCreature('mushroom', def.id, spawn.tile, stats, now);
-        if (c) pending.push({ creature: c });
+        // The starter's guaranteed creature comes straight away; other finds are eggs (tuning.creatureFinds).
+        const gc = spawn.forcedCreature && this.guaranteedCreature('mushroom', def.id, spawn.forcedCreature.rarity, now);
+        const c = gc ? { creature: gc } : this.findCreature('mushroom', def.id, spawn.tile, stats, now);
+        if (c) pending.push(c);
       }
       // Verdure: plants on lush tiles drop extra seeds.
       if (def.category === 'plant') {
@@ -2101,7 +2232,7 @@ export class Game {
     this.state.plantedSeeds.splice(i, 1);
     this.bump('harvest');
     const c = this.findCreature('seed', seed.seedItemID, seed.tile, this.tileStats(seed.tile, now), now, seed.plantedAt);
-    if (c) return this.grant([{ creature: c }]);
+    if (c) return this.grant([c]);
     if (seed.plantID && this.content.items[seed.plantID]) return this.grant([{ item: seed.plantID, count: 1 }]);
     // Seeds planted before plants were chosen at planting time: fall back to the seed's loot table.
     const table = this.content.items[seed.seedItemID]?.onGrow;
@@ -2123,7 +2254,7 @@ export class Game {
     if (found && found.forcedCreature) return this.crackGuaranteed(found, now, opts.family);
     const tile = found ? found.foundTile : null;
     const c = this.findCreature('geode', itemID, tile, found ? found.foundStats : {}, now);
-    if (c) return this.grant([{ creature: c }]);
+    if (c) return this.grant([c]);
     const up = tile ? Math.max(0, ...this.effects('gemUpgrade', tile).map((e) => e.chance || 0)) : 0;
     return this.grant(this.rollTable(def.onCrack, itemID, now, { gemUpgradeChance: up }));
   }
@@ -2399,6 +2530,8 @@ export class Game {
     }
     return n;
   }
+  devGiveEggs(n = 1) { const list = this.content.eggs || []; this.grant(list.map((e) => ({ item: e.id, count: n }))); return list.length; }
+  devHatchNow(now) { for (const n of this.state.nests) n.startedAt = now - n.hatchSeconds * 1000 - 1; return this.state.nests.length; }
   devResetRequests() { this.state.offerings.delivered = {}; }
   devGrantDecor() { for (const c of this.content.cosmetics || []) this.state.decor.owned[c.id] = (this.state.decor.owned[c.id] || 0) + 1; return (this.content.cosmetics || []).length; }
 
@@ -2489,6 +2622,13 @@ export class Content {
     this.requests = bundle.requests || [];
     this.cosmetics = bundle.cosmetics || [];
     this.eggs = bundle.eggs || [];
+    // Eggs are Bag items (category "egg"), built from eggs.json.
+    for (const e of this.eggs) {
+      if (this.items[e.id]) continue;
+      const it = { id: e.id, category: 'egg', name: e.name, rarity: e.tier, sprite: e.sprite, inGuide: false, guideText: e.text, egg: { family: e.family, tier: e.tier, hatchHours: e.hatchHours } };
+      this.itemList.push(it);
+      this.items[e.id] = it;
+    }
   }
   familyName(id) { return this.creatureList.find((c) => c.family === id)?.familyName || id; }
   itemsInGroup(g) { return this.itemList.filter((i) => i.groups && i.groups.includes(g)); }

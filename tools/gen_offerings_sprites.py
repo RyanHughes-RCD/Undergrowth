@@ -143,6 +143,43 @@ def decor():
     sprite("decor.mushroom-lamp", ["#8a2a22", "#c84a3a", "#e87a6a", "#efe2c8", "#fff3a8", "#ffd84a"], mushroom_lamp, frames=2, durations=[1.2, 1.2])
 
 
+FAMILY_EGG = {   # shell, shell light, spot
+    "fungling": ("#e8dcc0", "#fff6e4", "#a0603a"),
+    "sproutling": ("#a8d890", "#e0f8c8", "#4f8a2c"),
+    "geodeCritter": ("#9a9aa6", "#d0d0dc", "#5a5066"),
+}
+TIER_ACCENT = {"common": None, "uncommon": "#5fd35a", "rare": "#5a9cff", "veryRare": "#c58cff", "legendary": "#ffc84a"}
+
+
+def eggs():
+    """One egg per family and tier: the family's shell, the tier's colour as a band (and a sparkle for rare+)."""
+    for fam, (shell, light, spot) in FAMILY_EGG.items():
+        for tier, accent in TIER_ACCENT.items():
+            pal = [shell, light, spot, accent or spot, "#ffffff"]
+
+            def egg(c, f, tier=tier, accent=accent):
+                c.ellipse(8, 9.5, 4.6, 5.6, 2)
+                c.ellipse(6.6, 7, 1.6, 2.2, 3)
+                for (x, y) in ((9, 6), (10, 11), (6, 12), (8, 9)):
+                    c.set(x, y, 4)
+                if accent:
+                    for x in range(4, 13):
+                        if c.get(x, 10) not in (0, None):
+                            c.set(x, 10, 5)
+                if tier in ("rare", "veryRare", "legendary") and f == 1:
+                    c.set(12, 3, 6); c.set(13, 4, 6); c.set(11, 4, 6); c.set(12, 5, 6)
+            frames = 2 if tier in ("rare", "veryRare", "legendary") else 1
+            sprite(f"egg.{fam}.{tier}", pal, egg, frames=frames, durations=[0.9, 0.9] if frames > 1 else None, tags=("egg",))
+
+    def nest(c, f):
+        c.ellipse(8, 12, 7, 3.2, 2)
+        c.ellipse(8, 11.4, 5.2, 2, 3)
+        for x in range(1, 16, 2):
+            c.set(x, 12 + (x % 3) - 1, 4)
+        c.ellipse(8, 11.6, 3.6, 1.2, 5)
+    sprite("egg.nest", WOOD + ["#3a2616"], nest)
+
+
 def board_icon():
     def board(c, f):
         c.rect(1, 2, 10, 8, 3)
@@ -155,5 +192,6 @@ def board_icon():
 
 if __name__ == "__main__":
     decor()
+    eggs()
     board_icon()
     print("wrote Offerings sprites")

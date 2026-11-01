@@ -365,7 +365,34 @@ Mushrooms, plants and geodes now pay for things. Tap the **Old Log** to open its
   - `python3 tools/import_offerings_table.py` writes `requests.json` and `cosmetics.json` (and `eggs.json`). Only "In game" rows are exported, and importing the unedited sheet reproduces the JSON exactly.
   - `--check` previews; `--stubs` writes placeholder sprites for new sprite ids.
   - `tools/gen_offerings_sprites.py` draws the placeholder decor and the board icon.
-- **Save** (older saves get empty defaults): `offerings.delivered`, `unlocks` (slots, nests, expansions, trowel), `decor` (owned, placed with colour) and `compost`.
+- **Save** (older saves get empty defaults): `offerings.delivered`, `unlocks` (slots, nests, expansions, trowel), `decor` (owned, placed with colour) `compost` and `nests`.
+
+### Eggs (web)
+
+- **Finds give eggs** (`tuning.creatureFinds`, `"egg"` by default; `"instant"` brings back the old behaviour for comparisons).
+  - When picking a mushroom, harvesting a seed or cracking a geode rolls a creature find (same chances, conditions and find pity as before), you get an egg of that family: Fungling, Sproutling or Geode Critter.
+  - Wanderers are unchanged. The new forest's guaranteed starter creature still comes straight away, so a new player isn't waiting hours for a first creature.
+- **Egg tier:** the found species' rarity.
+  - Rare and rarer finds keep their tier only with that egg's foraging weight (rare 0.3, very rare 0.15, legendary 0.05); otherwise you get an uncommon egg.
+  - `pity.rareEgg` (6) guarantees one keeps its tier after a run of downgrades.
+- **Eggs are Bag items** (category `egg`, ids like `egg.fungling.common`, built from `Resources/Content/eggs.json`).
+- **Nesting:**
+  - Tap **Nest** on an egg in the Bag, then tap an open tile. A card previews what it could hatch into on that ground, with rough odds (silhouettes until you've met a species); "Nest it here" confirms.
+  - Nests are limited to `eggs.baseNests` (1) plus nests earned at the Old Log.
+  - Hatch time comes from the egg's tier (common 6h up to legendary 24h) and runs on timestamps, so it carries on while the app is closed.
+  - Tap a nest to see the time left and the current odds.
+- **Hatching** picks the species at hatch time, from the nest tile's stats right then:
+  - Only the egg's family, at or below its tier, among species whose tile conditions are met (and planted-time condition, judged at nesting).
+  - Weight = the species' find chance × `eggs.sameTierBoost` (8) for the egg's own tier, or × `eggs.tierBelowBoost` (2) one tier below.
+  - If nothing qualifies, it hatches the family's most common species with no conditions, so an egg never fails.
+- **Pity:** after `pity.hatchNewSpecies` (4) hatches in a family with no new species, the next one only picks species you haven't met (among those the tile allows).
+- **Glimmers:**
+  - Still a 1% chance at hatch.
+  - A Moonfall Shard used on a nest (from its sheet) guarantees a Glimmer.
+  - Using a shard from the Bag still makes your next find a Glimmer, which with eggs means the next hatch.
+- **Offerings:** nest unlocks ("A second nest", "A third nest") and egg rewards (rare and very rare eggs of each family) are among the 20 requests. These are the reliable way to get rare eggs.
+- **Content note:** most common species have no tile conditions (Pebble Mite and Drip Grub need nothing), so common eggs vary only a little by terrain; uncommon and rarer eggs vary a lot. Adding conditions to commons in the spawn spreadsheet would make terrain matter from the first egg.
+- **Developer mode → Eggs:** one of every egg, hatch nests now, +2 nests.
 - **Developer mode → Offerings:** +50 compost, complete open or all requests, reset requests, one of every decor.
 
 ## Named terrains (web)

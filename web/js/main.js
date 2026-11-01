@@ -202,6 +202,12 @@ class App {
       }
     }
     if (lines.length) this.ui.toast(lines.join('   '), sprite);
+    // The first egg ever: explain nesting once.
+    const egg = results.find((r) => r.item && this.content.items[r.item]?.egg);
+    if (egg && !this.game.state.milestones.firstEgg) {
+      this.game.state.milestones.firstEgg = true;
+      this.ui.celebrate(this.ui.story('messages.firstEggTitle'), this.ui.story('messages.firstEgg'));
+    }
   }
 
   /**
@@ -279,6 +285,13 @@ class App {
       }
       return;
     }
+    if (ui.mode && ui.mode.type === 'nest') {
+      // First tap: preview what would hatch there. "Nest it here" confirms.
+      if (!g.isFree(tile) || !g.inClearing(tile)) { this.ui.toast(g.inClearing(tile) ? 'Something is already there.' : "That's outside the clearing."); return; }
+      ui.mode = { ...ui.mode, tile };
+      this.changed(false);
+      return;
+    }
     if (ui.mode && ui.mode.type === 'decor') {
       const id = ui.mode.decorID;
       const ok = this.attempt(() => g.placeDecor(id, tile));
@@ -323,6 +336,8 @@ class App {
       if (def) ui.open('entry', { name: def.name, sprite: def.sprite, variant: null, text: this.content.story?.guide?.landmarks?.[def.id] });
       return;
     }
+    const nest = g.nestAt(tile);
+    if (nest) { ui.selectedTile = null; ui.open('nest', nest.id); this.changed(false); return; }
     const decor = g.decorAt(tile);
     if (decor) { ui.selectedTile = null; ui.open('decor', decor.id); this.changed(false); return; }
     const p = g.creatureAt(tile);
@@ -409,6 +424,39 @@ class App {
   buyDecor(id) {
     const ok = this.attempt(() => { this.game.buyDecor(id); return true; });
     if (ok) { this.ui.toast(`${this.game.decorDef(id)?.name} is in your Bag, under Decor.`, this.game.decorDef(id)?.sprite); this.changed(); }
+  }
+
+  beginNest(eggID) { this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'nest', eggID }; this.changed(false); }
+
+  nestHere() {
+    const g = this.game, m = this.ui.mode;
+    if (!m || m.type !== 'nest' || !m.tile) return;
+    const n = this.attempt(() => g.nestEgg(m.eggID, m.tile, g.now()));
+    if (!n) return;
+    this.ui.mode = null;
+    this.ui.toast(`Nested. It hatches in about ${Math.round(n.hatchSeconds / 3600)} hours. Tap the nest to see what it could be.`, this.content.items[m.eggID]?.sprite);
+    this.changed();
+  }
+
+  hatchNest(nestID) {
+    const g = this.game;
+    const n = g.state.nests.find((x) => x.id === nestID);
+    if (!n) return;
+    const tile = n.tile;
+    const terrains = this.ui.terrainsOnTile(tile, g.tileStats(tile, g.now()));
+    const first = !g.counterValue('hatch');
+    const results = this.attempt(() => g.hatch(nestID, g.now()));
+    if (!results) return;
+    this.ui.sheet = null; this.ui.close();
+    this.view.dustAt(tile);
+    this.present(results, `an egg nested on ${terrains.length ? terrains[0].name.toLowerCase() : 'blank ground'}`);
+    if (first) this.ui.toast(this.ui.story('messages.firstHatch'));
+    this.changed();
+  }
+
+  shardNest(nestID) {
+    const ok = this.attempt(() => { this.game.shardNest(nestID); return true; });
+    if (ok) { this.ui.toast('The shard settles into the nest. A Glimmer will hatch.'); this.changed(); }
   }
 
   beginDecor(id) { this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'decor', decorID: id }; this.changed(false); }

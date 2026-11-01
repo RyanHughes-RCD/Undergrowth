@@ -28,7 +28,7 @@ export function duration(seconds) {
   return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
 }
 
-const CATEGORY_TITLES = { seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
+const CATEGORY_TITLES = { egg: 'Eggs', seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
 const LANDMARK_TAB = 'landmarks';
 const TERRAIN_TAB = 'terrain';
 const FAMILY_TABS = [['fungling', 'Funglings'], ['sproutling', 'Sproutlings'], ['geodeCritter', 'Geode Critters'], ['wanderer', 'Wanderers']];
@@ -78,6 +78,7 @@ export class UI {
 
     const bottom = h('div', { class: 'hud-bottom' });
     if (this.mode) bottom.append(this.modeBanner());
+    if (this.mode && this.mode.type === 'nest' && this.mode.tile) bottom.append(this.nestPreviewCard(this.mode.eggID, this.mode.tile, true));
     if (this.selectedTile) bottom.append(this.tileCard(this.selectedTile));
     const invCount = Object.values(g.state.inventory).reduce((a, b) => a + b, 0);
     const finds = g.state.spawns.length;
@@ -149,6 +150,8 @@ export class UI {
     if (this.mode.type === 'place') {
       const c = g.creature(this.mode.creatureID);
       text = `Tap an empty tile to place ${c ? this.app.displayName(c) : 'creature'}`;
+    } else if (this.mode.type === 'nest') {
+      text = this.mode.tile ? 'Tap another tile to compare, or nest it here' : `Tap an open tile to see what the ${this.content.items[this.mode.eggID]?.name || 'egg'} could hatch into there`;
     } else if (this.mode.type === 'decor') {
       text = `Tap an open tile to place the ${this.game.decorDef(this.mode.decorID)?.name || 'decoration'}`;
     } else if (this.mode.type === 'decorMove') {
@@ -282,6 +285,7 @@ export class UI {
       terrain: () => [(this.terrainDef(arg) || {}).name || 'Terrain', this.terrainBody(arg)],
       offerings: () => ['The Old Log', this.offeringsBody()],
       decor: () => this.decorBody(arg),
+      nest: () => this.nestBody(arg),
     }[type];
     if (!build) return;
     const [title, body] = build();
@@ -399,11 +403,12 @@ export class UI {
         h('button', { class: 'btn green small', onclick: () => this.app.beginDecor(def.id) }, 'Place'))));
     }
     if (!owned.length) return [...head, h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms, plants and geodes in the forest to collect them.')];
-    const order = ['seed', 'geode', 'material', 'gem', 'plant', 'mushroom'];
+    const order = ['egg', 'seed', 'geode', 'material', 'gem', 'plant', 'mushroom'];
     const cats = [...new Set(owned.map((e) => e.def.category))].sort((a, b) =>
       ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
     return [...head, ...cats.map((cat) => [
       h('div', { class: 'section' }, catTitle(cat)),
+      cat === 'egg' ? h('p', { class: 'sub' }, `Nests in use: ${g.state.nests.length} of ${g.nestSlots}. What hatches depends on the ground you nest an egg on.`) : null,
       ...owned.filter((e) => e.def.category === cat)
         .sort((a, b) => rarityIndex(b.def.rarity) - rarityIndex(a.def.rarity) || a.def.name.localeCompare(b.def.name))
         .map(({ def, n }) => h('div', { class: 'list-row' },
@@ -413,6 +418,7 @@ export class UI {
             def.use ? h('div', { class: 'sub' }, this.useText(def.use)) : null),
           h('b', {}, `×${n}`),
           def.onGrow ? h('button', { class: 'btn green small', onclick: () => this.app.beginPlanting(def.id) }, 'Plant') : null,
+          def.egg ? h('button', { class: 'btn green small', disabled: g.state.nests.length >= g.nestSlots, onclick: () => this.app.beginNest(def.id) }, 'Nest') : null,
           def.onCrack ? h('div', { class: 'crack-btns' },
             h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack'),
             n > 1 ? h('button', { class: 'btn orange small', title: `Crack ${Math.min(n, this.batchMax)} at once`, onclick: () => { this.sheet = null; this.close(); this.openBatchCrack(def.id, Math.min(n, this.batchMax)); } }, `×${Math.min(n, this.batchMax)}`) : null) : null,
@@ -496,6 +502,53 @@ export class UI {
         h('button', { class: 'btn green', onclick: () => a.beginDecorMove(d.id) }, 'Move'),
         cols.length > 1 ? h('button', { class: 'btn', disabled: g.state.compost < cost, onclick: () => a.recolorDecor(d.id) }, `Recolour (${cost} compost)`) : null,
         h('button', { class: 'btn grey', onclick: () => a.removeDecor(d.id) }, 'Put away')),
+    ]];
+  }
+
+  /** Silhouettes (names once found) of what an egg could hatch into on a tile, with rough odds. */
+  hatchOdds(eggID, tile, startedAt = null) {
+    const g = this.game, now = g.now();
+    const list = g.hatchPreview(eggID, tile, now, startedAt ?? now);
+    const pct = (p) => (p >= 0.995 ? '100%' : p < 0.01 ? '<1%' : `${Math.round(p * 100)}%`);
+    return h('div', { class: 'hatch-odds' }, list.slice(0, 8).map((x) => {
+      const known = g.discovered.has('creature:' + x.def.id);
+      const art = this.app.artForType(x.def, false);
+      return h('div', { class: 'odds-cell', title: known ? x.def.name : 'Not met yet' },
+        this.sprites.element(art.sprite, known ? art.variant : { silhouette: [40, 52, 36] }, 2),
+        h('span', { class: 'sub' }, known ? x.def.name : '???'), h('b', {}, pct(x.p)));
+    }), list.length > 8 ? h('span', { class: 'sub' }, `+${list.length - 8} more`) : null);
+  }
+
+  nestPreviewCard(eggID, tile, confirm) {
+    const g = this.game, now = g.now();
+    const stats = g.tileStats(tile, now);
+    const terrains = this.terrainsOnTile(tile, stats);
+    return h('div', { class: 'card' },
+      h('div', { class: 'row space' }, h('b', {}, `Nest here: ${terrains.length ? terrains.map((t) => t.name).join(' · ') : 'blank ground'}`)),
+      h('p', { class: 'sub' }, 'If it hatched on this ground now:'),
+      this.hatchOdds(eggID, tile),
+      confirm ? h('div', { class: 'row end gap' }, h('button', { class: 'btn green', onclick: () => this.app.nestHere() }, 'Nest it here')) : null);
+  }
+
+  nestBody(nestID) {
+    const g = this.game, now = g.now(), a = this.app;
+    const n = g.state.nests.find((x) => x.id === nestID);
+    if (!n) return ['Nest', h('p', { class: 'sub' }, 'Empty.')];
+    const egg = this.content.items[n.eggID];
+    const p = g.nestProgress(n, now);
+    const shard = Object.values(this.content.items).find((i) => i.use && i.use.type === 'nextGlimmer');
+    const hasShard = shard && g.state.inventory[shard.id] > 0;
+    return [egg ? egg.name : 'Nest', [
+      h('div', { class: 'hero' }, this.sprites.element(egg ? egg.sprite : 'egg.nest', null, 6, '', true)),
+      h('div', { class: 'progress' }, h('span', { style: `width:${p * 100}%` })),
+      h('p', { class: 'sub center' }, p >= 1 ? 'Ready to hatch!' : `Hatches in about ${duration((1 - p) * n.hatchSeconds)}.`),
+      n.glimmer ? h('p', { class: 'sub center glimmer' }, ic('glimmer', 1), ' A Moonfall Shard rests in this nest: it will hatch a Glimmer.') : null,
+      h('div', { class: 'section' }, p >= 1 ? 'It could hatch into' : 'If it hatched now, it could be'),
+      h('p', { class: 'sub' }, 'The species comes from this ground when it hatches, so the creatures around it still matter.'),
+      this.hatchOdds(n.eggID, n.tile, n.startedAt),
+      h('div', { class: 'row gap wrap center' },
+        p >= 1 ? h('button', { class: 'btn green', onclick: () => a.hatchNest(n.id) }, 'Hatch') : null,
+        !n.glimmer && hasShard ? h('button', { class: 'btn', onclick: () => a.shardNest(n.id) }, ic('glimmer', 1), ' Use a Moonfall Shard') : null),
     ]];
   }
 
@@ -999,6 +1052,11 @@ export class UI {
         b('Complete all requests', () => a.dev((gm, t) => gm.devCompleteRequests(t, true), (n) => `${n} request(s) completed.`)),
         b('Reset requests', () => a.dev((gm) => gm.devResetRequests(), 'Requests reset (rewards kept).')),
         b('One of every decor', () => a.dev((gm) => gm.devGrantDecor(), (n) => `+${n} decor.`))),
+      h('div', { class: 'section' }, 'Eggs'),
+      h('div', { class: 'row gap wrap' },
+        b('One of every egg', () => a.dev((gm) => gm.devGiveEggs(1), (n) => `+${n} eggs.`)),
+        b('Hatch nests now', () => a.dev((gm, t) => gm.devHatchNow(t), (n) => `${n} nest(s) ready to hatch.`)),
+        b('+2 nests', () => a.dev((gm) => { gm.state.unlocks.nests += 2; }, 'Two more nests.'))),
 
       h('div', { class: 'section' }, 'Give'),
       h('div', { class: 'row gap wrap' }, give,
