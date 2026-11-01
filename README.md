@@ -293,7 +293,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
 - **Where it shows:**
   - The tile card names the tile's terrain and shows each active stat as a nine-pip meter (filled vs hollow, not colour alone), with no words or numbers.
   - Creature traits show what the creature gives at full strength on its own tile.
-  - Field Guide requirements read "Damp at mid Low or more": the band, plus where in it the true threshold sits, so 20 shows as "mid Moderate", not "Moderate".
+  - Everywhere else intensity is a small inline meter too: Field Guide requirements, terrain pages ("needs" and "has" for your selected tile), spawn bonuses, creature traits, and gem uses. A half-filled pip means a requirement sits partway through that level (20 = two full pips and a half), so the true threshold is never overstated. Amounts below the floor read "a touch of Stone".
   - Gem uses read "adds Stone (Low) to a tile for 24h".
 - **Raw values are developer-only:** the spawn inspector (raw value plus label), stat overlay and spawn heatmap live in developer mode, and switch off when you leave it.
 - **Field Guide → Terrain:** Forest floor, Stony ground, Dug earth, Damp ground, Glowing ground, Flowering ground, Lush grass, Shallow pool, Mossy bank, Wild meadow, Treeline (`Resources/Content/terrain.json`).

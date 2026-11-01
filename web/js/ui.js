@@ -165,8 +165,8 @@ export class UI {
       active.length ? h('div', { class: 'stat-grid' }, active.map((k) => this.intensityRow(k, stats[k])))
         : h('p', { class: 'sub' }, 'No intensity here yet. Creatures nearby will change this ground.'),
       ...g.activeBoosts(now).filter((b) => b.tile.x === tile.x && b.tile.y === tile.y).map((b) =>
-        h('div', { class: 'sub boost' }, ic('gem', 1), Object.entries(b.stats).map(([k, v]) => this.amountText(k, v)).join(', ') +
-          (b.expiresAt ? ` · ${duration((b.expiresAt - now) / 1000)} left` : ' · permanent'))));
+        h('div', { class: 'sub boost' }, ic('gem', 1), this.joinNodes(Object.entries(b.stats).map(([k, v]) => this.amountText(k, v)), ', '),
+          b.expiresAt ? ` · ${duration((b.expiresAt - now) / 1000)} left` : ' · permanent')));
   }
 
   /** A stat's intensity as a meter: name and pips (filled = reached, hollow = not; not colour alone). */
@@ -179,25 +179,42 @@ export class UI {
         h('i', { class: 'pip' + (i < it.level ? ' on' : ''), style: i < it.level ? `background:${STAT_COLORS[stat] || '#fff'}` : '' }))));
   }
 
-  /** An amount a creature or gem adds, as intensity ("Stone (Low)"; below the floor: "a touch of Stone"). */
+  /**
+   * A small inline meter. For a level (value) the reached pips are filled. For a requirement
+   * (opts.min), pips below its band are filled and its own band's pip is half-filled when the true
+   * threshold sits partway through that band, so the meter never overstates or understates it.
+   */
+  miniMeter(stat, value, opts = {}) {
+    const T = this.content.tuning;
+    const n = ((T.intensity || {}).bands || []).length || 9;
+    let full, part = false, label;
+    if (opts.min != null) { const r = requirementOf(opts.min, T); full = r.exact ? r.level : r.level - 1; part = !r.exact; label = `${cap(stat)} at least ${r.text}`; }
+    else { const it = intensityOf(value, T); full = it.level; label = `${cap(stat)}: ${it.label}`; }
+    const col = STAT_COLORS[stat] || '#fff';
+    return h('span', { class: 'pips mini', title: label, 'aria-label': label }, Array.from({ length: n }, (_, i) =>
+      h('i', { class: 'pip' + (i < full ? ' on' : part && i === full ? ' part' : ''), style: i < full ? `background:${col}` : part && i === full ? `--c:${col}` : '' })));
+  }
+
+  /** What a creature or gem adds: "Stone ▮▯▯…" (below the influence floor: "a touch of Stone"). */
   amountText(stat, value) {
-    const it = intensityOf(value, this.content.tuning);
-    return it.level ? `${cap(stat)} (${it.label})` : `a touch of ${cap(stat)}`;
+    return intensityOf(value, this.content.tuning).level ? [cap(stat), ' ', this.miniMeter(stat, value)] : `a touch of ${cap(stat)}`;
   }
 
-  /** "Damp at Low or more", "Stone at mid Moderate or more". */
+  /** A requirement as name + meter ("Damp ▮▮◧▯…" means at least that much). */
   requirementText(stat, min) {
-    return `${cap(stat)} at ${requirementOf(min, this.content.tuning).text} or more`;
+    return h('span', { class: 'req' }, cap(stat), ' ', this.miniMeter(stat, 0, { min }));
   }
 
-  /** Gem/material use, worded with intensities instead of raw amounts. */
+  /** Join nodes with a separator (for inline lists of meters). */
+  joinNodes(list, sep) { return list.flatMap((x, i) => (i ? [sep, x] : [x])); }
+
+  /** Gem/material use, with meters instead of raw amounts. */
   useText(use) {
     if (!use) return null;
     if (use.type !== 'soilBoost' || !use.stats) return use.text;
-    const what = Object.entries(use.stats).map(([k, v]) => this.amountText(k, v));
     const all = Object.keys(use.stats).length === CORE_STATS.length;
-    const amount = all ? `every stat (${intensityOf(Object.values(use.stats)[0], this.content.tuning).label})` : what.join(' and ');
-    return `${use.verb}: adds ${amount} to a tile ${use.permanent ? 'for good' : use.hours ? `for ${use.hours}h` : ''}`.trim() + '.';
+    const amount = all ? ['every stat ', this.miniMeter('stone', Object.values(use.stats)[0])] : this.joinNodes(Object.entries(use.stats).map(([k, v]) => this.amountText(k, v)), ' and ');
+    return [`${use.verb}: adds `, amount, ` to a tile ${use.permanent ? 'for good' : use.hours ? `for ${use.hours}h` : ''}`.trimEnd() + '.'];
   }
 
   /** Developer-only: a raw stat value (with its intensity label). */
@@ -268,7 +285,7 @@ export class UI {
 
   traitSummary(c) {
     const parts = Object.entries(c.contributions).sort((a, b) => b[1] - a[1]).map(([k, v]) => this.amountText(k, v));
-    return [...parts, `Radius ${c.radius.toFixed(1)}`].join(' · ');
+    return this.joinNodes([...parts, `Radius ${c.radius.toFixed(1)}`], ' · ');
   }
 
   creatureRow(c) {
@@ -394,7 +411,7 @@ export class UI {
           key: `creature:${def.id}${glimmer ? ':glimmer' : ''}`, name: glimmer ? `Glimmer ${def.name}` : def.name, ...art,
           rarity: glimmer ? null : def.rarity, glimmer, howFound: def.howFound, special: def.special,
           text: def.requires && Object.keys(def.requires).length
-            ? 'Needs a tile with ' + Object.entries(def.requires).map(([k, v]) => this.requirementText(k, v.min)).join(', ') + '.' : null,
+            ? ['Needs a tile with ', this.joinNodes(Object.entries(def.requires).map(([k, v]) => this.requirementText(k, v.min)), ', ')] : null,
         };
       }));
     }
@@ -402,8 +419,8 @@ export class UI {
       .map((i, idx) => ({ i, idx })).sort((a, b) => rarityIndex(a.i.rarity) - rarityIndex(b.i.rarity) || a.idx - b.idx)
       .map(({ i }) => ({
         key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: null, rarity: i.rarity, text: i.guideText,
-        howFound: i.howFound || (i.spawn ? 'Grows wild' + (i.spawn.requires && Object.keys(i.spawn.requires).length
-          ? ' where ' + Object.entries(i.spawn.requires).map(([k, v]) => this.requirementText(k, v.min)).join(', ') : ' anywhere') + '.' : null),
+        howFound: i.howFound || (i.spawn ? ['Grows wild', (i.spawn.requires && Object.keys(i.spawn.requires).length
+          ? [' where ', this.joinNodes(Object.entries(i.spawn.requires).map(([k, v]) => this.requirementText(k, v.min)), ', ')] : ' anywhere.')] : null),
         special: i.use ? this.useText(i.use) : null,
         teaser: content.story?.guide?.teasers?.[i.id] || null,
       }));
@@ -543,12 +560,12 @@ export class UI {
       lines.spawns.push('Mushrooms, plants and geodes are equally likely to be the kind that turns up.');
     } else if (def.kind === 'stat') {
       const k = def.stat;
-      lines.appears.push(`${cap(k)} at ${band(0).label} or more (stages grow through every intensity up to ${band(((T.intensity || {}).bands || []).length - 1).label}).`);
+      lines.appears.push([this.requirementText(k, band(0).min), ' or more. It grows through every level of the meter.']);
       const needs = this.content.spawnableItems.filter((i) => i.spawn.requires && i.spawn.requires[k]);
       if (needs.length) lines.spawns.push(`Wild finds that need ${cap(k)}: ${itemList(needs)}. Each appears once its own need is met (see its Field Guide entry).`);
       for (const cat of ['mushroom', 'plant', 'geode']) {
         const lo = this.categoryMultAt(cat, k, band(0).min), mid = this.categoryMultAt(cat, k, band(3).min);
-        if (lo) lines.spawns.push(`${catName[cat]} become likelier to be the kind chosen here: about ×${lo.toFixed(1)} at ${band(0).label}, ×${mid.toFixed(1)} at ${band(3).label}, up to ×${(T.spawns.categoryScaling || {}).maxMultiplier ?? 6}.`);
+        if (lo) lines.spawns.push([`${catName[cat]} become likelier to be the kind chosen here: about ×${lo.toFixed(1)} at `, this.miniMeter(k, band(0).min), `, ×${mid.toFixed(1)} at `, this.miniMeter(k, band(3).min), `, up to ×${(T.spawns.categoryScaling || {}).maxMultiplier ?? 6}.`]);
       }
       lines.spawns.push(general);
       const tr = T.terrain || {};
@@ -562,7 +579,7 @@ export class UI {
       }
       if (k === 'damp') {
         const mg = (tr.damp || {}).mushroomGrowth || {};
-        lines.spawns.push(`Damp grows mushrooms faster: from ${requirementOf(mg.minDamp ?? 6, T).text} Damp, each tile gets extra mushroom chances, up to ×${1 + (mg.maxBonus ?? 2)} its usual rate.`);
+        lines.spawns.push(['Damp grows mushrooms faster: from ', this.requirementText('damp', mg.minDamp ?? 6), `, each tile gets extra mushroom chances, up to ×${1 + (mg.maxBonus ?? 2)} its usual rate.`]);
         lines.other.push('Water slowly seeps to drier neighbours and runs downhill; high Stone blocks it.');
       }
       if (k === 'glow') {
@@ -576,12 +593,12 @@ export class UI {
       }
       if (k === 'verdure') {
         const v = tr.verdure || {};
-        lines.other.push(`From ${requirementOf(v.hideThreshold ?? 30, T).text} Verdure, things on the surface hide in tall grass until you tap the tile.`);
+        lines.other.push(['From ', this.requirementText('verdure', v.hideThreshold ?? 30), ', things on the surface hide in tall grass until you tap the tile.']);
         lines.other.push('Seeds grow faster here, and plants picked here drop extra seeds more often.');
       }
     } else if (def.kind === 'combo') {
       const cb = g.combo(def.combo);
-      for (const [k, b] of Object.entries(cb.requires || {})) lines.appears.push(this.requirementText(k, b.min) + '.');
+      for (const [k, b] of Object.entries(cb.requires || {})) lines.appears.push([this.requirementText(k, b.min), ' or more']);
       lines.appears.push('All of these on the same tile.');
       if (def.combo === 'pool') {
         lines.spawns.push(`Only things that need Damp can spawn on water: ${itemList(this.content.spawnableItems.filter((i) => i.spawn.requires && i.spawn.requires.damp))}.`);
@@ -603,11 +620,11 @@ export class UI {
       lines.spawns.push('Nothing spawns in the treeline, and creature influence stops at its edge.');
       const e = T.expansion || {};
       const conds = (e.conditions || []).map((cd) => {
-        if (cd.type === 'tilesAboveThreshold') return `${Math.round(cd.fraction * 100)}% of the clearing has a stat at ${requirementOf(cd.threshold, T).text} or more`;
+        if (cd.type === 'tilesAboveThreshold') return [`${Math.round(cd.fraction * 100)}% of the clearing has any stat at `, this.miniMeter('any', 0, { min: cd.threshold }), ' or more'];
         if (cd.type === 'slotsUnlocked') { const d = ((T.slotUnlocks || {}).unlockDays || [])[cd.count - 1]; return d != null ? `the forest is ${d + 1} days old` : null; }
         return null;
       }).filter(Boolean);
-      lines.other.push(`The clearing pushes it back by ${e.ringTiles ?? 2} tiles on each side when ${conds.join(e.mode === 'all' ? ' and ' : ' or ')}, at most every ${e.minHoursBetween ?? 12} hours.`);
+      lines.other.push([`The clearing pushes it back by ${e.ringTiles ?? 2} tiles on each side when `, this.joinNodes(conds, e.mode === 'all' ? ' and ' : ' or '), `, at most every ${e.minHoursBetween ?? 12} hours.`]);
     }
     // Compare with the tile you have selected (required vs current), without raw values.
     let compare = null;
@@ -620,8 +637,9 @@ export class UI {
           ...Object.entries(relevant).map(([k, b]) => {
             const okNow = (st[k] || 0) >= b.min;
             return h('div', { class: 'req-row' }, h('span', { class: 'grow' }, cap(k)),
-              h('span', { class: 'sub' }, `needs ${requirementOf(b.min, T).text}`),
-              h('b', {}, `has ${intensityOf(st[k] || 0, T).label}`), h('span', { class: 'req-mark ' + (okNow ? 'ok' : 'no') }, okNow ? 'met' : 'not yet'));
+              h('span', { class: 'req-col' }, h('span', { class: 'sub' }, 'needs'), this.miniMeter(k, 0, { min: b.min })),
+              h('span', { class: 'req-col' }, h('span', { class: 'sub' }, 'has'), this.miniMeter(k, st[k] || 0)),
+              h('span', { class: 'req-mark ' + (okNow ? 'ok' : 'no') }, okNow ? 'met' : 'not yet'));
           })];
       } else compare = [h('p', { class: 'sub' }, 'Tip: select a tile in the forest, then open this page to compare it with what this terrain needs.')];
     }
