@@ -241,13 +241,28 @@ export class UI {
   }
 
   toast(text, sprite) {
+    // A message that just appeared gets its turn: later ones wait (a few at most) instead of replacing it.
+    const nowMs = performance.now();
+    if (this.toastShownAt && nowMs - this.toastShownAt < 1500 && document.getElementById('toast').classList.contains('show')) {
+      this.toastQueue = (this.toastQueue || []).slice(-2);
+      this.toastQueue.push([text, sprite]);
+      return;
+    }
+    this.showToast(text, sprite);
+  }
+
+  showToast(text, sprite) {
+    this.toastShownAt = performance.now();
     const el = document.getElementById('toast');
     el.replaceChildren(sprite ? this.sprites.element(sprite, null, 2) : '', h('span', {}, text));
     // During the tutorial the coach card owns the top of the screen, so toasts sit low.
     el.classList.toggle('low', !!(this.game && this.game.inTutorial));
     el.classList.add('show');
     clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+    this.toastTimer = setTimeout(() => {
+      const next = (this.toastQueue || []).shift();
+      if (next) this.showToast(...next); else el.classList.remove('show');
+    }, 2800);
   }
 
   // -------------------------------------------------------------- sheets
@@ -474,6 +489,7 @@ export class UI {
       h('p', { class: 'sub center' }, this.story('messages.offeringsIntro')),
       h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
         h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Old Log', sprite: 'landmark.old-log', variant: null, text: this.content.story?.guide?.landmarks?.['landmark.old-log'] }) }, 'About the log')),
+      ...this.visitorSection(),
       h('div', { class: 'section' }, 'Requests'),
       open.length ? open.map((st) => this.offerCard(st)) : h('p', { class: 'sub' }, 'Nothing open right now. New requests open as your Field Guide grows.'),
       locked.length ? [h('div', { class: 'section' }, 'Coming later'), ...locked.map((st) => this.offerCard(st))] : null,
@@ -484,6 +500,33 @@ export class UI {
           h('button', { class: 'btn small ' + (g.state.compost >= c.compost ? 'green' : 'grey'), disabled: g.state.compost < c.compost, onclick: () => this.app.buyDecor(c.id) }, `${c.compost} compost`)))] : null,
       done.length ? [h('div', { class: 'section' }, `Delivered (${done.length})`), h('p', { class: 'sub' }, done.map((st) => st.req.name).join(' · '))] : null,
     ];
+  }
+
+  /** Today's visitors: wanderers asking for items, paying in eggs. New ones each day; can be swapped for compost. */
+  visitorSection() {
+    const g = this.game, now = g.now(), a = this.app;
+    const v = g.visitorsToday(now);
+    if (!v.offers.length) return [];
+    const cfg = this.content.tuning.visitors || {};
+    const left = (cfg.maxRerolls ?? 3) - v.rerolls;
+    const cost = cfg.rerollCost ?? 0;
+    return [h('div', { class: 'section' }, 'Visitors today'), h('p', { class: 'sub' }, 'Wanderers stop by the log to trade. New visitors come each day.'),
+      ...v.offers.map((o) => {
+        const req = g.requestDef(o.requestID);
+        if (!req) return null;
+        const st = g.requestStatus(req, now);
+        const w = this.content.creatures[o.wandererID];
+        const art = w ? this.app.artForType(w, false) : null;
+        return h('div', { class: 'card offer visitor' + (st.ready ? ' ready' : '') + (st.done ? ' locked' : '') },
+          h('div', { class: 'row gap' }, art ? h('div', { class: 'thumb small' }, this.sprites.element(art.sprite, art.variant, 2, '', true)) : null,
+            h('div', { class: 'grow' }, h('b', {}, req.name), h('div', { class: 'sub' }, `${/^[aeiou]/i.test(w ? w.name : 'w') ? 'An' : 'A'} ${w ? w.name : 'wanderer'} stops by. ${req.text || ''}`))),
+          h('div', { class: 'sub reward row gap' }, 'Pays: ', this.rewardText(req.reward)),
+          st.done ? h('p', { class: 'sub' }, 'Traded. Thank you!') : [
+            ...st.items.map((x) => this.offerItemRow(x)),
+            h('div', { class: 'row end gap' },
+              h('button', { class: 'btn grey small', disabled: left <= 0 || g.state.compost < cost, title: `${left} left today`, onclick: () => a.rerollVisitor(req.id) }, `Someone else (${cost} compost)`),
+              h('button', { class: 'btn ' + (st.ready ? 'green' : 'grey'), disabled: !st.ready, onclick: () => a.deliverRequest(req.id) }, 'Trade'))]);
+      })];
   }
 
   /** A placed decoration: move it, recolour it, or put it back in the Bag. */
@@ -1051,6 +1094,7 @@ export class UI {
         b('Complete open requests', () => a.dev((gm, t) => gm.devCompleteRequests(t), (n) => `${n} request(s) completed.`)),
         b('Complete all requests', () => a.dev((gm, t) => gm.devCompleteRequests(t, true), (n) => `${n} request(s) completed.`)),
         b('Reset requests', () => a.dev((gm) => gm.devResetRequests(), 'Requests reset (rewards kept).')),
+        b('New visitors', () => a.dev((gm, t) => gm.devNewVisitors(t), (n) => `${n} new visitor(s).`)),
         b('One of every decor', () => a.dev((gm) => gm.devGrantDecor(), (n) => `+${n} decor.`))),
       h('div', { class: 'section' }, 'Eggs'),
       h('div', { class: 'row gap wrap' },

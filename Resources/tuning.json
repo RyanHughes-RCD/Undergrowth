@@ -100,8 +100,7 @@
     "geodeCritter": 20,
     "rareGem": 10,
     "rareEgg": 6,
-    "hatchNewSpecies": 4,
-    "_about": "Per-family find pity (misses before a guaranteed find), rare gem pity, rareEgg (rare+ foraged eggs downgraded in a row before one keeps its tier), hatchNewSpecies (hatches in a family with no new species before the next favours an undiscovered one the tile allows)."
+    "hatchNewSpecies": 4
   },
   "visuals": {
     "maxDecorationsPerTile": 3,
@@ -197,10 +196,16 @@
   },
   "creatureFinds": "egg",
   "eggs": {
-    "_about": "creatureFinds 'egg': creature finds give eggs (Resources/Content/eggs.json); 'instant' gives the creature as before. Eggs hatch in nests (baseNests + Old Log nest unlocks) into a species of their family at or below their tier, chosen from the nest tile's stats at hatch time, weighted by find chance x sameTierBoost (the egg's tier) or tierBelowBoost (one below). The starter's guaranteed creature still comes straight away.",
+    "_about": "creatureFinds 'egg': creature finds give eggs (Resources/Content/eggs.json); 'instant' gives the creature as before. Eggs hatch in nests (baseNests + Old Log nest unlocks) into a species of their family at or below their tier, chosen from the nest tile's stats at hatch time, weighted by find chance x sameTierBoost (the egg's tier) or tierBelowBoost (one below). The starter's guaranteed creature still comes straight away. Pity (tuning pity): rareEgg = rare+ foraged eggs downgraded in a row before one keeps its tier; hatchNewSpecies = hatches in a family with no new species before the next favours an undiscovered one the tile allows.",
     "baseNests": 1,
     "sameTierBoost": 8,
     "tierBelowBoost": 2
+  },
+  "visitors": {
+    "_about": "Wanderers at the Old Log asking for items, paying in eggs (requests of kind 'visitor'). perDay of them each local day, chosen from the ones whose gating is met; a visitor can be swapped for another for rerollCost compost, up to maxRerolls a day.",
+    "perDay": 2,
+    "rerollCost": 6,
+    "maxRerolls": 3
   },
   "creatureCap": {
     "_about": "Off by default (no creature cap). When enabled, placed creatures are limited to the day-based slots (slotUnlocks) plus slots earned at the Old Log (unlock 'slot').",

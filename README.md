@@ -367,6 +367,15 @@ Mushrooms, plants and geodes now pay for things. Tap the **Old Log** to open its
   - `tools/gen_offerings_sprites.py` draws the placeholder decor and the board icon.
 - **Save** (older saves get empty defaults): `offerings.delivered`, `unlocks` (slots, nests, expansions, trowel), `decor` (owned, placed with colour) `compost` and `nests`.
 
+### Visitors (web)
+
+- **Wanderers stop by the Old Log to trade items for eggs** (requests of kind `visitor`).
+  - Each local day, `visitors.perDay` (2) of them are picked from the visitor requests whose gating is met. They stay all day and are replaced the next day; trading with one is a one-day thing, so the same visitor can come back.
+  - The wanderer shown with each is cosmetic, drawn from the Wanderer creatures.
+- **Someone else:** swaps a visitor for another for `visitors.rerollCost` (6) compost, up to `visitors.maxRerolls` (3) times a day.
+- **The pool:** nine visitors. Three open at 4 Field Guide entries and pay uncommon eggs; more open at 8–12 entries; three at 24 entries pay rare eggs.
+- **Save:** `visitorReqs` (day, offers, done, rerolls). Developer mode → Offerings has "New visitors".
+
 ### Eggs (web)
 
 - **Finds give eggs** (`tuning.creatureFinds`, `"egg"` by default; `"instant"` brings back the old behaviour for comparisons).

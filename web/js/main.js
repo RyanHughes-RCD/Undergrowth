@@ -416,7 +416,13 @@ class App {
     this.changed();
   }
 
-  compostItem(itemID) {
+  rerollVisitor(requestID) {
+    const g = this.game;
+    const next = this.attempt(() => g.rerollVisitor(requestID, g.now()));
+    if (next) { { const nm = this.content.creatures[next.wandererID]?.name || 'new visitor'; this.ui.toast(`${/^[aeiou]/i.test(nm) ? 'An' : 'A'} ${nm} wanders over instead.`); } this.changed(); }
+  }
+
+    compostItem(itemID) {
     const n = this.attempt(() => this.game.compost(itemID, 1));
     if (n) { this.ui.toast(`+${n} compost (${this.game.state.compost} in all).`, this.content.items[itemID]?.sprite); this.changed(); }
   }

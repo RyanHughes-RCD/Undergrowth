@@ -2338,13 +2338,10 @@ export class Game {
 
   /** A request right now: what it needs (have / need), what still locks it, and whether it can be delivered. */
   requestStatus(req, now) {
-    const need = req.requires || {};
-    const locks = [];
-    if (need.guide && this.guideCount < need.guide) locks.push({ type: 'guide', need: need.guide, have: this.guideCount });
-    if (need.request && !this.isDelivered(need.request)) locks.push({ type: 'request', id: need.request, name: this.requestDef(need.request)?.name || need.request });
-    if (need.day && this.forestDay(now) < need.day) locks.push({ type: 'day', need: need.day, have: this.forestDay(now) });
+    const visitor = req.kind === 'visitor';
+    const locks = visitor ? [] : this.requestLocks(req, now);
     const items = req.items.map((x) => ({ item: x.item, count: x.count, have: Math.min(x.count, this.state.inventory[x.item] || 0), owned: this.state.inventory[x.item] || 0 }));
-    const done = this.isDelivered(req.id);
+    const done = visitor ? this.visitorsToday(now).done.includes(req.id) : this.isDelivered(req.id);
     return { req, done, locks, items, ready: !done && !locks.length && items.every((x) => x.owned >= x.count) };
   }
 
@@ -2355,10 +2352,63 @@ export class Game {
     return list.sort((a, b) => rank(a) - rank(b));
   }
 
+  // ---- visitors: wanderers at the Old Log asking for items, paying in eggs (kind "visitor")
+  get visitorCfg() { return this.t.visitors || {}; }
+
+  /** Today's visitors (local day): picked once a day from the visitor requests whose gating is met. */
+  visitorsToday(now) {
+    const day = Game.dayNumber(now);
+    let v = this.state.visitorReqs;
+    if (!v || v.day !== day) {
+      v = this.state.visitorReqs = { day, offers: [], done: [], rerolls: 0 };
+      for (let i = 0; i < (this.visitorCfg.perDay ?? 2); i++) {
+        const o = this.pickVisitor(now, hash32(this.state.seed, day, i));
+        if (o) v.offers.push(o);
+      }
+    }
+    return v;
+  }
+
+  /** One visitor request not already offered or done today (deterministic from `h`), with a wanderer to ask for it. */
+  pickVisitor(now, h) {
+    const v = this.state.visitorReqs;
+    const taken = new Set([...(v ? v.offers.map((o) => o.requestID) : []), ...(v ? v.done : [])]);
+    const pool = (this.content.requests || []).filter((r) => r.kind === 'visitor' && !taken.has(r.id) && !this.requestLocks(r, now).length);
+    if (!pool.length) return null;
+    const req = pool[h % pool.length];
+    const wanderers = this.content.creatureList.filter((c) => c.family === 'wanderer');
+    const w = wanderers.length ? wanderers[hash32(h, 7) % wanderers.length].id : null;
+    return { requestID: req.id, wandererID: w };
+  }
+
+  /** Swap a visitor for another one (costs compost; a few times a day). */
+  rerollVisitor(requestID, now) {
+    const v = this.visitorsToday(now);
+    const i = v.offers.findIndex((o) => o.requestID === requestID);
+    if (i < 0) throw new GameError('That visitor has gone.');
+    if (v.rerolls >= (this.visitorCfg.maxRerolls ?? 3)) throw new GameError('No more visitors today. New ones come tomorrow.');
+    const next = this.pickVisitor(now, this.rng.int(0, 1e9));
+    if (!next) throw new GameError('Nobody else is visiting today.');
+    this.spendCompost(this.visitorCfg.rerollCost ?? 0);
+    v.offers[i] = next;
+    v.rerolls++;
+    return next;
+  }
+
+  requestLocks(req, now) {
+    const need = req.requires || {};
+    const locks = [];
+    if (need.guide && this.guideCount < need.guide) locks.push({ type: 'guide', need: need.guide, have: this.guideCount });
+    if (need.request && !this.isDelivered(need.request)) locks.push({ type: 'request', id: need.request, name: this.requestDef(need.request)?.name || need.request });
+    if (need.day && this.forestDay(now) < need.day) locks.push({ type: 'day', need: need.day, have: this.forestDay(now) });
+    return locks;
+  }
+
   /** Deliver a request: the items are taken and the reward given. */
   deliver(id, now) {
     const req = this.requestDef(id);
     if (!req) throw new GameError('Unknown request.');
+    if (req.kind === 'visitor') return this.deliverVisitor(req, now);
     const st = this.requestStatus(req, now);
     if (st.done) throw new GameError('Already delivered.');
     if (st.locks.length) throw new GameError("That request isn't open yet.");
@@ -2368,6 +2418,20 @@ export class Game {
     this.bump('deliver');
     const reward = this.grantReward(req.reward, now);
     this.events.push({ type: 'delivered', id, reward });
+    return reward;
+  }
+
+  deliverVisitor(req, now) {
+    const v = this.visitorsToday(now);
+    if (!v.offers.some((o) => o.requestID === req.id)) throw new GameError("That visitor isn't here today.");
+    const st = this.requestStatus(req, now);
+    if (st.done) throw new GameError('Already traded today.');
+    if (!st.ready) throw new GameError('You need more of the items it asks for.');
+    for (const x of req.items) for (let i = 0; i < x.count; i++) this.consume(x.item);
+    v.done.push(req.id);
+    this.bump('visitor');
+    const reward = this.grantReward(req.reward, now);
+    this.events.push({ type: 'delivered', id: req.id, reward, visitor: true });
     return reward;
   }
 
@@ -2533,6 +2597,7 @@ export class Game {
   devGiveEggs(n = 1) { const list = this.content.eggs || []; this.grant(list.map((e) => ({ item: e.id, count: n }))); return list.length; }
   devHatchNow(now) { for (const n of this.state.nests) n.startedAt = now - n.hatchSeconds * 1000 - 1; return this.state.nests.length; }
   devResetRequests() { this.state.offerings.delivered = {}; }
+  devNewVisitors(now) { this.state.visitorReqs = null; this.state.visitorReqs = { day: -1 }; return this.visitorsToday(now).offers.length; }
   devGrantDecor() { for (const c of this.content.cosmetics || []) this.state.decor.owned[c.id] = (this.state.decor.owned[c.id] || 0) + 1; return (this.content.cosmetics || []).length; }
 
   /** `count` of every item in the content (mushrooms, plants, seeds, geodes, gems, materials). */
