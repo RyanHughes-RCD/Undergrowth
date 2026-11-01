@@ -672,14 +672,25 @@ export class Game {
   // ---- clock: time of day + weather
   now(real = Date.now()) { return real + this.state.debugTimeOffset; }
   debugSkip(seconds) { this.state.debugTimeOffset += seconds * 1000; }
-  get clock() { return this.t.clock || { nightStartHour: 20, nightEndHour: 6, rainChance: 0.25, weatherBlockHours: 2 }; }
+  get clock() { return this.t.clock || { dawnStartHour: 5, dayStartHour: 7, duskStartHour: 17, nightStartHour: 19, rainChance: 0.25, weatherBlockHours: 2 }; }
+
+  /**
+   * Time of day by the device's local clock (tuning.clock): 'dawn' | 'day' | 'dusk' | 'night'.
+   * The same boundaries drive lighting, night-only spawns and Glow.
+   */
+  dayPhase(t) {
+    const c = this.clock, d = new Date(t), h = d.getHours() + d.getMinutes() / 60;
+    const dawn = c.dawnStartHour ?? c.nightEndHour ?? 5, day = c.dayStartHour ?? 7, dusk = c.duskStartHour ?? 17, night = c.nightStartHour ?? 19;
+    if (h >= dawn && h < day) return 'dawn';
+    if (h >= day && h < dusk) return 'day';
+    if (h >= dusk && h < night) return 'dusk';
+    return 'night';
+  }
   static dayNumber(t) { return Math.floor((t - new Date(t).getTimezoneOffset() * 60000) / DAY); }
 
   /** Night by the forest's clock (local time), or anywhere a creature makes it night. */
   isNight(t, tile = null) {
-    const c = this.clock;
-    const h = new Date(t).getHours();
-    const night = c.nightStartHour > c.nightEndHour ? (h >= c.nightStartHour || h < c.nightEndHour) : (h >= c.nightStartHour && h < c.nightEndHour);
+    const night = this.dayPhase(t) === 'night';
     if (night) return true;
     return tile ? this.effects('night', tile).length > 0 : false;
   }
@@ -1170,79 +1181,73 @@ export class Game {
         made++;
       }
     }
-    made += this.mushroomGrowth(t, cap, shared());
-    made += this.meadowGrowth(t, cap, shared());
+    made += this.growthBonuses(t, cap, shared());
     return made;
   }
 
-  /** Wild meadows (Bloom + Verdure combo) sprout extra plants: plant-only attempts on meadow tiles. */
-  meadowGrowth(t, cap, field) {
-    const m = this.combo('meadow');
-    if (!(m.extraPlantAttempts > 0)) return 0;
-    const c = this.clearing, occ = this.occupied(), tiles = [];
+
+
+  /**
+   * Category growth bonuses, proportional per tile (so a few qualifying tiles never hog the forest):
+   * each qualifying free tile gets an extra chance this tick of `normal per-tile spawn rate × bonus`,
+   * restricted to its category. Damp tiles grow mushrooms faster (terrain.damp.mushroomGrowth);
+   * wild meadows sprout plants faster (combos.meadow.plantGrowth).
+   */
+  growthBonuses(t, cap, field) {
+    const st = this.t.spawns, c = this.clearing;
+    const area = (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1);
+    const perTile = (st.attemptsPerTick * st.spawnChance) / Math.max(1, area);   // the normal rate for one tile
+    const mg = (this.terrain.damp || {}).mushroomGrowth || {};
+    const meadow = this.combo('meadow'), pg = meadow.plantGrowth || {};
     const K = field.keys.length, W = this.state.size.width, names = this.tileKeys.names;
-    const req = Object.entries(m.requires || {}).map(([k, b]) => [field.keys.indexOf(k), b]);
-    const kb = field.keys.indexOf('bloom'), kv = field.keys.indexOf('verdure');
-    for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
-      const o = (y * W + x) * K;
-      if (!req.every(([ki, b]) => ki >= 0 && boundMatches(b, field.values[o + ki]))) continue;
-      if (occ.has(names[y * W + x])) continue;
-      tiles.push([{ x, y }, field.values[o + kb] + field.values[o + kv]]);
-    }
+    const kd = field.keys.indexOf('damp'), kb = field.keys.indexOf('bloom'), kv = field.keys.indexOf('verdure');
+    const mreq = Object.entries(meadow.requires || {}).map(([k, b]) => [field.keys.indexOf(k), b]);
+    const occ = this.occupied();
     let made = 0;
-    for (let i = 0; i < m.extraPlantAttempts && tiles.length; i++) {
-      if (this.state.spawns.length >= cap) break;
-      const tile = weightedPick(tiles, this.rng);
-      if (!tile || !this.isFree(tile)) continue;
-      const w = tiles.find(([tl]) => tl === tile)[1];
-      if (!this.rng.chance(Math.min(m.maxChance ?? 0.6, w * (m.chancePerPoint ?? 0.008)))) continue;
-      const item = weightedPick(this.spawnDetails(tile, t).filter((x) => x.item.category === 'plant').map((x) => [x.item, x.weight]), this.rng);
+    for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+      if (this.state.spawns.length >= cap) return made;
+      const o = (y * W + x) * K;
+      const damp = field.values[o + kd] || 0;
+      if (damp < (mg.minDamp ?? 6) && !(field.values[o + kb] > 0)) continue;     // most tiles: nothing to do
+      const isMeadow = mreq.length && mreq.every(([ki, b]) => ki >= 0 && boundMatches(b, field.values[o + ki]));
+      let cat = null, bonus = 0;
+      if (damp >= (mg.minDamp ?? 6)) { cat = 'mushroom'; bonus = Math.min(mg.maxBonus ?? 2, damp * (mg.perPoint ?? 0.08)); }
+      if (isMeadow) {
+        const b = Math.min(pg.maxBonus ?? 2.5, ((field.values[o + kb] || 0) + (field.values[o + kv] || 0)) * (pg.perPoint ?? 0.06));
+        if (b > bonus || this.rng.chance(0.5)) { cat = 'plant'; bonus = b; }
+      }
+      if (!cat || bonus <= 0 || !this.rng.chance(perTile * bonus) || occ.has(names[y * W + x])) continue;
+      const tile = { x, y };
+      const item = weightedPick(this.spawnDetails(tile, t).filter((d) => d.item.category === cat).map((d) => [d.item, d.weight]), this.rng);
       if (!item) continue;
       this.state.spawns.push(this.newSpawn(item, tile, t));
+      occ.add(names[y * W + x]);
       made++;
     }
     return made;
   }
 
-  /** Damp grows mushrooms faster: extra mushroom-only attempts, weighted to wetter tiles
-   *  (terrain.damp.mushroomGrowth: chance = Damp × chancePerPoint, up to maxChance). */
-  mushroomGrowth(t, cap, field = null) {
-    const mg = this.terrain.damp && this.terrain.damp.mushroomGrowth;
-    if (!mg || !(mg.attemptsPerTick > 0)) return 0;
-    field = field || this.statField(t);
-    const c = this.clearing, wet = [], occ = this.occupied(), di = field.keys.indexOf('damp'), K = field.keys.length, W = this.state.size.width;
-    for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
-      const d = field.values[(y * W + x) * K + di] || 0;
-      if (d >= (mg.minDamp ?? 6) && !occ.has(x + ',' + y)) wet.push([{ x, y }, d]);
-    }
-    let made = 0;
-    for (let i = 0; i < mg.attemptsPerTick && wet.length; i++) {
-      if (this.state.spawns.length >= cap) break;
-      const tile = weightedPick(wet, this.rng);
-      if (!tile || !this.isFree(tile)) continue;
-      const d = wet.find(([tl]) => tl === tile)[1];
-      if (!this.rng.chance(Math.min(mg.maxChance ?? 0.6, d * (mg.chancePerPoint ?? 0.01)))) continue;
-      const item = weightedPick(this.spawnDetails(tile, t).filter((x) => x.item.category === 'mushroom').map((x) => [x.item, x.weight]), this.rng);
-      if (!item) continue;
-      this.state.spawns.push(this.newSpawn(item, tile, t));
-      made++;
-    }
-    return made;
-  }
+
 
   /**
    * Spawn-location weights for every free tile in the clearing, from the garden's live effect data:
-   *   weight = base + perStatPoint × (sum of the tile's six stats)
-   *               + perSource × (creatures whose influence reaches the tile + active soil boosts on it)
-   *               + perEffect × (creature special effects whose area covers it)
-   * capped at maxWeight (spawns.locationWeighting in tuning.json). With nothing active every tile
-   * weighs `base`, which is the old uniform pick. Recomputed per spawn tick, so it follows effects
-   * as they ramp, decay, move or expire.
+   *   effects  = creatures whose influence reaches the tile + active soil boosts on it
+   *            + creature special-effect areas covering it + combo tiles (pool, moss, meadow)
+   *   general  = generalByEffectCount[min(effects, last)]          (1, 1.5, 2, 2.5 by default)
+   *            × (1 + min(maxIntensityBonus, perStatPoint × tile stat total))
+   *   weight   = base × general, capped at maxWeight              (spawns.locationWeighting)
+   * The general bonus makes effect-bearing tiles likelier to get a spawn of any category; which
+   * category then comes from the tile's own stats (spawns.categoryScaling, combos), so specialised
+   * tiles keep their identity. With nothing active every tile weighs `base` (the old uniform pick).
+   * Everything is derived from saved state (placements, boosts, stats), so it is rebuilt exactly after
+   * a reload, and follows effects as they ramp, decay, move or expire. Spawns themselves add nothing,
+   * so there is no runaway feedback.
    */
   spawnLocations(t, field = null) {
     const lw = (this.t.spawns && this.t.spawns.locationWeighting) || {};
     const on = lw.enabled !== false;
-    const base = lw.base ?? 1, perPt = lw.perStatPoint ?? 0, perSrc = lw.perSource ?? 0, perFx = lw.perEffect ?? 0, max = lw.maxWeight ?? Infinity;
+    const base = lw.base ?? 1, perPt = lw.perStatPoint ?? 0, max = lw.maxWeight ?? Infinity;
+    const table = lw.generalByEffectCount || [1, 1.5, 2, 2.5], maxInt = lw.maxIntensityBonus ?? Infinity;
     const W = this.state.size.width, H = this.state.size.height, c = this.clearing;
     const sources = new Float32Array(W * H), fx = new Float32Array(W * H);
     if (on) {
@@ -1272,11 +1277,13 @@ export class Game {
     const bloomF = this.bloomFactor(t), gc = this.terrain.glowCycle || {}, night = this.isNight(t);
     const gN = gc.nightFactor ?? 1.6, gD = gc.dayFactor ?? 0.4, gFull = Math.max(1, gc.depthForFullGlow ?? 40);
     const glowAt = (depth) => (night ? gN : gD + (gN - gD) * Math.min(1, depth / gFull));
+    const comboReqs = on ? Object.entries(this.t.combos || {}).filter(([id]) => !id.startsWith('_'))
+      .map(([id, cb]) => [id, Object.entries(cb.requires || {}).map(([k, b]) => [field.keys.indexOf(k), b])]) : [];
     for (let y = c.y0; y <= c.y1; y++) {
       for (let x = c.x0; x <= c.x1; x++) {
         const tile = { x, y };
         if (occ.has(x + ',' + y) || !this.inBounds(tile)) continue;
-        let weight = base, intensity = 0;
+        let weight = base, intensity = 0, effects = 0, general = 1;
         const i = y * W + x;
         if (on) {
           const o = i * K;
@@ -1286,9 +1293,13 @@ export class Game {
             const k = CORE_STATS[ki];
             intensity += v * (k === 'glow' ? glowAt(field.values[o + depthIdx] || 0) : k === 'bloom' ? bloomF : 1);
           }
-          weight = Math.min(max, base + perPt * intensity + perSrc * sources[i] + perFx * fx[i]);
+          let combos = 0;
+          for (const [, reqs] of comboReqs) if (reqs.every(([ki, b]) => ki >= 0 && boundMatches(b, field.values[o + ki]))) combos++;
+          effects = sources[i] + fx[i] + combos;
+          general = table[Math.min(table.length - 1, Math.round(effects))] * (1 + Math.min(maxInt, perPt * intensity));
+          weight = Math.min(max, base * general);
         }
-        tiles.push({ tile, weight, intensity, sources: sources[i], effects: fx[i] });
+        tiles.push({ tile, weight, intensity, effects, general, sources: sources[i] });
         total += weight;
       }
     }
@@ -1319,11 +1330,13 @@ export class Game {
     const fac = this.statFactors(t, s);
     const varietyExp = this.varietyExponent(s, t);
     const out = [];
-    const pool = this.combosAt(s).includes('pool') && this.combo('pool').onlyDampItems;
+    const isPool = this.combosAt(s).includes('pool');
+    const pool = isPool && this.combo('pool').onlyDampItems;
     for (const item of opts.items || this.content.spawnableItems) {
       const rule = item.spawn;
       if (!rule) continue;
       if (pool && !(rule.requires && rule.requires.damp)) continue;   // shallow water: only Damp-loving things
+      if (rule.terrain === 'pool' && !isPool) continue;                // e.g. Water Reed: shallow pools only
       if (rule.time === 'night' && !night) continue;
       if (rule.time === 'day' && night) continue;
       if (!opts.seed && rule.rain && !raining) continue;
@@ -1348,6 +1361,10 @@ export class Game {
       let fx = 1;
       for (const e of weightFx) if (Game.effectMatches(e, item)) fx *= e.mult ?? 1;
       let weight = rule.baseWeight * mult * fx;
+      // Clustering plants (reeds): likelier next to one of their own.
+      if (rule.cluster && this.state.spawns.some((x) => x.itemID === item.id && Math.max(Math.abs(x.tile.x - tile.x), Math.abs(x.tile.y - tile.y)) === 1)) {
+        weight *= this.combo('pool').clusterBonus ?? 2.5;
+      }
       // High Bloom: a wider variety of plants (weights flattened toward each other).
       const variety = item.category === 'plant' ? varietyExp : 1;
       if (variety !== 1 && weight > 0) weight = Math.pow(weight, variety);

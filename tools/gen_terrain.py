@@ -433,6 +433,27 @@ def combo_art():
         overlay("ov.meadow.%s" % v, meadow)
 
 
+def lily_pads():
+    """Lily pads for larger pools: round pads with a notch, one with a flower."""
+    pal = ["transparent", "#183a1c", "#3f8a3a", "#5bb04a", "#2d6a2c", "#ffd0e0", "#ff9ccf", "#ffd84a"]
+
+    def pad(c, f, rx=4.2, ry=2.8, flower=False):
+        cx, cy = c.w / 2, c.h / 2
+        c.ellipse(cx, cy, rx, ry, 2)
+        c.ellipse(cx - rx * .3, cy - ry * .35, rx * .5, ry * .4, 3)
+        c.ellipse(cx + rx * .35, cy + ry * .3, rx * .45, ry * .35, 4)
+        for i in range(int(rx) + 1):                       # the notch
+            c.set(cx + i, cy, 0)
+        c.set(cx - 1, cy, 4)
+        if flower:
+            for dx, dy in ((0, -1), (-1, 0), (1, 0), (0, 1)):
+                c.set(cx - 1 + dx, cy - 1 + dy, 6)
+            c.set(cx - 1, cy - 1, 7)
+    deco("deco.lilypad.a", pal, pad, size=(11, 7), anchor=(5, 3), outline=True)
+    deco("deco.lilypad.b", pal, lambda c, f: pad(c, f, 3, 2.1), size=(9, 6), anchor=(4, 3), outline=True)
+    deco("deco.lilypad.flower", pal, lambda c, f: pad(c, f, 4.2, 2.8, True), size=(11, 7), anchor=(5, 3), outline=True)
+
+
 def pt(rng, m=1):
     return rng.randint(m, T - 1 - m), rng.randint(m, T - 1 - m)
 
@@ -445,3 +466,4 @@ def main():
     stone_spikes()
     staged_overlays()
     combo_art()
+    lily_pads()

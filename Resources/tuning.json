@@ -36,12 +36,13 @@
       "maxMultiplier": 4
     },
     "locationWeighting": {
+      "_about": "Where spawns land. weight = base x generalByEffectCount[effects on the tile] x (1 + min(maxIntensityBonus, perStatPoint x stat total)), capped at maxWeight. Effects = creatures reaching the tile + soil boosts + special-effect areas + combos.",
       "enabled": true,
       "base": 1,
-      "perStatPoint": 0.3,
-      "perSource": 3,
-      "perEffect": 1.5,
-      "maxWeight": 40
+      "generalByEffectCount": [1, 1.5, 2, 2.5],
+      "perStatPoint": 0.04,
+      "maxIntensityBonus": 2,
+      "maxWeight": 8
     },
     "categoryScaling": {
       "minMultiplier": 0.25,
@@ -106,16 +107,26 @@
     "elevation": { "enabled": false, "threshold": 0.15, "facePx": 7, "faceColor": "#5e5e68", "faceDark": "#3a3a44", "lipColor": "#c8c8d0", "pitPx": 6, "pitColor": "rgba(14,8,18,0.55)" },
     "glowLight": { "enabled": true, "minGlow": 6, "alphaPerPoint": 0.0125, "maxAlpha": 0.5, "radius": 14, "color": "#7cf2ff" },
     "petals": { "enabled": true, "minBloom": 12, "ratePerPoint": 0.0004, "max": 50, "lifeSeconds": 5, "windX": 8, "windY": 3, "colors": ["#ff9ccf", "#fff3c4", "#c58cff"] },
-    "sunlight": {
+    "canopy": {
+      "_about": "Tree shadows from design/canopy_source.webp (processed by tools/gen_canopy.py into img/canopy.png: alpha = sunlight). Layer 1 at full strength, layer 2 offset/scaled/flipped and added at secondAlpha so the flecks never repeat on a grid, and a large soft region layer that lifts the shade in some areas (clearings).",
       "enabled": true,
-      "image": "img/sunlight.png",
+      "image": "img/canopy.png",
       "scale": 1,
-      "opacity": 0.16,
-      "shadeOpacity": 0.1,
-      "nightFactor": 0.3,
-      "swayPx": 14,
-      "swaySeconds": 17,
-      "driftPxPerMinute": 20
+      "second": { "scale": 1.37, "offset": [97, 61], "flip": true, "alpha": 0.7 },
+      "region": { "image": "img/canopy-region.png", "scale": 2.6, "strength": 0.4, "offset": [211, 47] },
+      "swayPx": 3,
+      "swaySeconds": 23
+    },
+    "lighting": {
+      "_about": "Per state; values blend smoothly across clock.transitionMinutes around each boundary. shade/light = canopy shade and sun/moon-ray strength; ambient multiplies the whole scene.",
+      "refreshSeconds": 5,
+      "fireflies": { "perTile": 0.07, "max": 60 },
+      "states": {
+        "dawn": { "shade": 0.36, "shadeColor": "#0e1a16", "light": 0.32, "lightColor": "#ffd6b0", "ambient": "#e8ccd8", "ambientAlpha": 0.22, "fireflies": 0.15, "sparkle": "#ffe6d0", "sparkleEvery": 6 },
+        "day": { "shade": 0.55, "shadeColor": "#04120a", "light": 0.55, "lightColor": "#fff1c0", "ambient": "#ffffff", "ambientAlpha": 0, "fireflies": 0, "sparkle": "#fff8d8", "sparkleEvery": 4 },
+        "dusk": { "shade": 0.42, "shadeColor": "#140e1c", "light": 0.24, "lightColor": "#ffb070", "ambient": "#d8b4a8", "ambientAlpha": 0.26, "fireflies": 0.45, "sparkle": "#ffd0a0", "sparkleEvery": 6 },
+        "night": { "shade": 0.34, "shadeColor": "#02060e", "light": 0.2, "lightColor": "#b8d0ff", "ambient": "#56688f", "ambientAlpha": 0.46, "fireflies": 1, "sparkle": "#c8dcff", "sparkleEvery": 10 }
+      }
     },
     "overlayFadeSeconds": 0.6
   },
@@ -124,8 +135,12 @@
     "featureFraction": 0.45
   },
   "clock": {
-    "nightStartHour": 20,
-    "nightEndHour": 6,
+    "_about": "Real local time of day. One place for the four lighting states; night (nightStartHour to dawnStartHour) also drives night-only spawns and Glow.",
+    "dawnStartHour": 5,
+    "dayStartHour": 7,
+    "duskStartHour": 17,
+    "nightStartHour": 19,
+    "transitionMinutes": 50,
     "rainChance": 0.25,
     "weatherBlockHours": 2
   },
@@ -134,9 +149,12 @@
   },
   "combos": {
     "_about": "Combo tiles (the core of the game): a tile that meets every requirement becomes that combo. Uses the tile's raw stats.",
-    "pool": { "name": "Shallow pool", "requires": { "damp": { "min": 12 }, "depth": { "min": 8 } }, "onlyDampItems": true },
+    "pool": { "name": "Shallow pool", "requires": { "damp": { "min": 12 }, "depth": { "min": 8 } }, "onlyDampItems": true,
+      "clusterBonus": 2.5,
+      "lilyPads": { "minTiles": 6, "chance": 0.75, "tilesPerExtraPad": 6, "maxPads": 5, "flowerChance": 0.3 },
+      "splash": { "everySeconds": 0.65, "max": 24 } },
     "moss": { "name": "Mossy bank", "requires": { "stone": { "min": 5 }, "damp": { "min": 5 }, "verdure": { "min": 5 } }, "bugsPerTile": 0.85, "maxBugs": 40 },
-    "meadow": { "name": "Wild meadow", "requires": { "bloom": { "min": 8 }, "verdure": { "min": 8 } }, "plantCategoryMult": 3, "extraPlantAttempts": 2, "chancePerPoint": 0.008, "maxChance": 0.6, "flowerGrowthMult": 2.5 }
+    "meadow": { "name": "Wild meadow", "requires": { "bloom": { "min": 8 }, "verdure": { "min": 8 } }, "plantCategoryMult": 3, "plantGrowth": { "perPoint": 0.06, "maxBonus": 2.5 }, "flowerGrowthMult": 2.5 }
   },
   "terrain": {
     "_about": "Each stat's identity. Elevation: Stone raises, Depth lowers (-1..1). Shares = a stat's fraction of the tile's total.",
@@ -159,7 +177,7 @@
     "bloomCycle": { "openHour": 6, "peakHour": 12, "closeHour": 19, "minFactor": 0.15, "maxFactor": 1.3 },
     "bloom": { "varietyPerPoint": 0.012, "minVarietyExponent": 0.35, "wandererBonusPerPoint": 0.03 },
     "verdure": { "hideThreshold": 30, "seedGrowthPerPoint": 0.015, "extraSeedPerPoint": 0.008, "maxExtraSeedChance": 0.6 },
-    "damp": { "mushroomGrowth": { "attemptsPerTick": 2, "minDamp": 6, "chancePerPoint": 0.012, "maxChance": 0.6 } }
+    "damp": { "mushroomGrowth": { "_about": "Damp tiles grow mushrooms faster: extra mushroom chance per tile = normal per-tile rate x min(maxBonus, Damp x perPoint).", "minDamp": 6, "perPoint": 0.08, "maxBonus": 2 } }
   },
   "debugTools": true,
   "clearing": {

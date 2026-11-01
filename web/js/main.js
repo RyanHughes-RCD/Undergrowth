@@ -65,6 +65,7 @@ class App {
     }, 1000);
     document.addEventListener('visibilitychange', () => {
       this.lastReal = Date.now();
+      if (this.view) this.view.lightAt = 0;   // re-read the clock for lighting on return
       if (document.hidden) { this.save(); return; }
       const before = this.game.state.lastUpdated;
       const r = this.game.advance(this.game.now());
@@ -489,6 +490,7 @@ class App {
 
   debugSkip(hours) {
     this.game.debugSkip(hours * 3600);
+    this.view.lightAt = 0;
     const r = this.game.advance(this.game.now());
     this.ui.toast(`Skipped ${hours} hour${hours === 1 ? '' : 's'}. ${r.spawned} new spawn${r.spawned === 1 ? '' : 's'}.`);
     this.changed();

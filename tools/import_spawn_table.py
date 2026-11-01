@@ -73,6 +73,8 @@ def extra_flags(text):
         out["plantedTime"] = "night"
     if "checked once per day" in t:
         out["daily"] = True
+    if "shallow water only" in t:
+        out["terrain"] = "pool"
     return out
 
 
@@ -198,9 +200,13 @@ def main():
                 scaling = {stat: rate for stat in spawn["requires"]}
             if scaling:
                 spawn["statScaling"] = scaling
-            for k in ("time", "rain", "oneAtATime"):
+            for k in ("time", "rain", "oneAtATime", "terrain"):
                 if k in flags:
                     spawn[k] = flags[k]
+            if notes and "grows in clusters" in notes.lower():
+                spawn["cluster"] = True
+            if flags.get("terrain"):
+                it["flipInWorld"] = True       # vary orientation where it grows
             pv = r[place_col] if place_col is not None and place_col < len(r) else None
             spawn["placement"] = str(pv).strip().lower() if pv and str(pv).strip().lower() in ("surface", "buried", "auto") else "auto"
             if notes and re.search(r"unpicked for a day", notes, re.I):

@@ -112,12 +112,16 @@ python3 tools/gen_placeholders.py
   - If every scaling cell is left blank, the importer falls back to a rate per required stat by rarity: Common 1, Uncommon 1.5, Rare 2, Very rare 2.5, Legendary 3.
   - **Category first:** each spawn first picks mushroom, plant or geode (among categories that have something qualifying on that tile), then an item within it by effective weight.
   - **Category tilt:** a category's weight is `spawns.categoryWeights` × a multiplier from the tile's own-family stats (`spawns.categoryScaling`, % per point, clamped to 0.25..6). The default is +10% per point of Damp/Glow for mushrooms, Bloom/Verdure for plants and Stone/Depth for geodes. So an area full of Geode Critters turns up mostly geodes: one Common critter nearby gives about 50% geodes and 25% each of the others.
-  - **Where spawns land (effect-aware):** each spawn attempt picks a free tile in the clearing by weight instead of uniformly. The weight is `base + perStatPoint × (sum of the tile's six stats) + perSource × (creatures whose influence reaches the tile + active soil boosts on it) + perEffect × (creature special effects covering it)`, capped at `maxWeight` (`spawns.locationWeighting` in `tuning.json`, defaults 1 / 0.3 / 3 / 1.5 / 40).
-    - Overlapping creatures add up. With nothing active every tile weighs 1, which is the old uniform pick.
-    - It is recomputed every spawn tick, so it follows creatures as they ramp, decay or move, and boosts as they expire.
-    - Occupied tiles, landmarks and the treeline are never candidates. The overall spawn rate is unchanged.
-    - Wanderers arriving use the same weights.
-    - In testing, about 5× as many spawns landed near creatures as their share of the map; in the starting clearing it was about 3×.
+  - **Where spawns land (effect-driven):** each spawn attempt picks a free tile by weight (`spawns.locationWeighting`):
+    - `weight = base × general`, capped at `maxWeight` (8).
+    - `general = generalByEffectCount[effects] × (1 + min(maxIntensityBonus, perStatPoint × tile stat total))`.
+    - `effects` counts: creatures whose influence reaches the tile, active soil boosts, special-effect areas, and combo tiles.
+    - Defaults: by effect count 0 / 1 / 2 / 3+ = ×1 / ×1.5 / ×2 / ×2.5; `perStatPoint` 0.04; `maxIntensityBonus` 2.
+    - The general bonus applies to every category. Which category spawns there still comes from the tile's own stats (`spawns.categoryScaling`, combos), so specialised tiles keep their identity.
+    - Blank tiles weigh 1 under the normal rules. Spawns never add effects, so there's no runaway.
+    - It's rebuilt from saved state (creatures, boosts, stats), so it's identical after a reload, and it follows effects as they ramp, fade, move or expire.
+    - Occupied tiles, landmarks and the treeline are never candidates, and the overall spawn rate is unchanged. Arriving wanderers use the same weights.
+    - In simulation: a one-effect tile got about 2× a blank tile's spawns, a three-effect tile about 6×, and the busiest tile only 0.37% of all spawns.
   - **Seeds** choose their plant when planted, using the same weights for that tile at that time. The choice is saved on the seed, so a plant item can carry its own `growthSprites` (otherwise the stages are the generic seed stages ending in the plant's sprite).
   - **Spawn inspector:** in 🐞 Debug, turn on "Spawn inspector", then tap any tile. It shows the tile's stats and every qualifying item with its base, multiplier, weight and % within its category, plus what a Mystery Seed planted there now could grow into.
 - **Unclear sheet entries** and how I read them:
@@ -237,7 +241,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
 - **Damp spreads and pools:**
   - An ambient Damp layer (`terrain.ambientDamp`, saved in `state.ambientDamp`) sits on top of creature Damp, so creature ramp-up and fading are unchanged.
   - Each spawn tick it seeps into wetter-to-drier neighbours, flows more easily downhill, and evaporates more slowly on low ground, so hollows turn boggy. High Stone blocks it.
-  - Damp tiles grow mushrooms faster: extra mushroom-only spawn attempts, weighted to wetter tiles (`terrain.damp.mushroomGrowth`).
+  - Damp tiles grow mushrooms faster: each wet tile gets an extra mushroom-only chance of (normal per-tile rate × min(2, Damp × 0.08)) per tick (`terrain.damp.mushroomGrowth`). It's proportional per tile, so a few wet tiles never hog the forest.
 - **Glow follows the clock:**
   - Its effect on spawn weights, and on the forest's category and location weighting, is ×0.4 by day and ×1.6 at night (`terrain.glowCycle`, device local time).
   - Deep tiles glow at full strength even by day.
@@ -251,9 +255,16 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
   - Seeds grow faster on lush tiles (`seedGrowthPerPoint`), and plants there drop extra seeds (`extraSeedPerPoint`).
   - At Verdure ≥ 30 (`hideThreshold`), surface spawns are hidden in tall grass with an occasional rustle. The first tap reveals them; the next collects.
 - **Combo tiles** (`combos` in `tuning.json`) are the core of the game:
-  - **Shallow pool (Damp + Depth):** the ground pools with water. Pool tiles are autotiled: a lone tile is a rounded puddle, and neighbouring pool tiles join seamlessly with rounded inside corners. Only Damp-loving items spawn on water.
+  - **Shallow pool (Damp + Depth):** the ground pools with water, a small ecosystem of its own.
+    - **Shape:** pool tiles are autotiled. A lone tile is a rounded puddle, and neighbouring tiles join seamlessly with rounded inside corners.
+    - **Shoreline:** thin and broken, made of soil, mud and dark wet grass. It's stable because it comes from a world-pixel hash.
+    - **Sparkles:** brief, unsynchronised glints coloured for the time of day: warm by day, soft at dawn and dusk, rare silver-blue at night.
+    - **Lily pads:** connected pools of 6 or more tiles (`combos.pool.lilyPads`) may get pads, with a 75% chance per pool. A pool gets 1 pad, plus one more for every 6 extra tiles, up to 5, sometimes with a flower. Pools are found as connected regions, recomputed only when the set of pool tiles changes. The pads are deterministic: the same after a reload, never duplicated.
+    - **Water Reed:** a new plant in the spreadsheet with the "Shallow water only" condition (`spawn.terrain: "pool"`). It spawns only on pool tiles, is likelier next to another reed ("Grows in clusters", ×2.5), and is flipped for variety.
+    - **Splashes:** a creature wading through a pool splashes when it enters a pool tile, then every 0.65 s while moving. They're pooled and short-lived.
+    - Only Damp-loving items spawn on water.
   - **Mossy bank (Stone + Damp + Verdure):** moss grows over the ground and the stone spikes, and bugs gather (beetles by day, fireflies at night).
-  - **Wild meadow (Bloom + Verdure):** a tangle of flowers in long grass. Plants are favoured ×3 in spawn rolls, extra plant-only spawn attempts sprout there, and Mystery Seeds grow ×2.5 faster.
+  - **Wild meadow (Bloom + Verdure):** a tangle of flowers in long grass. Plants are favoured ×3 in spawn rolls. Each meadow tile gets an extra plant-only chance per tick (normal rate × min(2.5, (Bloom + Verdure) × 0.06), `combos.meadow.plantGrowth`). Mystery Seeds grow ×2.5 faster there.
 - **Tile art:** `Resources/Content/tileRules.json`. A rule with `"staged": true` and `"stat"` expands into the 9 stages (`ov.<stat>.s1a`… / `deco.spikes.<n><v>`). Combo layers use `combo_<id>`. The art is made by `tools/gen_terrain.py`; the water is drawn by the renderer.
 - **Plants:** every plant has its own grown sprite and its own bud stage (`plant.bud.<id>`). A Mystery Seed shows planted, then sprout, then that plant's bud, then the plant itself.
 - **Spawn placement:** item data `spawn.placement` is `surface`, `buried` or `auto` (the default). In the spreadsheet, an optional "Placement" column overrides it per item.
@@ -288,7 +299,21 @@ A separate test forest for trying any content or combination without touching yo
 - **Pixel frames:** panels, buttons, tabs and cards use stepped, notched-corner frames built from box-shadows. There are no rounded corners or blur effects.
 - **Treeline:** the edge bushes and the ground under them use deep, shadowed greens (`SHRUB_PALETTES` and the edge palette in `tools/gen_topdown.py`), so the clearing has a clear dark border.
 - **Movement:** wild spawns (mushrooms, plants, geodes, seed stages) stand still and show their first frame. Placed creatures keep their animation and wander inside their influence radius around the tile they were placed on: walk, pause, repeat, staying in the clearing. This is visual only; their influence still comes from the placement tile, and tapping a creature wherever it is selects it.
-- **Canopy light:** a faint dappled-sunlight overlay sways slowly over the forest, so creatures feel small under big trees. The mask is `web/img/sunlight.png`, made by `tools/gen_sunlight.py` from the reference picture's layout. It's seamless and world-anchored, so it moves with the ground when you pan. Settings are in `visuals.sunlight` in `tuning.json`: opacity 0.16, shade 0.1, sway, drift, scale, and night dimming (×0.3). To use a different image, save a seamless greyscale PNG over that file.
+- **Grass:** a deeper, verdant forest green (the ground palette in `tools/gen_placeholders.py`), so every grass tile, variant and overlay stays consistent.
+- **Tree shadows (canopy):**
+  - **Source:** your asset, `design/canopy_source.webp`, is a black shade layer whose see-through holes are sunlight.
+  - **Processing:** `tools/gen_canopy.py` turns it into `web/img/canopy.png` (a 240×190 seamless light mask). It scales the flecks to a few art pixels, removes any fleck touching the tile edge so tiles join with no seams, and quantises the soft edges into pixel steps.
+  - **Hiding the repeat:** the renderer adds a second copy, scaled ×1.37, flipped and offset. A large soft "clearings" layer (`web/img/canopy-region.png`, ×2.6) lifts the shade in some areas.
+  - **Rendering:** it's built each frame at one buffer pixel per art pixel for just the view, then scaled up without smoothing, so it's crisp at any zoom with no moiré. It's world-anchored, so it stays stable while panning, with only a slow 3 px sway.
+  - **Settings:** `visuals.canopy`.
+- **Day and night (real local clock):** the hours are in `clock` in `tuning.json`: dawn 5:00–7:00, day 7:00–17:00, dusk 17:00–19:00, night 19:00–5:00. Lighting blends across 50 minutes around each boundary (`clock.transitionMinutes`). The same night range drives night-only spawns and Glow.
+  - Each state sets the canopy shade and light strength and colour, a scene-wide ambient tint (multiply), firefly amount and sparkle colour (`visuals.lighting.states`):
+    - **Day:** full-strength canopy and warm sun flecks, no tint.
+    - **Dawn:** softer shade, peach light, a pink-warm tint.
+    - **Dusk:** amber light, a dusky tint, the first fireflies.
+    - **Night:** silver-blue moonlight through the canopy, a cool tint, full fireflies.
+  - The lighting is recomputed every 5 s and right away when the app comes back from the background, never per frame.
+  - **Fireflies** are a pure function of tile and time: about 7% of tiles at full night, capped at 60. There are no particle objects, so nothing leaks, nothing runs while the app is hidden, and they're simply there on return.
 - **Numbers:** UG Numerals (`tools/gen_numeral_font.py`, `web/fonts/ug-numerals-*.woff2`) is a tiny pixel font on Pixelify Sans' grid that covers only digits and number punctuation (`% + , . / : × −`), via `unicode-range`.
   - Slashed 0, flat-topped open 3, square-cornered 5, footed 1.
   - Every digit is the same width, so counters and timers don't shift.

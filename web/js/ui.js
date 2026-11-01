@@ -479,10 +479,11 @@ export class UI {
         const me = loc.tiles.find((x) => x.tile.x === tile.x && x.tile.y === tile.y);
         if (!me) return null;
         const lw = this.content.tuning.spawns.locationWeighting || {};
-        return h('p', { class: 'sub' }, h('b', {}, `Location weight ${me.weight.toFixed(1)}`),
-          ` = ${lw.base ?? 1} + ${lw.perStatPoint}×${me.intensity.toFixed(0)} stat pts + ${lw.perSource}×${me.sources} sources` +
-          (me.effects ? ` + ${lw.perEffect}×${me.effects} effects` : '') +
-          ` · ${(me.weight / loc.total * 100).toFixed(2)}% of spawn picks (uniform would be ${(100 / loc.tiles.length).toFixed(2)}%)`);
+        const table = lw.generalByEffectCount || [1, 1.5, 2, 2.5];
+        const eff = Math.round(me.effects);
+        return h('p', { class: 'sub' }, h('b', {}, `Location weight ${me.weight.toFixed(2)}`),
+          ` = ${lw.base ?? 1} × ${table[Math.min(table.length - 1, eff)]} (${eff} effect${eff === 1 ? '' : 's'}) × ${(1 + Math.min(lw.maxIntensityBonus ?? 99, (lw.perStatPoint || 0) * me.intensity)).toFixed(2)} (${me.intensity.toFixed(0)} stat pts)` +
+          ` · ${(me.weight / loc.total * 100).toFixed(2)}% of spawn picks (a blank tile: ${((lw.base ?? 1) / loc.total * 100).toFixed(2)}%)`);
       })(),
       h('div', { class: 'inspect-head' }, h('span', { class: 'grow' }, 'Item'), h('span', { class: 'num' }, 'Base'),
         h('span', { class: 'num' }, 'Mult'), h('span', { class: 'num' }, 'Weight'), h('span', { class: 'num' }, 'Chance')),

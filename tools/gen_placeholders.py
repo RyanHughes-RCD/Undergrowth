@@ -102,8 +102,8 @@ GROUND_PALETTE = [
     "transparent",
     # 1-4 soil / leaf litter
     "#6b4a2f", "#5a3d26", "#86603d", "#b5662f",
-    # 5-8 grass
-    "#5f8f3a", "#79a94a", "#4a7330", "#97c463",
+    # 5-8 grass (deep, verdant forest floor)
+    "#356b2e", "#4a8a3a", "#27552a", "#6aa64a",
     # 9-12 lush
     "#3f8a3a", "#5bb04a", "#2d6a2c", "#8ad46b",
     # 13-16 flowers
@@ -127,7 +127,7 @@ GROUND_PALETTE = [
     # 49-54 lips (soil left/right, rock left/right, dark left/right)
     "#4a3322", "#3a2719", "#5e5e68", "#4a4a54", "#2e1f22", "#22171a",
     # 55-57 mycelium, 58-60 dirt patches, 61 deep grass
-    "#d9cfb3", "#b0a587", "#f2ecd9", "#7a5232", "#5b3c22", "#93683f", "#3f6a2a",
+    "#d9cfb3", "#b0a587", "#f2ecd9", "#7a5232", "#5b3c22", "#93683f", "#1f4422",
 ]
 P = {name: i for i, name in enumerate([
     "t", "soil", "soil_d", "soil_l", "leaf",
@@ -751,7 +751,7 @@ def deco(sprite_id, palette, draw, size=(12, 12), frames=1, durations=None, anch
 
 
 def make_decorations():
-    G = ["transparent", "#2d5a20", "#4f8a2c", "#79b84a", "#a6e57a"]
+    G = ["transparent", "#1d461c", "#33702e", "#4f9440", "#7cbc5a"]
 
     def tuft(seed):
         def draw(c, f):

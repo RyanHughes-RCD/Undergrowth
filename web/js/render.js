@@ -236,7 +236,8 @@ export class ForestView {
       // a geode exposed on rock (the bare stone), or on the surface (geodes half-sunk in a dirt mound).
       const view = g.spawnView(sp, now, field.statsAt(sp.tile.x, sp.tile.y));
       const sprite = view === 'buried' ? 'spawn.buried.a' : view === 'hidden' ? 'spawn.rustle.a' : view === 'exposed' ? def.sprite : (def.worldSprite || def.sprite);
-      objs.push({ sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: view !== 'hidden', rustle: view === 'hidden', view, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100 });
+      objs.push({ sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: view !== 'hidden', rustle: view === 'hidden', view, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100,
+        flip: !!def.flipInWorld && (hash32(sp.tile.x, sp.tile.y, 3) & 1) === 1 });
     }
     for (const l of s.landmarks || []) {
       const def = (this.app.content.landmarks || []).find((d) => d.id === l.id);
@@ -305,6 +306,8 @@ export class ForestView {
     const x0 = Math.floor(view.minX / TS) - 1, x1 = Math.floor(view.maxX / TS) + 1;
     const y0 = Math.floor(view.minY / TS) - 1, y1 = Math.floor(view.maxY / TS) + 2;
     const edgeObjs = [];
+    const Lw = this.lighting();
+    if (this.visuals && this.visuals.length) this.updateLilyPads();
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const inside = x >= 0 && y >= 0 && x < size.width && y < size.height && this.game.inClearing({ x, y });
@@ -330,7 +333,12 @@ export class ForestView {
           ctx.fillStyle = `rgba(${tint[0]},${tint[1]},${tint[2]},${tint[3]})`;
           ctx.fillRect(x * TS, y * TS, TS, TS);
         }
-        if (inside && v.pool) ctx.drawImage(this.waterTile(x, y, t), x * TS, y * TS);
+        if (inside && v.pool) {
+          ctx.drawImage(this.waterTile(x, y), x * TS, y * TS);
+          this.waterSparkles(ctx, x, y, t, Lw);
+          const pad = this.lilyPads && this.lilyPads.get(y * W + x);
+          if (pad) this.blit(pad.sprite, null, c.x + pad.dx, c.y + pad.dy, 0, pad.flip);
+        }
         if (!inside) {
           for (const d of v.decorations) edgeObjs.push({ sprite: d.sprite, x: c.x + d.dx, y: c.y + TS / 2 + d.dy, flip: d.flip, phase: 0 });
         }
@@ -338,6 +346,7 @@ export class ForestView {
     }
 
     this.drawElevation(ctx, x0, y0, x1, y1);
+    this.drawSplashes(ctx);
 
     if (this.heat) {
       // Cool, faint for ordinary tiles; warm and strong where effects pull spawns in.
@@ -421,9 +430,13 @@ export class ForestView {
       if (o.glimmer) this.sparkles(x, y, t + o.phase);
     }
 
-    this.drawBugs(ctx, view, t);
-    this.drawSunlight(ctx, view, t);
+    // Atmosphere: time-of-day tint, then the canopy's shade and light; glows and fireflies on top.
+    const L = this.lighting();
+    this.drawAmbient(ctx, view, L);
+    this.drawCanopy(ctx, view, t, L);
     this.drawGlowLight(ctx, x0, y0, x1, y1, t);
+    this.drawBugs(ctx, view, t);
+    this.drawFireflies(ctx, view, t, L);
     this.drawPetals(ctx, view, t);
     this.drawDust(ctx);
 
@@ -484,6 +497,14 @@ export class ForestView {
     w.x += (dx / d) * step; w.y += (dy / d) * step;
     if (Math.abs(dx) > 0.5) w.flip = dx < 0;
     w.moving = true;
+    // Wading: splash on entering a pool tile, then every few steps while moving through it.
+    const tl = tileAt(w.x, w.y - 2);
+    const tk = tl.x + ',' + tl.y;
+    if (this.poolAt(tl.x, tl.y)) {
+      const every = ((this.game.combo('pool').splash || {}).everySeconds ?? 0.65) * 1000;
+      if (w.wadeTile !== tk || now - (w.splashAt || 0) > every) { this.splashAt(w.x, w.y - 1); w.splashAt = now; }
+    }
+    w.wadeTile = tk;
     return w;
   }
 
@@ -542,14 +563,14 @@ export class ForestView {
    * a lone pool tile is a rounded puddle and neighbouring pools join seamlessly (with small rounded
    * notches on inside corners). Cached per neighbour pattern; two shimmer frames.
    */
-  waterTile(x, y, t) {
+  waterTile(x, y) {
     const n = (dx, dy) => (this.poolAt(x + dx, y + dy) ? 1 : 0);
     const mask = [n(0, -1), n(1, 0), n(0, 1), n(-1, 0), n(-1, -1), n(1, -1), n(1, 1), n(-1, 1)].join('');
-    const frame = Math.floor(t / 0.9 + ((x * 7 + y * 3) % 5)) % 2;
-    const key = mask + frame + ((x * 31 + y * 17) % 3);
+    const key = x + ',' + y + ':' + mask;            // per tile: the shoreline is irregular but stable
     this.waterCache = this.waterCache || new Map();
     let c = this.waterCache.get(key);
     if (c) return c;
+    if (this.waterCache.size > 4000) this.waterCache.clear();
     const [N, E, S, Wn, NW, NE, SE, SW] = mask.split('').map(Number);
     const M = 2, R = 4;                                  // inset from the tile edge, corner radius
     const isWater = (px, py) => {
@@ -568,24 +589,117 @@ export class ForestView {
       return u <= 8 - M && w <= 8 - M;
     };
     const cfg = this.app.content.tuning.visuals.water || {};
-    const col = { water: cfg.water || '#3f6f94', deep: cfg.deep || '#2f5a80', light: cfg.light || '#7fb0d4', glint: cfg.glint || '#c8e6ff', shore: cfg.shore || '#2e4a2a' };
+    const col = { water: cfg.water || '#3f6f94', deep: cfg.deep || '#2f5a80', light: cfg.light || '#6f9fc4' };
+    const shore = cfg.shore || ['#4a3322', '#3a2c22', '#24461f'];
     c = document.createElement('canvas');
     c.width = c.height = TS;
     const g = c.getContext('2d');
-    const seed = (x * 31 + y * 17) % 3;
+    const near = (px, py, r) => { for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if ((dx || dy) && isWater(px + dx, py + dy)) return true; return false; };
     for (let py = 0; py < TS; py++) for (let px = 0; px < TS; px++) {
       let fill = null;
+      // A world-pixel hash keeps the shoreline irregular but identical every time it's drawn.
+      const r = hash32(x * TS + px, y * TS + py, 51) / 4294967296;
       if (isWater(px, py)) {
         const deep = isWater(px - 3, py) && isWater(px + 3, py) && isWater(px, py - 3) && isWater(px, py + 3);
         fill = !isWater(px, py - 1) ? col.light : deep ? col.deep : col.water;
-        if (deep && (px * 3 + py * 5 + seed * 7 + frame * 11) % 113 === 0) fill = col.glint;
       } else if (isWater(px + 1, py) || isWater(px - 1, py) || isWater(px, py + 1) || isWater(px, py - 1)) {
-        fill = col.shore;                                // a damp rim where the water meets the grass
+        if (r > 0.18) fill = shore[r < 0.55 ? 0 : r < 0.8 ? 1 : 2];   // thin, broken shore of soil and mud
+      } else if (r < 0.22 && near(px, py, 1)) {
+        fill = shore[2];                                               // the odd tuft of dark, wet grass
       }
       if (fill) { g.fillStyle = fill; g.fillRect(px, py, 1, 1); }
     }
     this.waterCache.set(key, c);
     return c;
+  }
+
+  /** Light glinting off the water: brief, unsynchronised specks, coloured for the time of day. */
+  waterSparkles(ctx, x, y, t, L) {
+    const every = Math.max(1, L.sparkleEvery || 5);
+    for (let k = 0; k < 2; k++) {
+      const hv = hash32(x, y, 31 + k);
+      const period = every * (0.8 + (hv % 100) / 250);
+      const cyc = (t + (hv % 1000) / 1000 * period) % period;
+      if (cyc > 0.45) continue;
+      const px = x * TS + 4 + (hv % 8), py = y * TS + 4 + ((hv >>> 8) % 8);
+      ctx.fillStyle = L.sparkle || '#fff8d8';
+      ctx.globalAlpha = 0.9;
+      ctx.fillRect(px, py, 1, 1);
+      if (cyc > 0.12 && cyc < 0.32) { ctx.globalAlpha = 0.55; ctx.fillRect(px - 1, py, 3, 1); ctx.fillRect(px, py - 1, 1, 3); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /**
+   * Lily pads on connected pools of at least combos.pool.lilyPads.minTiles tiles. Each pool is one
+   * feature: pads are chosen deterministically from its tiles (no duplicates, the same after a reload),
+   * and recomputed only when the set of pool tiles changes.
+   */
+  updateLilyPads() {
+    const W = this.game.state.size.width, H = this.game.state.size.height;
+    const pools = [];
+    for (let i = 0; i < W * H; i++) if (this.visuals[i] && this.visuals[i].pool && this.game.inClearing({ x: i % W, y: Math.floor(i / W) })) pools.push(i);
+    const sig = pools.join(',');
+    if (sig === this.poolSig) return;
+    this.poolSig = sig;
+    this.lilyPads = new Map();
+    const cfg = this.game.combo('pool').lilyPads || {};
+    const set = new Set(pools), seen = new Set();
+    this.poolBodies = 0;
+    for (const start of pools) {
+      if (seen.has(start)) continue;
+      const comp = [], stack = [start];
+      seen.add(start);
+      while (stack.length) {
+        const i = stack.pop(); comp.push(i);
+        const x = i % W, y = Math.floor(i / W);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy, j = ny * W + nx;
+          if (nx < 0 || ny < 0 || nx >= W || ny >= H || seen.has(j) || !set.has(j)) continue;
+          seen.add(j); stack.push(j);
+        }
+      }
+      this.poolBodies++;
+      if (comp.length < (cfg.minTiles ?? 6)) continue;
+      const anchor = Math.min(...comp);
+      if (hash32(anchor, comp.length, 404) / 4294967296 >= (cfg.chance ?? 0.75)) continue;
+      const count = Math.min(cfg.maxPads ?? 5, 1 + Math.floor((comp.length - (cfg.minTiles ?? 6)) / (cfg.tilesPerExtraPad ?? 6)));
+      const order = comp.slice().sort((a, b) => hash32(a, 7, 404) - hash32(b, 7, 404));
+      for (const i of order.slice(0, count)) {
+        const hv = hash32(i, 9, 404);
+        const sprite = hv / 4294967296 < (cfg.flowerChance ?? 0.3) ? 'deco.lilypad.flower' : (hv & 1 ? 'deco.lilypad.a' : 'deco.lilypad.b');
+        this.lilyPads.set(i, { sprite, dx: ((hv >>> 4) % 7) - 3, dy: ((hv >>> 8) % 5) - 2, flip: !!(hv & 2) });
+      }
+    }
+  }
+
+  /** A little splash where a creature wades (pooled, short-lived). */
+  splashAt(x, y) {
+    const cfg = this.game.combo('pool').splash || {};
+    this.splashes = this.splashes || [];
+    if (this.splashes.length >= (cfg.max ?? 24)) this.splashes.shift();
+    this.splashes.push({ x: Math.round(x), y: Math.round(y), start: performance.now() });
+  }
+
+  drawSplashes(ctx) {
+    if (!this.splashes || !this.splashes.length) return;
+    const now = performance.now();
+    this.splashes = this.splashes.filter((s) => now - s.start < 480);
+    for (const s of this.splashes) {
+      const k = (now - s.start) / 480;
+      const r = 2 + k * 4;
+      ctx.globalAlpha = 0.8 * (1 - k);
+      ctx.fillStyle = '#c8e6ff';
+      for (let i = 0; i < 12; i++) {                      // a ripple ring (flattened, top-down)
+        const a = i / 12 * Math.PI * 2;
+        ctx.fillRect(Math.round(s.x + Math.cos(a) * r), Math.round(s.y + Math.sin(a) * r * 0.5), 1, 1);
+      }
+      ctx.fillStyle = '#ffffff';                          // a few droplets hopping up and out
+      for (const [dx, h] of [[-3, 4], [2, 5], [4, 3]]) {
+        ctx.fillRect(Math.round(s.x + dx * (0.5 + k)), Math.round(s.y - h * 4 * k * (1 - k)), 1, 1);
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   /** Bugs drawn to mossy banks (Stone + Damp + Verdure combo): little flitting specks; fireflies at night. */
@@ -707,51 +821,156 @@ export class ForestView {
     ctx.globalAlpha = 1;
   }
 
+  // ------------------------------------------------------- lighting + atmosphere
+
   /**
-   * Dappled light through the canopy (tuning.visuals.sunlight): a seamless light mask, scaled up
-   * big in world pixels and swaying slowly in a loop, drawn faintly over the forest. Lit patches
-   * are warm; the gaps between them get a faint shade. Dimmer at night. World-anchored, so it moves
-   * with the ground when you pan; offsets snap to whole art pixels to stay crisp.
+   * Lighting for the real local time (tuning.clock boundaries, tuning.visuals.lighting.states),
+   * blended across clock.transitionMinutes around each boundary. Recomputed every
+   * lighting.refreshSeconds and whenever the app resumes (this.lightAt = 0), not every frame.
    */
-  drawSunlight(ctx, view, t) {
-    const cfg = this.app.content.tuning.visuals.sunlight;
+  lighting() {
+    const cfg = this.app.content.tuning.visuals.lighting || {};
+    const nowMs = performance.now();
+    if (this.light && nowMs - this.lightAt < (cfg.refreshSeconds ?? 5) * 1000) return this.light;
+    this.lightAt = nowMs;
+    this.light = lightingAt(this.game, this.app.content.tuning, this.game.now());
+    return this.light;
+  }
+
+  /** Whole-scene ambient tint (multiply): cool at night, soft warm at dawn and dusk, none by day. */
+  drawAmbient(ctx, view, L) {
+    if (!(L.ambientAlpha > 0)) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = L.ambientAlpha;
+    ctx.fillStyle = L.ambient;
+    ctx.fillRect(view.minX - 1, view.minY - 1, view.maxX - view.minX + 2, view.maxY - view.minY + 2);
+    ctx.restore();
+  }
+
+  /**
+   * Tree shadows (visuals.canopy). Built each frame at one-buffer-pixel-per-art-pixel for just the
+   * view, then drawn scaled with no smoothing, so it stays crisp at any zoom and costs the same
+   * whatever the zoom. Light = flecks layer 1 + (offset, scaled, flipped) layer 2; shade covers the
+   * rest, lifted in places by a large soft region layer. All world-anchored (stable when panning)
+   * with only a slow, gentle sway.
+   */
+  drawCanopy(ctx, view, t, L) {
+    const cfg = this.app.content.tuning.visuals.canopy;
     if (!cfg || cfg.enabled === false) return;
-    if (!this.sun) {
-      this.sun = { ready: false };
-      const img = new Image();
-      img.onload = () => {
-        // Pre-colour two layers from the mask: warm light where it's white, soft shade where it's dark.
-        const make = (fill, invert) => {
+    if (!this.canopy) {
+      this.canopy = { ready: 0 };
+      const load = (src, key, alphaFn) => {
+        const img = new Image();
+        img.onload = () => {
+          // Mask = luminance x alpha, so either an alpha mask or an opaque greyscale image works.
           const c = document.createElement('canvas');
           c.width = img.width; c.height = img.height;
           const x = c.getContext('2d');
-          x.fillStyle = fill; x.fillRect(0, 0, c.width, c.height);
-          x.globalCompositeOperation = invert ? 'destination-out' : 'destination-in';
           x.drawImage(img, 0, 0);
-          return c;
+          const d = x.getImageData(0, 0, c.width, c.height);
+          for (let i = 0; i < d.data.length; i += 4) {
+            const m = ((d.data[i] + d.data[i + 1] + d.data[i + 2]) / 765) * (d.data[i + 3] / 255);
+            d.data[i] = d.data[i + 1] = d.data[i + 2] = 255;
+            d.data[i + 3] = Math.round(255 * alphaFn(m));
+          }
+          x.putImageData(d, 0, 0);
+          this.canopy[key] = c;
+          this.canopy.ready++;
         };
-        this.sun = { ready: true, light: make('#fff4c8', false), shade: make('#0b1a10', true), w: img.width, h: img.height };
+        img.src = src;
       };
-      img.src = cfg.image || 'img/sunlight.png';
+      load(cfg.image || 'img/canopy.png', 'flecks', (m) => m);
+      const reg = cfg.region || {};
+      load(reg.image || 'img/canopy-region.png', 'region', (m) => m * (reg.strength ?? 0.4));
       return;
     }
-    if (!this.sun.ready) return;
-    const sc = cfg.scale || 2;
-    const period = Math.max(1, cfg.swaySeconds || 17);
-    const a = (t / period) * Math.PI * 2;
-    const drift = (cfg.driftPxPerMinute || 0) * t / 60;
-    const ox = Math.round(Math.sin(a) * (cfg.swayPx || 0) + drift * 0.6);
-    const oy = Math.round(Math.sin(a * 0.73 + 1.3) * (cfg.swayPx || 0) * 0.6 + drift * 0.3);
-    const night = this.game.isNight(this.game.now());
-    const k = night ? (cfg.nightFactor ?? 0.3) : 1;
-    const tw = this.sun.w * sc, th = this.sun.h * sc;
-    const x0 = Math.floor((view.minX - ox) / tw) * tw + ox, y0 = Math.floor((view.minY - oy) / th) * th + oy;
+    if (this.canopy.ready < 2) return;
+    const C = this.canopy;
+    const vx0 = Math.floor(view.minX) - 1, vy0 = Math.floor(view.minY) - 1;
+    const w = Math.ceil(view.maxX - view.minX) + 3, h = Math.ceil(view.maxY - view.minY) + 3;
+    const buf = (key) => {
+      let b = C[key + 'Buf'];
+      if (!b) { b = C[key + 'Buf'] = document.createElement('canvas'); }
+      if (b.width !== w || b.height !== h) { b.width = w; b.height = h; }
+      const g = b.getContext('2d');
+      g.imageSmoothingEnabled = false;
+      g.globalCompositeOperation = 'source-over';
+      g.globalAlpha = 1;
+      g.clearRect(0, 0, w, h);
+      return [b, g];
+    };
+    const period = Math.max(1, cfg.swaySeconds || 23), a = (t / period) * Math.PI * 2, sw = cfg.swayPx || 0;
+    const pat = (g, img, scale, ox, oy, flip) => {
+      const p = g.createPattern(img, 'repeat');
+      p.setTransform(new DOMMatrix().translate(ox - vx0, oy - vy0).scale(flip ? -scale : scale, scale));
+      return p;
+    };
+    // Light: the flecks, two layers unioned (additive) so the pattern is effectively aperiodic.
+    const [lb, lg] = buf('light');
+    const sec = cfg.second || {};
+    lg.fillStyle = pat(lg, C.flecks, cfg.scale || 1, Math.round(Math.sin(a) * sw), Math.round(Math.sin(a * 0.7 + 1) * sw * 0.6), false);
+    lg.fillRect(0, 0, w, h);
+    lg.globalCompositeOperation = 'lighter';
+    lg.globalAlpha = sec.alpha ?? 0.7;
+    lg.fillStyle = pat(lg, C.flecks, sec.scale || 1.37, (sec.offset || [0, 0])[0] + Math.round(Math.sin(a * 0.8 + 2) * sw), (sec.offset || [0, 0])[1] + Math.round(Math.cos(a * 0.6) * sw * 0.6), !!sec.flip);
+    lg.fillRect(0, 0, w, h);
+    // Shade: everything except the light, with large regions lifted (clearings).
+    const [sb, sg] = buf('shade');
+    sg.fillStyle = L.shadeColor;
+    sg.fillRect(0, 0, w, h);
+    sg.globalCompositeOperation = 'destination-out';
+    sg.drawImage(lb, 0, 0);
+    const reg = cfg.region || {};
+    sg.fillStyle = pat(sg, C.region, reg.scale || 2.6, (reg.offset || [0, 0])[0], (reg.offset || [0, 0])[1], false);
+    sg.fillRect(0, 0, w, h);
+    // Tint the light to the time of day (warm sun, silver moon).
+    lg.globalCompositeOperation = 'source-in';
+    lg.globalAlpha = 1;
+    lg.fillStyle = L.lightColor;
+    lg.fillRect(0, 0, w, h);
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    for (const [layer, alpha] of [[this.sun.shade, (cfg.shadeOpacity ?? 0.1) * k], [this.sun.light, (cfg.opacity ?? 0.16) * k]]) {
-      if (alpha <= 0) continue;
-      ctx.globalAlpha = alpha;
-      for (let y = y0; y < view.maxY; y += th) for (let x = x0; x < view.maxX; x += tw) ctx.drawImage(layer, x, y, tw, th);
+    ctx.globalAlpha = L.shade;
+    ctx.drawImage(sb, vx0, vy0);
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = L.light;
+    ctx.drawImage(lb, vx0, vy0);
+    ctx.restore();
+  }
+
+  /**
+   * Fireflies (night, a few at dusk/dawn): positions are a pure function of tile + time, so there
+   * are no particle objects to leak, nothing runs while the app is hidden, and the population is
+   * simply there again on return.
+   */
+  drawFireflies(ctx, view, t, L) {
+    const amount = L.fireflies || 0;
+    if (amount <= 0.01) return;
+    const cfg = (this.app.content.tuning.visuals.lighting || {}).fireflies || {};
+    const W = this.game.state.size.width, H = this.game.state.size.height;
+    const x0 = Math.max(0, Math.floor(view.minX / TS) - 1), x1 = Math.min(W - 1, Math.floor(view.maxX / TS) + 1);
+    const y0 = Math.max(0, Math.floor(view.minY / TS) - 1), y1 = Math.min(H - 1, Math.floor(view.maxY / TS) + 1);
+    const p = (cfg.perTile ?? 0.07) * amount;
+    let n = 0;
+    ctx.save();
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (!this.game.inClearing({ x, y })) continue;
+      const hv = hash32(x, y, 9091);
+      if (hv / 4294967296 >= p || n >= (cfg.max ?? 60)) continue;
+      n++;
+      const ph = (hv % 10000) / 1000;
+      const fx = x * TS + 8 + Math.sin(t * 0.31 + ph) * 12 + Math.sin(t * 0.83 + ph * 3) * 4;
+      const fy = y * TS + 6 + Math.cos(t * 0.27 + ph * 2) * 9 + Math.sin(t * 1.1 + ph) * 3;
+      const glow = Math.max(0, Math.sin(t * (0.9 + (hv % 7) / 10) + ph));       // gentle on/off pulse
+      if (glow < 0.05) continue;
+      const X = Math.round(fx), Y = Math.round(fy);
+      ctx.globalAlpha = 0.28 * glow;
+      ctx.fillStyle = '#e8ff8a';
+      ctx.fillRect(X - 1, Y - 1, 3, 3);
+      ctx.globalAlpha = 0.95 * glow;
+      ctx.fillStyle = '#fbffd0';
+      ctx.fillRect(X, Y, 1, 1);
     }
     ctx.restore();
   }
@@ -890,4 +1109,39 @@ function overlayColor(stats) {
 function parseHexRGB(h) {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(h || '');
   return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [255, 255, 255];
+}
+
+const hex2rgb = (h) => parseHexRGB(h);
+const rgb2hex = (c) => '#' + c.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+const mixState = (a, b, k) => {
+  const out = {};
+  for (const key in a) {
+    const va = a[key], vb = b[key] ?? va;
+    if (typeof va === 'number') out[key] = va + (vb - va) * k;
+    else if (typeof va === 'string' && va[0] === '#') { const ca = hex2rgb(va), cb = hex2rgb(vb); out[key] = rgb2hex(ca.map((v, i) => v + (cb[i] - v) * k)); }
+    else out[key] = k < 0.5 ? va : vb;
+  }
+  return out;
+};
+
+/** Lighting parameters for local time t: the active state, blended with its neighbour near a boundary. */
+export function lightingAt(game, tuning, t) {
+  const S = (tuning.visuals.lighting || {}).states || {};
+  const c = tuning.clock || {};
+  const d = new Date(t), h = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+  const bounds = [['dawn', c.dawnStartHour ?? 5], ['day', c.dayStartHour ?? 7], ['dusk', c.duskStartHour ?? 17], ['night', c.nightStartHour ?? 19]];
+  const T = (c.transitionMinutes ?? 50) / 60;
+  const phase = game.dayPhase(t);
+  for (let i = 0; i < bounds.length; i++) {
+    const [name, b] = bounds[i];
+    let dh = h - b;
+    if (dh > 12) dh -= 24;
+    if (dh < -12) dh += 24;
+    if (Math.abs(dh) < T / 2) {
+      const prev = bounds[(i + bounds.length - 1) % bounds.length][0];
+      const k = (dh + T / 2) / T;
+      return { phase, ...mixState(S[prev] || {}, S[name] || {}, k) };
+    }
+  }
+  return { phase, ...(S[phase] || {}) };
 }

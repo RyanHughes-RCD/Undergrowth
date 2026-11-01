@@ -229,6 +229,7 @@ PLANTS = {
     "crystal-thistle": ("thistle", "#6a8a7a", "#7ce0ff", "#e8ffff"),
     "ghost-orchid": ("orchid", "#9ab8a0", "#ffffff", "#e8f0ff"),
     "deeproot-lantern": ("lantern", "#5a4a30", "#ffb040", "#fff0b0"),
+    "water-reed": ("reeds", "#5ea347", "#7a4a24", "#b0804a"),
     "heartwood-sapling": ("sapling", "#7a4a2a", "#5ea347", "#ffd84a"),
 }
 PLANT_GLOW = {"glowbloom", "moonflower", "deeproot-lantern", "crystal-thistle"}
@@ -393,6 +394,13 @@ def draw_plant(shape, leaf, petal, centre):
             c.ellipse(4, 11, 1.8, 1.2, 3); c.ellipse(9, 8, 1.8, 1.2, 3)
             for (x, y) in ((11, 4), (5, 7)):
                 c.ellipse(x, y, 2.6, 2.2, 5); c.set(x, y, 7); c.set(x - 1, y - 1, 6)
+        elif shape == "reeds":                          # water reeds: spaced bright stalks, two cattail heads
+            for (x, top, lean) in ((3, 5, -1), (6, 2, 0), (9, 3, 0), (12, 6, 1)):
+                for y in range(top, 15):
+                    c.set(x + (lean if y < top + 3 else 0), y, 4 if y < top + 4 else 3)
+            for (x, y) in ((6, 4), (9, 6)):
+                c.rect(x, y, x, y + 3, 5); c.set(x, y, 6)
+            c.rect(2, 14, 13, 14, 2)
         elif shape == "sapling":
             c.rect(7, 9, 8, 15, 2)
             c.ellipse(8, 6, 5.5, 4.5, 3)
