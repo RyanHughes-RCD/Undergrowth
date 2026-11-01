@@ -102,6 +102,17 @@
       3600
     ],
     "viewBorderTiles": 0.5,
+    "sunlight": {
+      "enabled": true,
+      "image": "img/sunlight.png",
+      "scale": 1,
+      "opacity": 0.16,
+      "shadeOpacity": 0.1,
+      "nightFactor": 0.3,
+      "swayPx": 14,
+      "swaySeconds": 17,
+      "driftPxPerMinute": 20
+    },
     "overlayFadeSeconds": 0.6
   },
   "naming": {

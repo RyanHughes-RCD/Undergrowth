@@ -398,6 +398,8 @@ export class ForestView {
       if (o.glimmer) this.sparkles(x, y, t + o.phase);
     }
 
+    this.drawSunlight(ctx, view, t);
+
     // Tutorial pointer: a bouncing arrow and a soft ring on the thing to tap.
     const target = this.game.inTutorial ? this.game.tutorialTarget() : null;
     if (target) {
@@ -456,6 +458,55 @@ export class ForestView {
     if (Math.abs(dx) > 0.5) w.flip = dx < 0;
     w.moving = true;
     return w;
+  }
+
+  /**
+   * Dappled light through the canopy (tuning.visuals.sunlight): a seamless light mask, scaled up
+   * big in world pixels and swaying slowly in a loop, drawn faintly over the forest. Lit patches
+   * are warm; the gaps between them get a faint shade. Dimmer at night. World-anchored, so it moves
+   * with the ground when you pan; offsets snap to whole art pixels to stay crisp.
+   */
+  drawSunlight(ctx, view, t) {
+    const cfg = this.app.content.tuning.visuals.sunlight;
+    if (!cfg || cfg.enabled === false) return;
+    if (!this.sun) {
+      this.sun = { ready: false };
+      const img = new Image();
+      img.onload = () => {
+        // Pre-colour two layers from the mask: warm light where it's white, soft shade where it's dark.
+        const make = (fill, invert) => {
+          const c = document.createElement('canvas');
+          c.width = img.width; c.height = img.height;
+          const x = c.getContext('2d');
+          x.fillStyle = fill; x.fillRect(0, 0, c.width, c.height);
+          x.globalCompositeOperation = invert ? 'destination-out' : 'destination-in';
+          x.drawImage(img, 0, 0);
+          return c;
+        };
+        this.sun = { ready: true, light: make('#fff4c8', false), shade: make('#0b1a10', true), w: img.width, h: img.height };
+      };
+      img.src = cfg.image || 'img/sunlight.png';
+      return;
+    }
+    if (!this.sun.ready) return;
+    const sc = cfg.scale || 2;
+    const period = Math.max(1, cfg.swaySeconds || 17);
+    const a = (t / period) * Math.PI * 2;
+    const drift = (cfg.driftPxPerMinute || 0) * t / 60;
+    const ox = Math.round(Math.sin(a) * (cfg.swayPx || 0) + drift * 0.6);
+    const oy = Math.round(Math.sin(a * 0.73 + 1.3) * (cfg.swayPx || 0) * 0.6 + drift * 0.3);
+    const night = this.game.isNight(this.game.now());
+    const k = night ? (cfg.nightFactor ?? 0.3) : 1;
+    const tw = this.sun.w * sc, th = this.sun.h * sc;
+    const x0 = Math.floor((view.minX - ox) / tw) * tw + ox, y0 = Math.floor((view.minY - oy) / th) * th + oy;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    for (const [layer, alpha] of [[this.sun.shade, (cfg.shadeOpacity ?? 0.1) * k], [this.sun.light, (cfg.opacity ?? 0.16) * k]]) {
+      if (alpha <= 0) continue;
+      ctx.globalAlpha = alpha;
+      for (let y = y0; y < view.maxY; y += th) for (let x = x0; x < view.maxX; x += tw) ctx.drawImage(layer, x, y, tw, th);
+    }
+    ctx.restore();
   }
 
   blit(id, variant, x, y, t, flip = false) {
