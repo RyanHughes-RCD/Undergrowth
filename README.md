@@ -270,6 +270,38 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
 - **Spawn placement:** item data `spawn.placement` is `surface`, `buried` or `auto` (the default). In the spreadsheet, an optional "Placement" column overrides it per item.
 - **Debug:** the spawn inspector shows elevation, dominant stat, any combo, each stat's intensity stage, ambient Damp, the Glow and Bloom factors, and how spawns sit on that tile. It also tags each item that would be buried, hidden or exposed.
 
+## Tile intensity and the Terrain guide (web)
+
+- **Intensity, not numbers:** players never see a tile's raw stat value. One shared mapping (`intensityOf` in `web/js/core.js`, bands in `tuning.json` → `intensity`) turns a value into a label:
+
+  | Raw value | Intensity |
+  |---|---|
+  | 0–5 | No Intensity |
+  | 6–15 | Low |
+  | 16–25 | Moderate |
+  | 26–35 | Moderate+ |
+  | 36–45 | Medium |
+  | 46–55 | Medium+ |
+  | 56–65 | High |
+  | 66–75 | High+ |
+  | 76–85 | Very High |
+  | 86–100 | Maximum |
+
+  The stat cap is 100, so 96–100 also show Maximum.
+- **Below 6 is inactive everywhere (`intensity.minInfluence`):** the game's tile stats (`statField`, `tileStats`) zero anything under 6, so it counts for nothing in visuals, item requirements, category and location spawn weighting, effect counts, combos, terrain and placement. Raw values stay in saves and in the ambient-Damp simulation.
+  - Two thresholds that sat below 6 moved to 6: the Mossy bank combo (was 5 of each stat) and blend detection (was 3).
+- **Where it shows:**
+  - The tile card names the tile's terrain and shows each active stat as nine pips (filled vs hollow, not colour alone) plus its label.
+  - Creature traits show what the creature gives at full strength on its own tile.
+  - Field Guide requirements read "Damp at mid Low or more": the band, plus where in it the true threshold sits, so 20 shows as "mid Moderate", not "Moderate".
+  - Gem uses read "adds Stone (Low) to a tile for 24h".
+- **Raw values are developer-only:** the spawn inspector (raw value plus label), stat overlay and spawn heatmap live in developer mode, and switch off when you leave it.
+- **Field Guide → Terrain:** Forest floor, Stony ground, Dug earth, Damp ground, Glowing ground, Flowering ground, Lush grass, Shallow pool, Mossy bank, Wild meadow, Treeline (`Resources/Content/terrain.json`).
+  - **Discovery:** a terrain is discovered the first time it appears in your clearing (a stat reaching Low, or a combo forming). It's saved with the other guide discoveries (`terrain:<id>`), and older saves discover whatever is already in their clearing.
+  - **Illustrations:** built from the game's own sprites: rising stages across six tiles, a joined pond for pools, bushes for the treeline.
+  - **Each page:** what makes the terrain appear (as intensities), what can spawn there, the spawn bonuses (named as bonuses, at named intensities), other properties, and the selected tile's current intensity against what's needed. All of it is computed from `tuning.json`.
+  - **Developer mode** can open every entry (marked as a developer view) without marking it found.
+
 ## Developer mode (web)
 
 A separate test forest for trying any content or combination without touching your real save.

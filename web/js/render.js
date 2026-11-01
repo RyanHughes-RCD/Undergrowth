@@ -571,44 +571,7 @@ export class ForestView {
     let c = this.waterCache.get(key);
     if (c) return c;
     if (this.waterCache.size > 4000) this.waterCache.clear();
-    const [N, E, S, Wn, NW, NE, SE, SW] = mask.split('').map(Number);
-    const M = 2, R = 4;                                  // inset from the tile edge, corner radius
-    const isWater = (px, py) => {
-      if (px < 0 || py < 0 || px > 15 || py > 15) {      // outside: trust the neighbour's flag
-        const dx = px < 0 ? -1 : px > 15 ? 1 : 0, dy = py < 0 ? -1 : py > 15 ? 1 : 0;
-        return !!n(dx, dy);
-      }
-      const left = px < 8, top = py < 8;
-      const h = left ? Wn : E, v = top ? N : S, d = top ? (left ? NW : NE) : (left ? SW : SE);
-      const u = left ? 7.5 - px : px - 7.5, w = top ? 7.5 - py : py - 7.5;   // 0.5 .. 7.5 outward
-      if (h && v) return d ? true : Math.hypot(8 - u, 8 - w) >= M + 0.5;
-      if (h) return w <= 8 - M;
-      if (v) return u <= 8 - M;
-      const lim = 8 - M - R;
-      if (u > lim && w > lim) return Math.hypot(u - lim, w - lim) <= R;
-      return u <= 8 - M && w <= 8 - M;
-    };
-    const cfg = this.app.content.tuning.visuals.water || {};
-    const col = { water: cfg.water || '#3f6f94', deep: cfg.deep || '#2f5a80', light: cfg.light || '#6f9fc4' };
-    const shore = cfg.shore || ['#4a3322', '#3a2c22', '#24461f'];
-    c = document.createElement('canvas');
-    c.width = c.height = TS;
-    const g = c.getContext('2d');
-    const near = (px, py, r) => { for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if ((dx || dy) && isWater(px + dx, py + dy)) return true; return false; };
-    for (let py = 0; py < TS; py++) for (let px = 0; px < TS; px++) {
-      let fill = null;
-      // A world-pixel hash keeps the shoreline irregular but identical every time it's drawn.
-      const r = hash32(x * TS + px, y * TS + py, 51) / 4294967296;
-      if (isWater(px, py)) {
-        const deep = isWater(px - 3, py) && isWater(px + 3, py) && isWater(px, py - 3) && isWater(px, py + 3);
-        fill = !isWater(px, py - 1) ? col.light : deep ? col.deep : col.water;
-      } else if (isWater(px + 1, py) || isWater(px - 1, py) || isWater(px, py + 1) || isWater(px, py - 1)) {
-        if (r > 0.18) fill = shore[r < 0.55 ? 0 : r < 0.8 ? 1 : 2];   // thin, broken shore of soil and mud
-      } else if (r < 0.22 && near(px, py, 1)) {
-        fill = shore[2];                                               // the odd tuft of dark, wet grass
-      }
-      if (fill) { g.fillStyle = fill; g.fillRect(px, py, 1, 1); }
-    }
+    c = paintWaterTile(n, x, y, this.app.content.tuning.visuals.water || {});
     this.waterCache.set(key, c);
     return c;
   }
@@ -1144,4 +1107,53 @@ export function lightingAt(game, tuning, t) {
     }
   }
   return { phase, ...(S[phase] || {}) };
+}
+
+/**
+ * Paints one 16x16 shallow-water tile. n(dx, dy) says whether a neighbour is water. Quarters of the
+ * tile follow their side and corner neighbours (rounded alone, joined when connected); the shoreline
+ * is a thin broken rim from a world-pixel hash at (x, y), so it is stable. Used by the forest and by
+ * the Field Guide's Terrain illustrations.
+ */
+export function paintWaterTile(n, x, y, cfg = {}) {
+  const mask = [n(0, -1), n(1, 0), n(0, 1), n(-1, 0), n(-1, -1), n(1, -1), n(1, 1), n(-1, 1)].join('');
+  let c;
+  const [N, E, S, Wn, NW, NE, SE, SW] = mask.split('').map(Number);
+  const M = 2, R = 4;                                  // inset from the tile edge, corner radius
+  const isWater = (px, py) => {
+    if (px < 0 || py < 0 || px > 15 || py > 15) {      // outside: trust the neighbour's flag
+      const dx = px < 0 ? -1 : px > 15 ? 1 : 0, dy = py < 0 ? -1 : py > 15 ? 1 : 0;
+      return !!n(dx, dy);
+    }
+    const left = px < 8, top = py < 8;
+    const h = left ? Wn : E, v = top ? N : S, d = top ? (left ? NW : NE) : (left ? SW : SE);
+    const u = left ? 7.5 - px : px - 7.5, w = top ? 7.5 - py : py - 7.5;   // 0.5 .. 7.5 outward
+    if (h && v) return d ? true : Math.hypot(8 - u, 8 - w) >= M + 0.5;
+    if (h) return w <= 8 - M;
+    if (v) return u <= 8 - M;
+    const lim = 8 - M - R;
+    if (u > lim && w > lim) return Math.hypot(u - lim, w - lim) <= R;
+    return u <= 8 - M && w <= 8 - M;
+  };
+  const col = { water: cfg.water || '#3f6f94', deep: cfg.deep || '#2f5a80', light: cfg.light || '#6f9fc4' };
+  const shore = cfg.shore || ['#4a3322', '#3a2c22', '#24461f'];
+  c = document.createElement('canvas');
+  c.width = c.height = TS;
+  const g = c.getContext('2d');
+  const near = (px, py, r) => { for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if ((dx || dy) && isWater(px + dx, py + dy)) return true; return false; };
+  for (let py = 0; py < TS; py++) for (let px = 0; px < TS; px++) {
+    let fill = null;
+    // A world-pixel hash keeps the shoreline irregular but identical every time it's drawn.
+    const r = hash32(x * TS + px, y * TS + py, 51) / 4294967296;
+    if (isWater(px, py)) {
+      const deep = isWater(px - 3, py) && isWater(px + 3, py) && isWater(px, py - 3) && isWater(px, py + 3);
+      fill = !isWater(px, py - 1) ? col.light : deep ? col.deep : col.water;
+    } else if (isWater(px + 1, py) || isWater(px - 1, py) || isWater(px, py + 1) || isWater(px, py - 1)) {
+      if (r > 0.18) fill = shore[r < 0.55 ? 0 : r < 0.8 ? 1 : 2];   // thin, broken shore of soil and mud
+    } else if (r < 0.22 && near(px, py, 1)) {
+      fill = shore[2];                                               // the odd tuft of dark, wet grass
+    }
+    if (fill) { g.fillStyle = fill; g.fillRect(px, py, 1, 1); }
+  }
+  return c;
 }

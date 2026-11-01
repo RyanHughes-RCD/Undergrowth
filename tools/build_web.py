@@ -47,6 +47,7 @@ def main():
         "landmarks": load(os.path.join(content, "landmarks.json")),
         "story": load(os.path.join(content, "story.json")),
         "tasks": load(os.path.join(content, "tasks.json")),
+        "terrain": load(os.path.join(content, "terrain.json")),
         "sprites": sprites,
         "palettes": palettes,
     }

@@ -254,3 +254,18 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .inspect-kv { display: flex; justify-content: space-between; gap: 10px; font-size: var(--t-small); padding: 2px 0; }
 .inspect-kv b { text-align: right; }
 .tag { font-size: var(--t-tiny); color: #ffd84a; margin-left: 6px; text-transform: uppercase; letter-spacing: 1px; }
+
+/* Intensity pips: filled squares for levels reached, hollow for the rest (shape, not only colour). */
+.pips { display: flex; gap: 2px; align-items: center; }
+.pip { display: block; width: 5px; height: 7px; box-shadow: inset 0 0 0 1px #6a7468; }
+.pip.on { box-shadow: inset 0 0 0 1px rgba(0,0,0,.45); }
+.stat-val.none { color: var(--dim); }
+
+/* Terrain (Field Guide) */
+.terrain-art { display: block; }
+.terrain-hero { padding: 6px 0; }
+.guide-line { font-size: var(--t-small); margin: 3px 0; line-height: 1.35; }
+.req-row { display: flex; align-items: center; gap: 8px; font-size: var(--t-small); padding: 3px 0; }
+.req-mark { min-width: 52px; text-align: right; font-weight: 700; }
+.req-mark.ok { color: #8ad46b; }
+.req-mark.no { color: #e07a6a; }

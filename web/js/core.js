@@ -92,6 +92,39 @@ export function spawnWeight(rule, stats, rarityWeight) {
 
 export class GameError extends Error {}
 
+// ---------------------------------------------------------------- intensity (player-facing)
+
+/**
+ * The one mapping from a raw tile stat value to its player-facing intensity (tuning.intensity).
+ * Returns { level: 0..bands, label, min, max }: level 0 is "No Intensity" (below minInfluence).
+ * Values above the last band's range (the stat cap is 100) stay at the top band.
+ */
+export function intensityOf(value, tuning) {
+  const cfg = (tuning && tuning.intensity) || {};
+  const bands = cfg.bands || [];
+  const v = value || 0;
+  let level = 0;
+  for (let i = 0; i < bands.length; i++) if (v >= bands[i].min) level = i + 1;
+  if (!level) return { level: 0, label: 'No Intensity', min: 0, max: (bands[0] ? bands[0].min : 6) - 1 };
+  const b = bands[level - 1], next = bands[level];
+  return { level, label: b.label, min: b.min, max: next ? next.min - 1 : Infinity };
+}
+
+/**
+ * A requirement ("at least `min`") as an intensity: the band it falls in, plus whether it sits at the
+ * start, middle or top of that band, so a threshold of 20 isn't shown as plain "Moderate" (16).
+ */
+export function requirementOf(min, tuning) {
+  const cfg = (tuning && tuning.intensity) || {};
+  const floor = cfg.minInfluence ?? 6;
+  const m = Math.max(min || 0, floor);
+  const b = intensityOf(m, tuning);
+  const span = Number.isFinite(b.max) ? b.max - b.min + 1 : 10;
+  const pos = (m - b.min) / span;
+  const qualifier = pos < 0.2 ? '' : pos < 0.6 ? 'mid ' : 'high ';
+  return { ...b, text: qualifier + b.label, exact: pos < 0.2 };
+}
+
 // ---------------------------------------------------------------- stats
 
 export class StatEngine {
@@ -873,7 +906,7 @@ export class Game {
     if (cfg.enabled === false) return;
     const W = this.state.size.width, c = this.clearing;
     const amb = this.state.ambientDamp || {};
-    const field = this.statField(t);
+    const field = this.statField(t, { raw: true });     // water physics uses the raw values
     const n = W * this.state.size.height;
     const D = new Float32Array(n), E = new Float32Array(n), S = new Float32Array(n);
     let any = false;
@@ -956,7 +989,8 @@ export class Game {
   // ---- stats
   activeBoosts(now) { return this.state.soilBoosts.filter((b) => now >= b.appliedAt && (b.expiresAt == null || now < b.expiresAt)); }
 
-  statField(now) {
+  /** Tile stats for every tile. Values below intensity.minInfluence are 0 (inactive) unless opts.raw. */
+  statField(now, opts = {}) {
     const f = this.stats.field(this.state.size, this.effectivePlacements(), now);
     for (const b of this.activeBoosts(now)) if (this.inBounds(b.tile)) f.add(b.tile.x, b.tile.y, b.stats);
     // Ambient Damp (seeped and pooled water) on top of what creatures give.
@@ -983,16 +1017,23 @@ export class Game {
       for (let i = 0; i < K; i++) f.values[o + i] *= m;
     }
     f.clamp(this.t.statCap);
+    if (!opts.raw) {
+      const floor = this.minInfluence;
+      for (let i = 0; i < f.values.length; i++) if (f.values[i] < floor) f.values[i] = 0;
+    }
     return f;
   }
+  /** Below this a stat has no influence anywhere (tuning.intensity.minInfluence). */
+  get minInfluence() { return (this.t.intensity && this.t.intensity.minInfluence) ?? 6; }
   field(now) { return this.statCache || (this.statCache = this.statField(now)); }
 
-  tileStats(tile, now) {
+  tileStats(tile, now, opts = {}) {
     const s = this.stats.statsAt(tile, this.effectivePlacements(), now);
     for (const b of this.activeBoosts(now)) if (sameTile(b.tile, tile)) for (const k in b.stats) s[k] = (s[k] || 0) + b.stats[k];
     s.damp = (s.damp || 0) + this.ambientAt(tile.x, tile.y);
     const m = this.revealFactor(tile.x, tile.y, now);
-    for (const k in s) s[k] = Math.min(this.t.statCap, Math.max(0, s[k] * m));
+    const floor = opts.raw ? 0 : this.minInfluence;
+    for (const k in s) { s[k] = Math.min(this.t.statCap, Math.max(0, s[k] * m)); if (s[k] < floor) s[k] = 0; }
     return s;
   }
 
@@ -1059,8 +1100,34 @@ export class Game {
   }
 
   // ---- progression: slots, blend, expansion, first-uncommon hint
+  /**
+   * Terrain discovery (Field Guide → Terrain): a terrain is discovered the first time it shows up
+   * in your clearing (a stat reaching Low intensity, or a combo forming). Stored with the other
+   * guide discoveries ("terrain:<id>"), so it's saved and never needs rediscovering.
+   */
+  discoverTerrain(now) {
+    const list = this.content.terrain || [];
+    if (!list.length || list.every((t) => this.discovered.has('terrain:' + t.id))) return [];
+    const found = [];
+    const mark = (id) => { if (this.discover('terrain:' + id)) found.push(id); };
+    for (const t of list) if (t.kind === 'base' || t.kind === 'treeline') mark(t.id);
+    const field = this.field(now), c = this.clearing;
+    const wantStat = list.filter((t) => t.kind === 'stat' && !this.discovered.has('terrain:' + t.id));
+    const wantCombo = list.filter((t) => t.kind === 'combo' && !this.discovered.has('terrain:' + t.id));
+    if (wantStat.length || wantCombo.length) {
+      for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+        const st = field.statsAt(x, y);
+        for (const t of wantStat) if ((st[t.stat] || 0) > 0) mark(t.id);
+        if (wantCombo.length) { const cs = this.combosAt(st); for (const t of wantCombo) if (cs.includes(t.combo)) mark(t.id); }
+      }
+    }
+    for (const id of found) this.events.push({ type: 'terrainDiscovered', id });
+    return found;
+  }
+
   checkProgress(now) {
     const s = this.state;
+    this.discoverTerrain(now);
     if (this.inTutorial) this.tutorialTick(now);
 
     if (!s.milestones.blend) {
@@ -1295,7 +1362,8 @@ export class Game {
           }
           let combos = 0;
           for (const [, reqs] of comboReqs) if (reqs.every(([ki, b]) => ki >= 0 && boundMatches(b, field.values[o + ki]))) combos++;
-          effects = sources[i] + fx[i] + combos;
+          // A tile with no stat at or above the influence floor is blank: no effects count there.
+          effects = intensity > 0 || combos > 0 ? sources[i] + fx[i] + combos : 0;
           general = table[Math.min(table.length - 1, Math.round(effects))] * (1 + Math.min(maxInt, perPt * intensity));
           weight = Math.min(max, base * general);
         }
@@ -1908,6 +1976,7 @@ export class Game {
   devFillGuide() {
     for (const it of Object.values(this.content.items)) if (it.inGuide !== false) this.discover('item:' + it.id);
     for (const def of this.content.creatureList) { this.discover('creature:' + def.id); this.discover('creature:' + def.id + ':glimmer'); }
+    for (const t of this.content.terrain || []) this.discover('terrain:' + t.id);
   }
 
   /** Grow the clearing to the whole forest (one expansion message instead of one per ring). */
@@ -1979,6 +2048,7 @@ export class Content {
     this.landmarks = bundle.landmarks || [];
     this.story = bundle.story || {};
     this.tasks = bundle.tasks || [];
+    this.terrain = bundle.terrain || [];
   }
   familyName(id) { return this.creatureList.find((c) => c.family === id)?.familyName || id; }
   itemsInGroup(g) { return this.itemList.filter((i) => i.groups && i.groups.includes(g)); }

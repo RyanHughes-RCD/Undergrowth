@@ -78,7 +78,7 @@
   },
   "visuals": {
     "maxDecorationsPerTile": 3,
-    "intensityStages": [2, 4, 6, 9, 12, 16, 21, 27, 35],
+    "intensityStages": [6, 16, 26, 36, 46, 56, 66, 76, 86],
     "refreshSeconds": 5,
     "edge": {
       "ground": [
@@ -147,13 +147,28 @@
   "wanderers": {
     "maxCatchUpDays": 7
   },
+  "intensity": {
+    "_about": "One authoritative mapping from a tile's raw stat value to what players see. Below minInfluence a stat is inactive everywhere (no visuals, no spawn or effect influence). Raw values stay in the simulation and saves.",
+    "minInfluence": 6,
+    "bands": [
+      { "min": 6, "label": "Low" },
+      { "min": 16, "label": "Moderate" },
+      { "min": 26, "label": "Moderate+" },
+      { "min": 36, "label": "Medium" },
+      { "min": 46, "label": "Medium+" },
+      { "min": 56, "label": "High" },
+      { "min": 66, "label": "High+" },
+      { "min": 76, "label": "Very High" },
+      { "min": 86, "label": "Maximum" }
+    ]
+  },
   "combos": {
     "_about": "Combo tiles (the core of the game): a tile that meets every requirement becomes that combo. Uses the tile's raw stats.",
     "pool": { "name": "Shallow pool", "requires": { "damp": { "min": 12 }, "depth": { "min": 8 } }, "onlyDampItems": true,
       "clusterBonus": 2.5,
       "lilyPads": { "minTiles": 6, "chance": 0.75, "tilesPerExtraPad": 6, "maxPads": 5, "flowerChance": 0.3 },
       "splash": { "everySeconds": 0.65, "max": 24 } },
-    "moss": { "name": "Mossy bank", "requires": { "stone": { "min": 5 }, "damp": { "min": 5 }, "verdure": { "min": 5 } }, "bugsPerTile": 0.85, "maxBugs": 40 },
+    "moss": { "name": "Mossy bank", "requires": { "stone": { "min": 6 }, "damp": { "min": 6 }, "verdure": { "min": 6 } }, "bugsPerTile": 0.85, "maxBugs": 40 },
     "meadow": { "name": "Wild meadow", "requires": { "bloom": { "min": 8 }, "verdure": { "min": 8 } }, "plantCategoryMult": 3, "plantGrowth": { "perPoint": 0.06, "maxBonus": 2.5 }, "flowerGrowthMult": 2.5 }
   },
   "terrain": {
@@ -214,7 +229,7 @@
     ]
   },
   "blend": {
-    "minEach": 3,
+    "minEach": 6,
     "highlightSeconds": 5
   },
   "expansion": {

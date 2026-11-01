@@ -1,5 +1,6 @@
 // DOM user interface: HUD, sheets (Creatures, Bag, Field Guide), geode cracking, reveals.
-import { CORE_STATS, RARITIES, RARITY_NAMES, rarityIndex } from './core.js';
+import { CORE_STATS, RARITIES, RARITY_NAMES, rarityIndex, intensityOf, requirementOf } from './core.js';
+import { paintWaterTile } from './render.js';
 
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
@@ -29,6 +30,7 @@ export function duration(seconds) {
 
 const CATEGORY_TITLES = { seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
 const LANDMARK_TAB = 'landmarks';
+const TERRAIN_TAB = 'terrain';
 const FAMILY_TABS = [['fungling', 'Funglings'], ['sproutling', 'Sproutlings'], ['geodeCritter', 'Geode Critters'], ['wanderer', 'Wanderers']];
 const catTitle = (c) => CATEGORY_TITLES[c] || cap(c);
 
@@ -153,21 +155,58 @@ export class UI {
   }
 
   tileCard(tile) {
-    const stats = this.game.tileStats(tile, this.game.now());
+    const g = this.game, now = g.now();
+    const stats = g.tileStats(tile, now);
+    const terrains = this.terrainsOnTile(tile, stats);
+    const active = CORE_STATS.filter((k) => (stats[k] || 0) > 0);
     return h('div', { class: 'card' },
-      h('div', { class: 'row space' }, h('b', {}, `Tile ${tile.x}, ${tile.y}`),
+      h('div', { class: 'row space' }, h('b', {}, terrains.length ? terrains.map((t) => t.name).join(' · ') : 'Blank ground'),
         h('button', { class: 'x', onclick: () => { this.selectedTile = null; this.app.changed(false); } }, ic('close', 1))),
-      h('div', { class: 'stat-grid' }, CORE_STATS.map((k) => this.statBar(k, stats[k] || 0))),
-      ...this.game.activeBoosts(this.game.now()).filter((b) => b.tile.x === tile.x && b.tile.y === tile.y).map((b) =>
-        h('div', { class: 'sub boost' }, ic('gem', 1), Object.entries(b.stats).map(([k, v]) => `+${v} ${cap(k)}`).join(', ') +
-          (b.expiresAt ? ` · ${duration((b.expiresAt - this.game.now()) / 1000)} left` : ' · permanent'))));
+      active.length ? h('div', { class: 'stat-grid' }, active.map((k) => this.intensityRow(k, stats[k])))
+        : h('p', { class: 'sub' }, 'No intensity here yet. Creatures nearby will change this ground.'),
+      ...g.activeBoosts(now).filter((b) => b.tile.x === tile.x && b.tile.y === tile.y).map((b) =>
+        h('div', { class: 'sub boost' }, ic('gem', 1), Object.entries(b.stats).map(([k, v]) => this.amountText(k, v)).join(', ') +
+          (b.expiresAt ? ` · ${duration((b.expiresAt - now) / 1000)} left` : ' · permanent'))));
   }
 
-  statBar(stat, value) {
+  /** A stat's intensity: name, pips (filled = reached, hollow = not; not colour alone), band label. */
+  intensityRow(stat, value) {
+    const it = intensityOf(value, this.content.tuning);
+    const n = ((this.content.tuning.intensity || {}).bands || []).length || 9;
+    return h('div', { class: 'stat' },
+      h('span', { class: 'stat-name' }, cap(stat)),
+      h('span', { class: 'pips', title: it.label }, Array.from({ length: n }, (_, i) =>
+        h('i', { class: 'pip' + (i < it.level ? ' on' : ''), style: i < it.level ? `background:${STAT_COLORS[stat] || '#fff'}` : '' }))),
+      h('span', { class: 'stat-val' + (it.level ? '' : ' none') }, it.level ? it.label : '—'));
+  }
+
+  /** An amount a creature or gem adds, as intensity ("Stone (Low)"; below the floor: "a touch of Stone"). */
+  amountText(stat, value) {
+    const it = intensityOf(value, this.content.tuning);
+    return it.level ? `${cap(stat)} (${it.label})` : `a touch of ${cap(stat)}`;
+  }
+
+  /** "Damp at Low or more", "Stone at mid Moderate or more". */
+  requirementText(stat, min) {
+    return `${cap(stat)} at ${requirementOf(min, this.content.tuning).text} or more`;
+  }
+
+  /** Gem/material use, worded with intensities instead of raw amounts. */
+  useText(use) {
+    if (!use) return null;
+    if (use.type !== 'soilBoost' || !use.stats) return use.text;
+    const what = Object.entries(use.stats).map(([k, v]) => this.amountText(k, v));
+    const all = Object.keys(use.stats).length === CORE_STATS.length;
+    const amount = all ? `every stat (${intensityOf(Object.values(use.stats)[0], this.content.tuning).label})` : what.join(' and ');
+    return `${use.verb}: adds ${amount} to a tile ${use.permanent ? 'for good' : use.hours ? `for ${use.hours}h` : ''}`.trim() + '.';
+  }
+
+  /** Developer-only: a raw stat value (with its intensity label). */
+  statBar(stat, value, label = null) {
     return h('div', { class: 'stat' },
       h('span', { class: 'stat-name' }, cap(stat)),
       h('span', { class: 'bar' }, h('span', { style: `width:${Math.min(100, value)}%;background:${STAT_COLORS[stat] || '#fff'}` })),
-      h('span', { class: 'stat-val' }, Math.round(value)));
+      h('span', { class: 'stat-val' }, label ? `${value.toFixed(1)} ${label}` : Math.round(value)));
   }
 
   toast(text, sprite) {
@@ -212,6 +251,7 @@ export class UI {
       tasks: () => ['Tasks', this.tasksBody()],
       inspect: () => [`Spawns · tile ${arg.x}, ${arg.y}`, this.inspectBody(arg)],
       entry: () => [arg.name, this.entryBody(arg)],
+      terrain: () => [(this.terrainDef(arg) || {}).name || 'Terrain', this.terrainBody(arg)],
     }[type];
     if (!build) return;
     const [title, body] = build();
@@ -228,7 +268,7 @@ export class UI {
   }
 
   traitSummary(c) {
-    const parts = Object.entries(c.contributions).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${cap(k)} +${Math.round(v)}`);
+    const parts = Object.entries(c.contributions).sort((a, b) => b[1] - a[1]).map(([k, v]) => this.amountText(k, v));
     return [...parts, `Radius ${c.radius.toFixed(1)}`].join(' · ');
   }
 
@@ -303,7 +343,8 @@ export class UI {
         def.notYet ? h('div', { class: 'sub' }, `Not in the game yet: ${def.notYet}`) : null) : null,
       h('label', { class: 'field' }, 'Name', name),
       h('div', { class: 'section' }, 'Traits'),
-      ...Object.entries(c.contributions).sort((a, b) => b[1] - a[1]).map(([k, v]) => this.statBar(k, v)),
+      h('p', { class: 'sub' }, 'At full strength, on its own tile:'),
+      h('div', { class: 'stat-grid' }, Object.entries(c.contributions).sort((a, b) => b[1] - a[1]).map(([k, v]) => this.intensityRow(k, v))),
       h('div', { class: 'sub' }, `Influence radius ${c.radius.toFixed(1)} tiles · ramps up over ${def?.rampHours ?? '?'}h`),
       origin ? h('div', { class: 'sub' }, `Found: ${origin}`) : null,
       h('div', { class: 'section' }, 'Status'),
@@ -327,7 +368,7 @@ export class UI {
           h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)),
           h('div', { class: 'grow' }, h('b', {}, def.name),
             h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, rarityName(def.rarity)),
-            def.use ? h('div', { class: 'sub' }, def.use.text) : null),
+            def.use ? h('div', { class: 'sub' }, this.useText(def.use)) : null),
           h('b', {}, `×${n}`),
           def.onGrow ? h('button', { class: 'btn green small', onclick: () => this.app.beginPlanting(def.id) }, 'Plant') : null,
           def.onCrack ? h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack') : null,
@@ -337,6 +378,9 @@ export class UI {
 
   guideEntries(tab) {
     const content = this.content;
+    if (tab === TERRAIN_TAB) {
+      return (content.terrain || []).map((t) => ({ key: 'terrain:' + t.id, name: t.name, terrain: t }));
+    }
     if (tab === LANDMARK_TAB) {
       return (content.landmarks || []).filter((l) => l.inGuide !== false).map((l) => ({
         key: 'landmark:' + l.id.replace(/^landmark\./, ''), name: l.name, sprite: l.sprite, variant: null,
@@ -351,7 +395,7 @@ export class UI {
           key: `creature:${def.id}${glimmer ? ':glimmer' : ''}`, name: glimmer ? `Glimmer ${def.name}` : def.name, ...art,
           rarity: glimmer ? null : def.rarity, glimmer, howFound: def.howFound, special: def.special,
           text: def.requires && Object.keys(def.requires).length
-            ? 'Needs a tile with ' + Object.entries(def.requires).map(([k, v]) => `${cap(k)} ${v.min}+`).join(', ') + '.' : null,
+            ? 'Needs a tile with ' + Object.entries(def.requires).map(([k, v]) => this.requirementText(k, v.min)).join(', ') + '.' : null,
         };
       }));
     }
@@ -360,8 +404,8 @@ export class UI {
       .map(({ i }) => ({
         key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: null, rarity: i.rarity, text: i.guideText,
         howFound: i.howFound || (i.spawn ? 'Grows wild' + (i.spawn.requires && Object.keys(i.spawn.requires).length
-          ? ' where ' + Object.entries(i.spawn.requires).map(([k, v]) => `${cap(k)} ${v.min}+`).join(', ') : ' anywhere') + '.' : null),
-        special: i.use ? i.use.text : null,
+          ? ' where ' + Object.entries(i.spawn.requires).map(([k, v]) => this.requirementText(k, v.min)).join(', ') : ' anywhere') + '.' : null),
+        special: i.use ? this.useText(i.use) : null,
         teaser: content.story?.guide?.teasers?.[i.id] || null,
       }));
   }
@@ -373,15 +417,15 @@ export class UI {
       .sort((a, b) => ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
     const famTabs = FAMILY_TABS.filter(([id]) => content.creatureList.some((c) => c.family === id)).map(([id]) => id);
     if (this.guideTab === 'creatures') this.guideTab = famTabs[0];
-    const tabs = [LANDMARK_TAB, ...famTabs, ...cats];
+    const tabs = [LANDMARK_TAB, TERRAIN_TAB, ...famTabs, ...cats];
     const all = tabs.flatMap((t) => this.guideEntries(t));
     const found = all.filter((e) => this.game.discovered.has(e.key)).length;
     const sil = { silhouette: [78, 84, 92] };
     return [`Field Guide · ${found}/${all.length}`, [
       h('div', { class: 'tabs' }, tabs.map((t) => h('button', {
         class: 'tab' + (t === this.guideTab ? ' on' : ''), onclick: () => { this.guideTab = t; this.renderSheet(); },
-      }, t === LANDMARK_TAB ? 'Landmarks' : (FAMILY_TABS.find(([id]) => id === t) || [null, catTitle(t)])[1]))),
-      h('div', { class: 'guide-grid' }, this.guideEntries(this.guideTab).map((e) => {
+      }, t === LANDMARK_TAB ? 'Landmarks' : t === TERRAIN_TAB ? 'Terrain' : (FAMILY_TABS.find(([id]) => id === t) || [null, catTitle(t)])[1]))),
+      this.guideTab === TERRAIN_TAB ? this.terrainGrid() : h('div', { class: 'guide-grid' }, this.guideEntries(this.guideTab).map((e) => {
         const known = this.game.discovered.has(e.key);
         // Undiscovered entries with a teaser (the Heartwood Sapling) can still be opened as a silhouette.
         const teaser = !known && e.teaser;
@@ -403,6 +447,194 @@ export class UI {
       e.howFound ? h('p', { class: 'sub center' }, e.howFound) : null,
       e.text ? h('p', { class: 'sub center' }, e.text) : null,
       e.special ? h('p', { class: 'center' }, ic('sparkle', 1), ' ' + e.special) : null,
+    ];
+  }
+
+  // -------------------------------------------------------------- terrain (Field Guide)
+
+  terrainDef(id) { return (this.content.terrain || []).find((t) => t.id === id) || null; }
+
+  /** Terrain types on a tile right now: its combos, then its active stats (strongest first). */
+  terrainsOnTile(tile, stats) {
+    const list = this.content.terrain || [];
+    if (!this.game.inClearing(tile)) return list.filter((t) => t.kind === 'treeline');
+    const combos = this.game.combosAt(stats);
+    const out = list.filter((t) => t.kind === 'combo' && combos.includes(t.combo));
+    const stat = list.filter((t) => t.kind === 'stat' && (stats[t.stat] || 0) > 0).sort((a, b) => (stats[b.stat] || 0) - (stats[a.stat] || 0));
+    return [...out, ...stat].slice(0, 3);
+  }
+
+  /**
+   * A terrain illustration from the real game sprites: cols x rows tiles of ground, with the
+   * terrain's overlay/decoration at rising intensity stages, or a joined pond for water. Crisp, no
+   * smoothing.
+   */
+  terrainArt(def, cols, rows, scale) {
+    const TS = 16, art = def.art || {};
+    const head = art.deco ? 8 : 0;
+    const c = document.createElement('canvas');
+    c.width = cols * TS; c.height = rows * TS + head;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    const frame = (id) => this.sprites.frames(id, null)[0];
+    const n = cols * rows;
+    const stages = n === 1 ? [6] : Array.from({ length: n }, (_, i) => Math.max(1, Math.round(2 + i * 7 / Math.max(1, n - 1))));
+    const pool = cols === 1 ? [[1]] : [[1, 1, 0], [1, 1, 1]];
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const ground = (art.ground || ['tile.grass.a', 'tile.grass.b', 'tile.grass.c'])[(x + y * 2) % (art.ground || [1, 2, 3]).length];
+      g.drawImage(frame(ground).canvas, x * TS, y * TS + head);
+    }
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const i = y * cols + x, st = stages[i];
+      if (art.water) {
+        const at = (dx, dy) => ((pool[y + dy] || [])[x + dx] ? 1 : 0);
+        if (at(0, 0)) g.drawImage(paintWaterTile(at, x + 40, y + 40, this.content.tuning.visuals.water || {}), x * TS, y * TS + head);
+      }
+      if (art.overlay) g.drawImage(frame(art.overlay.replace('{n}', st)).canvas, x * TS, y * TS + head);
+      if (art.deco) {
+        const id = art.deco.replace('{n}', Math.max(st, def.kind === 'treeline' ? 1 : st));
+        const f = frame(id), a = this.sprites.anchor(id);
+        g.drawImage(f.canvas, x * TS + 8 - a.x, y * TS + head + 14 - a.y);
+      }
+    }
+    c.style.width = c.width * scale + 'px';
+    c.style.height = c.height * scale + 'px';
+    c.className = 'px terrain-art';
+    return c;
+  }
+
+  terrainGrid() {
+    const dev = this.app.devMode;
+    return h('div', { class: 'guide-grid' }, this.guideEntries(TERRAIN_TAB).map((e) => {
+      const known = this.game.discovered.has(e.key);
+      const view = known || dev;                     // developer mode can read every entry (not saved as found)
+      const art = this.terrainArt(e.terrain, 1, 1, 4);
+      if (!known) art.style.filter = 'brightness(0.25) saturate(0)';
+      return h('button', { class: 'guide-cell' + (known ? '' : ' unknown'), onclick: () => { if (view) this.open('terrain', e.terrain.id); } },
+        art, h('span', {}, known ? e.name : dev ? `${e.name} (dev)` : '???'));
+    }));
+  }
+
+  /** Category bonus a stat gives (spawns.categoryScaling), at a given raw level, clamped like the game. */
+  categoryMultAt(cat, stat, value) {
+    const cs = this.content.tuning.spawns.categoryScaling || {};
+    const pct = (cs[cat] || {})[stat];
+    if (!pct) return null;
+    return Math.min(cs.maxMultiplier ?? 6, Math.max(cs.minMultiplier ?? 0.25, 1 + (pct / 100) * value));
+  }
+
+  terrainBody(id) {
+    const def = this.terrainDef(id);
+    if (!def) return [h('p', {}, 'Unknown terrain.')];
+    const T = this.content.tuning, g = this.game, now = g.now();
+    const band = (i) => ((T.intensity || {}).bands || [])[i] || { min: 6, label: 'Low' };
+    const lines = { appears: [], spawns: [], other: [] };
+    const known = (it) => g.discovered.has('item:' + it.id);
+    const itemList = (items) => {
+      const names = items.filter(known).map((i) => i.name);
+      const hidden = items.length - names.length;
+      return names.join(', ') + (hidden ? `${names.length ? ', ' : ''}${hidden} not yet found` : '');
+    };
+    const lw = T.spawns.locationWeighting || {}, table = lw.generalByEffectCount || [1, 1.5, 2, 2.5];
+    const general = `Ground with active effects draws spawns of every kind: ×${table[1]} with one effect, ×${table[2]} with two, ×${table[3]} with three or more, and more as intensity rises (up to ×${lw.maxWeight} in all). It's a bonus, not a guarantee.`;
+    const catName = { mushroom: 'Mushrooms', plant: 'Plants', geode: 'Geodes' };
+    if (def.kind === 'base') {
+      lines.appears.push('Every tile until a stat reaches Low intensity.');
+      lines.spawns.push(`Can appear: ${itemList(this.content.spawnableItems.filter((i) => !i.spawn.requires || !Object.keys(i.spawn.requires).length))}.`);
+      lines.spawns.push('Mushrooms, plants and geodes are equally likely to be the kind that turns up.');
+    } else if (def.kind === 'stat') {
+      const k = def.stat;
+      lines.appears.push(`${cap(k)} at ${band(0).label} or more (stages grow through every intensity up to ${band(((T.intensity || {}).bands || []).length - 1).label}).`);
+      const needs = this.content.spawnableItems.filter((i) => i.spawn.requires && i.spawn.requires[k]);
+      if (needs.length) lines.spawns.push(`Wild finds that need ${cap(k)}: ${itemList(needs)}. Each appears once its own need is met (see its Field Guide entry).`);
+      for (const cat of ['mushroom', 'plant', 'geode']) {
+        const lo = this.categoryMultAt(cat, k, band(0).min), mid = this.categoryMultAt(cat, k, band(3).min);
+        if (lo) lines.spawns.push(`${catName[cat]} become likelier to be the kind chosen here: about ×${lo.toFixed(1)} at ${band(0).label}, ×${mid.toFixed(1)} at ${band(3).label}, up to ×${(T.spawns.categoryScaling || {}).maxMultiplier ?? 6}.`);
+      }
+      lines.spawns.push(general);
+      const tr = T.terrain || {};
+      if (k === 'stone') {
+        lines.other.push(`After its creature leaves, Stone fades ${Math.round(1 / ((tr.statDecayRate || {}).stone || 1))}× more slowly than other stats.`);
+        lines.other.push('Where Stone is the strongest stat, geodes lie exposed on top: tap to collect.');
+      }
+      if (k === 'depth') {
+        lines.other.push('Where Depth is the strongest stat, geodes are buried. Things whose main need is Depth are always buried: they show as loose soil, tap to dig.');
+        lines.other.push('Depth lowers the ground, so water runs here and collects.');
+      }
+      if (k === 'damp') {
+        const mg = (tr.damp || {}).mushroomGrowth || {};
+        lines.spawns.push(`Damp grows mushrooms faster: from ${requirementOf(mg.minDamp ?? 6, T).text} Damp, each tile gets extra mushroom chances, up to ×${1 + (mg.maxBonus ?? 2)} its usual rate.`);
+        lines.other.push('Water slowly seeps to drier neighbours and runs downhill; high Stone blocks it.');
+      }
+      if (k === 'glow') {
+        const gc = tr.glowCycle || {};
+        lines.other.push(`Glow counts ×${gc.dayFactor ?? 0.4} by day and ×${gc.nightFactor ?? 1.6} at night toward spawns. On deep ground it counts in full even by day.`);
+      }
+      if (k === 'bloom') {
+        const bc = tr.bloomCycle || {};
+        lines.other.push(`Bloom opens from ${bc.openHour ?? 6}:00, peaks at ${bc.peakHour ?? 12}:00 and closes by ${bc.closeHour ?? 19}:00; its effect on spawns follows the same rhythm.`);
+        lines.other.push('Strong Bloom brings a wider mix of plants, and draws wanderers.');
+      }
+      if (k === 'verdure') {
+        const v = tr.verdure || {};
+        lines.other.push(`From ${requirementOf(v.hideThreshold ?? 30, T).text} Verdure, things on the surface hide in tall grass until you tap the tile.`);
+        lines.other.push('Seeds grow faster here, and plants picked here drop extra seeds more often.');
+      }
+    } else if (def.kind === 'combo') {
+      const cb = g.combo(def.combo);
+      for (const [k, b] of Object.entries(cb.requires || {})) lines.appears.push(this.requirementText(k, b.min) + '.');
+      lines.appears.push('All of these on the same tile.');
+      if (def.combo === 'pool') {
+        lines.spawns.push(`Only things that need Damp can spawn on water: ${itemList(this.content.spawnableItems.filter((i) => i.spawn.requires && i.spawn.requires.damp))}.`);
+        lines.spawns.push(`Water Reed grows only in pools, and is ×${cb.clusterBonus ?? 2.5} likelier beside another reed.`);
+        const lp = cb.lilyPads || {};
+        lines.other.push(`Pools that join into a pond of ${lp.minTiles ?? 6} or more tiles may grow lily pads (more in bigger ponds).`);
+        lines.other.push('Creatures splash as they wade through.');
+      }
+      if (def.combo === 'moss') lines.other.push('Bugs gather over moss: beetles by day, fireflies at night. They are part of the scenery.');
+      if (def.combo === 'meadow') {
+        const pg = cb.plantGrowth || {};
+        lines.spawns.push(`Plants are ×${cb.plantCategoryMult ?? 3} likelier to be the kind chosen here.`);
+        lines.spawns.push(`Each meadow tile also grows extra plants, up to ×${1 + (pg.maxBonus ?? 2.5)} its usual rate.`);
+        lines.other.push(`Mystery Seeds planted here grow ×${cb.flowerGrowthMult ?? 2.5} faster.`);
+      }
+      lines.spawns.push(general);
+    } else if (def.kind === 'treeline') {
+      lines.appears.push('Everywhere outside your clearing.');
+      lines.spawns.push('Nothing spawns in the treeline, and creature influence stops at its edge.');
+      const e = T.expansion || {};
+      const conds = (e.conditions || []).map((cd) => {
+        if (cd.type === 'tilesAboveThreshold') return `${Math.round(cd.fraction * 100)}% of the clearing has a stat at ${requirementOf(cd.threshold, T).text} or more`;
+        if (cd.type === 'slotsUnlocked') { const d = ((T.slotUnlocks || {}).unlockDays || [])[cd.count - 1]; return d != null ? `the forest is ${d + 1} days old` : null; }
+        return null;
+      }).filter(Boolean);
+      lines.other.push(`The clearing pushes it back by ${e.ringTiles ?? 2} tiles on each side when ${conds.join(e.mode === 'all' ? ' and ' : ' or ')}, at most every ${e.minHoursBetween ?? 12} hours.`);
+    }
+    // Compare with the tile you have selected (required vs current), without raw values.
+    let compare = null;
+    const sel = this.selectedTile;
+    const relevant = def.kind === 'stat' ? { [def.stat]: { min: band(0).min } } : def.kind === 'combo' ? (g.combo(def.combo).requires || {}) : null;
+    if (relevant) {
+      if (sel) {
+        const st = g.tileStats(sel, now);
+        compare = [h('div', { class: 'section' }, 'Your selected tile'),
+          ...Object.entries(relevant).map(([k, b]) => {
+            const okNow = (st[k] || 0) >= b.min;
+            return h('div', { class: 'req-row' }, h('span', { class: 'grow' }, cap(k)),
+              h('span', { class: 'sub' }, `needs ${requirementOf(b.min, T).text}`),
+              h('b', {}, `has ${intensityOf(st[k] || 0, T).label}`), h('span', { class: 'req-mark ' + (okNow ? 'ok' : 'no') }, okNow ? 'met' : 'not yet'));
+          })];
+      } else compare = [h('p', { class: 'sub' }, 'Tip: select a tile in the forest, then open this page to compare it with what this terrain needs.')];
+    }
+    const section = (title, arr) => (arr.length ? [h('div', { class: 'section' }, title), ...arr.map((t) => h('p', { class: 'guide-line' }, t))] : []);
+    return [
+      h('div', { class: 'hero terrain-hero' }, this.terrainArt(def, 3, 2, 4)),
+      !g.discovered.has('terrain:' + id) && this.app.devMode ? h('p', { class: 'dev-note' }, 'Developer view: not discovered in this forest yet.') : null,
+      h('p', { class: 'sub center' }, def.text),
+      ...section('Appears when', lines.appears),
+      ...section('Spawns', lines.spawns),
+      ...section('Other properties', lines.other),
+      ...(compare || []),
     ];
   }
 
@@ -445,8 +677,10 @@ export class UI {
     };
     const cats = ['mushroom', 'plant', 'geode'];
     const seed = g.seedDetails(tile, now);
+    const raw = g.tileStats(tile, now, { raw: true });
     return [
-      h('div', { class: 'stat-grid' }, CORE_STATS.map((k) => this.statBar(k, stats[k] || 0))),
+      h('p', { class: 'sub' }, 'Developer view: raw values (players see intensity only). Below the influence floor a stat counts as 0.'),
+      h('div', { class: 'stat-grid' }, CORE_STATS.map((k) => this.statBar(k, raw[k] || 0, intensityOf(stats[k] || 0, this.content.tuning).label))),
       h('p', { class: 'sub' }, `${g.isNight(now) ? 'Night' : 'Day'}${g.isRaining(now) ? ', raining' : ''} · ` +
         (g.inClearing(tile) ? (g.isFree(tile) ? 'open tile' : 'tile is occupied (nothing spawns here now)') : 'outside the clearing')),
       (() => {
@@ -522,7 +756,16 @@ export class UI {
       h('p', { class: 'sub' }, '60× = a minute per second · 3600× = an hour per second. Creatures take 12–48 forest-hours to reach full strength.'),
       h('div', { class: 'section' }, 'Skip ahead'),
       h('div', { class: 'row gap wrap' }, b('+1 hour', () => a.debugSkip(1)), b('+6 hours', () => a.debugSkip(6)), b('+1 day', () => a.debugSkip(24))),
-      h('div', { class: 'section' }, 'View'),
+      // Raw values (inspector, overlay, heatmap) are developer-only.
+      ...(a.devMode ? this.devViewTools() : []),
+    ];
+  }
+
+  devViewTools() {
+    const a = this.app;
+    const b = (label, fn, cls = '') => h('button', { class: 'btn ' + cls, onclick: fn }, label);
+    return [
+      h('div', { class: 'section' }, 'View (raw values)'),
       h('div', { class: 'row gap wrap' },
         b(this.statOverlay ? 'Hide stat overlay' : 'Show stat overlay', () => { this.statOverlay = !this.statOverlay; a.changed(false); this.renderSheet(); }),
         b(this.spawnHeatmap ? 'Spawn heatmap: ON' : 'Spawn heatmap: off', () => { this.spawnHeatmap = !this.spawnHeatmap; a.changed(false); this.renderSheet(); }, this.spawnHeatmap ? 'orange' : ''),
@@ -729,7 +972,7 @@ export class UI {
         text = h('div', { class: 'center' },
           h('h2', {}, gem ? gem.name : r.item),
           gem ? h('p', { class: 'rarity', style: `color:${color}` }, rarityName(gem.rarity).toUpperCase()) : null,
-          gem && gem.use ? h('p', { class: 'sub' }, gem.use.text) : null,
+          gem && gem.use ? h('p', { class: 'sub' }, this.useText(gem.use)) : null,
           r.isNew ? h('p', { class: 'new' }, 'New Field Guide entry!') : null);
       }
       rockWrap.replaceChildren(left, right, revealEl);

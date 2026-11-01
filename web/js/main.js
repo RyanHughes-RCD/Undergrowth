@@ -100,7 +100,10 @@ class App {
     const ui = this.ui;
     const cfg = this.content.tuning;
     for (const e of events) {
-      if (e.type === 'blend') {
+      if (e.type === 'terrainDiscovered') {
+        const t = (this.content.terrain || []).find((x) => x.id === e.id);
+        if (t) ui.toast(`New terrain in your Field Guide: ${t.name}.`);
+      } else if (e.type === 'blend') {
         this.view.highlight(e.tiles, (cfg.blend && cfg.blend.highlightSeconds) || 5);
         ui.celebrate(ui.story('messages.blendTitle'), ui.story('messages.blend'));
       } else if (e.type === 'expansion') {
@@ -417,6 +420,7 @@ class App {
     this.save();
     this.devMode = false;
     store.del(DEV_MODE_KEY);
+    Object.assign(this.ui, { spawnInspector: false, spawnHeatmap: false, statOverlay: false });   // raw views are dev-only
     const s = this.load();
     this.swapGame(s ? new Game(this.content, s) : Game.newForest(this.content, Date.now()));
     this.ui.toast('Back in your forest.');
