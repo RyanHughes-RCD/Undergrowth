@@ -138,6 +138,19 @@ python3 tools/gen_placeholders.py
   - "Use on a creature source item" (Moonfall Shard): the next creature you find is a Glimmer.
   - "+10% Sproutling chance" (Hybridizer): ×1.1.
 
+### Tile spawn workbook (`design/Undergrowth_Tile_Spawns.xlsx`)
+
+An editable Excel view of every wild spawn by terrain type and intensity.
+
+- **Editable sheets** (blue text on yellow):
+  - **Items:** rarity, spawn weight, stat minimums, scaling.
+  - **Terrains:** what forms each named terrain and combo, home finds, rules.
+  - **Settings:** intensity levels, scaling clamps, category tilt, terrain affinity, where spawns land.
+- **View sheets** (Single Stats, Pairs, Triples): live formulas giving the chance of each item at each intensity level for a tile with those stats. They match `Game.spawnDetails` / `categoryDetails` exactly. The Settings → Preview inputs set time of day, rain and Bloom factor.
+- **Commands:**
+  - `python3 tools/tile_spawns_workbook.py export` rebuilds the workbook from the game data.
+  - `python3 tools/tile_spawns_workbook.py import [file]` applies an edited one. Items go to the spawn table spreadsheet, then `import_spawn_table.py` runs; Terrains and Settings go to `tuning.json`. It lists every change.
+
 ## Project layout
 
 ```
