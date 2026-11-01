@@ -37,7 +37,7 @@ final class ContentTests: XCTestCase {
         let db = try loadContent()
         let lantern = try XCTUnwrap(db.creatures["lantern-fungling"])
         XCTAssertEqual(lantern.bonuses?[.glow], 14)
-        XCTAssertEqual(lantern.radius, 2)
+        XCTAssertEqual(lantern.radius, 4, "radius doubled")
         XCTAssertEqual(lantern.rampHours, 18)
         XCTAssertEqual(lantern.source?.items, ["mushroom.glowcap"])
         let morel = try XCTUnwrap(db.items["mushroom.moonlight-morel"]?.spawn)
@@ -108,11 +108,11 @@ final class StatTests: XCTestCase {
         for _ in 0..<50 {
             let c = roller.rollCreature(typeID: "spore-sage", origin: nil, now: t0, forceGlimmer: false, rng: &rng)
             XCTAssertTrue((10.75...18.05).contains(c.contributions[.damp]!), "\(c.contributions)")
-            XCTAssertEqual(c.radius, 3)
+            XCTAssertEqual(c.radius, 6)
             XCTAssertEqual(c.rampHours, 24)
         }
         let g = roller.rollCreature(typeID: "spore-sage", origin: nil, now: t0, forceGlimmer: true, rng: &rng)
-        XCTAssertEqual(g.radius, 4, "glimmer +1 radius")
+        XCTAssertEqual(g.radius, 8, "glimmer radius doubles too (+2)")
         XCTAssertGreaterThanOrEqual(g.contributions[.damp]!, 18 * 0.6 * 1.5 - 0.05)
     }
 
@@ -128,9 +128,9 @@ final class StatTests: XCTestCase {
         XCTAssertEqual(g.tileStats(tile, at: half)[.glow]!, c.contributions[.glow]! / 2, accuracy: 0.01)
         let full = t0.addingTimeInterval(18 * 3600)
         XCTAssertEqual(g.tileStats(tile, at: full)[.glow]!, c.contributions[.glow]!, accuracy: 0.01)
-        // Radius 2 + 1 padding: two tiles out gets some, three tiles out gets none.
-        XCTAssertGreaterThan(g.tileStats(GridPoint(tile.x + 2, tile.y), at: full)[.glow]!, 0)
-        XCTAssertEqual(g.tileStats(GridPoint(tile.x + 3, tile.y), at: full)[.glow]!, 0)
+        // Radius 4 + 1 padding: four tiles out gets some, five tiles out gets none.
+        XCTAssertGreaterThan(g.tileStats(GridPoint(tile.x + 4, tile.y), at: full)[.glow]!, 0)
+        XCTAssertEqual(g.tileStats(GridPoint(tile.x + 5, tile.y), at: full)[.glow]!, 0)
         try g.recall(creatureID: c.id, now: full)
         XCTAssertEqual(g.tileStats(tile, at: full.addingTimeInterval(9 * 3600))[.glow]!, c.contributions[.glow]! / 2, accuracy: 0.01)
     }

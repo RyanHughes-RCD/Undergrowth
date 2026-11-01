@@ -6,8 +6,9 @@ export const CORE_STATS = ['damp', 'glow', 'bloom', 'verdure', 'stone', 'depth']
 export const RARITIES = ['common', 'uncommon', 'rare', 'veryRare', 'legendary'];
 export const RARITY_NAMES = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', veryRare: 'Very rare', legendary: 'Legendary' };
 export const rarityIndex = (r) => Math.max(0, RARITIES.indexOf(r));
-/** 2 = spawn-table content (older forests are replanted). 3 = clearing, tutorial, unlocks (2 migrates). */
-export const SAVE_VERSION = 3;
+/** 2 = spawn-table content (older forests are replanted). 3 = clearing, tutorial, unlocks (2 migrates).
+ *  4 = creature influence radius doubled (owned/placed creatures are scaled on load). */
+export const SAVE_VERSION = 4;
 export const TUTORIAL_STEPS = ['forage', 'pickClover', 'plant', 'dig', 'crack', 'place', 'watch', 'wrap', 'done'];
 
 // ---------------------------------------------------------------- utilities
@@ -351,6 +352,26 @@ export class Game {
     s.tasks = s.tasks || { claimed: [], announced: [] };
     if (s.lastExpansionAt == null) s.lastExpansionAt = s.createdAt;
     if (s.announcedSlots == null) s.announcedSlots = this.unlockedSlots(s.lastUpdated || s.createdAt);
+    if ((s.version || 0) < 4) {
+      // Every creature's influence radius doubled (spreadsheet + glimmer bonus); scale what's already owned.
+      for (const c of s.creatures) c.radius *= 2;
+      for (const p of s.placements) p.radius *= 2;
+      // The starting clearing is now twice as tall. Forests that haven't expanded yet get the extra
+      // rows (same width); the new tiles fade in like any revealed ground.
+      const c = s.clearing, H = s.size.height;
+      const untouched = !Object.keys(s.revealed).length && c.y1 - c.y0 + 1 < H;
+      if (untouched) {
+        const h = c.y1 - c.y0 + 1, add = h;
+        const up = Math.min(c.y0, Math.floor(add / 2));
+        const down = Math.min(H - 1 - c.y1, add - up);
+        const now = s.lastUpdated || s.createdAt;
+        for (let y = c.y0 - up; y <= c.y1 + down; y++) {
+          if (y >= c.y0 && y <= c.y1) continue;
+          for (let x = c.x0; x <= c.x1; x++) s.revealed[x + ',' + y] = now;
+        }
+        s.clearing = { x0: c.x0, x1: c.x1, y0: c.y0 - up, y1: c.y1 + down };
+      }
+    }
     s.version = SAVE_VERSION;
   }
 

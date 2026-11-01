@@ -20,7 +20,7 @@
       1.0
     ],
     "glimmerBonusMult": 1.5,
-    "glimmerRadiusBonus": 1
+    "glimmerRadiusBonus": 2
   },
   "spawns": {
     "tickSeconds": 180,
@@ -97,7 +97,7 @@
   "debugTools": true,
   "clearing": {
     "startWidth": 7,
-    "startHeight": 7
+    "startHeight": 14
   },
   "tutorial": {
     "enabled": true,
