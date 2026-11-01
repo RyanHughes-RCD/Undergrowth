@@ -59,7 +59,7 @@ The iOS app doesn't have these yet. It ignores the new data files.
 
 ## How to play
 
-The forest is 40×56 tiles (`tuning.json` → `grid`). You start in a small clearing that grows outward over time. The view fits the clearing between the top bar and the bottom controls at a crisp whole-pixel scale, and never zooms out past `visuals.minFitScale`. Once the clearing is bigger than the screen, drag to explore. Pinch to zoom in.
+The forest is 40×56 tiles (`tuning.json` → `grid`). You start in a small clearing that grows outward over time. At full zoom-out the clearing plus a thin treeline border (`visuals.viewBorderTiles`, half a tile) fills the screen width at a crisp whole-pixel scale, and you can never pan past that border. Drag to explore the rest of the clearing. Pinch to zoom in.
 
 
 - **You start with no creatures.** Tap things that grow in the forest:
@@ -112,7 +112,8 @@ python3 tools/gen_placeholders.py
   - Multiplier = 1 + Σ (scaling ÷ 100) × max(0, stat − min). It is clamped to `spawns.scaling.minMultiplier`..`maxMultiplier` in `tuning.json` (0.25..4). Effective weight = base weight × multiplier.
   - Minimums, time of day, rain and one-at-a-time still gate whether an item can spawn at all.
   - If every scaling cell is left blank, the importer falls back to a rate per required stat by rarity: Common 1, Uncommon 1.5, Rare 2, Very rare 2.5, Legendary 3.
-  - **Category first:** each spawn first picks mushroom, plant or geode (weighted by `spawns.categoryWeights`, among categories that have something qualifying on that tile), then an item within it by effective weight.
+  - **Category first:** each spawn first picks mushroom, plant or geode (among categories that have something qualifying on that tile), then an item within it by effective weight.
+  - **Category tilt:** a category's weight is `spawns.categoryWeights` × a multiplier from the tile's own-family stats (`spawns.categoryScaling`, % per point, clamped to 0.25..6). The default is +10% per point of Damp/Glow for mushrooms, Bloom/Verdure for plants and Stone/Depth for geodes. So an area full of Geode Critters turns up mostly geodes: one Common critter nearby gives about 50% geodes and 25% each of the others.
   - **Seeds** choose their plant when planted, using the same weights for that tile at that time. The choice is saved on the seed, so a plant item can carry its own `growthSprites` (otherwise the stages are the generic seed stages ending in the plant's sprite).
   - **Spawn inspector:** in 🐞 Debug, turn on "Spawn inspector", then tap any tile. It shows the tile's stats and every qualifying item with its base, multiplier, weight and % within its category, plus what a Mystery Seed planted there now could grow into.
 - **Unclear sheet entries** and how I read them:

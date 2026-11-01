@@ -444,7 +444,7 @@ export class UI {
     const g = this.game, now = g.now();
     const stats = g.tileStats(tile, now);
     const details = g.spawnDetails(tile, now);
-    const odds = g.categoryOdds(details);
+    const catRows = Object.fromEntries(g.categoryDetails(details, stats).map((r) => [r.category, r]));
     const fmt = (n) => (n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2));
     const table = (list, catShare) => {
       const total = list.reduce((a, d) => a + d.weight, 0) || 1;
@@ -467,13 +467,13 @@ export class UI {
       ...cats.map((cat) => {
         const list = details.filter((d) => d.item.category === cat);
         return [
-          h('div', { class: 'section' }, `${catTitle(cat)} · ${odds[cat] ? (odds[cat] * 100).toFixed(0) + '% of rolls' : 'none qualify'}`),
+          h('div', { class: 'section' }, `${catTitle(cat)} · ${catRows[cat] ? (catRows[cat].share * 100).toFixed(0) + '% of rolls (×' + catRows[cat].mult.toFixed(2) + ')' : 'none qualify'}`),
           list.length ? table(list) : h('p', { class: 'sub' }, 'Nothing qualifies here.'),
         ];
       }),
       h('div', { class: 'section' }, 'A Mystery Seed planted here now could grow into'),
       seed.length ? table(seed) : h('p', { class: 'sub' }, 'No plant qualifies.'),
-      h('p', { class: 'sub' }, '* multiplier clamped to the configured range. Chance is within the category; the category itself is picked first by spawns.categoryWeights.'),
+      h('p', { class: 'sub' }, '* multiplier clamped to the configured range. Chance is within the category; the category itself is picked first by spawns.categoryWeights × its stat multiplier (spawns.categoryScaling).'),
     ];
   }
 

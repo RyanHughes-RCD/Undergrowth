@@ -78,16 +78,24 @@ export class ForestView {
     return { x: 0, y: top, w, h: Math.max(100, h - top - bottom) };
   }
 
-  /** Whole-device-pixel scale at which the entire map fits the play area. */
+  /** The furthest the camera may see: the clearing plus a thin treeline border (visuals.viewBorderTiles). */
+  get bounds() {
+    const r = this.rect;
+    const b = (this.app.content.tuning.visuals.viewBorderTiles ?? 0.5) * TS;
+    return { x: r.x - b, y: r.y - b, w: r.w + b * 2, h: r.h + b * 2 };
+  }
+
+  /**
+   * Furthest zoom-out, in whole device pixels: the bounds fill the full screen width
+   * (and the play area's height), so you never see past the treeline border.
+   */
   fitK() {
     if (!this.app.game) return Math.round(2 * this.dpr);
-    const a = this.area();
-    const pad = 4;
-    // Fit the whole clearing, but never zoom out past minFitScale: big clearings are explored by dragging.
-    const v = this.app.content.tuning.visuals;
-    const fit = Math.min((a.w - 8) / (this.mapW + pad), a.h / (this.mapH + pad), v.maxFitScale || 4);
-    const k = Math.max(Math.floor(this.dpr * fit), Math.ceil(this.dpr * (v.minFitScale || 0)));
-    return Math.max(1, k);
+    const a = this.area(), b = this.bounds;
+    // Width: round down so the border on both sides stays in view (whole pixels can't hit it exactly).
+    const kw = Math.floor(this.dpr * window.innerWidth / b.w);
+    const kh = Math.ceil(this.dpr * a.h / b.h - 0.01);
+    return Math.max(1, kw, kh);
   }
 
   fit() {
@@ -100,12 +108,15 @@ export class ForestView {
 
   centerOn(tile) { const p = centre(tile.x, tile.y); this.cam = { x: p.x, y: p.y }; this.clamp(); }
 
-  /** When the map fits, keep it centred; when zoomed in, keep the view over the map. */
+  /**
+   * Keep the view inside the bounds: across the full screen width, and down the play area
+   * (so every row can be brought out from under the HUD).
+   */
   clamp() {
     if (!this.app.game) return;
     const a = this.area();
-    const hw = a.w / 2 / this.zoom, hh = a.h / 2 / this.zoom;
-    const r = this.rect;
+    const hw = window.innerWidth / 2 / this.zoom, hh = a.h / 2 / this.zoom;
+    const r = this.bounds;
     const clampAxis = (v, lo, size, half) => (size <= half * 2 ? lo + size / 2 : Math.min(Math.max(v, lo + half), lo + size - half));
     this.cam.x = clampAxis(this.cam.x, r.x, r.w, hw);
     this.cam.y = clampAxis(this.cam.y, r.y, r.h, hh);

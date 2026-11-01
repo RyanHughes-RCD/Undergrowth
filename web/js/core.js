@@ -929,21 +929,37 @@ export class Game {
 
   spawnWeights(tile, t) { return this.spawnDetails(tile, t).map((d) => [d.item, d.weight]); }
 
-  /** Category odds for a tile: configurable weights over categories with something qualifying. */
-  categoryOdds(details) {
+  /**
+   * Category weights for a tile: spawns.categoryWeights × a stat multiplier, so a category's own
+   * stats (spawns.categoryScaling, % per point) make it likelier there. E.g. Stone/Depth from
+   * Geode Critters tilt the area towards geodes. Clamped to categoryScaling.min/maxMultiplier.
+   */
+  categoryDetails(details, stats) {
     const cw = (this.t.spawns && this.t.spawns.categoryWeights) || {};
+    const cs = (this.t.spawns && this.t.spawns.categoryScaling) || {};
+    const lo = cs.minMultiplier ?? 0.25, hi = cs.maxMultiplier ?? 6;
     const cats = [...new Set(details.map((d) => d.item.category))];
-    const total = cats.reduce((a, c) => a + (cw[c] ?? 1), 0) || 1;
-    return Object.fromEntries(cats.map((c) => [c, (cw[c] ?? 1) / total]));
+    const rows = cats.map((c) => {
+      let raw = 1;
+      for (const stat in cs[c] || {}) raw += (cs[c][stat] / 100) * ((stats && stats[stat]) || 0);
+      const mult = Math.min(hi, Math.max(lo, raw));
+      return { category: c, base: cw[c] ?? 1, mult, weight: (cw[c] ?? 1) * mult };
+    });
+    const total = rows.reduce((x, r) => x + r.weight, 0) || 1;
+    for (const r of rows) r.share = r.weight / total;
+    return rows;
   }
 
-  /** Category first (mushroom / plant / geode), then the item within it by effective weight. */
+  categoryOdds(details, stats) {
+    return Object.fromEntries(this.categoryDetails(details, stats).map((r) => [r.category, r.share]));
+  }
+
+  /** Category first (mushroom / plant / geode, tilted by the tile's stats), then the item within it by effective weight. */
   pickSpawn(tile, t) {
     const details = this.spawnDetails(tile, t);
     if (!details.length) return null;
-    const cw = (this.t.spawns && this.t.spawns.categoryWeights) || {};
-    const cats = [...new Set(details.map((d) => d.item.category))];
-    const cat = weightedPick(cats.map((c) => [c, cw[c] ?? 1]), this.rng);
+    const cats = this.categoryDetails(details, this.tileStats(tile, t));
+    const cat = weightedPick(cats.map((r) => [r.category, r.weight]), this.rng);
     return weightedPick(details.filter((d) => d.item.category === cat).map((d) => [d.item, d.weight]), this.rng);
   }
 

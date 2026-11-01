@@ -35,6 +35,13 @@
       "minMultiplier": 0.25,
       "maxMultiplier": 4
     },
+    "categoryScaling": {
+      "minMultiplier": 0.25,
+      "maxMultiplier": 6,
+      "mushroom": {"damp": 10, "glow": 10},
+      "plant": {"bloom": 10, "verdure": 10},
+      "geode": {"stone": 10, "depth": 10}
+    },
     "categoryWeights": {
       "mushroom": 1,
       "plant": 1,
@@ -86,9 +93,8 @@
       600,
       3600
     ],
-    "maxFitScale": 3,
-    "overlayFadeSeconds": 0.6,
-    "minFitScale": 1.6
+    "viewBorderTiles": 0.5,
+    "overlayFadeSeconds": 0.6
   },
   "naming": {
     "quietThreshold": 0.3,
