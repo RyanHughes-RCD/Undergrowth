@@ -250,6 +250,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
 - **Damp spreads and pools:**
   - An ambient Damp layer (`terrain.ambientDamp`, saved in `state.ambientDamp`) sits on top of creature Damp, so creature ramp-up and fading are unchanged.
   - Each spawn tick it seeps into wetter-to-drier neighbours, flows more easily downhill, and evaporates more slowly on low ground, so hollows turn boggy. High Stone blocks it.
+  - Tuned so one Damp common wets about 65 tiles lightly (was about 86). A Depth area 3 tiles away stays mostly dry (about 3 of 9 tiles wet, was 7), and one 5 tiles away stays dry. A Damp common placed right next to a Depth common still makes a pool. Settings: `spreadRate` 0.05, `gravityPerTick` 0.02, `evaporation` 0.08, `lowGroundRetention` 0.55, `max` 22.
   - Damp tiles grow mushrooms faster: each wet tile gets an extra mushroom-only chance of (normal per-tile rate × min(1, Damp × 0.08)), so at most ×2 its usual mushroom rate per tick (`terrain.damp.mushroomGrowth`). It's proportional per tile, so a few wet tiles never hog the forest.
 - **Glow follows the clock:**
   - Its effect on spawn weights, and on the forest's category and location weighting, is ×0.4 by day and ×1.6 at night (`terrain.glowCycle`, device local time).
