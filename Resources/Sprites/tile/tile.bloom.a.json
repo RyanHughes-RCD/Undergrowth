@@ -1,41 +1,33 @@
 {
  "id": "tile.bloom.a",
  "size": [
-  32,
-  24
+  16,
+  16
  ],
  "anchor": [
-  16,
+  8,
   8
  ],
  "paletteRef": "pal.ground",
  "frames": [
   {
    "rows": [
-    "...............b9...............",
-    ".............9a99a9.............",
-    "...........99aa9a9a9b...........",
-    ".........d9a9a99a999999.........",
-    ".......999ab9a99999999a99.......",
-    ".....99999a99999af99d9b99b9.....",
-    "...9a99g99a9g9999999a999ab99a...",
-    ".999999ea9ba9999999aa99a999a999.",
-    ".a9b99b9bb9999ab9e99da9a999e9a9.",
-    ".NNa9999a999aa99g99999b99a999OO.",
-    ".NNNN999b99f9999e999a999b99OOOO.",
-    ".NNNNNN999b99a999ad99a999OOOOOO.",
-    ".NNNNNNNN9a99dba9999a99OOOOOOOO.",
-    ".NNNNNNNNNN999999abbaOOOOOOOOSO.",
-    ".NNRRNNNNNNNN99999bOOOOOOOOSSOO.",
-    ".NNNNRNNNNNNNNN99OOOOOOOOSOOOOO.",
-    ".NNNNNNRRNNNNNNNOOOOOOOSOOOOOOO.",
-    "...NNNNNNRRNNNNNOOOOOSSOOOOOO...",
-    ".....NNNNNNNNNNNOOOOOOOOOOO.....",
-    ".......NNNNNNNNNOOSOOOOOO.......",
-    ".........NNNNNNRSOOOOOO.........",
-    "...........NNNNNOOOOO...........",
-    ".............NNNOOO.............",
-    "...............NO..............."
+    "999a999999999999",
+    "b9999b9a9999b999",
+    "a9b99b99a9a9999a",
+    "9aab99a999aaa999",
+    "9999b99999a9a9a9",
+    "99a99999999999aa",
+    "9a9b999b9b99a9a9",
+    "9b999fb99999a9a9",
+    "9999b999b99g9999",
+    "b9ba9e999999b999",
+    "99bb9b99ga9ab9a9",
+    "b999ef9aad99aaaa",
+    "9a9999aaa99a99b9",
+    "99g99aa99a99aa99",
+    "a9g99aab999b9999",
+    "9ba9999b999b9999"
    ]
   }
  ],

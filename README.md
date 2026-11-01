@@ -1,6 +1,6 @@
 # Undergrowth (working title)
 
-A cozy isometric pixel-art forest floor. Place creatures and they slowly reshape the land around them. The forest's look comes from whatever mix of stats each tile ends up with. Plants, mushrooms and geodes sprout across the forest for you to collect.
+A cozy top-down pixel-art forest clearing, framed by a shrub treeline. Place creatures and they slowly reshape the land around them. The forest's look comes from whatever mix of stats each tile ends up with. Plants, mushrooms and geodes sprout across the forest for you to collect.
 
 ## Running it
 
@@ -39,6 +39,9 @@ Then open <http://localhost:8000>.
 - **Same gameplay as the iOS app:** `web/js/core.js` mirrors `UndergrowthCore`. When game rules change, update both.
 
 ## How to play
+
+The whole forest (12×16 tiles, set in `tuning.json`) fits the screen between the top bar and the bottom controls at a crisp whole-pixel scale, with a shrub treeline filling the edges. Pinch to zoom in; drag to look around while zoomed.
+
 
 - **You start with no creatures.** Tap things that grow in the forest:
   - **Mushrooms**: pick them; Funglings sometimes hide inside.
@@ -97,8 +100,8 @@ python3 tools/gen_placeholders.py
 project.yml                     XcodeGen spec
 App/                            iOS app (SwiftUI + SpriteKit)
   GameStore.swift               owns the Game, clock, saving, UI state
-  Rendering/ForestScene.swift   isometric renderer, camera, taps
-  Rendering/IsoMath.swift       grid ⇄ screen projection
+  Rendering/ForestScene.swift   top-down renderer, fit-to-screen camera, taps
+  Rendering/TileMath.swift      grid ⇄ screen (16×16 tiles)
   Rendering/TextureCache.swift  sprite data → CGImage/SKTexture (nearest-neighbor)
   Screens/                      HUD, Burrow, Bag, Geode cracking, Field Guide
 Packages/UndergrowthCore/       pure-Swift game logic (no UIKit), unit tested
@@ -115,7 +118,8 @@ Resources/                      all data, copied into the app as a folder
   tuning.json                   every tuning number
   Content/*.json                creatures, items, loot, tile rules, name parts
   Sprites/**/*.json             one sprite per file; Sprites/Palettes/ for shared palettes
-tools/gen_placeholders.py       regenerates the placeholder art (+ gen_content_sprites.py for spawn-table entries)
+tools/gen_placeholders.py       regenerates the placeholder art (+ gen_topdown.py for tiles/overlays/shrubs,
+                                gen_content_sprites.py for spawn-table entries)
 tools/import_spawn_table.py     spreadsheet → Resources/Content JSON
 design/                         the spawn table + creature effect definitions
 ```
@@ -139,7 +143,7 @@ design/                         the spawn table + creature effect definitions
 - **`paletteRef`** can replace `palette` to point at a shared palette in `Sprites/Palettes/`. The ground tiles use `pal.ground`.
 - **`anchor`** is measured in pixel-edge coordinates from the top-left.
   - Objects anchor at their feet.
-  - Ground tiles are 32×24 (a 32×16 diamond plus an 8px side), anchored at the diamond centre `[16, 8]`.
+  - Ground tiles and overlays are 16×16 squares anchored at their centre `[8, 8]`. Shrubs and objects anchor at their base.
 - **Missing sprite ids** render as a magenta "?" instead of crashing.
 
 ### Content (`Resources/Content/`)

@@ -1,41 +1,33 @@
 {
  "id": "tile.cave.a",
  "size": [
-  32,
-  24
+  16,
+  16
  ],
  "anchor": [
-  16,
+  8,
   8
  ],
  "paletteRef": "pal.ground",
  "frames": [
   {
    "rows": [
-    "...............ut...............",
-    ".............tttvut.............",
-    "...........vttttttttt...........",
-    ".........tuuuuuuuuuuutt.........",
-    ".......tvuuLKKKKKKKKLuutt.......",
-    ".....vtLLKKKJJJJJJJJKKKLLtt.....",
-    "...tttLKKKJJJMMMMMMJJJKKKLtvt...",
-    ".ttttLLKKJJMMMMMMMMMMJJKKLLtttt.",
-    ".ttttLKKJJJMMMMMMMMMMJJJKKLtttt.",
-    ".PPvtLLKKJJMMMMMMMMMMJJKKLLtvQQ.",
-    ".PPPPtLKKKJJJMMMMMMJJJKKKLtQQQQ.",
-    ".PPPPPPLLKKKJJJJJJJJKKKLLQQQQQQ.",
-    ".PPPPPPPPLLLKKKKKKKKLLLQQQQQQQQ.",
-    ".RPPPPPPPPPttttututttQQQQQQQQSQ.",
-    ".PPRRPPPPPPPPtttttuQQQQQQQQQSQQ.",
-    ".PPPPPRPPPPPPPPtuQQQQQQQQQSQQQQ.",
-    ".PPPPPPRRPPPPPPPQQQQQQQQSQQQQQQ.",
-    "...PPPPPPRRPPPPPQQQQQQSQQQQQQ...",
-    ".....PPPPPPRRPPPQQQSQQQQQQQ.....",
-    ".......PPPPPPRRPQQQQQQQQQ.......",
-    ".........PPPPPPRSQQQQQQ.........",
-    "...........PPPPPQQQQQ...........",
-    ".............PPPQQQ.............",
-    "...............PQ..............."
+    "ttttttttutttuttt",
+    "uvttvuttttvutttt",
+    "tuttttuuuutttttt",
+    "ttttuuLLLLuutttt",
+    "ttttLLLLLLLLuttt",
+    "uttLLKKKKKKLLttt",
+    "tttLKKKJJKKKLtut",
+    "tttLKKJJJJKKLutt",
+    "tttLKJJMMJJKLvtt",
+    "ttvLKJMMMMJKLvtt",
+    "tttLKKJMMJKKLttt",
+    "ttttLKKJJKKLtttt",
+    "ttttttLLLLttttvv",
+    "tvttttvtttuttttv",
+    "tvttttvtttttvttt",
+    "tttttttvtttttttv"
    ]
   }
  ],

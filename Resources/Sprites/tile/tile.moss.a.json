@@ -1,41 +1,33 @@
 {
  "id": "tile.moss.a",
  "size": [
-  32,
-  24
+  16,
+  16
  ],
  "anchor": [
-  16,
+  8,
   8
  ],
  "paletteRef": "pal.ground",
  "frames": [
   {
    "rows": [
-    "...............mn...............",
-    ".............lmlllm.............",
-    "...........llnmlnllnl...........",
-    ".........lllllnmlnlllll.........",
-    ".......lllllnlllllllmllll.......",
-    ".....olmnlmlnlmmlnllllnmlll.....",
-    "...nlnmmlllllmmlmllmllllmonon...",
-    ".llnnllllmllllnlllllllmmllnnoll.",
-    ".llllomlllllllllmlmoloollllllll.",
-    ".NNlllnmllllmlmlmlllmlmnmmlllOO.",
-    ".NNNNnlmnllllllmmllmllollllOOOO.",
-    ".NNNNNNllmllnllllllllllnlOOOOOO.",
-    ".NNNNNNNNlllllllllonnnmOOOOOOOO.",
-    ".RNNNNNNNNNollllllllnOOOOOOOOSS.",
-    ".NNRRNNNNNNNNlnnnmnOOOOOOOOSSOO.",
-    ".NNNNNRNNNNNNNNllOOOOOOOOSSOOOO.",
-    ".NNNNNNRNNNNNNNNOOOOOOOSSOOOOOO.",
-    "...NNNNNNRRNNNNNOOOOOOSOOOOOO...",
-    ".....NNNNNNRRNNNOOOSOOOOOOO.....",
-    ".......NNNNNNRNNOSSOOOOOO.......",
-    ".........NNNNNNRSOOOOOO.........",
-    "...........NNNNNOOOOO...........",
-    ".............NNNOOO.............",
-    "...............NO..............."
+    "nomllmmlollolmll",
+    "mlllnlonllnlllll",
+    "mllmlnlmllnlmlll",
+    "nllllllnlmlollll",
+    "llnnlmllmllllnll",
+    "llllmnnlnllllllm",
+    "nlmlmlmmnlnlommo",
+    "nllnomlnllllllll",
+    "llmlnmmmlmnlolll",
+    "llloolllllllllll",
+    "mlolllnlnllllllm",
+    "lllnllmmlnlllmlo",
+    "lmlnmmlllllllmmm",
+    "llmlllllmllollnl",
+    "llnllnmlllmlllmm",
+    "nmmnllnloollnllo"
    ]
   }
  ],

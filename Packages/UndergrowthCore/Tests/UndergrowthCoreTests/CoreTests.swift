@@ -54,9 +54,9 @@ final class ContentTests: XCTestCase {
         let db = try loadContent()
         XCTAssertEqual(db.sprites.sprite("tile.grass.a").paletteRef, "pal.ground")
         let buf = db.sprites.pixels("tile.grass.a")
-        XCTAssertEqual(buf.width, 32)
-        XCTAssertEqual(buf.bytes[(8 * 32 + 16) * 4 + 3], 255)
-        XCTAssertEqual(buf.bytes[3], 0)
+        XCTAssertEqual(buf.width, 16, "top-down square tiles")
+        XCTAssertEqual(buf.bytes.count, 16 * 16 * 4)
+        XCTAssertEqual(buf.bytes[3], 255, "tiles are fully opaque")
     }
 
     func testMissingSpriteFallsBack() throws {
@@ -120,7 +120,7 @@ final class StatTests: XCTestCase {
         let g = Game.newForest(content: content, now: t0, seed: 1)
         g.debugGrantCreature(typeID: "lantern-fungling", glimmer: false, now: t0)
         let c = g.state.creatures[0]
-        let tile = GridPoint(14, 14)
+        let tile = GridPoint(6, 8)
         g.removeSpawnsForTest()
         try g.place(creatureID: c.id, at: tile, now: t0)
         XCTAssertEqual(g.tileStats(tile, at: t0)[.glow], 0)
@@ -140,7 +140,7 @@ final class StatTests: XCTestCase {
         g.removeSpawnsForTest()
         g.debugGrantCreature(typeID: "rot-hermit", glimmer: false, now: t0)
         g.debugGrant(itemID: "gem.jasper")
-        let tile = GridPoint(10, 10)
+        let tile = GridPoint(5, 5)
         try g.use(itemID: "gem.jasper", on: tile, now: t0)
         XCTAssertEqual(g.tileStats(tile, at: t0)[.stone], 8)
         try g.place(creatureID: g.state.creatures[0].id, at: tile, now: t0)
@@ -165,9 +165,9 @@ final class StatTests: XCTestCase {
         g.removeSpawnsForTest()
         for _ in 0..<4 { g.debugGrantCreature(typeID: "pebble-mite", glimmer: false, now: t0) }
         for (i, c) in g.state.creatures.prefix(3).enumerated() {
-            try g.place(creatureID: c.id, at: GridPoint(i * 6 + 2, 3), now: t0)
+            try g.place(creatureID: c.id, at: GridPoint(i * 4 + 1, 3), now: t0)
         }
-        XCTAssertThrowsError(try g.place(creatureID: g.state.creatures[3].id, at: GridPoint(20, 20), now: t0)) {
+        XCTAssertThrowsError(try g.place(creatureID: g.state.creatures[3].id, at: GridPoint(10, 12), now: t0)) {
             XCTAssertEqual($0 as? GameError, .noFreeSlot)
         }
     }
@@ -178,8 +178,8 @@ final class StatTests: XCTestCase {
         g.debugGrantCreature(typeID: "grove-heart", glimmer: false, now: t0)
         g.debugGrantCreature(typeID: "pebble-mite", glimmer: false, now: t0)
         let heart = g.state.creatures[0], mite = g.state.creatures[1]
-        try g.place(creatureID: heart.id, at: GridPoint(12, 12), now: t0)
-        try g.place(creatureID: mite.id, at: GridPoint(14, 12), now: t0)
+        try g.place(creatureID: heart.id, at: GridPoint(4, 8), now: t0)
+        try g.place(creatureID: mite.id, at: GridPoint(6, 8), now: t0)
         // Pebble Mite normally takes 12h; under the Grove Heart it takes 6h.
         let p = try XCTUnwrap(g.activePlacement(for: mite.id))
         XCTAssertEqual(g.level(of: p, at: t0.addingTimeInterval(6 * 3600)), 1, accuracy: 0.001)
@@ -228,7 +228,7 @@ final class SpawnAndLootTests: XCTestCase {
         let threshold = content.tuning.pity["fungling"]!
         var found: CreatureInstance?
         for i in 0..<threshold where found == nil {
-            let tile = GridPoint(i % 20, i / 20 + 20)
+            let tile = GridPoint(i % 12, i / 12 + 2)
             g.debugAddSpawn(itemID: "mushroom.brown-button-cap", at: tile, now: t0)
             for r in try g.collect(spawnID: g.spawnAt(tile)!.id, now: t0) {
                 if case .creature(let c, _) = r { found = c }
@@ -286,7 +286,7 @@ final class SpawnAndLootTests: XCTestCase {
         g.debugGrant(itemID: "seed.mystery-seed", count: 30)
         var plants = 0, sprouts = 0
         for i in 0..<30 {
-            let tile = GridPoint(i % 28, 27 - i / 28)
+            let tile = GridPoint(i % 12, 15 - i / 12)
             try g.plantSeed(itemID: "seed.mystery-seed", at: tile, now: t0)
             let seed = g.seedAt(tile)!
             XCTAssertThrowsError(try g.harvestSeed(id: seed.id, now: t0))
@@ -340,7 +340,7 @@ final class SpawnAndLootTests: XCTestCase {
         let g = Game.newForest(content: content, now: t0, seed: 21)
         g.removeSpawnsForTest()
         g.debugGrantCreature(typeID: "hollow-digger", glimmer: false, now: t0)
-        let tile = GridPoint(12, 12), near = GridPoint(12, 13)
+        let tile = GridPoint(6, 6), near = GridPoint(6, 7)
         let before = g.spawnWeights(for: near, at: t0).first { $0.0.id == "geode.pebble-geode" }!.1
         try g.place(creatureID: g.state.creatures[0].id, at: tile, now: t0)
         let after = g.spawnWeights(for: near, at: t0).first { $0.0.id == "geode.pebble-geode" }!.1
@@ -378,13 +378,15 @@ final class VisualsNamingSaveTests: XCTestCase {
         XCTAssertTrue(e.visual(for: [.stone: 80, .depth: 80], at: GridPoint(3, 4)).overlays.isEmpty)
     }
 
-    func testEdgeIsForestAndDenserFurtherOut() {
+    func testEdgeIsAShrubTreeline() {
         let e = engine()
         let edge = content.tuning.visuals.edge!
-        func density(_ dist: Int) -> Double {
-            Double((0..<400).filter { !e.edgeVisual(at: GridPoint(-dist, $0), size: content.tuning.grid, edge: edge).decorations.isEmpty }.count) / 400
+        // Every tile just outside the map holds a shrub, on all four sides.
+        let size = content.tuning.grid
+        for p in [GridPoint(-1, 3), GridPoint(size.width, 5), GridPoint(4, -1), GridPoint(2, size.height)] {
+            let v = e.edgeVisual(at: p, size: size, edge: edge)
+            XCTAssertTrue(v.decorations.first?.sprite.hasPrefix("deco.shrub") == true, "\(p)")
         }
-        XCTAssertLessThan(density(1), density(4))
     }
 
     func testForestNames() {

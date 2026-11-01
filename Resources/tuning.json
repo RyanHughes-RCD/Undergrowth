@@ -1,7 +1,7 @@
 {
   "grid": {
-    "width": 28,
-    "height": 28
+    "width": 12,
+    "height": 16
   },
   "placementSlots": 3,
   "starterCreatures": [],
@@ -26,7 +26,7 @@
     "tickSeconds": 300,
     "attemptsPerTick": 3,
     "spawnChance": 0.5,
-    "maxTotal": 30,
+    "maxTotal": 18,
     "lifetimeSeconds": 172800,
     "maxCatchUpTicks": 288
   },
@@ -58,16 +58,17 @@
         "tile.edge.b"
       ],
       "decorations": [
-        "deco.tree.a",
-        "deco.tree.b",
-        "deco.tree.a",
-        "deco.bush.a"
+        "deco.shrub.a",
+        "deco.shrub.b",
+        "deco.shrub.c",
+        "deco.shrub.d",
+        "deco.shrub.e",
+        "deco.shrub.f"
       ],
-      "baseDensity": 0.3,
-      "densityPerTile": 0.2,
-      "maxDensity": 0.85
+      "baseDensity": 1.0,
+      "densityPerTile": 0,
+      "maxDensity": 1.0
     },
-    "cameraMarginTiles": 2,
     "debugSpeeds": [
       1,
       60,

@@ -893,7 +893,8 @@ def make_decorations():
 
 
 if __name__ == "__main__":
-    make_ground()
+    import gen_topdown  # top-down 16x16 ground, overlays and shrub treeline
+    gen_topdown.main()
     make_creatures()
     make_items()
     make_decorations()

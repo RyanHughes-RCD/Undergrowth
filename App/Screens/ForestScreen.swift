@@ -87,7 +87,7 @@ struct ForestScreen: View {
                     Text(store.forestName)
                         .font(.system(.headline, design: .rounded))
                         .foregroundStyle(.white)
-                        .lineLimit(2)
+                        .lineLimit(1)
                     Text("\(store.clockText) · tap to rename")
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.6))

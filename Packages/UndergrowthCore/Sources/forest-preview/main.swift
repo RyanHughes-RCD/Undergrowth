@@ -20,7 +20,7 @@ let w = game.state.size.width, h = game.state.size.height
 for id in ["spore-sage", "pollen-puff", "hollow-digger"] { game.debugGrantCreature(typeID: id, glimmer: false, now: t0) }
 game.debugClearSpawns()
 // Place them in a loose triangle so their zones overlap a little.
-let spots = [GridPoint(w / 2 - 7, h / 2 - 4), GridPoint(w / 2 + 6, h / 2 - 5), GridPoint(w / 2, h / 2 + 7)]
+let spots = [GridPoint(w / 4, h / 4), GridPoint(w * 3 / 4, h / 2), GridPoint(w / 3, h * 3 / 4)]
 for (c, p) in zip(game.burrow, spots) { try game.place(creatureID: c.id, at: p, now: t0) }
 let now = t0.addingTimeInterval(hours * 3600)
 game.advance(to: now)
@@ -30,15 +30,14 @@ let field = game.statField(at: now)
 let rules = TileRuleEngine(rules: content.tileRules, maxDecorations: content.tuning.visuals.maxDecorationsPerTile,
                            seed: game.state.seed)
 
-// Canvas
-let margin = 24
-let imgW = (w + h) * 16 + 2 * margin
-let imgH = (w + h) * 8 + 24 + 2 * margin
+// Canvas: top-down 16px tiles with a 3-tile shrub treeline around the map.
+let border = 3
+let imgW = (w + 2 * border) * 16
+let imgH = (h + 2 * border) * 16
 var img = [UInt8](repeating: 0, count: imgW * imgH * 3)
-for i in 0..<(imgW * imgH) { img[i * 3] = 24; img[i * 3 + 1] = 30; img[i * 3 + 2] = 24 }
 
 func center(_ p: GridPoint) -> (Int, Int) {
-    ((p.x - p.y) * 16 + h * 16 + margin, (p.x + p.y) * 8 + margin + 8)
+    ((p.x + border) * 16 + 8, (p.y + border) * 16 + 8)
 }
 
 func blit(_ id: String, at c: (Int, Int), dx: Int = 0, dy: Int = 0, flip: Bool = false,
@@ -67,22 +66,34 @@ func blit(_ id: String, at c: (Int, Int), dx: Int = 0, dy: Int = 0, flip: Bool =
     }
 }
 
-let tiles = (0..<h).flatMap { y in (0..<w).map { x in GridPoint(x, y) } }.sorted { ($0.x + $0.y, $0.x) < ($1.x + $1.y, $1.x) }
-var visuals: [GridPoint: TileVisual] = [:]
-for p in tiles {
-    let v = rules.visual(for: field.stats(at: p), at: p)
-    visuals[p] = v
-    blit(v.ground, at: center(p), tint: v.tint, amount: v.tintAmount)
-    for o in v.overlays { blit(o.sprite, at: center(p), flip: o.flipped) }
-}
-for p in tiles {
-    for d in visuals[p]!.decorations { blit(d.sprite, at: center(p), dx: d.offsetX, dy: d.offsetY, flip: d.flipped) }
-    if let s = game.spawnAt(p), let def = content.items[s.itemID] { blit(def.sprite, at: center(p)) }
-    if let pl = game.creatureAt(p), let c = game.state.creature(pl.creatureID), let def = content.creatures[c.typeID] {
-        let variant = c.isGlimmer ? RenderVariant.swap(def.glimmerPaletteSwap) : .normal
-        blit(def.sprite, at: center(p), variant: variant)
+let size = game.state.size
+let allTiles = (-border..<(h + border)).flatMap { y in (-border..<(w + border)).map { x in GridPoint(x, y) } }
+var objects: [(y: Int, draw: () -> Void)] = []
+let overrides = game.groundOverrides(at: now, field: field)
+for p in allTiles {
+    let c = center(p)
+    if size.contains(p) {
+        var v = rules.visual(for: field.stats(at: p), at: p)
+        if let forced = overrides[p] { v.ground = forced; v.overlays = [] }
+        blit(v.ground, at: c, tint: v.tint, amount: v.tintAmount)
+        for o in v.overlays { blit(o.sprite, at: c, flip: o.flipped) }
+        for d in v.decorations {
+            objects.append((c.1 + d.offsetY + 3, { blit(d.sprite, at: c, dx: d.offsetX * 4 / 5, dy: d.offsetY + 3, flip: d.flipped) }))
+        }
+    } else if let edge = content.tuning.visuals.edge {
+        let v = rules.edgeVisual(at: p, size: size, edge: edge)
+        blit(v.ground, at: c)
+        for d in v.decorations {
+            objects.append((c.1 + 8 + d.offsetY, { blit(d.sprite, at: c, dx: d.offsetX, dy: 8 + d.offsetY, flip: d.flipped) }))
+        }
+    }
+    if let s = game.spawnAt(p), let def = content.items[s.itemID] { objects.append((c.1 + 5, { blit(def.sprite, at: c, dy: 5) })) }
+    if let pl = game.creatureAt(p), let cr = game.state.creature(pl.creatureID), let def = content.creatures[cr.typeID] {
+        let variant = cr.isGlimmer ? RenderVariant.swap(def.glimmerPaletteSwap) : .normal
+        objects.append((c.1 + 5, { blit(def.sprite, at: c, dy: 5, variant: variant) }))
     }
 }
+for o in objects.sorted(by: { $0.y < $1.y }) { o.draw() }
 
 var out = Data("P6\n\(imgW) \(imgH)\n255\n".utf8)
 out.append(contentsOf: img)

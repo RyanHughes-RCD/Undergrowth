@@ -1,41 +1,33 @@
 {
  "id": "tile.edge.a",
  "size": [
-  32,
-  24
+  16,
+  16
  ],
  "anchor": [
-  16,
+  8,
   8
  ],
  "paletteRef": "pal.ground",
  "frames": [
   {
    "rows": [
-    "...............Zb...............",
-    ".............7ZZZZZ.............",
-    "...........ZZZZ7ZZ7Zb...........",
-    ".........ZZZZb777Z7ZZbZ.........",
-    ".......ZbZZZbb7ZZ7ZZZZZZZ.......",
-    ".....ZZZ7ZZZZbZZZZZZZZbZZZZ.....",
-    "...ZZbZ7Z7ZZ7ZZ7bZZbZZZZZZZZZ...",
-    ".ZZbZZ77ZZZ777ZbZZZZZ77Z7ZZZbbZ.",
-    ".ZZZZbZbZZZZZZZZbbZZZbZZZZZZZZZ.",
-    ".77ZbbbbZZZZZZZb7ZZ7ZZZZZ7ZZZZZ.",
-    ".N777bZ7ZZbZZZZZZZZbZZZZZZZZZOZ.",
-    ".NN7N77ZbZZZZZZ7Z7ZbZ7ZZZZZOZOO.",
-    ".NNNNNN77ZZZZZZ7ZZbZZbZZZOZOOOO.",
-    ".NRNNNN7N77ZZZZZZ7ZZZZZZZOOOOSO.",
-    ".NNRRNNNNNN77ZZZZZZZZZOOOOOSSOO.",
-    ".NNNNRNNNNN7N77Z7ZZOZOOOOSSOOOO.",
-    ".NNNNNNRRNNNNNN7ZOOOOOOOSOOOOOO.",
-    "...NNNNNNRRNNNNNOOOOOSSOOOOOO...",
-    ".....NNNNNNRRNNNOOOOOOOOOOO.....",
-    ".......NNNNNNRNNOSSOOOOOO.......",
-    ".........NNNNNNNSOOOOOO.........",
-    "...........NNNNNOOOOO...........",
-    ".............NNNOOO.............",
-    "...............NO..............."
+    "ZZZbbZZZ7ZZZZZZ7",
+    "ZZZ7ZZZZZ7ZZZZZZ",
+    "ZZZZZ7ZZZbZZ7ZbZ",
+    "bZZ7ZZZZZZ7ZZZZZ",
+    "bZbZbZ7Z7ZZbZ7ZZ",
+    "ZbZZZZZZZZZ7ZZZb",
+    "ZZ7ZbZZZZZ7ZZZZZ",
+    "ZbbZZ7ZZbZZZZZZ7",
+    "Z7b7bZZZZbb7ZZ7Z",
+    "Z7ZZZ7ZZZbZ7Z77Z",
+    "bZZZZZZZbb7ZZ7ZZ",
+    "ZZZZZZZZZZZZZZZZ",
+    "ZZbZbZZZZZZ77ZZZ",
+    "7ZbZZZZZZbZZZZZZ",
+    "77ZbZZZZbZZbZb77",
+    "ZZZZZZZZZZZbZZZZ"
    ]
   }
  ],
