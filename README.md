@@ -301,6 +301,33 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
   - **Each page:** what makes the terrain appear (as intensities), what can spawn there, the spawn bonuses (named as bonuses, at named intensities), other properties, and the selected tile's current intensity against what's needed. All of it is computed from `tuning.json`.
   - **Developer mode** can open every entry (marked as a developer view) without marking it found.
 
+## Creature balance and interactions (web)
+
+- **Balance** lives in `design/creature_balance.json`: per-rarity rules plus each creature's stats and variant. `tools/balance_creatures.py` writes it into the spreadsheet (Stat 1/2, a new optional Stat 3, bonuses, radius, ramp), which stays the source of truth; `tools/import_spawn_table.py` builds the content.
+
+  | Rarity | Primary (at its tile) | Secondary | Third | Radius | Ramp |
+  |---|---|---|---|---|---|
+  | Common | 24 (Moderate) | none: single-stat specialists | | 2 | 12h |
+  | Uncommon | 34 (Moderate+) | 12 for some (pure or dual) | | 3.5 (was 4) | 18h |
+  | Rare | 46 (Medium) | 24, often cross-family | | 5 (was 6) | 24h |
+  | Very rare | 60 (Medium+) | 36 | | 6.5 (was 8) | 36h |
+  | Legendary | 80 (High+) | 50 | 24 | 8 (was 10) | 48h |
+
+  - **Variants** keep creatures of the same rarity distinct: focused (×1.2, radius −0.5), broad (×0.85, radius +1), pure (no secondary, ×1.1), dual (×0.9, secondary ×1.4).
+  - **Rolls** are now 80–100% (`creatureRoll.bonusRange`), so each creature's identity is consistent.
+  - **Combinations:** commons combine, for example Damp + Depth commons make a pool and Bloom + Verdure commons make a meadow; no single common makes a combo.
+  - **Footprint:** a legendary is 2.5× stronger than before but covers about the same number of tiles.
+- **Owned creatures:** when `creatureRoll.balanceVersion` changes, creatures in a save take their species' new values once on load. Each keeps its name, glimmer status, origin and place in the forest, with a stable roll quality from its id.
+- **Batch geode cracking:** bag rows with 2 or more geodes get a "×N" button, up to `geodes.batchMax` (5).
+  - Each geode is cracked on its own (its own roll and find record), and rewards are granted and saved before anything is shown.
+  - The screen is built for five: a 3 + 2 grid of result cards that crack open one after another. Tap to show everything; rare and better rewards and creatures are highlighted; Continue is always visible.
+  - Single cracking is unchanged.
+- **Creature interactions** (`interactions` in `tuning.json`) happen between creatures whose influence reaches overlap.
+  - **Cosmetic moments** (renderer only, never stats or positions): a heart as two creatures meet, hopping together, a chase, a visit, or facing each other. One plays every 5–12 s somewhere on screen, with a 35–80 s cooldown per pair. Each ends on a timer and the creatures go back to wandering.
+  - **Reward moments** (game logic, saved): on each spawn tick an eligible pair has a 2% chance to interact (then a 3-hour cooldown). 4% of those, up to ×1.6 for rarer creatures, leave a bonus Mystery Seed planted (60%) or a geode dug up (40%) on a free clearing tile nearby, through the normal seed and spawn systems.
+  - **Cap:** at most 3 rewards per day. In simulation: one pair gives about one every 4–5 days, 8 creatures about 2.3 a day, 20 creatures hit the cap.
+- **App icon:** a plain brown-capped mushroom with no face, in a dark forest with a few patches of canopy light taken from `web/img/canopy.png` (`tools/gen_app_icon.py`).
+
 ## Developer mode (web)
 
 A separate test forest for trying any content or combination without touching your real save.

@@ -14,9 +14,22 @@
     "radiusPadding": 1
   },
   "glimmerChance": 0.01,
+  "geodes": { "batchMax": 5 },
+  "interactions": {
+    "_about": "Creatures whose influence reaches overlap can interact. Cosmetic moments are visual only (renderer). Reward moments are rolled per spawn tick per eligible pair: pairChancePerTick, then rewardChance x rarity bonus, capped at maxRewardsPerDay; each pair then waits pairCooldownMinutes.",
+    "pairChancePerTick": 0.02,
+    "pairCooldownMinutes": 180,
+    "rewardChance": 0.04,
+    "maxRewardsPerDay": 3,
+    "rewardWeights": { "seed": 0.6, "geode": 0.4 },
+    "rarityRewardBonus": { "common": 1, "uncommon": 1.1, "rare": 1.25, "veryRare": 1.4, "legendary": 1.6 },
+    "cosmetic": { "everySeconds": [5, 12], "pairCooldownSeconds": [35, 80], "weights": { "heart": 3, "hop": 2, "chase": 2, "visit": 2, "face": 1 } }
+  },
   "creatureRoll": {
+    "_about": "balanceVersion: bump after rebalancing (design/creature_balance.json); owned creatures are re-rolled to the new species values on load, keeping name, glimmer and placement.",
+    "balanceVersion": 2,
     "bonusRange": [
-      0.6,
+      0.8,
       1.0
     ],
     "glimmerBonusMult": 1.5,

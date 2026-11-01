@@ -416,7 +416,7 @@ export class ForestView {
       }
       if (o.roam) {
         const w = this.roamStep(o, now);
-        x = w.x; y = w.y; flip = w.flip;
+        x = w.x; y = w.y + (w.hopY || 0); flip = w.flip;
         if (w.moving && Math.floor((t + o.phase) * 6) % 2 === 0) y -= 1; // little hop while walking
       }
       if (o.kind === 'creature') {
@@ -429,6 +429,9 @@ export class ForestView {
       ctx.globalAlpha = 1;
       if (o.glimmer) this.sparkles(x, y, t + o.phase);
     }
+
+    this.socialTick(now);
+    this.drawSocialFx(ctx, now);
 
     // Atmosphere: time-of-day tint, then the canopy's shade and light; glows and fireflies on top.
     const L = this.lighting();
@@ -478,6 +481,12 @@ export class ForestView {
     }
     const dt = Math.min(0.1, (now - w.last) / 1000);
     w.last = now;
+    w.hopY = 0;
+    if (w.script) {
+      if (now < w.script.end) { this.runScript(o, w, now, dt); return w; }
+      // Done: back to ordinary wandering after a short pause, from wherever it is now.
+      w.script = null; w.tx = w.x; w.ty = w.y; w.wait = now + 600 + Math.random() * 1400;
+    }
     const dx = w.tx - w.x, dy = w.ty - w.y, d = Math.hypot(dx, dy);
     w.moving = false;
     if (now < w.wait) return w;
@@ -492,7 +501,14 @@ export class ForestView {
       w.wait = now + 1500 + Math.random() * 4000;
       return w;
     }
-    const speed = 7; // art px per second
+    this.moveToward(w, w.tx, w.ty, 7, dt, now);
+    return w;
+  }
+
+  /** One movement step toward (tx, ty) at `speed` art px/s; splashes when wading. Returns true on arrival. */
+  moveToward(w, tx, ty, speed, dt, now) {
+    const dx = tx - w.x, dy = ty - w.y, d = Math.hypot(dx, dy);
+    if (d < 0.6) { w.moving = false; return true; }
     const step = Math.min(d, speed * dt);
     w.x += (dx / d) * step; w.y += (dy / d) * step;
     if (Math.abs(dx) > 0.5) w.flip = dx < 0;
@@ -505,7 +521,149 @@ export class ForestView {
       if (w.wadeTile !== tk || now - (w.splashAt || 0) > every) { this.splashAt(w.x, w.y - 1); w.splashAt = now; }
     }
     w.wadeTile = tk;
-    return w;
+    return false;
+  }
+
+  /** Keep a point inside a creature's own wandering circle (so moments never break its radius). */
+  clampToHome(o, x, y) {
+    const hx = o.x, hy = o.y, lim = Math.max(2, o.roam - 2);
+    const dx = x - hx, dy = y - hy, d = Math.hypot(dx, dy);
+    return d <= lim ? { x, y } : { x: hx + dx / d * lim, y: hy + dy / d * lim };
+  }
+
+  /**
+   * A short social moment between two nearby creatures (renderer only: positions, never stats).
+   * heart: meet in the middle and a heart floats up. hop: hop together, facing. chase: one runs at
+   * the other, which scampers off. visit: one walks over and pauses; the other faces it. face: both
+   * stop and look at each other. reward: both go to where a bonus seed/geode turned up. Every
+   * script ends on its timer, then normal wandering resumes.
+   */
+  runScript(o, w, now, dt) {
+    const sc = w.script, pw = this.roam.get(sc.partner);
+    const px = pw ? pw.x : w.x, py = pw ? pw.y : w.y;
+    const face = () => { if (Math.abs(px - w.x) > 0.5) w.flip = px < w.x; };
+    const meet = (gap) => { const mx = (w.x + px) / 2, my = (w.y + py) / 2, side = w.x <= px ? -1 : 1; return this.clampToHome(o, mx + side * gap, my); };
+    w.moving = false;
+    switch (sc.type) {
+      case 'heart': {
+        const m = sc.meet || (sc.meet = meet(5));
+        if (this.moveToward(w, m.x, m.y, 10, dt, now) || now > sc.start + 2200) {
+          face();
+          if (sc.lead && !sc.hearted) { sc.hearted = true; this.socialFx('heart', (w.x + px) / 2, Math.min(w.y, py) - 14, now); }
+        }
+        break;
+      }
+      case 'hop': {
+        face();
+        const k = (now - sc.start) / 380;
+        if (k < 3) w.hopY = -Math.round(Math.abs(Math.sin(k * Math.PI)) * 3);
+        break;
+      }
+      case 'chase': {
+        const tgt = this.clampToHome(o, px, py);
+        this.moveToward(w, tgt.x, tgt.y, 15, dt, now);
+        break;
+      }
+      case 'flee': {
+        const ax = w.x - px, ay = w.y - py, d = Math.hypot(ax, ay) || 1;
+        const tgt = this.clampToHome(o, w.x + ax / d * 12, w.y + ay / d * 12);
+        if (this.moveToward(w, tgt.x, tgt.y, 13, dt, now)) face();
+        break;
+      }
+      case 'visit': {
+        const m = sc.meet || (sc.meet = meet(7));
+        if (this.moveToward(w, m.x, m.y, 9, dt, now)) face();
+        break;
+      }
+      case 'face': face(); break;
+      case 'reward': {
+        const tgt = sc.meet || (sc.meet = this.clampToHome(o, sc.tx + (sc.lead ? -5 : 5), sc.ty));
+        if (this.moveToward(w, tgt.x, tgt.y, 11, dt, now) || now > sc.start + 2600) {
+          w.flip = sc.tx < w.x;
+          if (sc.lead && now > (sc.fxAt || 0)) {
+            sc.fxAt = now + 320;
+            if (sc.kind === 'geode') this.dust = (this.dust || []).concat([{ x: sc.tx, y: sc.ty, start: now }]);
+            else this.socialFx('sprout', sc.tx, sc.ty - 6, now);
+          }
+        }
+        break;
+      }
+      default: break;
+    }
+  }
+
+  socialFx(kind, x, y, now) {
+    this.social = (this.social || []).filter((f) => now - f.start < 1500);
+    if (this.social.length < 12) this.social.push({ kind, x: Math.round(x), y: Math.round(y), start: now });
+  }
+
+  /** Hearts and sprout sparkles from social moments (pixel shapes, rising and fading). */
+  drawSocialFx(ctx, now) {
+    if (!this.social || !this.social.length) return;
+    this.social = this.social.filter((f) => now - f.start < 1400);
+    for (const f of this.social) {
+      const k = (now - f.start) / 1400;
+      ctx.globalAlpha = k < 0.15 ? k / 0.15 : 1 - Math.max(0, (k - 0.6) / 0.4);
+      const x = f.x, y = Math.round(f.y - k * 10);
+      if (f.kind === 'heart') {
+        ctx.fillStyle = '#1b1420';
+        for (const [dx, dy, w] of [[-3, -1, 7], [-3, 0, 7], [-2, 1, 5], [-1, 2, 3], [0, 3, 1]]) ctx.fillRect(x + dx, y + dy, w, 1);
+        ctx.fillRect(x - 2, y - 2, 2, 1); ctx.fillRect(x + 1, y - 2, 2, 1);
+        ctx.fillStyle = '#ff6a8a';
+        for (const [dx, dy, w] of [[-2, -1, 2], [1, -1, 2], [-2, 0, 5], [-1, 1, 3], [0, 2, 1]]) ctx.fillRect(x + dx, y + dy, w, 1);
+        ctx.fillStyle = '#ffd0dc'; ctx.fillRect(x - 2, y - 1, 1, 1);
+      } else {
+        ctx.fillStyle = '#b8ec8a';
+        for (const [dx, dy] of [[0, -2], [0, 2], [-2, 0], [2, 0], [0, 0]]) ctx.fillRect(x + dx, y + dy, 1, 1);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * Picks an occasional cosmetic moment between two visible creatures whose reach overlaps, with a
+   * cooldown per pair and random spacing (interactions.cosmetic), so it never looks scripted.
+   */
+  socialTick(now) {
+    const cfg = (this.app.content.tuning.interactions || {}).cosmetic;
+    if (!cfg) return;
+    if (!this.nextSocial) this.nextSocial = now + 3000;
+    if (now < this.nextSocial) return;
+    const [a0, a1] = cfg.everySeconds || [5, 12];
+    this.nextSocial = now + (a0 + Math.random() * (a1 - a0)) * 1000;
+    const cs = (this.drawn || []).filter((o) => o.kind === 'creature' && o.roam && this.roam.get(o.key) && !this.roam.get(o.key).script);
+    this.socialCd = this.socialCd || new Map();
+    const pairs = [];
+    for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) {
+      const A = cs[i], B = cs[j], key = [A.key, B.key].sort().join('|');
+      if ((this.socialCd.get(key) || 0) > now) continue;
+      if (Math.hypot(A.x - B.x, A.y - B.y) < A.roam + B.roam + TS) pairs.push([A, B, key]);
+    }
+    if (!pairs.length) return;
+    const [A, B, key] = pairs[Math.floor(Math.random() * pairs.length)];
+    const [c0, c1] = cfg.pairCooldownSeconds || [35, 80];
+    this.socialCd.set(key, now + (c0 + Math.random() * (c1 - c0)) * 1000);
+    const weights = cfg.weights || { heart: 1 };
+    const total = Object.values(weights).reduce((x, y) => x + y, 0);
+    let r = Math.random() * total, type = 'heart';
+    for (const [k, v] of Object.entries(weights)) { if (r < v) { type = k; break; } r -= v; }
+    const dur = { heart: 3600, hop: 1300, chase: 2300, visit: 2600, face: 1600 }[type] || 2000;
+    const wa = this.roam.get(A.key), wb = this.roam.get(B.key);
+    const second = { chase: 'flee', visit: 'face' }[type] || type;
+    wa.script = { type, partner: B.key, start: now, end: now + dur, lead: true };
+    wb.script = { type: second, partner: A.key, start: now, end: now + dur, lead: false };
+    this.lastSocial = { type, a: A.key, b: B.key, at: now };
+  }
+
+  /** A bonus seed/geode from the game: both creatures go to the spot and dig or tend it. */
+  playInteraction(e) {
+    const now = performance.now();
+    const c = centre(e.tile.x, e.tile.y);
+    const wa = this.roam.get(e.a), wb = this.roam.get(e.b);
+    if (wa) wa.script = { type: 'reward', kind: e.kind, partner: e.b, tx: c.x, ty: c.y + 4, start: now, end: now + 3400, lead: true };
+    if (wb) wb.script = { type: 'reward', kind: e.kind, partner: e.a, tx: c.x, ty: c.y + 4, start: now, end: now + 3400, lead: false };
+    if (!wa && !wb) this.socialFx('sprout', c.x, c.y, now);
   }
 
   /**

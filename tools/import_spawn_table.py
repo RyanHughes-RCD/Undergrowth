@@ -119,6 +119,8 @@ def main():
                 scale_cols[stat] = ci
     # Optional placement column ("Placement": surface / buried / auto); blank = auto.
     place_col = next((ci for ci, title in enumerate(rows[header]) if isinstance(title, str) and title.strip().lower().startswith("placement")), None)
+    titles = [str(t).strip() if t else "" for t in rows[header]]
+    stat3_cols = (titles.index("Stat 3"), titles.index("Stat 3 max bonus")) if "Stat 3" in titles and "Stat 3 max bonus" in titles else None
     loot_start = next(i for i, r in enumerate(rows) if r[0] and str(r[0]).startswith("Geode loot table"))
     entries = [r for r in rows[header + 1:loot_start] if r[0]]
 
@@ -141,11 +143,16 @@ def main():
         if cat == "Creature":
             fam = FAMILY[family]
             cid = slug(name)
+            # One to three stats (single-stat specialists leave Stat 2 blank; legendaries add a Stat 3).
+            pairs = [(s1, b1), (s2, b2)]
+            if stat3_cols:
+                pairs.append((r[stat3_cols[0]] if stat3_cols[0] < len(r) else None, r[stat3_cols[1]] if stat3_cols[1] < len(r) else None))
+            pairs = [(s.lower(), b) for s, b in pairs if s and b]
             c = {
                 "id": cid, "name": name, "family": fam, "familyName": family, "rarity": rarity,
                 "sprite": "creature." + cid, "glimmerSprite": "creature." + cid + ".glimmer",
-                "stats": [s1.lower(), s2.lower()],
-                "bonuses": {s1.lower(): b1, s2.lower(): b2},
+                "stats": [s for s, _ in pairs],
+                "bonuses": {s: b for s, b in pairs},
                 "radius": radius, "rampHours": ramp, "chance": chance,
                 "requires": requires(r),
             }

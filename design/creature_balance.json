@@ -1,0 +1,66 @@
+{
+  "_about": "Creature balance. tools/balance_creatures.py writes these into the spawn spreadsheet (Stat 1/2, bonuses, radius, ramp), then tools/import_spawn_table.py builds the content. Bonuses are the maximum at the creature's own tile; each creature rolls rollRange of that (tuning.json creatureRoll.bonusRange) and influence falls off with distance (smoothstep, reach = radius + 1). Intensity bands: Low 6, Moderate 16, Moderate+ 26, Medium 36, Medium+ 46, High 56, High+ 66, Very High 76, Maximum 86 (cap 100).",
+  "rarity": {
+    "common":    { "primary": 24, "secondary": 0,  "radius": 2,   "rampHours": 12, "_note": "One focused stat: Moderate at its tile, Low around it. Combine two to reach Medium." },
+    "uncommon":  { "primary": 34, "secondary": 12, "radius": 3.5, "rampHours": 18, "_note": "Stronger specialists; some add a real second stat." },
+    "rare":      { "primary": 46, "secondary": 24, "radius": 5,   "rampHours": 24, "_note": "Medium primary, Moderate secondary: gateways to combos." },
+    "veryRare":  { "primary": 60, "secondary": 36, "radius": 6.5, "rampHours": 36, "_note": "Medium+ primary, strong cross-family pairs." },
+    "legendary": { "primary": 80, "secondary": 50, "third": 24, "radius": 8, "rampHours": 48, "_note": "High+ at its tile, three stats. Radius cut from 10 to 8: power from strength, not coverage." }
+  },
+  "variants": {
+    "standard": { "primary": 1,    "secondary": 1,   "radius": 0 },
+    "focused":  { "primary": 1.2,  "secondary": 1,   "radius": -0.5 },
+    "broad":    { "primary": 0.85, "secondary": 1,   "radius": 1 },
+    "pure":     { "primary": 1.1,  "secondary": 0,   "radius": 0 },
+    "dual":     { "primary": 0.9,  "secondary": 1.4, "radius": 0 }
+  },
+  "creatures": {
+    "Button Fungling":      { "primary": "damp",    "variant": "standard" },
+    "Puff Fungling":        { "primary": "glow",    "variant": "focused" },
+    "Speckled Fungling":    { "primary": "damp",    "variant": "broad" },
+    "Pebble Mite":          { "primary": "stone",   "variant": "focused" },
+    "Gravel Roller":        { "primary": "depth",   "variant": "broad" },
+    "Drip Grub":            { "primary": "depth",   "variant": "standard" },
+    "Clover Sprout":        { "primary": "verdure", "variant": "standard" },
+    "Bud Sproutling":       { "primary": "bloom",   "variant": "focused" },
+    "Fernling":             { "primary": "verdure", "variant": "broad" },
+
+    "Shelfback":            { "primary": "damp",    "variant": "pure" },
+    "Lantern Fungling":     { "primary": "glow",    "secondary": "damp",    "variant": "dual" },
+    "Mossling":             { "primary": "damp",    "secondary": "verdure", "variant": "dual" },
+    "Ringleader":           { "primary": "damp",    "variant": "focused", "secondary": "glow" },
+    "Moss Shell":           { "primary": "stone",   "secondary": "verdure", "variant": "dual" },
+    "Bloomstone Snail":     { "primary": "stone",   "secondary": "bloom",   "variant": "standard" },
+    "Quartz Beetle":        { "primary": "stone",   "variant": "pure" },
+    "Delve Pup":            { "primary": "depth",   "variant": "pure" },
+    "Bluebell Sprite":      { "primary": "bloom",   "variant": "pure" },
+    "Pebble Rose":          { "primary": "bloom",   "secondary": "stone",   "variant": "dual" },
+    "Ivy Climber":          { "primary": "verdure", "variant": "focused", "secondary": "bloom" },
+    "Sun Sproutling":       { "primary": "bloom",   "variant": "broad", "secondary": "verdure" },
+
+    "Fairy Ring Keeper":    { "primary": "glow",    "secondary": "damp" },
+    "Spore Sage":           { "primary": "damp",    "secondary": "glow" },
+    "Rot Hermit":           { "primary": "damp",    "secondary": "depth" },
+    "Amethyst Tortoise":    { "primary": "stone",   "secondary": "glow" },
+    "Hollow Digger":        { "primary": "depth",   "secondary": "stone" },
+    "Fossil Keeper":        { "primary": "stone",   "secondary": "depth" },
+    "Pollen Puff":          { "primary": "bloom",   "secondary": "verdure" },
+    "Thornback":            { "primary": "verdure", "secondary": "stone" },
+    "Night Bloomer":        { "primary": "bloom",   "secondary": "glow" },
+    "Glowmoss Sprite":      { "primary": "glow",    "secondary": "verdure" },
+
+    "Crystal Cap Wanderer": { "primary": "glow",    "secondary": "stone" },
+    "Mycelium Weaver":      { "primary": "damp",    "secondary": "verdure" },
+    "Geode Golem":          { "primary": "stone",   "secondary": "depth" },
+    "Opal Serpent":         { "primary": "depth",   "secondary": "glow" },
+    "Hybridizer":           { "primary": "bloom",   "secondary": "verdure" },
+    "Root Delver":          { "primary": "verdure", "secondary": "depth" },
+    "Bog Wisp":             { "primary": "damp",    "secondary": "depth" },
+    "Crystal Bloom Fae":    { "primary": "bloom",   "secondary": "stone" },
+
+    "Moonlight Monarch":    { "primary": "glow",    "secondary": "damp",    "third": "bloom" },
+    "Deepstone Ancient":    { "primary": "stone",   "secondary": "depth",   "third": "glow" },
+    "Grove Heart":          { "primary": "bloom",   "secondary": "verdure", "third": "damp" },
+    "Ancient Woodkeeper":   { "primary": "verdure", "secondary": "depth",   "third": "stone" }
+  }
+}

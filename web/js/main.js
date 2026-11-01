@@ -100,7 +100,12 @@ class App {
     const ui = this.ui;
     const cfg = this.content.tuning;
     for (const e of events) {
-      if (e.type === 'terrainDiscovered') {
+      if (e.type === 'interaction') {
+        this.view.playInteraction(e);
+        const name = (pid) => { const pl = this.game.state.placements.find((x) => x.id === pid); const c = pl && this.game.creature(pl.creatureID); return c ? this.displayName(c) : 'Two creatures'; };
+        const it = this.content.items[e.itemID];
+        ui.toast(e.kind === 'seed' ? `${name(e.a)} and ${name(e.b)} planted a seed together.` : `${name(e.a)} and ${name(e.b)} dug up a ${it ? it.name : 'geode'}!`, it ? it.sprite : null);
+      } else if (e.type === 'terrainDiscovered') {
         const t = (this.content.terrain || []).find((x) => x.id === e.id);
         if (t) ui.toast(`New terrain in your Field Guide: ${t.name}.`);
       } else if (e.type === 'blend') {
@@ -360,6 +365,14 @@ class App {
   crack(itemID, opts = {}) {
     const r = this.attempt(() => this.game.crack(itemID, this.game.now(), opts)) || [];
     this.changed();
+    return r;
+  }
+
+  /** Crack up to five at once; rewards are granted and saved before anything is shown. */
+  crackMany(itemID, count) {
+    const r = this.attempt(() => this.game.crackMany(itemID, count, this.game.now())) || [];
+    this.changed();
+    this.save();
     return r;
   }
 

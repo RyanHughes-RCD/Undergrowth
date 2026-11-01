@@ -387,7 +387,9 @@ export class UI {
             def.use ? h('div', { class: 'sub' }, this.useText(def.use)) : null),
           h('b', {}, `×${n}`),
           def.onGrow ? h('button', { class: 'btn green small', onclick: () => this.app.beginPlanting(def.id) }, 'Plant') : null,
-          def.onCrack ? h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack') : null,
+          def.onCrack ? h('div', { class: 'crack-btns' },
+            h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack'),
+            n > 1 ? h('button', { class: 'btn orange small', title: `Crack ${Math.min(n, this.batchMax)} at once`, onclick: () => { this.sheet = null; this.close(); this.openBatchCrack(def.id, Math.min(n, this.batchMax)); } }, `×${Math.min(n, this.batchMax)}`) : null) : null,
           def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : 'Crush') : 'Use') : null)),
     ]);
   }
@@ -913,6 +915,73 @@ export class UI {
     ov.classList.add('show');
   }
 
+  get batchMax() { return ((this.content.tuning.geodes || {}).batchMax) ?? 5; }
+
+  /**
+   * Batch cracking: up to five geodes. Rewards are granted first (exactly once), then shown on one
+   * screen sized for five: a 3 + 2 grid of result cards that crack open in quick succession. Tap
+   * anywhere to skip to the end; Continue is always there.
+   */
+  openBatchCrack(itemID, count) {
+    const app = this.app;
+    const ov = document.getElementById('overlay');
+    const def = this.content.items[itemID];
+    const results = app.crackMany(itemID, count);
+    if (!results.length) return;
+    const openID = def.openSprite && this.sprites.has(def.openSprite) ? def.openSprite : def.sprite;
+    const timers = [];
+    const cards = results.map((res, i) => {
+      const body = h('div', { class: 'batch-body' });
+      const rock = h('div', { class: 'batch-rock' }, this.sprites.element(def.sprite, null, 4));
+      let best = -1;
+      const lines = res.rewards.map((r) => {
+        if (r.creature) {
+          best = Math.max(best, 5);
+          const art = app.art(r.creature);
+          const cdef = this.content.creatures[r.creature.typeID];
+          return h('div', { class: 'batch-line creature' + (r.creature.isGlimmer ? ' glimmer' : '') },
+            this.sprites.element(art.sprite, art.variant, 3, '', true),
+            h('div', {}, h('b', {}, app.displayName(r.creature)),
+              h('span', { class: 'sub', style: `color:${RARITY_COLORS[cdef?.rarity] || '#fff'}` }, r.creature.isGlimmer ? 'Glimmer!' : rarityName(cdef?.rarity || 'common')),
+              r.isNew ? h('span', { class: 'new' }, 'New!') : null));
+        }
+        const it = this.content.items[r.item];
+        best = Math.max(best, rarityIndex(it?.rarity || 'common'));
+        return h('div', { class: 'batch-line' },
+          this.sprites.element(it?.sprite || '__missing', null, 3),
+          h('div', {}, h('b', {}, `${it ? it.name : r.item}`, r.count > 1 ? ` ×${r.count}` : ''),
+            h('span', { class: 'sub', style: `color:${RARITY_COLORS[it?.rarity] || '#fff'}` }, rarityName(it?.rarity || 'common')),
+            r.isNew ? h('span', { class: 'new' }, 'New!') : null));
+      });
+      const special = best >= 2;                       // rare or better, or a creature: highlighted
+      const card = h('div', { class: 'batch-card' + (special ? ' special' : '') + (best >= 5 ? ' has-creature' : '') },
+        h('div', { class: 'batch-num' }, `#${i + 1}`), rock, body);
+      const reveal = () => {
+        if (card.classList.contains('open')) return;
+        card.classList.add('open');
+        rock.replaceChildren(this.sprites.element(openID, null, 4));
+        body.replaceChildren(...(lines.length ? lines : [h('div', { class: 'sub' }, 'Just dust.')]));
+      };
+      card._reveal = reveal;
+      timers.push(setTimeout(() => { card.classList.add('shake'); }, 120 + i * 260));
+      timers.push(setTimeout(reveal, 380 + i * 260));
+      return card;
+    });
+    const revealAll = () => { timers.forEach(clearTimeout); cards.forEach((c) => c._reveal()); };
+    const left = app.game.state.inventory[itemID] || 0;
+    const close = () => { revealAll(); ov.classList.remove('show'); ov.replaceChildren(); app.changed(false); };
+    const panel = h('div', { class: 'batch-panel', onclick: (e) => { if (!e.target.closest('button')) revealAll(); } },
+      h('h2', { class: 'center' }, `${results.length} × ${def.name}`),
+      h('div', { class: 'batch-grid n' + results.length }, cards),
+      h('p', { class: 'sub center' }, 'Tap to show everything at once. Creatures go to your Creatures tab.'),
+      h('div', { class: 'batch-footer' },
+        left > 1 ? h('button', { class: 'btn orange', onclick: () => { revealAll(); this.openBatchCrack(itemID, Math.min(left, this.batchMax)); } }, `Crack ${Math.min(left, this.batchMax)} more`) : null,
+        left === 1 ? h('button', { class: 'btn orange', onclick: () => { revealAll(); this.openCrack(itemID); } }, 'Crack the last one') : null,
+        h('button', { class: 'btn green', onclick: close }, 'Continue')));
+    ov.replaceChildren(h('div', { class: 'batch-wrap' }, panel));
+    ov.classList.add('show');
+  }
+
   openCrack(itemID) {
     const app = this.app;
     const ov = document.getElementById('overlay');
@@ -998,6 +1067,7 @@ export class UI {
       const left2 = app.game.state.inventory[itemID] || 0;
       footer.replaceChildren(...[
         left2 > 0 ? h('button', { class: 'btn orange', onclick: () => this.openCrack(itemID) }, `Crack another (${left2})`) : null,
+        left2 > 1 ? h('button', { class: 'btn orange', onclick: () => this.openBatchCrack(itemID, Math.min(left2, this.batchMax)) }, `Crack ${Math.min(left2, this.batchMax)} at once`) : null,
         h('button', { class: 'btn grey', onclick: () => { ov.classList.remove('show'); ov.replaceChildren(); } }, 'Done'),
       ].filter(Boolean));
     };

@@ -382,6 +382,7 @@ export class Game {
     /** One-shot notifications for the UI (tutorial steps, unlocks, milestones). Not saved. */
     this.events = [];
     this.migrate();
+    this.rebalanceOwnedCreatures();
     this.normalizeSlots();
     this.fitToGrid();
     this.placeLandmarks();
@@ -443,6 +444,7 @@ export class Game {
       lastSpawnTick: now - content.tuning.spawns.tickSeconds * 1000 * 6, lastUpdated: now,
       debugTimeOffset: 0, geodes: [], visitors: [], soilBoosts: [], nextGlimmer: false,
       lastWandererDay: Game.dayNumber(now),
+      balanceVersion: (content.tuning.creatureRoll || {}).balanceVersion || 1,
     };
     // Start as a small clearing in the middle of the full forest.
     const c = content.tuning.clearing || {};
@@ -1081,6 +1083,7 @@ export class Game {
       report.despawned += this.expireSpawns(t);
       this.ambientTick(t);
       report.spawned += this.spawnTick(t);
+      report.spawned += this.interactionTick(t, now - t < 15 * 60000);
       this.state.lastSpawnTick = t;
       report.ticks++;
     }
@@ -1634,6 +1637,40 @@ export class Game {
     };
   }
 
+  /**
+   * After a creature rebalance (tuning.creatureRoll.balanceVersion), owned creatures take their
+   * species' new values: each keeps a stable roll quality (from its id), its glimmer status, name,
+   * origin and placement; placements (including fading ones) are updated to match. Runs once.
+   */
+  rebalanceOwnedCreatures() {
+    const roll = this.t.creatureRoll || {};
+    const version = roll.balanceVersion || 1;
+    const s = this.state;
+    if ((s.balanceVersion || 1) >= version) return;
+    const [lo, hi] = roll.bonusRange || [0.8, 1];
+    for (const c of s.creatures) {
+      const def = this.content.creatures[c.typeID];
+      if (!def) continue;
+      const q = lo + (hi - lo) * (hashStr(c.id) / 4294967296);
+      const contributions = {};
+      for (const stat in def.bonuses || {}) {
+        let v = def.bonuses[stat] * q;
+        if (c.isGlimmer) v *= roll.glimmerBonusMult ?? 1.5;
+        contributions[stat] = Math.round(v * 10) / 10;
+      }
+      for (const stat in def.extraContributions || {}) {
+        const v = def.extraContributions[stat];
+        contributions[stat] = (contributions[stat] || 0) + (c.isGlimmer ? v * (roll.glimmerBonusMult ?? 1.5) : v);
+      }
+      c.contributions = contributions;
+      c.radius = Math.round(((def.radius ?? 2) + (c.isGlimmer ? roll.glimmerRadiusBonus ?? 0 : 0)) * 10) / 10;
+      c.rampHours = def.rampHours ?? c.rampHours;
+      for (const p of s.placements) if (p.creatureID === c.id) { p.contributions = { ...contributions }; p.radius = c.radius; }
+    }
+    s.balanceVersion = version;
+    this.statCache = null;
+  }
+
   discover(key) {
     if (this.discovered.has(key)) return false;
     this.discovered.add(key);
@@ -1838,6 +1875,13 @@ export class Game {
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
     this.consume(itemID);
+    this.plantAt(itemID, tile, now);
+    this.bump('plant');
+    if (this.state.tutorial.step === 'plant') this.enterTutorialStep('dig', now);
+  }
+
+  /** Put a seed in the ground (shared by planting from the bag and bonus seeds from creatures). */
+  plantAt(itemID, tile, now, extra = {}) {
     // Verdure: plants grow faster on lush tiles.
     const verdure = this.tileStats(tile, now).verdure || 0;
     const meadow = this.combosAt(this.tileStats(tile, now)).includes('meadow') ? (this.combo('meadow').flowerGrowthMult ?? 1) : 1;
@@ -1845,9 +1889,70 @@ export class Game {
     const grow = this.rng.range(...range(this.t.seeds.growSeconds)) / Math.max(0.01, speed);
     // The plant is chosen now (tile stats + time of day at planting), so its growth stages can show it.
     const plantID = this.choosePlant(tile, now);
-    this.state.plantedSeeds.push({ id: this.rng.uuid(), seedItemID: itemID, tile: { ...tile }, plantedAt: now, growSeconds: grow, plantID });
-    this.bump('plant');
-    if (this.state.tutorial.step === 'plant') this.enterTutorialStep('dig', now);
+    const seed = { id: this.rng.uuid(), seedItemID: itemID, tile: { ...tile }, plantedAt: now, growSeconds: grow, plantID, ...extra };
+    this.state.plantedSeeds.push(seed);
+    return seed;
+  }
+
+  // ---- creature interactions (rewards; the cosmetic moments are drawn by the renderer)
+
+  /** Pairs of active creatures whose influence reaches overlap. */
+  interactionPairs(t) {
+    const ps = this.activePlacements.filter((p) => this.stats.level(p, t) > 0.2);
+    const out = [];
+    for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
+      const a = ps[i], b = ps[j];
+      if (dist(a.tile, b.tile) < this.stats.reach(a.radius) + this.stats.reach(b.radius)) out.push([a, b]);
+    }
+    return out;
+  }
+
+  /**
+   * Once per spawn tick: each eligible pair (off cooldown) may interact (pairChancePerTick). Some
+   * interactions leave a bonus seed planted or a geode dug up near them (rewardChance x rarity bonus),
+   * at most maxRewardsPerDay. Rewards go through the normal seed/spawn systems on a free clearing tile,
+   * and are saved like any other. `live` adds an event so the renderer can animate it.
+   */
+  interactionTick(t, live = false) {
+    const cfg = this.t.interactions;
+    if (!cfg) return 0;
+    const st = this.state.interactions || (this.state.interactions = { cooldowns: {}, day: Game.dayNumber(t), rewards: 0 });
+    const day = Game.dayNumber(t);
+    if (st.day !== day) { st.day = day; st.rewards = 0; }
+    for (const k in st.cooldowns) if (st.cooldowns[k] <= t) delete st.cooldowns[k];
+    let made = 0;
+    for (const [a, b] of this.interactionPairs(t)) {
+      const key = [a.creatureID, b.creatureID].sort().join('|');
+      if (st.cooldowns[key] > t || !this.rng.chance(cfg.pairChancePerTick ?? 0.05)) continue;
+      st.cooldowns[key] = t + (cfg.pairCooldownMinutes ?? 90) * 60000;
+      if (st.rewards >= (cfg.maxRewardsPerDay ?? 3)) continue;
+      const bonus = cfg.rarityRewardBonus || {};
+      const rb = ((bonus[this.species(a)?.rarity] ?? 1) + (bonus[this.species(b)?.rarity] ?? 1)) / 2;
+      if (!this.rng.chance((cfg.rewardChance ?? 0.35) * rb)) continue;
+      const mid = { x: Math.round((a.tile.x + b.tile.x) / 2), y: Math.round((a.tile.y + b.tile.y) / 2) };
+      const tile = this.isFree(mid) ? mid : this.freeNear(mid);
+      if (!tile || !this.inClearing(tile)) continue;
+      const w = cfg.rewardWeights || { seed: 0.6, geode: 0.4 };
+      const kind = weightedPick(Object.entries(w), this.rng);
+      let itemID = null;
+      if (kind === 'seed') {
+        const seedDef = Object.values(this.content.items).find((i) => i.category === 'seed');
+        if (!seedDef) continue;
+        this.plantAt(seedDef.id, tile, t, { bonus: true });
+        itemID = seedDef.id;
+      } else {
+        const pick = weightedPick(this.spawnDetails(tile, t).filter((d) => d.item.category === 'geode').map((d) => [d.item, d.weight]), this.rng)
+          || Object.values(this.content.items).find((i) => i.category === 'geode' && i.spawn && (!i.spawn.requires || !Object.keys(i.spawn.requires).length));
+        if (!pick) continue;
+        this.state.spawns.push({ ...this.newSpawn(pick, tile, t), placement: 'surface', bonus: true });
+        itemID = pick.id;
+      }
+      st.rewards++;
+      made++;
+      this.bump('interactionReward');
+      if (live) this.events.push({ type: 'interaction', a: a.id, b: b.id, kind, tile, itemID });
+    }
+    return made;
   }
 
   /** Harvest a grown seed: a Sproutling if one grew (depends on the tile), else a plant. */
@@ -1884,6 +1989,20 @@ export class Game {
     if (c) return this.grant([{ creature: c }]);
     const up = tile ? Math.max(0, ...this.effects('gemUpgrade', tile).map((e) => e.chance || 0)) : 0;
     return this.grant(this.rollTable(def.onCrack, itemID, now, { gemUpgradeChance: up }));
+  }
+
+  /**
+   * Crack several of one geode at once (up to tuning.geodes.batchMax, and never more than you own).
+   * Each geode goes through crack() on its own (its own find record, rolls and modifiers), and its
+   * rewards are granted right then, exactly once; the result is one entry per geode for display.
+   */
+  crackMany(itemID, count, now, opts = {}) {
+    const max = ((this.t.geodes || {}).batchMax) ?? 5;
+    const n = Math.max(0, Math.min(count, max, this.state.inventory[itemID] || 0));
+    if (!n) throw new GameError("You don't have that.");
+    const out = [];
+    for (let i = 0; i < n; i++) out.push({ itemID, rewards: this.crack(itemID, now, opts) });
+    return out;
   }
 
   /** True if the next crack of this geode is the tutorial's guaranteed creature. */
