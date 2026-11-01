@@ -36,8 +36,13 @@ export class ForestView {
   get game() { return this.app.game; }
   /** CSS pixels per art pixel. */
   get zoom() { return this.k / this.dpr; }
-  get mapW() { return this.game.state.size.width * TS; }
-  get mapH() { return this.game.state.size.height * TS; }
+  /** The open clearing in world px (the camera frames this; everything else is treeline). */
+  get rect() {
+    const c = this.game.state.clearing;
+    return { x: c.x0 * TS, y: c.y0 * TS, w: (c.x1 - c.x0 + 1) * TS, h: (c.y1 - c.y0 + 1) * TS };
+  }
+  get mapW() { return this.rect.w; }
+  get mapH() { return this.rect.h; }
 
   resize() {
     const dpr = window.devicePixelRatio || 1;
@@ -78,7 +83,8 @@ export class ForestView {
     if (!this.app.game) return Math.round(2 * this.dpr);
     const a = this.area();
     const pad = 4;
-    const k = Math.floor(this.dpr * Math.min((a.w - 8) / (this.mapW + pad), a.h / (this.mapH + pad)));
+    const maxScale = this.app.content.tuning.visuals.maxFitScale || 4;
+    const k = Math.floor(this.dpr * Math.min((a.w - 8) / (this.mapW + pad), a.h / (this.mapH + pad), maxScale));
     return Math.max(1, k);
   }
 
@@ -97,9 +103,10 @@ export class ForestView {
     if (!this.app.game) return;
     const a = this.area();
     const hw = a.w / 2 / this.zoom, hh = a.h / 2 / this.zoom;
-    const clampAxis = (v, size, half) => (size <= half * 2 ? size / 2 : Math.min(Math.max(v, half), size - half));
-    this.cam.x = clampAxis(this.cam.x, this.mapW, hw);
-    this.cam.y = clampAxis(this.cam.y, this.mapH, hh);
+    const r = this.rect;
+    const clampAxis = (v, lo, size, half) => (size <= half * 2 ? lo + size / 2 : Math.min(Math.max(v, lo + half), lo + size - half));
+    this.cam.x = clampAxis(this.cam.x, r.x, r.w, hw);
+    this.cam.y = clampAxis(this.cam.y, r.y, r.h, hh);
   }
 
   setK(k, anchorScreen) {
@@ -132,7 +139,14 @@ export class ForestView {
       this.edgeCache.clear();
       this.k = 0;
       this.fit();
-      this.cam = { x: this.mapW / 2, y: this.mapH / 2 };
+      this.cam = { x: this.rect.x + this.mapW / 2, y: this.rect.y + this.mapH / 2 };
+    }
+    const ck = JSON.stringify(s.clearing);
+    if (this.clearingKey !== ck) {
+      // The clearing grew: re-fit and re-centre (the treeline steps back).
+      if (this.clearingKey) { this.k = 0; this.fit(); this.cam = { x: this.rect.x + this.mapW / 2, y: this.rect.y + this.mapH / 2 }; }
+      this.clearingKey = ck;
+      this.edgeCache.clear();
     }
     const field = g.field(g.now());
     const overlay = this.app.ui.statOverlay;
@@ -144,6 +158,13 @@ export class ForestView {
         const forced = overrides.get(x + ',' + y);
         if (forced) { v.ground = forced; v.overlays = []; }
         if (overlay) v.overlay = overlayColor(stats);
+        // Remember when each overlay/ground first appeared so changes fade in instead of popping.
+        const prev = this.visuals[y * s.size.width + x];
+        const nowMs = performance.now();
+        v.since = {};
+        for (const o of v.overlays) v.since[o.sprite] = prev ? (prev.since?.[o.sprite] ?? nowMs) : 0;
+        v.groundSince = prev && prev.ground !== v.ground ? nowMs : (prev ? prev.groundSince : 0);
+        v.prevGround = prev && prev.ground !== v.ground ? prev.ground : (prev ? prev.prevGround : null);
         this.visuals[y * s.size.width + x] = v;
       }
     }
@@ -169,7 +190,7 @@ export class ForestView {
     for (let y = 0; y < s.size.height; y++) {
       for (let x = 0; x < s.size.width; x++) {
         const v = this.visuals[y * s.size.width + x];
-        if (!v) continue;
+        if (!v || !g.inClearing({ x, y }) || g.landmarkAt({ x, y })) continue;
         const c = centre(x, y);
         v.decorations.forEach((d, i) => objs.push({
           sprite: d.sprite, x: c.x + Math.round(d.dx * 0.8), y: c.y + d.dy + 3, flip: d.flip,
@@ -180,7 +201,12 @@ export class ForestView {
     for (const sp of s.spawns) {
       const def = this.app.content.items[sp.itemID];
       if (!def) continue;
-      objs.push({ sprite: def.sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, bob: true, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100 });
+      objs.push({ sprite: def.sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, bob: !sp.wiggle, wiggle: !!sp.wiggle, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100 });
+    }
+    for (const l of s.landmarks || []) {
+      const def = (this.app.content.landmarks || []).find((d) => d.id === l.id);
+      if (!def) continue;
+      objs.push({ sprite: def.sprite, ...at(l.tile), tile: l.tile, kind: 'landmark', key: l.id, phase: 0 });
     }
     for (const seed of s.plantedSeeds) {
       const stages = this.app.content.items[seed.seedItemID]?.growthSprites || ['__missing'];
@@ -237,6 +263,7 @@ export class ForestView {
     const view = { minX: -ox / scale, maxX: (this.canvas.width - ox) / scale, minY: -oy / scale, maxY: (this.canvas.height - oy) / scale };
     const size = this.game.state.size;
     const W = size.width;
+    const nowMs = performance.now();
 
     // Every tile on screen (map + treeline), plus a margin for tall shrubs.
     const x0 = Math.floor(view.minX / TS) - 1, x1 = Math.floor(view.maxX / TS) + 1;
@@ -244,13 +271,24 @@ export class ForestView {
     const edgeObjs = [];
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
-        const inside = x >= 0 && y >= 0 && x < size.width && y < size.height;
+        const inside = x >= 0 && y >= 0 && x < size.width && y < size.height && this.game.inClearing({ x, y });
         const v = inside ? this.visuals[y * W + x] : this.edgeVisual(x, y);
         if (!v) continue;
         const c = centre(x, y);
         const phase = ((x * 7 + y * 3) % 10) / 10;
+        const fadeMs = (this.app.content.tuning.visuals.overlayFadeSeconds || 0) * 1000;
+        const fadeIn = (since) => (fadeMs > 0 && since ? Math.min(1, (nowMs - since) / fadeMs) : 1);
+        if (v.prevGround && fadeIn(v.groundSince) < 1) {
+          this.blit(v.prevGround, null, c.x, c.y, t + phase);
+          ctx.globalAlpha = fadeIn(v.groundSince);
+        }
         this.blit(v.ground, null, c.x, c.y, t + phase);
-        for (const o of v.overlays) this.blit(o.sprite, null, c.x, c.y, t + phase, o.flip);
+        ctx.globalAlpha = 1;
+        for (const o of v.overlays) {
+          ctx.globalAlpha = fadeIn(v.since && v.since[o.sprite]);
+          this.blit(o.sprite, null, c.x, c.y, t + phase, o.flip);
+        }
+        ctx.globalAlpha = 1;
         const tint = v.overlay || v.tint;
         if (tint) {
           ctx.fillStyle = `rgba(${tint[0]},${tint[1]},${tint[2]},${tint[3]})`;
@@ -259,6 +297,18 @@ export class ForestView {
         if (!inside) {
           for (const d of v.decorations) edgeObjs.push({ sprite: d.sprite, x: c.x + d.dx, y: c.y + TS / 2 + d.dy, flip: d.flip, phase: 0 });
         }
+      }
+    }
+
+    // Highlight pulses (blend celebration, first-uncommon hint).
+    this.highlights = (this.highlights || []).filter((hl) => nowMs < hl.until);
+    for (const hl of this.highlights) {
+      const pulse = 0.25 + 0.25 * Math.sin(nowMs / 180);
+      ctx.fillStyle = `rgba(${hl.color},${pulse})`;
+      ctx.strokeStyle = `rgba(${hl.color},0.9)`;
+      for (const tl of hl.tiles) {
+        ctx.fillRect(tl.x * TS, tl.y * TS, TS, TS);
+        ctx.strokeRect(tl.x * TS + 0.5, tl.y * TS + 0.5, TS - 1, TS - 1);
       }
     }
 
@@ -295,14 +345,31 @@ export class ForestView {
       let y = o.y;
       let alpha = 1;
       if (o.bob && (t + o.phase) % 4 < 0.3) y -= 1;
+      let x = o.x;
+      if (o.wiggle) x += Math.round(Math.sin(t * 18) * (Math.floor(t * 2) % 3 === 0 ? 1.5 : 0));
       if (o.kind === 'creature') {
         const age = (now - (this.firstSeen.get(o.key) || 0)) / 300;
         if (age < 1) { y -= Math.round(12 * (1 - age)); alpha = age; }
       }
       ctx.globalAlpha = alpha;
-      this.blit(o.sprite, o.variant, o.x, y, t + o.phase, o.flip);
+      this.blit(o.sprite, o.variant, x, y, t + o.phase, o.flip);
       ctx.globalAlpha = 1;
       if (o.glimmer) this.sparkles(o.x, y, t + o.phase);
+    }
+
+    // Tutorial pointer: a bouncing arrow and a soft ring on the thing to tap.
+    const target = this.game.inTutorial ? this.game.tutorialTarget() : null;
+    if (target) {
+      const c = centre(target.x, target.y);
+      const bounce = Math.round(Math.abs(Math.sin(t * 4)) * 3);
+      ctx.strokeStyle = 'rgba(255,240,170,0.9)';
+      ctx.beginPath();
+      ctx.arc(c.x, c.y + 2, 9 + Math.sin(t * 4), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#fff0aa';
+      const ay = c.y - 22 - bounce;
+      for (let i = 0; i < 4; i++) ctx.fillRect(c.x - 3 + i, ay + i, 7 - i * 2, 1);
+      ctx.fillRect(c.x - 1, ay - 4, 2, 4);
     }
 
     // Effects: collected spawns float up and fade.
@@ -348,6 +415,10 @@ export class ForestView {
     }
     if (ui.mode && ui.mode.type === 'place') return g.activePlacements;
     return [];
+  }
+
+  highlight(tiles, seconds, color = '255,236,140') {
+    this.highlights = (this.highlights || []).concat([{ tiles, until: performance.now() + seconds * 1000, color }]);
   }
 
   // ---------------------------------------------------------- input
@@ -413,7 +484,8 @@ export class ForestView {
       }
       if (!moved && e.type === 'pointerup' && performance.now() - downAt < 600) {
         const w = this.screenToWorld(e.clientX, e.clientY);
-        this.app.handleTap(this.hitTest(w));
+        // Placing/planting/using targets the tile under the finger; browsing prefers the sprite tapped.
+        this.app.handleTap(this.app.ui.mode ? tileAt(w.x, w.y) : this.hitTest(w));
       }
     };
     el.addEventListener('pointerup', end);

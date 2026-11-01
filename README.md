@@ -38,6 +38,23 @@ Then open <http://localhost:8000>.
 - **Saves:** stored in the browser's `localStorage`. They're separate from the iOS app's saves, and Safari may clear them after a long period without visiting.
 - **Same gameplay as the iOS app:** `web/js/core.js` mirrors `UndergrowthCore`. When game rules change, update both.
 
+## Opening and early progression (web version)
+
+- **New forest:** a 5×5 clearing in the middle of the 12×16 forest, with all stats at 0. The Old Log sits at its centre (`Content/landmarks.json`). Only spawns with no stat requirements can appear, straight from the normal spawn rules.
+- **Tutorial:** forage, then plant, dig, crack, place, and watch. The pointer and the coach card guide each step, and each step only advances when you do it.
+  - The guaranteed results ride on the tutorial's own spawns: the Clover always drops a seed, and the Pebble Geode always holds a Common creature.
+  - The creature's family is set by `tutorial.creatureFamily`: `"random"` or `"choose"`.
+  - The tutorial creature ramps up in `tutorial.rampSeconds` (60) the first time it's placed. Placing it again later uses its normal time.
+  - Progress is saved, so quitting resumes at the same step. The 🐞 menu can replay or skip the tutorial.
+- **Slots:** 1 to start, then more on the days in `slotUnlocks.unlockDays` (counted from first play). Locked slots show their day.
+- **Blend celebration:** fires once, the first time two creatures each give a tile `blend.minEach` or more.
+- **Forest expansion:** the clearing grows by one ring when the `expansion` conditions are met, at most every `minHoursBetween` hours. Newly revealed tiles fade influence in over `revealRampSeconds`, and nothing reaches past the treeline.
+- **First-Uncommon hint:** shows once, the first time any tile meets an Uncommon spawn's stat requirements.
+- **Story and hint text:** all in `Content/story.json`, including the Old Log's Field Guide entry and the Heartwood Sapling teaser.
+- **Older saves:** forests from before this update open fully, with the tutorial marked done.
+
+The iOS app doesn't have these yet. It ignores the new data files.
+
 ## How to play
 
 The whole forest (12×16 tiles, set in `tuning.json`) fits the screen between the top bar and the bottom controls at a crisp whole-pixel scale, with a shrub treeline filling the edges. Pinch to zoom in; drag to look around while zoomed.

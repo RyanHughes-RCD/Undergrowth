@@ -28,6 +28,7 @@ export function duration(seconds) {
 }
 
 const CATEGORY_TITLES = { seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
+const LANDMARK_TAB = 'landmarks';
 const FAMILY_TABS = [['fungling', 'Funglings'], ['sproutling', 'Sproutlings'], ['geodeCritter', 'Geode Critters'], ['wanderer', 'Wanderers']];
 const catTitle = (c) => CATEGORY_TITLES[c] || cap(c);
 
@@ -55,7 +56,7 @@ export class UI {
     const now = g.now();
     const d = new Date(now);
     const clock = `${g.isNight(now) ? '🌙' : '☀️'} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}${g.isRaining(now) ? ' 🌧' : ''}${g.state.nextGlimmer ? ' ✨' : ''}`;
-    const top = h('div', { class: 'hud-top' },
+    const top = h('div', { class: 'hud-top' }, h('div', { class: 'hud-row' },
       h('button', { class: 'name-btn', onclick: () => this.open('rename') },
         h('div', { class: 'forest-name' }, g.forestName),
         h('div', { class: 'hint' }, `${clock} · tap to rename`)),
@@ -64,7 +65,7 @@ export class UI {
           h('b', {}, `⏩ ${this.app.speed}×`),
           g.state.debugTimeOffset > 0 ? h('span', {}, `+${duration(g.state.debugTimeOffset / 1000)}`) : null),
         h('button', { class: 'round-btn', title: 'Debug', onclick: () => this.open('debug') }, '🐞')) : null,
-    );
+    ), this.coachCard());
 
     const bottom = h('div', { class: 'hud-bottom' });
     if (this.mode) bottom.append(this.modeBanner());
@@ -78,6 +79,43 @@ export class UI {
     ));
     this.root.replaceChildren(top, bottom);
     if (this.sheet && withSheet) this.renderSheet();
+  }
+
+  /** Story/hint text from Content/story.json with {placeholders} filled in. */
+  story(path, vars = {}) {
+    let v = this.content.story;
+    for (const k of path.split('.')) v = v && v[k];
+    return typeof v === 'string' ? v.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? vars[k] : '')) : '';
+  }
+
+  /** The tutorial's guidance card: one step per core loop, with an action button where needed. */
+  coachCard() {
+    const g = this.game;
+    if (!g.inTutorial) return null;
+    const step = g.tutorialStep;
+    const tut = g.state.tutorial;
+    const cr = tut.creatureID ? g.creature(tut.creatureID) : null;
+    const vars = { creature: cr ? this.app.displayName(cr) : 'creature' };
+    const text = this.story(`tutorial.${step}.text`, vars);
+    if (!text) return null;
+    const btnLabel = this.story(`tutorial.${step}.button`, vars);
+    const a = this.app;
+    let action = null;
+    if (step === 'plant' && !this.mode) action = () => a.beginPlanting('seed.mystery-seed');
+    if (step === 'crack') action = () => this.openCrack('geode.pebble-geode');
+    if (step === 'place' && !this.mode) action = () => a.beginPlacing(tut.creatureID);
+    if (step === 'wrap') action = () => { g.finishTutorial(); a.changed(); };
+    let progress = null;
+    if (step === 'watch' && tut.placementID) {
+      const p = g.state.placements.find((x) => x.id === tut.placementID);
+      const lv = p ? g.level(p, g.now()) : 0;
+      progress = h('div', { class: 'progress' }, h('span', { style: `width:${Math.round(lv * 100)}%` }));
+    }
+    return h('div', { class: 'coach pop' },
+      h('div', { class: 'coach-title' }, this.story(`tutorial.${step}.title`, vars)),
+      h('div', { class: 'coach-text' }, text),
+      progress,
+      action && btnLabel ? h('button', { class: 'btn green small', onclick: action }, btnLabel) : null);
   }
 
   navButton(icon, label, badge, onclick) {
@@ -125,6 +163,12 @@ export class UI {
     return h('div', { class: 'slots' }, g.state.slots.map((slot) => {
       const p = slot.placementID && g.state.placements.find((x) => x.id === slot.placementID);
       const c = p && g.creature(p.creatureID);
+      const open = g.unlockedSlots(now);
+      const index = g.state.slots.indexOf(slot);
+      if (index >= open) {
+        return h('div', { class: 'slot locked' }, '🔒',
+          h('span', { class: 'slot-day' }, this.story('messages.lockedSlot', { day: g.slotUnlockDay(index) ?? '?' })));
+      }
       if (!c) return h('div', { class: 'slot empty' }, '+');
       const art = this.app.art(c);
       const lv = g.level(p, now);
@@ -137,6 +181,8 @@ export class UI {
   toast(text, sprite) {
     const el = document.getElementById('toast');
     el.replaceChildren(sprite ? this.sprites.element(sprite, null, 2) : '', h('span', {}, text));
+    // During the tutorial the coach card owns the top of the screen, so toasts sit low.
+    el.classList.toggle('low', !!(this.game && this.game.inTutorial));
     el.classList.add('show');
     clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
@@ -296,6 +342,12 @@ export class UI {
 
   guideEntries(tab) {
     const content = this.content;
+    if (tab === LANDMARK_TAB) {
+      return (content.landmarks || []).filter((l) => l.inGuide !== false).map((l) => ({
+        key: 'landmark:' + l.id.replace(/^landmark\./, ''), name: l.name, sprite: l.sprite, variant: null,
+        text: content.story?.guide?.landmarks?.[l.id] || null,
+      }));
+    }
     const fam = FAMILY_TABS.find(([id]) => id === tab);
     if (fam) {
       return content.creatureList.filter((def) => def.family === tab).flatMap((def) => [false, true].map((glimmer) => {
@@ -315,6 +367,7 @@ export class UI {
         howFound: i.howFound || (i.spawn ? 'Grows wild' + (i.spawn.requires && Object.keys(i.spawn.requires).length
           ? ' where ' + Object.entries(i.spawn.requires).map(([k, v]) => `${cap(k)} ${v.min}+`).join(', ') : ' anywhere') + '.' : null),
         special: i.use ? i.use.text : null,
+        teaser: content.story?.guide?.teasers?.[i.id] || null,
       }));
   }
 
@@ -325,19 +378,24 @@ export class UI {
       .sort((a, b) => ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
     const famTabs = FAMILY_TABS.filter(([id]) => content.creatureList.some((c) => c.family === id)).map(([id]) => id);
     if (this.guideTab === 'creatures') this.guideTab = famTabs[0];
-    const tabs = [...famTabs, ...cats];
+    const tabs = [LANDMARK_TAB, ...famTabs, ...cats];
     const all = tabs.flatMap((t) => this.guideEntries(t));
     const found = all.filter((e) => this.game.discovered.has(e.key)).length;
     const sil = { silhouette: [78, 84, 92] };
     return [`Field Guide · ${found}/${all.length}`, [
       h('div', { class: 'tabs' }, tabs.map((t) => h('button', {
         class: 'tab' + (t === this.guideTab ? ' on' : ''), onclick: () => { this.guideTab = t; this.renderSheet(); },
-      }, (FAMILY_TABS.find(([id]) => id === t) || [null, catTitle(t)])[1]))),
+      }, t === LANDMARK_TAB ? 'Landmarks' : (FAMILY_TABS.find(([id]) => id === t) || [null, catTitle(t)])[1]))),
       h('div', { class: 'guide-grid' }, this.guideEntries(this.guideTab).map((e) => {
         const known = this.game.discovered.has(e.key);
-        return h('button', { class: 'guide-cell' + (known ? '' : ' unknown') + (e.glimmer ? ' glim' : ''), onclick: () => { if (known) this.open('entry', e); } },
+        // Undiscovered entries with a teaser (the Heartwood Sapling) can still be opened as a silhouette.
+        const teaser = !known && e.teaser;
+        return h('button', {
+          class: 'guide-cell' + (known ? '' : ' unknown') + (e.glimmer ? ' glim' : '') + (teaser ? ' teaser' : ''),
+          onclick: () => { if (known) this.open('entry', e); else if (teaser) this.open('entry', { name: '???', sprite: e.sprite, variant: sil, text: e.teaser }); },
+        },
           this.sprites.element(e.sprite, known ? e.variant : sil, 4),
-          h('span', {}, known ? e.name : '???'),
+          h('span', {}, known ? e.name : teaser ? '??? ✨' : '???'),
           e.rarity ? h('i', { class: 'dot', style: `background:${RARITY_COLORS[e.rarity]}` }) : e.glimmer ? h('i', { class: 'glimmer' }, '✦') : null);
       })),
     ]];
@@ -391,12 +449,29 @@ export class UI {
           b('Give', () => a.debugGiveCreature(sel.value, false)),
           b('Give glimmer', () => a.debugGiveCreature(sel.value, true)));
       })(),
+      h('div', { class: 'section' }, 'Tutorial'),
+      h('div', { class: 'row gap wrap' },
+        b('Replay tutorial (new forest)', () => { if (confirm('Start a fresh forest and replay the tutorial?')) a.resetForest(); }),
+        this.game.inTutorial ? b('Skip tutorial', () => { this.game.finishTutorial(); this.sheet = null; this.close(); a.changed(); }) : null),
       h('div', { class: 'section' }, 'Danger'),
       b('Reset forest', () => { if (confirm('Start a brand-new forest? This erases your progress.')) a.resetForest(); }, 'red'),
     ];
   }
 
   // -------------------------------------------------------------- reveals
+
+  /** A short celebratory card (blend moment). */
+  celebrate(title, text) {
+    const ov = document.getElementById('overlay');
+    if (ov.classList.contains('show')) { this.toast(text); return; }
+    const done = () => { ov.classList.remove('show'); ov.replaceChildren(); };
+    ov.replaceChildren(h('div', { class: 'reveal-card pop' },
+      h('div', { class: 'rays-wrap small' }, h('div', { class: 'rays gold' }), h('div', { class: 'big-emoji' }, '🌿✨')),
+      h('h2', {}, title), h('p', { class: 'sub' }, text),
+      h('button', { class: 'btn green', onclick: done }, 'Lovely')));
+    ov.onclick = (e) => { if (e.target === ov) done(); };
+    ov.classList.add('show');
+  }
 
   showReveal(creature, isNew, source) {
     const art = this.app.art(creature);
@@ -426,6 +501,9 @@ export class UI {
     const hint = h('p', { class: 'hint-big' }, 'Tap the rock to crack it open');
     const stage = h('div', { class: 'crack-stage' }, rockWrap);
     const footer = h('div', { class: 'crack-footer' });
+    const cfg = this.content.tuning.tutorial || {};
+    let family = null;
+    const needsChoice = cfg.creatureFamily === 'choose' && app.game.hasGuaranteedGeode(itemID);
 
     const drawRock = () => {
       const svg = `<svg viewBox="0 0 100 100" class="cracks">${cracks.slice(0, hits).map((d) => `<path d="${d}"/>`).join('')}</svg>`;
@@ -445,7 +523,7 @@ export class UI {
     };
 
     const burst = () => {
-      const results = app.crack(itemID);
+      const results = app.crack(itemID, { family });
       const flash = h('div', { class: 'flash' });
       ov.append(flash);
       setTimeout(() => flash.remove(), 700);
@@ -486,6 +564,7 @@ export class UI {
     };
 
     rockWrap.onclick = () => {
+      if (needsChoice && !family) return;
       if (hits >= needed) return;
       hits++;
       rockWrap.classList.remove('shake');
@@ -497,6 +576,20 @@ export class UI {
     };
 
     footer.replaceChildren(h('button', { class: 'btn grey', onclick: () => { ov.classList.remove('show'); ov.replaceChildren(); } }, 'Not now'));
+    if (needsChoice) {
+      // Test option: the player picks which family hatches from the tutorial geode.
+      hint.textContent = this.story('tutorial.crack.choose');
+      const families = cfg.families || ['fungling', 'sproutling', 'geodeCritter'];
+      const pick = h('div', { class: 'family-pick' }, families.map((fam) => {
+        const sample = this.content.creatureList.find((c) => c.family === fam && c.rarity === 'common');
+        return h('button', { class: 'btn grey family', onclick: () => {
+          family = fam;
+          pick.remove();
+          hint.textContent = 'Tap the rock to crack it open';
+        } }, sample ? this.sprites.element(sample.sprite, null, 3) : '', h('span', {}, sample?.familyName || fam));
+      }));
+      hint.after(pick);
+    }
     ov.replaceChildren(h('div', { class: 'crack-screen' }, stage, hint, footer));
     ov.onclick = null;
     ov.classList.add('show');

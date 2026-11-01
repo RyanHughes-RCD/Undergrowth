@@ -74,7 +74,9 @@
       60,
       600,
       3600
-    ]
+    ],
+    "maxFitScale": 3,
+    "overlayFadeSeconds": 0.6
   },
   "naming": {
     "quietThreshold": 0.3,
@@ -89,5 +91,50 @@
   "wanderers": {
     "maxCatchUpDays": 7
   },
-  "debugTools": true
+  "debugTools": true,
+  "clearing": {
+    "startWidth": 5,
+    "startHeight": 5
+  },
+  "tutorial": {
+    "enabled": true,
+    "creatureFamily": "random",
+    "families": [
+      "fungling",
+      "sproutling",
+      "geodeCritter"
+    ],
+    "rampSeconds": 60,
+    "refreshSecondsWhileFast": 1
+  },
+  "slotUnlocks": {
+    "unlockDays": [
+      0,
+      1,
+      2
+    ]
+  },
+  "blend": {
+    "minEach": 3,
+    "highlightSeconds": 5
+  },
+  "expansion": {
+    "mode": "any",
+    "conditions": [
+      {
+        "type": "tilesAboveThreshold",
+        "fraction": 0.4,
+        "threshold": 10
+      },
+      {
+        "type": "slotsUnlocked",
+        "count": 3
+      }
+    ],
+    "minHoursBetween": 24,
+    "revealRampSeconds": 600
+  },
+  "uncommonHint": {
+    "rarity": "uncommon"
+  }
 }

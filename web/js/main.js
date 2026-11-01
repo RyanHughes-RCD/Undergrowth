@@ -28,7 +28,7 @@ class App {
       this.ui.toast(`While you were away, ${report.spawned} new thing${report.spawned === 1 ? '' : 's'} appeared.`);
     }
     if (this.replanted) this.ui.toast('The forest has been replanted for the new spawn table. Creatures now hide in mushrooms, seeds and geodes.');
-    else if (!saved) this.ui.toast('Welcome! Your forest is empty. Pick mushrooms, plants and geodes: creatures hide inside.');
+    else if (!saved && !this.game.inTutorial) this.ui.toast('Welcome! Your forest is empty. Pick mushrooms, plants and geodes: creatures hide inside.');
     this.save();
 
     // Clock: every second, apply the debug time speed; refresh the forest on its normal cadence
@@ -43,7 +43,11 @@ class App {
       if (document.hidden) return;
       if (this.speed > 1) this.game.state.debugTimeOffset += dt * (this.speed - 1);
       sinceRefresh += dt / 1000;
-      if (this.speed > 1 || sinceRefresh >= refresh) { sinceRefresh = 0; this.tick(); }
+      // Refresh every second while sped up or while a creature is fast-ramping (tutorial), so
+      // the land visibly changes; otherwise on the normal cadence.
+      const fast = this.game.state.placements.some((p) => p.removedAt == null && p.rampSeconds && p.rampSeconds < 600 && this.game.level(p, this.game.now()) < 1);
+      const every = fast ? ((this.content.tuning.tutorial && this.content.tuning.tutorial.refreshSecondsWhileFast) || 1) : refresh;
+      if (this.speed > 1 || sinceRefresh >= every) { sinceRefresh = 0; this.tick(); }
     }, 1000);
     document.addEventListener('visibilitychange', () => {
       this.lastReal = Date.now();
@@ -71,12 +75,37 @@ class App {
     this.game.advance(this.game.now());
     this.view.sync();
     this.ui.render(false);
+    this.processEvents();
+  }
+
+  /** Shows one-shot game events: tutorial steps, slot unlocks, blend, expansion, hints. */
+  processEvents() {
+    const events = this.game.takeEvents();
+    if (!events.length) return;
+    const ui = this.ui;
+    const cfg = this.content.tuning;
+    for (const e of events) {
+      if (e.type === 'slotUnlocked') {
+        ui.toast(ui.story('messages.slotUnlocked', { count: e.count, max: e.max }));
+      } else if (e.type === 'blend') {
+        this.view.highlight(e.tiles, (cfg.blend && cfg.blend.highlightSeconds) || 5);
+        ui.celebrate(ui.story('messages.blendTitle'), ui.story('messages.blend'));
+      } else if (e.type === 'expansion') {
+        this.view.highlight(e.tiles, 4, '170,255,150');
+        ui.toast(ui.story('messages.expansion'));
+      } else if (e.type === 'uncommonHint') {
+        this.view.highlight([e.tile], 6, '200,170,255');
+        ui.toast(ui.story('messages.uncommonHint'));
+      }
+    }
+    ui.render(false);
   }
 
   /** Call after any change. `persist=false` for pure UI changes. */
   changed(persist = true) {
     this.view.sync();
     this.ui.render();
+    this.processEvents();
     if (persist) this.scheduleSave();
   }
 
@@ -95,7 +124,8 @@ class App {
       if (!raw) return null;
       const s = JSON.parse(raw);
       if (!s || typeof s.version !== 'number' || s.version > SAVE_VERSION) return null;
-      if (s.version < SAVE_VERSION) { this.replanted = true; return null; }
+      // v1 forests used creatures/items that no longer exist; v2 migrates in Game.migrate().
+      if (s.version < 2) { this.replanted = true; return null; }
       return s;
     } catch (e) {
       console.warn('Could not read save; starting fresh', e);
@@ -154,7 +184,10 @@ class App {
         const c = g.creature(ui.mode.creatureID);
         ui.mode = null;
         ui.selectedCreatureID = null;
-        this.ui.toast(`${this.displayName(c)} settles in. Its influence will grow over the next few hours.`, this.art(c).sprite);
+        const p = g.activePlacement(c.id);
+        const secs = (p && p.rampSeconds) || this.content.tuning.rampSecondsToFull;
+        const when = secs < 3600 ? 'over the next minute' : `over about ${Math.round(secs / 3600)} hours`;
+        this.ui.toast(`${this.displayName(c)} settles in. Its influence will grow ${when}.`, this.art(c).sprite);
         this.changed();
       }
       return;
@@ -178,6 +211,12 @@ class App {
         this.ui.toast('Planted. Check back in a little while.', this.content.items[item]?.growthSprites?.[0]);
         this.changed();
       }
+      return;
+    }
+    const landmark = g.landmarkAt(tile);
+    if (landmark) {
+      const def = (this.content.landmarks || []).find((l) => l.id === landmark.id);
+      if (def) ui.open('entry', { name: def.name, sprite: def.sprite, variant: null, text: this.content.story?.guide?.landmarks?.[def.id] });
       return;
     }
     const p = g.creatureAt(tile);
@@ -262,8 +301,8 @@ class App {
 
   renameForest(name) { this.game.renameForest(name); this.changed(); }
 
-  crack(itemID) {
-    const r = this.attempt(() => this.game.crack(itemID, this.game.now())) || [];
+  crack(itemID, opts = {}) {
+    const r = this.attempt(() => this.game.crack(itemID, this.game.now(), opts)) || [];
     this.changed();
     return r;
   }

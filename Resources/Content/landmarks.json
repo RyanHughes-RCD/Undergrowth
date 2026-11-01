@@ -1,0 +1,9 @@
+[
+  {
+    "id": "landmark.old-log",
+    "name": "The Old Log",
+    "sprite": "landmark.old-log",
+    "position": "center",
+    "inGuide": true
+  }
+]

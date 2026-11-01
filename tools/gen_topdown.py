@@ -246,6 +246,25 @@ def make_shrubs():
             write(sid, (24, 22), [c], palette=palette, anchor=(12, 20), tags=["decoration"])
 
 
+def make_landmarks():
+    """The fallen old log at the centre of the clearing."""
+    pal = ["transparent", "#24160e", "#6b4a2f", "#8a6440", "#4a3322", "#c49a6c", "#6a9a48", "#83b45a", "#e8d4b0"]
+    c = Canvas(30, 16)
+    c.ellipse(15, 9.5, 13, 4.5, 2)                       # trunk
+    for x in range(4, 26, 3):
+        c.line(x, 6, x + 1, 13, 4)                        # bark grooves
+    c.rect(3, 6, 26, 6, 3)
+    c.ellipse(26, 9.5, 3, 4.2, 5)                         # cut end with rings
+    c.ellipse(26, 9.5, 1.8, 2.6, 8)
+    c.ellipse(26, 9.5, 0.8, 1.2, 5)
+    for (x, y, rx) in ((9, 5.5, 4), (17, 5, 3), (6, 8, 2)):
+        c.ellipse(x, y, rx, 1.6, 6)                       # moss
+        c.set(int(x) - 1, int(y) - 1, 7)
+    c.set(13, 3, 7); c.set(14, 2, 6)                      # tiny sprout
+    c.outline(1)
+    write("landmark.old-log", (30, 16), [c], palette=pal, anchor=(15, 13), tags=["landmark"])
+
+
 def main():
     os.makedirs(os.path.join(OUT, "Palettes"), exist_ok=True)
     with open(os.path.join(OUT, "Palettes", "pal.ground.json"), "w") as fh:
@@ -254,3 +273,4 @@ def main():
     make_ground()
     make_overlays()
     make_shrubs()
+    make_landmarks()
