@@ -109,8 +109,9 @@ MUSHROOMS = {
     "starlight-bonnet": ("bell", "#3a3a8a", "#d8d8f0", "#fff8b0"),
     "amethyst-deceiver": ("dome", "#9a5ad8", "#c8a8e8", "#d4a8ff"),
     "ancient-sporecrown": ("crown", "#c8a040", "#efe2c8", "#9ff4ff"),
+    "foxfire-button": ("dome", "#4a8a6a", "#e8f0dc", "#b8ff9a"),
 }
-GLOWING = {"glowcap", "crystal-cap", "moonlight-morel", "ghost-fungus", "starlight-bonnet", "ancient-sporecrown"}
+GLOWING = {"foxfire-button", "glowcap", "crystal-cap", "moonlight-morel", "ghost-fungus", "starlight-bonnet", "ancient-sporecrown"}
 
 
 def draw_mushroom(shape, cap, stem, accent):
@@ -231,6 +232,7 @@ PLANTS = {
     "deeproot-lantern": ("lantern", "#5a4a30", "#ffb040", "#fff0b0"),
     "water-reed": ("reeds", "#5ea347", "#7a4a24", "#b0804a"),
     "heartwood-sapling": ("sapling", "#7a4a2a", "#5ea347", "#ffd84a"),
+    "hollow-root": ("roots", "#5a9a3a", "#8a5a34", "#c8a070"),
 }
 PLANT_GLOW = {"glowbloom", "moonflower", "deeproot-lantern", "crystal-thistle"}
 
@@ -324,6 +326,12 @@ def draw_plant(shape, leaf, petal, centre):
             c.ellipse(6, 13, 3, 1, 3)
             c.ellipse(6, 6, 2.5, 1.6, 5); c.ellipse(11, 6, 2.5, 1.6, 5); c.ellipse(8.5, 4, 1.6, 2, 5)
             c.set(8, 7, 7)
+        elif shape == "roots":                          # hollow root: a knot of bare roots with a few leaves
+            for (x0, y0, x1, y1) in ((8, 9, 3, 14), (8, 9, 13, 14), (8, 9, 6, 15), (8, 9, 11, 15)):
+                c.line(x0, y0, x1, y1, 5)
+            c.ellipse(8, 10, 2.5, 1.6, 5); c.set(7, 9, 6); c.set(9, 11, 7)
+            c.line(8, 9, 8, 5, 2)
+            c.ellipse(6, 5, 2, 1.2, 3); c.ellipse(10, 4, 2, 1.2, 3); c.set(10, 3, 4); c.set(6, 4, 4)
         elif shape == "lantern":
             c.line(8, 14, 8, 5, 2)
             c.line(8, 5, 11, 4, 2)
@@ -516,7 +524,8 @@ RANK = {"common": 0, "uncommon": 1, "rare": 2, "veryRare": 3, "legendary": 4}
 
 def creature_palette(c):
     fam = c["family"]
-    s1, s2 = c["stats"][0], c["stats"][1]
+    s1 = c["stats"][0]
+    s2 = c["stats"][1] if len(c["stats"]) > 1 else s1
     main = mix(FAMILY_BASE[fam], STAT_COLOURS.get(s2, "#888888"), 0.25)
     if fam == "wanderer":
         main = mix(STAT_COLOURS.get(s1, "#ffffff"), "#ffffff", 0.35)

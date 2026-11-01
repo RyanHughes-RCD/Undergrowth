@@ -10,6 +10,7 @@
   "loot.plant.dandelion": {"rolls": [{"item": "plant.dandelion"}, {"item": "seed.mystery-seed", "chance": 0.25, "seedDrop": true}]},
   "loot.plant.moss-tuft": {"rolls": [{"item": "plant.moss-tuft"}, {"item": "seed.mystery-seed", "chance": 0.25, "seedDrop": true}]},
   "loot.plant.sorrel": {"rolls": [{"item": "plant.sorrel"}, {"item": "seed.mystery-seed", "chance": 0.25, "seedDrop": true}]},
+  "loot.plant.hollow-root": {"rolls": [{"item": "plant.hollow-root"}, {"item": "seed.mystery-seed", "chance": 0.25, "seedDrop": true}]},
   "loot.plant.violet": {"rolls": [{"item": "plant.violet"}, {"item": "seed.mystery-seed", "chance": 0.25, "seedDrop": true}]},
   "loot.plant.pebblewort": {"rolls": [{"item": "plant.pebblewort"}, {"item": "seed.mystery-seed", "chance": 0.25, "seedDrop": true}]},
   "loot.plant.foxglove": {"rolls": [{"item": "plant.foxglove"}, {"item": "seed.mystery-seed", "chance": 0.25, "seedDrop": true}]},

@@ -1,0 +1,59 @@
+{
+ "id": "ov.terrain.foxfire-fen.a",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "................",
+    ".......s........",
+    ".......r........",
+    "................",
+    "........ihhhi...",
+    ".......ihhhhhi..",
+    ".......hhhhrhh..",
+    ".......ihhrshi..",
+    "........ihhrii..",
+    "..iiiii...ihhhi.",
+    ".ihhrsri.ihhhhhi",
+    ".ihhhrhi..ihhhi.",
+    ".ihhrsri...iii..",
+    "..iiiii.........",
+    "........r.......",
+    "................"
+   ],
+   "duration": 0.9
+  },
+  {
+   "rows": [
+    "................",
+    "..r....r........",
+    ".rsr............",
+    "................",
+    "........ihhhi...",
+    ".......ihhhhhi..",
+    ".......hhhhhhhr.",
+    ".......ihhhhhrs.",
+    "........ihhsri..",
+    "..iiiii...ihhhi.",
+    ".ihhhrhi.ihhhhhi",
+    ".ihhhhhi..ihhhr.",
+    ".ihhhrhi...iii..",
+    "..iiiii.........",
+    "................",
+    "................"
+   ],
+   "duration": 0.9
+  }
+ ],
+ "tags": [
+  "overlay"
+ ]
+}

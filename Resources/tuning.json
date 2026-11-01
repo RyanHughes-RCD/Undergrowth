@@ -186,6 +186,27 @@
       { "min": 86, "label": "Maximum" }
     ]
   },
+  "terrains": {
+    "_about": "Named terrains formed by stat pairs (Low intensity, 10+ each, so two neighbouring commons make one) and triples (30+ each, for the legendary ones). A tile shows one: the most specific match (more stats first), then the one with the highest total of its stats. Its home items get x homeMult; its rule adds: night / day / rain (home items x that at those times), category (that category likelier to be chosen there), location (spawns land there x that often). The tile also counts one extra effect for where spawns land.",
+    "homeMult": 3,
+    "foxfire-fen": {"name": "Foxfire Fen", "requires": {"damp": {"min": 10}, "glow": {"min": 10}}, "home": ["mushroom.foxfire-button", "mushroom.blue-stain-cap", "mushroom.glowcap", "mushroom.moonlight-morel"], "rule": {"night": 2}},
+    "rain-garden": {"name": "Rain Garden", "requires": {"damp": {"min": 10}, "bloom": {"min": 10}}, "home": ["plant.violet", "mushroom.bloom-bonnet", "plant.trillium", "plant.bluebell", "mushroom.coral-fungus", "plant.ghost-orchid"], "rule": {"rain": 3}},
+    "dripstone-ledge": {"name": "Dripstone Ledge", "requires": {"damp": {"min": 10}, "stone": {"min": 10}}, "home": ["mushroom.pebble-cap", "mushroom.shelf-fungus", "geode.mossy-geode"], "rule": {"category": {"mushroom": 2}}},
+    "fernbrake": {"name": "Fernbrake", "requires": {"damp": {"min": 10}, "verdure": {"min": 10}}, "home": ["plant.fern", "plant.moss-tuft", "mushroom.chanterelle", "mushroom.puffball", "mushroom.lions-mane", "plant.pitcher-plant"], "rule": {"location": 1.6}},
+    "crystal-outcrop": {"name": "Crystal Outcrop", "requires": {"glow": {"min": 10}, "stone": {"min": 10}}, "home": ["mushroom.crystal-cap", "geode.glimmering-geode", "mushroom.amethyst-deceiver"], "rule": {"category": {"geode": 2}}},
+    "lantern-hollow": {"name": "Lantern Hollow", "requires": {"glow": {"min": 10}, "depth": {"min": 10}}, "home": ["mushroom.foxfire-button", "plant.hollow-root", "mushroom.ghost-fungus", "plant.deeproot-lantern"], "rule": {"night": 2}},
+    "moonlit-garden": {"name": "Moonlit Garden", "requires": {"glow": {"min": 10}, "bloom": {"min": 10}}, "home": ["plant.moonflower", "plant.glowbloom", "mushroom.starlight-bonnet"], "rule": {"night": 3}},
+    "wisp-thicket": {"name": "Wisp Thicket", "requires": {"glow": {"min": 10}, "verdure": {"min": 10}}, "home": ["mushroom.foxfire-button", "plant.sorrel", "plant.deeproot-lantern"], "rule": {"night": 2}},
+    "rock-garden": {"name": "Rock Garden", "requires": {"bloom": {"min": 10}, "stone": {"min": 10}}, "home": ["plant.moss-rose", "plant.stonecrop", "plant.crystal-thistle"], "rule": {"day": 2}},
+    "sunken-garden": {"name": "Sunken Garden", "requires": {"bloom": {"min": 10}, "depth": {"min": 10}}, "home": ["plant.hollow-root", "plant.cave-lily"], "rule": {"category": {"plant": 2}}},
+    "geode-bed": {"name": "Geode Bed", "requires": {"stone": {"min": 10}, "depth": {"min": 10}}, "home": ["mushroom.earthstar", "geode.deep-geode", "geode.pebble-geode"], "rule": {"category": {"geode": 3}}},
+    "overgrown-rocks": {"name": "Overgrown Rocks", "requires": {"stone": {"min": 10}, "verdure": {"min": 10}}, "home": ["plant.pebblewort", "geode.rootbound-geode"], "rule": {"location": 1.5}},
+    "root-tangle": {"name": "Root Tangle", "requires": {"depth": {"min": 10}, "verdure": {"min": 10}}, "home": ["plant.hollow-root", "mushroom.turkey-tail", "plant.deeproot-lantern"], "rule": {"category": {"plant": 2}}},
+    "glowworm-grotto": {"name": "Glowworm Grotto", "requires": {"damp": {"min": 30}, "glow": {"min": 30}, "depth": {"min": 30}}, "home": ["mushroom.ancient-sporecrown", "mushroom.cave-truffle", "mushroom.ghost-fungus", "mushroom.glowcap"], "rule": {"night": 2}},
+    "heartwood-grove": {"name": "Heartwood Grove", "requires": {"bloom": {"min": 30}, "verdure": {"min": 30}, "depth": {"min": 30}}, "home": ["plant.heartwood-sapling", "plant.cave-lily", "plant.sunpetal", "plant.foxglove"], "rule": {"day": 2}},
+    "heartstone-vein": {"name": "Heartstone Vein", "requires": {"glow": {"min": 30}, "stone": {"min": 30}, "depth": {"min": 30}}, "home": ["geode.ancient-heartstone", "geode.deep-geode", "geode.glimmering-geode", "mushroom.crystal-cap"], "rule": {"category": {"geode": 3}}},
+    "amethyst-seep": {"name": "Amethyst Seep", "requires": {"damp": {"min": 30}, "glow": {"min": 30}, "stone": {"min": 30}}, "home": ["mushroom.amethyst-deceiver", "mushroom.crystal-cap", "geode.mossy-geode", "mushroom.glowcap"], "rule": {"night": 2}}
+  },
   "combos": {
     "_about": "Combo tiles (the core of the game): a tile that meets every requirement becomes that combo. Uses the tile's raw stats.",
     "pool": { "name": "Shallow pool", "requires": { "damp": { "min": 12 }, "depth": { "min": 8 } }, "onlyDampItems": true,

@@ -808,6 +808,31 @@ export class Game {
   }
   combo(id) { return (this.t.combos || {})[id] || {}; }
 
+  /** Named terrains (tuning.terrains): id → { name, requires, home, rule }. */
+  get terrainDefs() {
+    if (this._terrainDefs && this._terrainDefs.src === this.t.terrains) return this._terrainDefs.list;
+    const src = this.t.terrains || {};
+    const list = Object.entries(src).filter(([id, d]) => !id.startsWith('_') && d && typeof d === 'object' && d.requires)
+      .map(([id, d]) => ({ id, ...d, home: new Set(d.home || []), keys: Object.keys(d.requires) }));
+    this._terrainDefs = { src: this.t.terrains, list };
+    return list;
+  }
+  terrainDef(id) { return this.terrainDefs.find((d) => d.id === id) || null; }
+
+  /**
+   * The named terrain a tile shows (one per tile): the most specific match (most stats), then the one
+   * whose stats add up highest. null on plain ground.
+   */
+  terrainAt(stats) {
+    let best = null, bestN = 0, bestSum = -1;
+    for (const d of this.terrainDefs) {
+      if (d.keys.length < bestN || !groupMatches(d.requires, stats)) continue;
+      const sum = d.keys.reduce((a, k) => a + (stats[k] || 0), 0);
+      if (d.keys.length > bestN || sum > bestSum) { best = d; bestN = d.keys.length; bestSum = sum; }
+    }
+    return best;
+  }
+
   // ---- terrain: each stat's own identity (tuning.terrain)
   get terrain() { return this.t.terrain || {}; }
 
@@ -878,6 +903,9 @@ export class Game {
     out.bloomVis = (stats.bloom || 0) * this.bloomFactor(t);
     out.combos = this.combosAt(stats);
     for (const c of out.combos) out['combo_' + c] = 1;
+    const ter = this.terrainAt(stats);
+    out.terrain = ter ? ter.id : null;
+    if (ter) out['terrain_' + ter.id] = 1;
     return out;
   }
 
@@ -1117,11 +1145,13 @@ export class Game {
     const field = this.field(now), c = this.clearing;
     const wantStat = list.filter((t) => t.kind === 'stat' && !this.discovered.has('terrain:' + t.id));
     const wantCombo = list.filter((t) => t.kind === 'combo' && !this.discovered.has('terrain:' + t.id));
-    if (wantStat.length || wantCombo.length) {
+    const wantNamed = list.filter((t) => t.kind === 'terrain' && !this.discovered.has('terrain:' + t.id));
+    if (wantStat.length || wantCombo.length || wantNamed.length) {
       for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
         const st = field.statsAt(x, y);
         for (const t of wantStat) if ((st[t.stat] || 0) > 0) mark(t.id);
         if (wantCombo.length) { const cs = this.combosAt(st); for (const t of wantCombo) if (cs.includes(t.combo)) mark(t.id); }
+        if (wantNamed.length) { const ter = this.terrainAt(st); if (ter) for (const t of wantNamed) if (t.terrain === ter.id) mark(t.id); }
       }
     }
     for (const id of found) this.events.push({ type: 'terrainDiscovered', id });
@@ -1352,6 +1382,7 @@ export class Game {
     const glowAt = (depth) => (night ? gN : gD + (gN - gD) * Math.min(1, depth / gFull));
     const comboReqs = on ? Object.entries(this.t.combos || {}).filter(([id]) => !id.startsWith('_'))
       .map(([id, cb]) => [id, Object.entries(cb.requires || {}).map(([k, b]) => [field.keys.indexOf(k), b])]) : [];
+    const terReqs = on ? this.terrainDefs.map((d) => [d, Object.entries(d.requires).map(([k, b]) => [field.keys.indexOf(k), b])]) : [];
     for (let y = c.y0; y <= c.y1; y++) {
       for (let x = c.x0; x <= c.x1; x++) {
         const tile = { x, y };
@@ -1368,10 +1399,26 @@ export class Game {
           }
           let combos = 0;
           for (const [, reqs] of comboReqs) if (reqs.every(([ki, b]) => ki >= 0 && boundMatches(b, field.values[o + ki]))) combos++;
+          // A named terrain counts as one more effect, and some draw spawns more (rule.location).
+          let terN = 0, terSum = -1, terLoc = 1;
+          if (intensity > 0) {
+            for (let ti = 0; ti < terReqs.length; ti++) {
+              const reqs = terReqs[ti][1];
+              if (reqs.length < terN) continue;
+              let sum = 0, okT = true;
+              for (let r = 0; r < reqs.length; r++) {
+                const ki = reqs[r][0], v = ki >= 0 ? field.values[o + ki] : 0;
+                if (ki < 0 || !boundMatches(reqs[r][1], v)) { okT = false; break; }
+                sum += v;
+              }
+              if (okT && (reqs.length > terN || sum > terSum)) { terN = reqs.length; terSum = sum; const d = terReqs[ti][0]; terLoc = (d.rule && d.rule.location) || 1; }
+            }
+          }
+          if (terN) combos++;
           // A tile with no stat at or above the influence floor is blank: no effects count there.
           effects = intensity > 0 || combos > 0 ? sources[i] + fx[i] + combos : 0;
           general = table[Math.min(table.length - 1, Math.round(effects))] * (1 + Math.min(maxInt, perPt * intensity));
-          weight = Math.min(max, base * general);
+          weight = Math.min(max, base * general * terLoc);
         }
         tiles.push({ tile, weight, intensity, effects, general, sources: sources[i] });
         total += weight;
@@ -1405,6 +1452,13 @@ export class Game {
     const varietyExp = this.varietyExponent(s, t);
     const out = [];
     const isPool = this.combosAt(s).includes('pool');
+    // Named terrain (tuning.terrains): its home items are likelier, more so at its time (night/day/rain).
+    const ter = this.terrainAt(s);
+    let homeMult = 1;
+    if (ter) {
+      const r = ter.rule || {};
+      homeMult = (this.t.terrains.homeMult ?? 1) * (night ? (r.night ?? 1) : (r.day ?? 1)) * (raining ? (r.rain ?? 1) : 1);
+    }
     // Terrain affinity (spawns.terrainAffinity): the tile's intensity levels, and which categories it favours.
     const aff = (this.t.spawns && this.t.spawns.terrainAffinity) || null;
     const lvl = {}; let maxLvl = 0;
@@ -1459,6 +1513,8 @@ export class Game {
         }
         weight *= affinity;
       }
+      const home = ter && ter.home.has(item.id) ? homeMult : 1;
+      weight *= home;
       // Clustering plants (reeds): likelier next to one of their own.
       if (rule.cluster && this.state.spawns.some((x) => x.itemID === item.id && Math.max(Math.abs(x.tile.x - tile.x), Math.abs(x.tile.y - tile.y)) === 1)) {
         weight *= this.combo('pool').clusterBonus ?? 2.5;
@@ -1466,7 +1522,7 @@ export class Game {
       // High Bloom: a wider variety of plants (weights flattened toward each other).
       const variety = item.category === 'plant' ? varietyExp : 1;
       if (variety !== 1 && weight > 0) weight = Math.pow(weight, variety);
-      if (weight > 0) out.push({ item, base: rule.baseWeight, rawMult: raw, mult, clamped: raw !== mult, fx, variety, affinity, weight });
+      if (weight > 0) out.push({ item, base: rule.baseWeight, rawMult: raw, mult, clamped: raw !== mult, fx, variety, affinity, home, terrain: ter ? ter.id : null, weight });
     }
     return out;
   }
@@ -1485,10 +1541,13 @@ export class Game {
     const lo = cs.minMultiplier ?? 0.25, hi = cs.maxMultiplier ?? 6;
     const cats = [...new Set(details.map((d) => d.item.category))];
     const meadow = stats && this.combosAt(stats).includes('meadow') ? (this.combo('meadow').plantCategoryMult ?? 1) : 1;
+    const ter = stats ? this.terrainAt(stats) : null;
+    const terCat = (ter && ter.rule && ter.rule.category) || {};
     const rows = cats.map((c) => {
       let raw = c === 'plant' ? meadow : 1;
       for (const stat in cs[c] || {}) raw += (cs[c][stat] / 100) * ((stats && stats[stat]) || 0) * (fac[stat] ?? 1);
-      const mult = Math.min(hi, Math.max(lo, raw));
+      // A named terrain's category tilt applies after the clamp, so it still counts on strong ground.
+      const mult = Math.min(hi, Math.max(lo, raw)) * (terCat[c] ?? 1);
       return { category: c, base: cw[c] ?? 1, mult, weight: (cw[c] ?? 1) * mult };
     });
     const total = rows.reduce((x, r) => x + r.weight, 0) || 1;

@@ -1,0 +1,59 @@
+{
+ "id": "ov.terrain.glowworm-grotto.b",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "................",
+    "................",
+    "...JJFHF........",
+    "..JMMMF.........",
+    ".JMMMMMJ........",
+    "..JFMMJFH.......",
+    "...JJJ....JMMFHF",
+    ".........JMMMMMJ",
+    ".........MFMMFMM",
+    "....FJJJ.JMMFHFJ",
+    "...FHMMMM.JMMFJ.",
+    "...JMMMMHF......",
+    "....MMMMF.......",
+    ".....FJJ...F....",
+    "................",
+    "................"
+   ],
+   "duration": 0.9
+  },
+  {
+   "rows": [
+    "................",
+    "................",
+    "...JJJ..........",
+    "..JMMMJ.........",
+    ".JHMMMMJ........",
+    "..JMMMJ.........",
+    "...JJJ....JMMMF.",
+    ".FH......JMMMMMJ",
+    "FHFF.F...MFMMMMM",
+    "...F.JJJ.JMMMMMJ",
+    "....MMMMM.JMMMJ.",
+    "...JMMMMMJ......",
+    "...FMMMMM.......",
+    "...H.JJF........",
+    "...F........FHF.",
+    "................"
+   ],
+   "duration": 0.9
+  }
+ ],
+ "tags": [
+  "overlay"
+ ]
+}

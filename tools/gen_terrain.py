@@ -433,6 +433,121 @@ def combo_art():
         overlay("ov.meadow.%s" % v, meadow)
 
 
+def named_terrain_art():
+    """One overlay per named terrain (tuning.terrains): ov.terrain.<id>.a/b. Glowing ones twinkle (2 frames)."""
+    def specks(c, rng, n, cols, m=1):
+        for _ in range(n):
+            x, y = pt(rng, m)
+            c.set(x, y, P[cols[rng.randint(0, len(cols) - 1)]])
+
+    def twinkle(c, rng, f, n, lit="gm_glow", hi="gm_hi"):
+        for i in range(n):
+            x, y = pt(rng, 1)
+            on = (i + f) % 2 == 0
+            c.set(x, y, P[hi if on else lit])
+            if on:
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    if rng.random() < .5:
+                        c.set(x + dx, y + dy, P[lit])
+
+    def flowers(c, rng, n, cols, centre="yellow"):
+        for _ in range(n):
+            x, y = pt(rng, 2)
+            col = P[cols[rng.randint(0, len(cols) - 1)]]
+            for dx, dy in ((0, -1), (-1, 0), (1, 0), (0, 1)):
+                c.set(x + dx, y + dy, col)
+            c.set(x, y, P[centre])
+
+    def rocks(c, rng, n, r=(1.2, 2.2), lit="rock_l", base="rock", edge="rock_d"):
+        for _ in range(n):
+            x, y = pt(rng, 3)
+            rr = rng.uniform(*r)
+            blob(c, x, y, rr, rr * .75, P[base], edge=P[edge])
+            c.set(x - 1, y - 1, P[lit])
+
+    def puddles(c, rng, n, base="water", hi="water_hi", edge="mud_d"):
+        for _ in range(n):
+            x, y = pt(rng, 3)
+            rr = rng.uniform(1.6, 2.8)
+            blob(c, x, y, rr, rr * .6, P[base], edge=P[edge])
+            c.set(x - 1, y, P[hi])
+
+    def crystals(c, rng, n, cols=("cr_cyan", "cr_dcyan"), hi="cr_white", f=0):
+        for i in range(n):
+            x, y = pt(rng, 3)
+            h = rng.randint(2, 4)
+            for k in range(h):
+                c.set(x, y - k, P[cols[0]]); c.set(x + 1, y - k, P[cols[1]])
+            c.set(x, y - h, P[hi] if (i + f) % 2 == 0 else P[cols[0]])
+            c.set(x - 1, y, P[cols[1]])
+
+    def fronds(c, rng, n, col="lush", lit="lush_l", dark="lush_d"):
+        for _ in range(n):
+            x, y = rng.randint(2, 13), rng.randint(6, 15)
+            d = 1 if rng.random() < .5 else -1
+            for k in range(5):
+                c.set(x + d * (k // 2), y - k, P[col])
+                if k % 2 == 0:
+                    c.set(x + d * (k // 2) - 1, y - k, P[lit]); c.set(x + d * (k // 2) + 1, y - k, P[dark])
+
+    def roots(c, rng, n, col="loam_root", dark="loam_d"):
+        for _ in range(n):
+            x, y = pt(rng, 1)
+            dx, dy = rng.choice(((1, 0), (1, 1), (0, 1), (-1, 1)))
+            for k in range(rng.randint(4, 8)):
+                c.set(x, y, P[col]); c.set(x, y + 1, P[dark])
+                x += dx if rng.random() < .8 else 0
+                y += dy if rng.random() < .6 else 0
+
+    def patches(c, rng, n, base, edge, r=(2, 3.2)):
+        for _ in range(n):
+            x, y = pt(rng, 3)
+            rr = rng.uniform(*r)
+            blob(c, x, y, rr, rr * .7, P[base], edge=P[edge])
+
+    def wisps(c, rng, f, n):
+        for i in range(n):
+            x, y = pt(rng, 3)
+            y -= (i + f) % 2
+            c.ellipse(x + .5, y + .5, 1.6, 1.6, P["gm_glow"])
+            c.set(x, y, P["gm_hi"]); c.set(x + 1, y, P["gm_hi"])
+
+    def mossy_rocks(c, rng, n):
+        for _ in range(n):
+            x, y = pt(rng, 4)
+            rr = rng.uniform(2.2, 3)
+            blob(c, x, y, rr, rr * .75, P["rock"], edge=P["rock_d"])
+            c.ellipse(x + .5, y - rr * .35, rr * .9, rr * .4, P["moss_l"])
+            c.set(x - 1, y - 1, P["moss_ll"]); c.set(x + 1, y + 1, P["rock_l"])
+            for k in range(rng.randint(2, 3)):
+                c.set(x - 2 + k * 2, y + int(rr * .6), P["moss"])
+
+    A = {
+        "foxfire-fen": (2, lambda c, r, f: (patches(c, r, 3, "mud", "mud_d"), twinkle(c, r, f, 7))),
+        "rain-garden": (1, lambda c, r, f: (puddles(c, r, 2), flowers(c, r, 4, ("pink", "violet", "white")), specks(c, r, 6, ("water_l",)))),
+        "dripstone-ledge": (1, lambda c, r, f: (rocks(c, r, 3, (1.8, 2.6)), specks(c, r, 8, ("water_l", "water_hi")), puddles(c, r, 1))),
+        "fernbrake": (1, lambda c, r, f: (patches(c, r, 2, "mud_m", "mud_d", (1.6, 2.4)), fronds(c, r, 7, "lush_l", "lush_ll", "grass_dd"))),
+        "crystal-outcrop": (2, lambda c, r, f: (rocks(c, r, 2), crystals(c, r, 4, f=f))),
+        "lantern-hollow": (2, lambda c, r, f: (patches(c, r, 2, "cave_m", "cave_d"), roots(c, r, 2), twinkle(c, r, f, 6))),
+        "moonlit-garden": (2, lambda c, r, f: (flowers(c, r, 5, ("white", "white", "violet"), "cr_white"), twinkle(c, r, f, 4, "gm_hi", "cr_white"))),
+        "wisp-thicket": (2, lambda c, r, f: (fronds(c, r, 5, "lush_l", "lush_ll", "grass_dd"), wisps(c, r, f, 3))),
+        "rock-garden": (1, lambda c, r, f: (rocks(c, r, 4, (1, 1.8)), flowers(c, r, 4, ("pink", "yellow", "violet"), "white"))),
+        "sunken-garden": (1, lambda c, r, f: (patches(c, r, 2, "loam", "loam_d"), flowers(c, r, 4, ("violet", "pink", "white")))),
+        "geode-bed": (1, lambda c, r, f: (patches(c, r, 3, "dirt", "dirt_d"), crystals(c, r, 3, ("cr_violet", "rock_d"), "cr_white"))),
+        "overgrown-rocks": (1, lambda c, r, f: (mossy_rocks(c, r, 3), fronds(c, r, 3, "moss_l", "moss_ll", "moss_d"))),
+        "root-tangle": (1, lambda c, r, f: (patches(c, r, 2, "loam", "loam_d"), roots(c, r, 6))),
+        "glowworm-grotto": (2, lambda c, r, f: (patches(c, r, 3, "cave_d", "cave"), twinkle(c, r, f, 12, "cr_cyan", "cr_white"))),
+        "heartwood-grove": (2, lambda c, r, f: (roots(c, r, 4), fronds(c, r, 3), flowers(c, r, 3, ("pink", "white")), twinkle(c, r, f, 3, "yellow", "white"))),
+        "heartstone-vein": (2, lambda c, r, f: (rocks(c, r, 3, (2, 2.8)), roots(c, r, 2, "cr_violet", "cr_dcyan"), twinkle(c, r, f, 4, "cr_violet", "cr_white"))),
+        "amethyst-seep": (2, lambda c, r, f: (puddles(c, r, 2), crystals(c, r, 4, ("cr_violet", "rock_d"), "cr_white", f=f))),
+    }
+    for tid, (frames, fn) in A.items():
+        for v in "ab":
+            def draw(c, rng, f, fn=fn):
+                fn(c, rng, f)
+            overlay("ov.terrain.%s.%s" % (tid, v), draw, frames=frames, durations=[0.9, 0.9] if frames > 1 else None)
+
+
 def lily_pads():
     """Lily pads for larger pools: round pads with a notch, one with a flower."""
     pal = ["transparent", "#183a1c", "#3f8a3a", "#5bb04a", "#2d6a2c", "#ffd0e0", "#ff9ccf", "#ffd84a"]
@@ -466,4 +581,5 @@ def main():
     stone_spikes()
     staged_overlays()
     combo_art()
+    named_terrain_art()
     lily_pads()

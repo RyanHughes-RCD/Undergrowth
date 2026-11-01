@@ -310,6 +310,50 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
   - **Each page:** what makes the terrain appear (as intensities), what can spawn there, the spawn bonuses (named as bonuses, at named intensities), other properties, and the selected tile's current intensity against what's needed. All of it is computed from `tuning.json`.
   - **Developer mode** can open every entry (marked as a developer view) without marking it found.
 
+## Named terrains (web)
+
+Where two stats meet on a tile, the ground becomes a named terrain with its own art, Field Guide page and spawns (`tuning.terrains`, `Resources/Content/terrain.json`).
+
+- **How one forms:**
+  - Pairs need both stats at 10 or more (Low intensity). Two neighbouring common creatures of different stats make a small patch of 3–6 tiles.
+  - The four legendary triples need all three stats at 30 or more.
+- **Which one shows:** a tile shows one terrain. A triple beats a pair; between pairs, the one whose stats add up highest wins.
+- **Existing combos still apply:** Damp + Depth stays a Shallow pool and Bloom + Verdure a Wild meadow; they work alongside these.
+- **Overlap with pools:** only Glowworm Grotto draws its art over pool water. The others don't draw over pools.
+
+| Stats | Terrain | Rule | Home finds |
+|---|---|---|---|
+| Damp + Glow | Foxfire Fen | home ×2 at night | Foxfire Button, Blue Stain Cap, Glowcap, Moonlight Morel |
+| Damp + Bloom | Rain Garden | home ×3 in rain | Violet, Bloom Bonnet, Trillium, Bluebell, Coral Fungus, Ghost Orchid |
+| Damp + Stone | Dripstone Ledge | mushrooms ×2 | Pebble Cap, Shelf Fungus, Mossy Geode |
+| Damp + Verdure | Fernbrake | spawns land ×1.6 | Fern, Moss Tuft, Chanterelle, Puffball, Lion's Mane, Pitcher Plant |
+| Glow + Stone | Crystal Outcrop | geodes ×2 | Crystal Cap, Glimmering Geode, Amethyst Deceiver |
+| Glow + Depth | Lantern Hollow | home ×2 at night | Foxfire Button, Hollow Root, Ghost Fungus, Deeproot Lantern |
+| Glow + Bloom | Moonlit Garden | home ×3 at night | Moonflower, Glowbloom, Starlight Bonnet |
+| Glow + Verdure | Wisp Thicket | home ×2 at night | Foxfire Button, Sorrel, Deeproot Lantern |
+| Bloom + Stone | Rock Garden | home ×2 by day | Moss Rose, Stonecrop, Crystal Thistle |
+| Bloom + Depth | Sunken Garden | plants ×2 | Hollow Root, Cave Lily |
+| Stone + Depth | Geode Bed | geodes ×3 | Earthstar, Deep Geode, Pebble Geode |
+| Stone + Verdure | Overgrown Rocks | spawns land ×1.5 | Pebblewort, Rootbound Geode |
+| Depth + Verdure | Root Tangle | plants ×2 | Hollow Root, Turkey Tail, Deeproot Lantern |
+| Damp + Glow + Depth | Glowworm Grotto | home ×2 at night | Ancient Sporecrown, Cave Truffle, Ghost Fungus, Glowcap |
+| Bloom + Verdure + Depth | Heartwood Grove | home ×2 by day | Heartwood Sapling, Cave Lily, Sunpetal, Foxglove |
+| Glow + Stone + Depth | Heartstone Vein | geodes ×3 | Ancient Heartstone, Deep Geode, Glimmering Geode, Crystal Cap |
+| Damp + Glow + Stone | Amethyst Seep | home ×2 at night | Amethyst Deceiver, Crystal Cap, Mossy Geode, Glowcap |
+
+- **Spawns:**
+  - Home finds get ×`homeMult` (3) on top of the rarity weighting (`spawns.terrainAffinity`), and only once their own stat needs are met.
+  - Category rules apply after the category clamp, so they still count on strong ground.
+  - A terrain tile counts one more effect when choosing where spawns land.
+  - The spawn inspector shows the home factor as `h×…`.
+- **New low-level commons:**
+  - Foxfire Button: a mushroom that needs Glow 10.
+  - Hollow Root: a plant that needs Depth 10.
+  - Together with Pebble Cap (Stone 10) and Sorrel (Verdure 10), every stat now has a find that shows up around a single common creature.
+- **Loosened uncommons:** Blue Stain Cap now needs Damp 20 (was 30) and Wild Strawberry needs Verdure 20 (was 30), so a single rare creature unlocks an uncommon.
+- **Art:** `tools/gen_terrain.py` (`named_terrain_art`) draws `ov.terrain.<id>.a/b`. Glowing terrains twinkle. The tile rules put them in one overlay group, above Glow.
+- **Note on regenerating sprites:** creature sprites are kept as they are. Their colours come from their stats, and the rebalance changed those stats, so restore `Resources/Sprites/creature` after running `tools/gen_placeholders.py` unless you want them recoloured.
+
 ## Creature balance and interactions (web)
 
 - **Balance** lives in `design/creature_balance.json`: per-rarity rules plus each creature's stats and variant. `tools/balance_creatures.py` writes it into the spreadsheet (Stat 1/2, a new optional Stat 3, bonuses, radius, ramp), which stays the source of truth; `tools/import_spawn_table.py` builds the content.

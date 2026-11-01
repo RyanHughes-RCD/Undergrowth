@@ -1,0 +1,37 @@
+{
+ "id": "ov.terrain.dripstone-ledge.b",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "................",
+    ".C...v..........",
+    "...vuttvvv....E.",
+    "...vttvuttv.....",
+    "...Ettttttt.....",
+    ".....vvtttv.....",
+    ".......vvv......",
+    ".....C.....iii..",
+    ".E.......iBBBBBi",
+    ".........iBEBBBi",
+    ".........iBBBBBi",
+    ".........vuiii..",
+    "........vtttCtv.",
+    ".........vtttv..",
+    "..........vvv...",
+    "................"
+   ]
+  }
+ ],
+ "tags": [
+  "overlay"
+ ]
+}

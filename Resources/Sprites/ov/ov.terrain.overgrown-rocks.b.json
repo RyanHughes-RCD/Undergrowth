@@ -1,0 +1,37 @@
+{
+ "id": "ov.terrain.overgrown-rocks.b",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "................",
+    "................",
+    "................",
+    "...omn...mmm....",
+    ".....m..mommm...",
+    "....omnvtttttv..",
+    "..mmmmm.ltlut...",
+    ".vmomomn.vvv....",
+    ".vtttttv........",
+    ".vltlmomn.......",
+    "..vvmommm..omn..",
+    "...vtttomn.m....",
+    "....ltluvmomn...",
+    ".....vvvomn.....",
+    ".........omn....",
+    "................"
+   ]
+  }
+ ],
+ "tags": [
+  "overlay"
+ ]
+}

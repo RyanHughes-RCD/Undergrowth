@@ -477,7 +477,8 @@ export class UI {
     const list = this.content.terrain || [];
     if (!this.game.inClearing(tile)) return list.filter((t) => t.kind === 'treeline');
     const combos = this.game.combosAt(stats);
-    const out = list.filter((t) => t.kind === 'combo' && combos.includes(t.combo));
+    const ter = this.game.terrainAt(stats);
+    const out = list.filter((t) => (t.kind === 'terrain' && ter && t.terrain === ter.id) || (t.kind === 'combo' && combos.includes(t.combo)));
     const stat = list.filter((t) => t.kind === 'stat' && (stats[t.stat] || 0) > 0).sort((a, b) => (stats[b.stat] || 0) - (stats[a.stat] || 0));
     return [...out, ...stat].slice(0, 3);
   }
@@ -508,7 +509,7 @@ export class UI {
         const at = (dx, dy) => ((pool[y + dy] || [])[x + dx] ? 1 : 0);
         if (at(0, 0)) g.drawImage(paintWaterTile(at, x + 40, y + 40, this.content.tuning.visuals.water || {}), x * TS, y * TS + head);
       }
-      if (art.overlay) g.drawImage(frame(art.overlay.replace('{n}', st)).canvas, x * TS, y * TS + head);
+      if (art.overlay) g.drawImage(frame(art.overlay.replace('{n}', st).replace('{ab}', (x + y) % 2 ? 'b' : 'a')).canvas, x * TS, y * TS + head);
       if (art.deco) {
         const id = art.deco.replace('{n}', Math.max(st, def.kind === 'treeline' ? 1 : st));
         const f = frame(id), a = this.sprites.anchor(id);
@@ -617,6 +618,23 @@ export class UI {
         lines.other.push(`Mystery Seeds planted here grow ×${cb.flowerGrowthMult ?? 2.5} faster.`);
       }
       lines.spawns.push(general);
+    } else if (def.kind === 'terrain') {
+      const td = g.terrainDef(def.terrain) || { requires: {}, home: new Set(), rule: {} };
+      const n = Object.keys(td.requires).length;
+      for (const [k, b] of Object.entries(td.requires)) lines.appears.push([this.requirementText(k, b.min), ' or more']);
+      lines.appears.push(`All of these on the same tile. Where several terrains could form, the one with ${n > 2 ? 'three' : 'more'} stats wins, then the strongest.`);
+      const home = this.content.spawnableItems.filter((i) => td.home.has(i.id));
+      const hm = (T.terrains || {}).homeMult ?? 1;
+      if (home.length) lines.spawns.push(`Home finds, ×${hm} likelier here once their own needs are met: ${itemList(home)}.`);
+      lines.spawns.push(`Rarer finds are favoured most on ground that suits them (rare ×${(T.spawns.terrainAffinity || {}).byRarity?.rare ?? 1} compared with common ×${(T.spawns.terrainAffinity || {}).byRarity?.common ?? 1}).`);
+      const r = td.rule || {};
+      if (r.night) lines.spawns.push(`At night its home finds are ×${r.night} likelier again.`);
+      if (r.day) lines.spawns.push(`By day its home finds are ×${r.day} likelier again.`);
+      if (r.rain) lines.spawns.push(`In the rain its home finds are ×${r.rain} likelier again.`);
+      for (const [c, m] of Object.entries(r.category || {})) lines.spawns.push(`${catName[c] || c} are ×${m} likelier to be the kind chosen here.`);
+      if (r.location) lines.other.push(`Spawns land here ×${r.location} as often as on other ground with the same effects.`);
+      lines.other.push('Counts as one more effect when choosing where spawns land.');
+      lines.spawns.push(general);
     } else if (def.kind === 'treeline') {
       lines.appears.push('Everywhere outside your clearing.');
       lines.spawns.push('Nothing spawns in the treeline, and creature influence stops at its edge.');
@@ -631,7 +649,7 @@ export class UI {
     // Compare with the tile you have selected (required vs current), without raw values.
     let compare = null;
     const sel = this.selectedTile;
-    const relevant = def.kind === 'stat' ? { [def.stat]: { min: band(0).min } } : def.kind === 'combo' ? (g.combo(def.combo).requires || {}) : null;
+    const relevant = def.kind === 'stat' ? { [def.stat]: { min: band(0).min } } : def.kind === 'combo' ? (g.combo(def.combo).requires || {}) : def.kind === 'terrain' ? ((g.terrainDef(def.terrain) || {}).requires || {}) : null;
     if (relevant) {
       if (sel) {
         const st = g.tileStats(sel, now);
@@ -690,7 +708,7 @@ export class UI {
         h('span', { class: 'grow' }, d.item.name, h('span', { class: 'sub', style: `color:${RARITY_COLORS[d.item.rarity]}` }, ' ' + rarityName(d.item.rarity)),
           (() => { const v = g.spawnView({ itemID: d.item.id, tile, placement: g.resolvePlacement(d.item, stats) }, now, stats); return v === 'surface' ? null : h('span', { class: 'tag' }, v); })()),
         h('span', { class: 'num' }, fmt(d.base)),
-        h('span', { class: 'num' + (d.clamped ? ' clamped' : '') }, '×' + d.mult.toFixed(2) + (d.clamped ? '*' : '') + (d.fx !== 1 ? ` ×${d.fx}` : '') + (d.affinity && d.affinity !== 1 ? ` t×${d.affinity.toFixed(2)}` : '')),
+        h('span', { class: 'num' + (d.clamped ? ' clamped' : '') }, '×' + d.mult.toFixed(2) + (d.clamped ? '*' : '') + (d.fx !== 1 ? ` ×${d.fx}` : '') + (d.affinity && d.affinity !== 1 ? ` t×${d.affinity.toFixed(2)}` : '') + (d.home && d.home !== 1 ? ` h×${+d.home.toFixed(2)}` : '')),
         h('span', { class: 'num' }, fmt(d.weight)),
         h('b', { class: 'num' }, (d.weight / total * 100).toFixed(1) + '%')));
     };
