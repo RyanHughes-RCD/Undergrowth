@@ -113,15 +113,24 @@ python3 tools/gen_placeholders.py
   - **Category first:** each spawn first picks mushroom, plant or geode (among categories that have something qualifying on that tile), then an item within it by effective weight.
   - **Category tilt:** a category's weight is `spawns.categoryWeights` × a multiplier from the tile's own-family stats (`spawns.categoryScaling`, % per point, clamped to 0.25..6). The default is +10% per point of Damp/Glow for mushrooms, Bloom/Verdure for plants and Stone/Depth for geodes. So an area full of Geode Critters turns up mostly geodes: one Common critter nearby gives about 50% geodes and 25% each of the others.
   - **Where spawns land (effect-driven):** each spawn attempt picks a free tile by weight (`spawns.locationWeighting`):
-    - `weight = base × general`, capped at `maxWeight` (8).
+    - `weight = base × general`, capped at `maxWeight` (24).
     - `general = generalByEffectCount[effects] × (1 + min(maxIntensityBonus, perStatPoint × tile stat total))`.
     - `effects` counts: creatures whose influence reaches the tile, active soil boosts, special-effect areas, and combo tiles.
-    - Defaults: by effect count 0 / 1 / 2 / 3+ = ×1 / ×1.5 / ×2 / ×2.5; `perStatPoint` 0.04; `maxIntensityBonus` 2.
+    - Defaults: by effect count 0 / 1 / 2 / 3+ = ×1 / ×3 / ×5 / ×7; `perStatPoint` 0.05; `maxIntensityBonus` 3.
     - The general bonus applies to every category. Which category spawns there still comes from the tile's own stats (`spawns.categoryScaling`, combos), so specialised tiles keep their identity.
-    - Blank tiles weigh 1 under the normal rules. Spawns never add effects, so there's no runaway.
+    - Blank tiles weigh 1, and a spawn that lands on one only goes ahead `spawns.blankTileSpawnChance` of the time (0.35). Spawns never add effects, so there's no runaway.
     - It's rebuilt from saved state (creatures, boosts, stats), so it's identical after a reload, and it follows effects as they ramp, fade, move or expire.
     - Occupied tiles, landmarks and the treeline are never candidates, and the overall spawn rate is unchanged. Arriving wanderers use the same weights.
-    - In simulation: a one-effect tile got about 2× a blank tile's spawns, a three-effect tile about 6×, and the busiest tile only 0.37% of all spawns.
+  - **Terrain affinity (what spawns on developed ground)** (`spawns.terrainAffinity`) makes a forest you've shaped look shaped:
+    - An item whose stat needs are met on the tile gets × `byRarity` (common 6, uncommon 12, rare 30, very rare 80, legendary 250). So rare items show up on their own terrain far more often than their small base weights suggest.
+    - It gets +`perExtraLevel` (0.25) for each intensity level the tile is above its need, up to `extraLevelCap` (2) levels.
+    - Beyond `overshootGrace` (2) levels above its need, it fades by `overshootFadePerLevel` (0.25) per level. Rich ground therefore favours the items made for it over low-need commons.
+    - Items with no needs (Brown Button Cap, Clover, Pebble Geode) fade by `genericFadePerLevel` (0.4) per intensity level, down to `genericMinFactor` (0.08), on ground that favours a different category. For example, Clover fades on Damp/Glow ground, but Brown Button Cap doesn't.
+    - The spawn inspector's Mult column shows it as `t×…`.
+    - In a one-day simulation of a starting clearing, these terrain items made up the following share of what spawned on developed tiles:
+      - Damp + Depth commons: 62%
+      - Bloom + Verdure: 51%
+      - A lone Stone common: about 75%, counting Pebble Geodes
   - **Seeds** choose their plant when planted, using the same weights for that tile at that time. The choice is saved on the seed, so a plant item can carry its own `growthSprites` (otherwise the stages are the generic seed stages ending in the plant's sprite).
   - **Spawn inspector:** in 🐞 Debug, turn on "Spawn inspector", then tap any tile. It shows the tile's stats and every qualifying item with its base, multiplier, weight and % within its category, plus what a Mystery Seed planted there now could grow into.
 - **Unclear sheet entries** and how I read them:

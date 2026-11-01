@@ -1243,8 +1243,11 @@ export class Game {
       // check keeps the overall spawn rate the same as picking any tile at random.
       loc = loc || this.spawnLocations(t, shared());
       if (!loc.tiles.length || !this.rng.chance(loc.tiles.length / area)) continue;
-      const tile = weightedPick(loc.tiles.map((x) => [x.tile, x.weight]), this.rng);
-      if (!tile || !this.isFree(tile)) continue;
+      const picked = weightedPick(loc.tiles.map((x) => [x, x.weight]), this.rng);
+      if (!picked || !this.isFree(picked.tile)) continue;
+      const tile = picked.tile;
+      // Untouched ground is quieter: only some attempts there produce anything.
+      if (!(picked.effects > 0) && !this.rng.chance(st.blankTileSpawnChance ?? 1)) continue;
       const item = this.pickSpawn(tile, t);
       if (item) {
         this.state.spawns.push(this.newSpawn(item, tile, t));
@@ -1402,6 +1405,12 @@ export class Game {
     const varietyExp = this.varietyExponent(s, t);
     const out = [];
     const isPool = this.combosAt(s).includes('pool');
+    // Terrain affinity (spawns.terrainAffinity): the tile's intensity levels, and which categories it favours.
+    const aff = (this.t.spawns && this.t.spawns.terrainAffinity) || null;
+    const lvl = {}; let maxLvl = 0;
+    for (const k of CORE_STATS) { lvl[k] = intensityOf(s[k] || 0, this.t).level; maxLvl = Math.max(maxLvl, lvl[k]); }
+    const cs = (this.t.spawns && this.t.spawns.categoryScaling) || {};
+    const favoured = new Set(Object.keys(cs).filter((cat) => typeof cs[cat] === 'object' && Object.keys(cs[cat]).some((k) => lvl[k] > 0)));
     const pool = isPool && this.combo('pool').onlyDampItems;
     for (const item of opts.items || this.content.spawnableItems) {
       const rule = item.spawn;
@@ -1432,6 +1441,24 @@ export class Game {
       let fx = 1;
       for (const e of weightFx) if (Game.effectMatches(e, item)) fx *= e.mult ?? 1;
       let weight = rule.baseWeight * mult * fx;
+      let affinity = 1;
+      if (aff) {
+        const needs = Object.keys(req);
+        if (needs.length) {
+          // Its home terrain: rarer items are weighted much more heavily where their needs are met.
+          const extra = needs.reduce((a, k) => a + Math.max(0, lvl[k] - intensityOf(mins[k] || 0, this.t).level), 0) / needs.length;
+          // Matching ground boosts the item (more for rarer ones, a little more per level above its need, up
+          // to extraLevelCap); ground far richer than the item needs (beyond overshootGrace levels) fades it,
+          // so a strong terrain shows the items made for it rather than the same low-need commons.
+          const boost = 1 + (aff.perExtraLevel ?? 0) * Math.min(extra, aff.extraLevelCap ?? Infinity);
+          const fade = Math.max(aff.genericMinFactor ?? 0.1, 1 - (aff.overshootFadePerLevel ?? 0) * Math.max(0, extra - (aff.overshootGrace ?? Infinity)));
+          affinity = (aff.byRarity[item.rarity] ?? 1) * boost * fade;
+        } else if (maxLvl > 0 && !favoured.has(item.category)) {
+          // Plain-forest items fade on ground with a character that favours something else.
+          affinity = Math.max(aff.genericMinFactor ?? 0.1, 1 - (aff.genericFadePerLevel ?? 0.3) * maxLvl);
+        }
+        weight *= affinity;
+      }
       // Clustering plants (reeds): likelier next to one of their own.
       if (rule.cluster && this.state.spawns.some((x) => x.itemID === item.id && Math.max(Math.abs(x.tile.x - tile.x), Math.abs(x.tile.y - tile.y)) === 1)) {
         weight *= this.combo('pool').clusterBonus ?? 2.5;
@@ -1439,7 +1466,7 @@ export class Game {
       // High Bloom: a wider variety of plants (weights flattened toward each other).
       const variety = item.category === 'plant' ? varietyExp : 1;
       if (variety !== 1 && weight > 0) weight = Math.pow(weight, variety);
-      if (weight > 0) out.push({ item, base: rule.baseWeight, rawMult: raw, mult, clamped: raw !== mult, fx, variety, weight });
+      if (weight > 0) out.push({ item, base: rule.baseWeight, rawMult: raw, mult, clamped: raw !== mult, fx, variety, affinity, weight });
     }
     return out;
   }

@@ -690,7 +690,7 @@ export class UI {
         h('span', { class: 'grow' }, d.item.name, h('span', { class: 'sub', style: `color:${RARITY_COLORS[d.item.rarity]}` }, ' ' + rarityName(d.item.rarity)),
           (() => { const v = g.spawnView({ itemID: d.item.id, tile, placement: g.resolvePlacement(d.item, stats) }, now, stats); return v === 'surface' ? null : h('span', { class: 'tag' }, v); })()),
         h('span', { class: 'num' }, fmt(d.base)),
-        h('span', { class: 'num' + (d.clamped ? ' clamped' : '') }, '×' + d.mult.toFixed(2) + (d.clamped ? '*' : '') + (d.fx !== 1 ? ` ×${d.fx}` : '')),
+        h('span', { class: 'num' + (d.clamped ? ' clamped' : '') }, '×' + d.mult.toFixed(2) + (d.clamped ? '*' : '') + (d.fx !== 1 ? ` ×${d.fx}` : '') + (d.affinity && d.affinity !== 1 ? ` t×${d.affinity.toFixed(2)}` : '')),
         h('span', { class: 'num' }, fmt(d.weight)),
         h('b', { class: 'num' }, (d.weight / total * 100).toFixed(1) + '%')));
     };
