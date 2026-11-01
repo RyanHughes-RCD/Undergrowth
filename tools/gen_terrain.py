@@ -190,18 +190,24 @@ def verdure_decorations():
 
 
 def spawn_markers():
-    # Buried: a patch of loose, turned soil with a few clods (what's inside is a surprise).
+    # Buried: a fresh mound of turned earth, raised and outlined so it reads on grass and on dug
+    # ground alike. Frame 1 (shown when it stirs) kicks a few crumbs up off the top.
+    # palette: 1 outline, 2 light crumb, 3 dark crack, 4 mound, 5 mound lit, 6 top highlight, 7 shadow
+    pal = ["transparent", "#1b1009", "#d6a873", "#2a1a10", "#7a4f2e", "#a5703f", "#c99358", "#3a2616"]
+
     def buried(c, f):
-        c.ellipse(7, 5, 6.5, 3.4, 4)
-        c.ellipse(6, 4.2, 4.5, 2, 5)
-        for (x, y) in ((3, 4), (9, 3), (6, 6), (11, 5)):
-            c.set(x, y, 3)
-        for (x, y) in ((4, 3), (10, 2), (8, 5)):
-            c.set(x, y, 2)
-        c.set(7, 4, 3); c.set(8, 3, 3); c.set(6, 3, 3)                 # a small X of cracks
-        c.set(8, 5, 3); c.set(6, 5, 3)
-    deco("spawn.buried.a", ["transparent", "#24160e", "#a37a4e", "#2e1f14", "#5a3d26", "#7a5232"], buried,
-         size=(14, 8), anchor=(7, 6), outline=False)
+        c.ellipse(8, 9.2, 7.4, 2.2, 7)                                   # shadow on the ground
+        c.ellipse(8, 7.4, 6.6, 3.6, 4)                                   # the mound
+        c.ellipse(7, 6.2, 4.6, 2.4, 5)                                   # lit upper slope
+        c.ellipse(6, 5.4, 2.4, 1.1, 6)                                   # top highlight
+        for (x, y) in ((4, 8), (11, 8), (9, 9), (3, 9), (13, 9)):        # clods at the foot
+            c.set(x, y, 5)
+        c.set(12, 7, 7); c.set(4, 6, 6)
+        c.set(8, 6, 3); c.set(9, 7, 3); c.set(7, 7, 3); c.set(10, 6, 3)  # a little crack where it's been dug
+        if f == 1:                                                       # crumbs popping up
+            for (x, y) in ((5, 2), (10, 1), (8, 3), (12, 3)):
+                c.set(x, y, 2)
+    deco("spawn.buried.a", pal, buried, size=(16, 12), frames=2, durations=[0.25, 0.25], anchor=(8, 9), outline=True)
 
     # Hidden in tall grass: a dense clump; the renderer gives it an occasional rustle.
     pal = ["transparent", "#1b1420", "#2d5a20", "#4f8a2c", "#79b84a", "#a6e57a"]

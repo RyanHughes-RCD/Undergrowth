@@ -204,6 +204,37 @@ class App {
     if (lines.length) this.ui.toast(lines.join('   '), sprite);
   }
 
+  /**
+   * Collect All: picks up every find in the clearing at once, including ones buried (dug up) and
+   * hidden in tall grass. Items are summed into one toast; creatures found are shown one after another.
+   */
+  collectAll() {
+    const g = this.game, now = g.now();
+    const spawns = [...g.state.spawns];
+    if (!spawns.length) return;
+    const counts = new Map(), creatures = [];
+    let n = 0;
+    for (const sp of spawns) {
+      if (!g.state.spawns.includes(sp)) continue;
+      const view = g.spawnView(sp, now);
+      const results = this.attempt(() => g.collect(sp.id, now));
+      if (!results) continue;
+      n++;
+      if (view === 'buried') this.view.dustAt(sp.tile);
+      const name = this.content.items[sp.itemID]?.name || 'something';
+      for (const r of results) {
+        if (r.item) counts.set(r.item, (counts.get(r.item) || 0) + r.count);
+        else if (r.creature) creatures.push([r, view === 'buried' ? `a ${name}, dug up from the earth` : `a ${name}`]);
+      }
+    }
+    const list = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const names = list.slice(0, 4).map(([id, c]) => `${c} ${this.content.items[id]?.name || id}`);
+    if (list.length > 4) names.push(`${list.length - 4} more`);
+    this.ui.toast(`Collected ${n} find${n === 1 ? '' : 's'}: ${names.join(', ')}.`, list.length ? this.content.items[list[0][0]]?.sprite : null);
+    for (const [r, source] of creatures) this.ui.showReveal(r.creature, r.isNew, source);
+    this.changed();
+  }
+
   // ---------------------------------------------------------------- actions
 
   handleTap(tile) {

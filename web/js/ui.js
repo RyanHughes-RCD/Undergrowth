@@ -80,6 +80,11 @@ export class UI {
     if (this.mode) bottom.append(this.modeBanner());
     if (this.selectedTile) bottom.append(this.tileCard(this.selectedTile));
     const invCount = Object.values(g.state.inventory).reduce((a, b) => a + b, 0);
+    const finds = g.state.spawns.length;
+    if (finds >= 2 && !this.mode) {
+      bottom.append(h('div', { class: 'collect-row' },
+        h('button', { class: 'btn green collect-all', onclick: () => this.app.collectAll() }, ic('bag', 1), ` Collect all (${finds})`)));
+    }
     bottom.append(h('div', { class: 'nav' },
       this.navButton('creatures', 'Creatures', g.state.creatures.length, () => this.open('creatures')),
       this.navButton('bag', 'Bag', invCount, () => this.open('bag')),
@@ -920,9 +925,15 @@ export class UI {
   }
 
   showReveal(creature, isNew, source) {
-    const art = this.app.art(creature);
     const ov = document.getElementById('overlay');
-    const done = () => { ov.classList.remove('show'); ov.replaceChildren(); };
+    // Several finds at once (Collect All): show them one after another.
+    if (ov.classList.contains('show') && ov.querySelector('.reveal-card')) { (this.revealQueue = this.revealQueue || []).push([creature, isNew, source]); return; }
+    const art = this.app.art(creature);
+    const done = () => {
+      ov.classList.remove('show'); ov.replaceChildren();
+      const next = (this.revealQueue || []).shift();
+      if (next) this.showReveal(...next);
+    };
     ov.replaceChildren(h('div', { class: 'reveal-card pop' },
       h('h2', { class: creature.isGlimmer ? 'glimmer' : '' }, creature.isGlimmer ? [ic('glimmer', 2), `A glimmer ${this.app.displayName(creature)}!`, ic('glimmer', 2)] : `You found a ${this.app.displayName(creature)}!`),
       h('p', { class: 'sub' }, `It came from ${source}.`),

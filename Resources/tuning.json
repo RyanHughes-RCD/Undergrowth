@@ -38,11 +38,11 @@
   "spawns": {
     "tickSeconds": 180,
     "attemptsPerTick": 3,
-    "spawnChance": 0.5,
+    "spawnChance": 0.25,
     "maxTotal": 160,
     "lifetimeSeconds": 172800,
     "maxCatchUpTicks": 288,
-    "maxPerOpenTile": 0.14,
+    "maxPerOpenTile": 0.08,
     "minCap": 5,
     "scaling": {
       "minMultiplier": 0.25,

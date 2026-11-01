@@ -49,6 +49,10 @@ Then open <http://localhost:8000>.
 - **Forest expansion:** the clearing grows by `ringTiles` (2) tiles on each side when the `expansion` conditions are met, at most every `minHoursBetween` hours. Newly revealed tiles fade influence in over `revealRampSeconds`, and nothing reaches past the treeline.
 - **Starter tasks:** a few goals at a time appear under Tasks. Examples are picking 5 mushrooms, harvesting a seed, cracking 3 geodes, and having two creatures out at once. Each gives a reward to claim. They're defined in `Content/tasks.json` (text, counter, target, reward).
 - **Spawns:** the cap is `spawns.maxPerOpenTile` × open tiles, at least `minCap` and at most `maxTotal`.
+  - Rates were halved for a calmer pace: `spawnChance` 0.25 (was 0.5) and `maxPerOpenTile` 0.08 (was 0.14).
+  - An active player now picks about 125 finds a day in a starting forest (was about 245). Creature finds from picking drop by about the same share; pity counters still guarantee them.
+- **Collect all:** with two or more finds on the map, a "Collect all (N)" button above the nav picks up everything, including buried and hidden finds. One toast sums the items; creatures found are revealed one after another.
+- **Buried finds:** these show as a raised, outlined mound of fresh earth. Every few seconds it stirs: a little hop and a puff of crumbs.
 - **First-Uncommon hint:** shows once, the first time any tile meets an Uncommon spawn's stat requirements.
 - **Story and hint text:** all in `Content/story.json`, including the Old Log's Field Guide entry and the Heartwood Sapling teaser.
 - **Older saves:** forests from before this update open fully, with the tutorial marked done.

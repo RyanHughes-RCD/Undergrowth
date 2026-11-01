@@ -98,6 +98,8 @@ button { border: 0; background: none; cursor: pointer; padding: 0; }
 .mini-bar span, .progress span { display: block; height: 100%; background: var(--green-hi); box-shadow: inset 0 calc(-1 * var(--px)) 0 0 var(--green); }
 
 .nav { display: flex; gap: 10px; }
+.collect-row { display: flex; justify-content: flex-end; }
+.collect-all { display: flex; align-items: center; gap: 4px; }
 .nav-btn { flex: 1; position: relative; padding: 6px 0 6px; display: flex; flex-direction: column; align-items: center; gap: 2px;
   font-size: var(--t-small); font-weight: 600; }
 .nav-btn:active, .btn:active, .slot:active, .tab:active { transform: translateY(var(--px)); }

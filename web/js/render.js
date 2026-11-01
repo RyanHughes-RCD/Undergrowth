@@ -244,7 +244,7 @@ export class ForestView {
       // a geode exposed on rock (the bare stone), or on the surface (geodes half-sunk in a dirt mound).
       const view = g.spawnView(sp, now, field.statsAt(sp.tile.x, sp.tile.y));
       const sprite = view === 'buried' ? 'spawn.buried.a' : view === 'hidden' ? 'spawn.rustle.a' : view === 'exposed' ? def.sprite : (def.worldSprite || def.sprite);
-      objs.push({ sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: view !== 'hidden', rustle: view === 'hidden', view, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100,
+      objs.push({ sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: view !== 'hidden' && view !== 'buried', rustle: view === 'hidden', dig: view === 'buried', view, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100,
         flip: !!def.flipInWorld && (hash32(sp.tile.x, sp.tile.y, 3) & 1) === 1 });
     }
     for (const l of s.landmarks || []) {
@@ -418,6 +418,12 @@ export class ForestView {
       let x = o.x;
       let flip = o.flip;
       let ft = o.still ? 0 : t + o.phase;
+      if (o.dig) {
+        // Buried: something stirs under the mound every few seconds (a hop and a puff of crumbs).
+        const cyc = (t + o.phase) % 3.8;
+        ft = cyc < 0.5 ? 0.3 : 0;
+        if (cyc < 0.5) { y -= cyc < 0.25 ? 1 : 0; x += Math.round(Math.sin(t * 40) * 0.6); }
+      }
       if (o.rustle) {
         // Hidden in tall grass: still most of the time, with a short rustle every few seconds.
         const cyc = (t + o.phase) % 3.4;
