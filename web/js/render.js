@@ -22,6 +22,7 @@ export class ForestView {
     this.effects = [];
     this.firstSeen = new Map();
     this.edgeCache = new Map();
+    this.roam = new Map(); // creature wander state by placement id
     this.engineFor = null;
     this.pointers = new Map();
     this.insets = { top: 80, bottom: 170 };
@@ -214,7 +215,7 @@ export class ForestView {
     for (const sp of s.spawns) {
       const def = this.app.content.items[sp.itemID];
       if (!def) continue;
-      objs.push({ sprite: def.sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, bob: !sp.wiggle, wiggle: !!sp.wiggle, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100 });
+      objs.push({ sprite: def.sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: true, phase: 0 });
     }
     for (const l of s.landmarks || []) {
       const def = (this.app.content.landmarks || []).find((d) => d.id === l.id);
@@ -232,13 +233,14 @@ export class ForestView {
       if (!cr) continue;
       const art = this.app.art(cr);
       if (!this.firstSeen.has(p.id)) this.firstSeen.set(p.id, performance.now());
-      objs.push({ sprite: art.sprite, variant: art.variant, ...at(p.tile), tile: p.tile, kind: 'creature', key: p.id, glimmer: cr.isGlimmer, phase: hash32(p.tile.x, p.tile.y) % 1000 / 300 });
+      objs.push({ sprite: art.sprite, variant: art.variant, ...at(p.tile), tile: p.tile, kind: 'creature', key: p.id, glimmer: cr.isGlimmer, phase: hash32(p.tile.x, p.tile.y) % 1000 / 300, roam: Math.max(0.5, this.game.stats.reach(p.radius) - 0.5) * TS });
     }
     for (const v of s.visitors || []) {
       const def = this.app.content.creatures[v.speciesID];
       if (!def) continue;
       objs.push({ sprite: def.sprite, ...at(v.tile), tile: v.tile, kind: 'visitor', key: v.id, bob: true, glimmer: true, phase: hash32(v.tile.x, v.tile.y) % 1000 / 100 });
     }
+    for (const k of [...this.roam.keys()]) if (!objs.some((o) => o.key === k)) this.roam.delete(k);
     // Spawns that vanished get a little "picked" pop.
     const keys = new Set(objs.filter((o) => o.key).map((o) => o.key));
     for (const o of this.objects) {
@@ -352,22 +354,29 @@ export class ForestView {
     const pad = 32;
     const drawn = this.objects.filter((o) => o.x >= view.minX - pad && o.x <= view.maxX + pad && o.y >= view.minY - pad && o.y <= view.maxY + pad * 2)
       .concat(edgeObjs);
-    drawn.sort((a, b) => a.y - b.y || a.x - b.x);
+    const sortY = (o) => (o.roam && this.roam.has(o.key) ? this.roam.get(o.key).y : o.y);
+    drawn.sort((a, b) => sortY(a) - sortY(b) || a.x - b.x);
     this.drawn = drawn;
     for (const o of drawn) {
       let y = o.y;
       let alpha = 1;
       if (o.bob && (t + o.phase) % 4 < 0.3) y -= 1;
       let x = o.x;
-      if (o.wiggle) x += Math.round(Math.sin(t * 18) * (Math.floor(t * 2) % 3 === 0 ? 1.5 : 0));
+      let flip = o.flip;
+      if (o.roam) {
+        const w = this.roamStep(o, now);
+        x = w.x; y = w.y; flip = w.flip;
+        if (w.moving && Math.floor((t + o.phase) * 6) % 2 === 0) y -= 1; // little hop while walking
+      }
       if (o.kind === 'creature') {
         const age = (now - (this.firstSeen.get(o.key) || 0)) / 300;
         if (age < 1) { y -= Math.round(12 * (1 - age)); alpha = age; }
       }
+      o.drawX = x; o.drawY = y;
       ctx.globalAlpha = alpha;
-      this.blit(o.sprite, o.variant, x, y, t + o.phase, o.flip);
+      this.blit(o.sprite, o.variant, x, y, o.still ? 0 : t + o.phase, flip);
       ctx.globalAlpha = 1;
-      if (o.glimmer) this.sparkles(o.x, y, t + o.phase);
+      if (o.glimmer) this.sparkles(x, y, t + o.phase);
     }
 
     // Tutorial pointer: a bouncing arrow and a soft ring on the thing to tap.
@@ -395,9 +404,44 @@ export class ForestView {
     }
   }
 
+  /**
+   * Creatures wander inside their influence radius around the tile they were placed on:
+   * walk to a random spot, pause, repeat. Purely visual; their stats still come from the tile.
+   */
+  roamStep(o, now) {
+    let w = this.roam.get(o.key);
+    const home = { x: o.x, y: o.y };
+    if (!w || w.homeX !== home.x || w.homeY !== home.y) {
+      w = { homeX: home.x, homeY: home.y, x: home.x, y: home.y, tx: home.x, ty: home.y, wait: now + 600 + Math.random() * 2000, last: now, flip: false, moving: false };
+      this.roam.set(o.key, w);
+    }
+    const dt = Math.min(0.1, (now - w.last) / 1000);
+    w.last = now;
+    const dx = w.tx - w.x, dy = w.ty - w.y, d = Math.hypot(dx, dy);
+    w.moving = false;
+    if (now < w.wait) return w;
+    if (d < 0.5) {
+      // Arrived: rest a moment, then pick a new spot inside the radius (and inside the clearing).
+      const r = this.rect, pad = 6;
+      for (let i = 0; i < 8; i++) {
+        const a = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * o.roam;
+        const nx = home.x + Math.cos(a) * rr, ny = home.y + Math.sin(a) * rr;
+        if (nx > r.x + pad && nx < r.x + r.w - pad && ny > r.y + pad && ny < r.y + r.h - 1) { w.tx = nx; w.ty = ny; break; }
+      }
+      w.wait = now + 1500 + Math.random() * 4000;
+      return w;
+    }
+    const speed = 7; // art px per second
+    const step = Math.min(d, speed * dt);
+    w.x += (dx / d) * step; w.y += (dy / d) * step;
+    if (Math.abs(dx) > 0.5) w.flip = dx < 0;
+    w.moving = true;
+    return w;
+  }
+
   blit(id, variant, x, y, t, flip = false) {
     const frames = this.sprites.frames(id, variant);
-    const f = frames[frames.length > 1 ? this.sprites.frameIndex(id, t) : 0];
+    const f = frames[frames.length > 1 && t ? this.sprites.frameIndex(id, t) : 0];
     const a = this.sprites.anchor(id);
     if (flip) {
       this.ctx.save();
@@ -443,7 +487,8 @@ export class ForestView {
       if (!o.kind) continue;
       const f = this.sprites.frames(o.sprite, o.variant)[0];
       const a = this.sprites.anchor(o.sprite);
-      const px = Math.floor(w.x - (o.x - a.x)), py = Math.floor(w.y - (o.y - a.y));
+      const ox = o.drawX ?? o.x, oy = o.drawY ?? o.y;
+      const px = Math.floor(w.x - (ox - a.x)), py = Math.floor(w.y - (oy - a.y));
       if (px < -2 || py < -2 || px > f.w + 1 || py > f.h + 1) continue;
       // Generous: accept a hit within 2px of an opaque pixel (small sprites on phones).
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {

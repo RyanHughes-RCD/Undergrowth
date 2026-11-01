@@ -57,8 +57,16 @@ def make_ground():
     for i, sid in enumerate(("tile.grass.a", "tile.grass.b", "tile.grass.c")):
         tile(sid, "grass", [("grass_d", .07), ("grass_l", .05), ("grass_ll", .01)],
              extra=tufts(("grass_l", "grass_d", "grass_ll"), 3 + i))
+    # Treeline floor: its own very dark palette (the ground palette is full).
+    edge_pal = ["transparent", "#0d1f0f", "#123016", "#081509", "#1a3c1c"]
     for sid in ("tile.edge.a", "tile.edge.b"):
-        tile(sid, "grass_dd", [("lush_d", .15), ("grass_d", .12)], extra=tufts(("grass_d", "lush_d"), 3))
+        rng = rng_for(sid)
+        c = Canvas(T, T)
+        for y in range(T):
+            for x in range(T):
+                r = rng.random()
+                c.px[y][x] = 2 if r < .15 else 3 if r < .3 else 4 if r < .34 else 1
+        write(sid, (T, T), [c], palette=edge_pal, anchor=(8, 8), tags=["tile"])
 
     def cave(c, rng, f):
         blob(c, 7.5, 7.5, 5.5, 5, P["cave_l"])
@@ -211,12 +219,12 @@ def make_overlays():
 
 # ------------------------------------------------------------------ shrub treeline
 
+# Deep, shadowed forest greens so the treeline reads as a clear dark border around the clearing.
 SHRUB_PALETTES = [
-    ["transparent", "#142410", "#3f7a32", "#5ea347", "#2e5c26", "#7cc35a", "#e05a6a"],
-    ["transparent", "#13220f", "#356b2c", "#4f9440", "#264f20", "#6db552", "#f4f0e0"],
-    ["transparent", "#15240f", "#4a8034", "#68ad4a", "#335f26", "#8ccf63", "#ffd84a"],
+    ["transparent", "#060d06", "#14301a", "#1d4022", "#0c2010", "#2a5a2c", "#8a3a48"],
+    ["transparent", "#050c06", "#12291a", "#1a3a22", "#0a1c10", "#255030", "#9a9a88"],
+    ["transparent", "#060d05", "#173218", "#21461f", "#0e2410", "#2f612a", "#a08a30"],
 ]
-
 
 def make_shrubs():
     for i, palette in enumerate(SHRUB_PALETTES):
