@@ -228,7 +228,10 @@ export function forestName(parts, tuning, means, seed) {
 // ---------------------------------------------------------------- tile rules
 
 export class TileRuleEngine {
-  constructor(rules, maxDecorations, seed) {
+  constructor(rules, maxDecorations, seed, stages = null) {
+    // "staged" rules expand into one rule per intensity stage (visuals.intensityStages thresholds):
+    // { id, layer, stat, staged: true, sprites: ["ov.x.s{n}a", ...] } → id1..id9 in one group.
+    rules = Game.expandStagedRules(rules, stages);
     const sorted = rules.map((r, i) => [r, i]).sort((a, b) => {
       const pa = a[0].priority || 0, pb = b[0].priority || 0;
       return pa !== pb ? pb - pa : a[1] - b[1];
@@ -263,9 +266,12 @@ export class TileRuleEngine {
     }
 
     const decorations = [];
+    const usedGroups = new Set();
     for (const r of this.decorations) {
       if (decorations.length >= this.maxDecorations) break;
+      if (r.group && usedGroups.has(r.group)) continue;          // staged: only the highest stage shows
       if (!r.sprites || !r.sprites.length || !conditionMatches(r.when, r.any, stats)) continue;
+      if (r.group) usedGroups.add(r.group);
       const h = this.h(x, y, 'd-' + r.id);
       if (h / 4294967296 >= (r.density == null ? 1 : r.density)) continue;
       const h2 = hash32(h, 7);
@@ -355,6 +361,11 @@ export class Game {
     if (!s.clearing) {
       s.clearing = { x0: 0, y0: 0, x1: s.size.width - 1, y1: s.size.height - 1 };
       s.tutorial = s.tutorial || { step: 'done' };
+    // The guided tutorial is gone (tuning.tutorial.enabled false): forests mid-tutorial just carry on.
+    if (s.tutorial.step !== 'done' && !(this.t.tutorial && this.t.tutorial.enabled)) {
+      s.tutorial = { step: 'done' };
+      for (const sp of s.spawns || []) delete sp.wiggle;
+    }
       s.minUnlockedSlots = this.t.placementSlots;
     }
     s.revealed = s.revealed || {};
@@ -420,9 +431,52 @@ export class Game {
     state.announcedSlots = g.unlockedSlots(now);
     for (const typeID of content.tuning.starterCreatures) state.creatures.push(g.rollCreature(typeID, 'starter', now, false));
     if (state.tutorial.step === 'forage') g.enterTutorialStep('forage', now);
+    else g.placeStarters(now);
     g.advance(now);
     g.events = [];
     return g;
+  }
+
+  /**
+   * The opening (tuning.start): a few things already waiting around the old log, on the surface and
+   * kept until picked. One random mushroom or geode among them is guaranteed to hold a creature.
+   */
+  placeStarters(now) {
+    const st = this.t.start || {};
+    const log = this.state.landmarks[0];
+    const c = this.clearing;
+    const centre = log ? log.tile : { x: Math.floor((c.x0 + c.x1) / 2), y: Math.floor((c.y0 + c.y1) / 2) };
+    const r = st.radius ?? 3;
+    const made = [];
+    for (const e of st.spawns || []) {
+      const def = this.content.items[e.item];
+      if (!def) continue;
+      for (let i = 0; i < (e.count || 1); i++) {
+        let tile = null;
+        for (let k = 0; k < 30 && !tile; k++) {
+          const t = { x: centre.x + this.rng.int(-r, r), y: centre.y + this.rng.int(-r, r) };
+          if (this.isFree(t)) tile = t;
+        }
+        tile = tile || this.freeNear(centre);
+        if (!tile) continue;
+        const sp = { id: this.rng.uuid(), itemID: def.id, tile, spawnedAt: now, keep: true, starter: true, placement: 'surface' };
+        this.state.spawns.push(sp);
+        made.push(sp);
+      }
+    }
+    const holders = made.filter((sp) => ['mushroom', 'geode'].includes(this.content.items[sp.itemID].category));
+    if (holders.length) holders[this.rng.int(0, holders.length - 1)].forcedCreature = { rarity: st.guaranteedCreatureRarity || 'common' };
+    return made;
+  }
+
+  /** A creature that can come from this source item (any rarity if none of the asked rarity). */
+  guaranteedCreature(kind, itemID, rarity, now) {
+    const from = this.content.creatureList.filter((d) => d.source && d.source.kind === kind && !d.notYet);
+    let pool = from.filter((d) => (d.source.items || []).includes(itemID) && (!rarity || d.rarity === rarity));
+    if (!pool.length) pool = from.filter((d) => !rarity || d.rarity === rarity);
+    if (!pool.length) pool = from;
+    if (!pool.length) return null;
+    return this.rollCreature(pool[this.rng.int(0, pool.length - 1)].id, itemID, now);
   }
 
   // ---- clearing + landmarks
@@ -680,6 +734,34 @@ export class Game {
     });
   }
 
+  static expandStagedRules(rules, stages) {
+    const th = stages && stages.length ? stages : [2, 4, 6, 9, 12, 16, 21, 27, 35];
+    const out = [];
+    for (const r of rules) {
+      if (!r.staged) { out.push(r); continue; }
+      th.forEach((min, i) => {
+        const n = i + 1;
+        out.push({
+          ...r, staged: undefined, id: r.id + n, group: r.group || r.id, priority: (r.priority || 0) + n,
+          when: { ...(r.when || {}), [r.stat]: { min } },
+          sprites: (r.sprites || []).map((x) => x.replace('{n}', n)),
+        });
+      });
+    }
+    return out;
+  }
+
+  /** Combo tiles on this tile (tuning.combos: pool, moss, meadow …), from its raw stats. */
+  combosAt(stats) {
+    const out = [];
+    for (const id in this.t.combos || {}) {
+      if (id.startsWith('_')) continue;
+      if (groupMatches(this.t.combos[id].requires || {}, stats)) out.push(id);
+    }
+    return out;
+  }
+  combo(id) { return (this.t.combos || {})[id] || {}; }
+
   // ---- terrain: each stat's own identity (tuning.terrain)
   get terrain() { return this.t.terrain || {}; }
 
@@ -748,6 +830,8 @@ export class Game {
     for (const k of CORE_STATS) out['share_' + k] = sh[k];
     out.glowVis = (stats.glow || 0) * this.glowFactor(t, stats, 'visual');
     out.bloomVis = (stats.bloom || 0) * this.bloomFactor(t);
+    out.combos = this.combosAt(stats);
+    for (const c of out.combos) out['combo_' + c] = 1;
     return out;
   }
 
@@ -967,11 +1051,7 @@ export class Game {
   checkProgress(now) {
     const s = this.state;
     if (this.inTutorial) this.tutorialTick(now);
-    const open = this.unlockedSlots(now);
-    if (open > (s.announcedSlots || 0)) {
-      s.announcedSlots = open;
-      this.events.push({ type: 'slotUnlocked', count: open, max: this.maxSlots });
-    }
+
     if (!s.milestones.blend) {
       const tiles = this.blendedTiles(now);
       if (tiles.length) { s.milestones.blend = now; this.events.push({ type: 'blend', tiles }); }
@@ -1091,6 +1171,36 @@ export class Game {
       }
     }
     made += this.mushroomGrowth(t, cap, shared());
+    made += this.meadowGrowth(t, cap, shared());
+    return made;
+  }
+
+  /** Wild meadows (Bloom + Verdure combo) sprout extra plants: plant-only attempts on meadow tiles. */
+  meadowGrowth(t, cap, field) {
+    const m = this.combo('meadow');
+    if (!(m.extraPlantAttempts > 0)) return 0;
+    const c = this.clearing, occ = this.occupied(), tiles = [];
+    const K = field.keys.length, W = this.state.size.width, names = this.tileKeys.names;
+    const req = Object.entries(m.requires || {}).map(([k, b]) => [field.keys.indexOf(k), b]);
+    const kb = field.keys.indexOf('bloom'), kv = field.keys.indexOf('verdure');
+    for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+      const o = (y * W + x) * K;
+      if (!req.every(([ki, b]) => ki >= 0 && boundMatches(b, field.values[o + ki]))) continue;
+      if (occ.has(names[y * W + x])) continue;
+      tiles.push([{ x, y }, field.values[o + kb] + field.values[o + kv]]);
+    }
+    let made = 0;
+    for (let i = 0; i < m.extraPlantAttempts && tiles.length; i++) {
+      if (this.state.spawns.length >= cap) break;
+      const tile = weightedPick(tiles, this.rng);
+      if (!tile || !this.isFree(tile)) continue;
+      const w = tiles.find(([tl]) => tl === tile)[1];
+      if (!this.rng.chance(Math.min(m.maxChance ?? 0.6, w * (m.chancePerPoint ?? 0.008)))) continue;
+      const item = weightedPick(this.spawnDetails(tile, t).filter((x) => x.item.category === 'plant').map((x) => [x.item, x.weight]), this.rng);
+      if (!item) continue;
+      this.state.spawns.push(this.newSpawn(item, tile, t));
+      made++;
+    }
     return made;
   }
 
@@ -1209,9 +1319,11 @@ export class Game {
     const fac = this.statFactors(t, s);
     const varietyExp = this.varietyExponent(s, t);
     const out = [];
+    const pool = this.combosAt(s).includes('pool') && this.combo('pool').onlyDampItems;
     for (const item of opts.items || this.content.spawnableItems) {
       const rule = item.spawn;
       if (!rule) continue;
+      if (pool && !(rule.requires && rule.requires.damp)) continue;   // shallow water: only Damp-loving things
       if (rule.time === 'night' && !night) continue;
       if (rule.time === 'day' && night) continue;
       if (!opts.seed && rule.rain && !raining) continue;
@@ -1257,8 +1369,9 @@ export class Game {
     const cs = (this.t.spawns && this.t.spawns.categoryScaling) || {};
     const lo = cs.minMultiplier ?? 0.25, hi = cs.maxMultiplier ?? 6;
     const cats = [...new Set(details.map((d) => d.item.category))];
+    const meadow = stats && this.combosAt(stats).includes('meadow') ? (this.combo('meadow').plantCategoryMult ?? 1) : 1;
     const rows = cats.map((c) => {
-      let raw = 1;
+      let raw = c === 'plant' ? meadow : 1;
       for (const stat in cs[c] || {}) raw += (cs[c][stat] / 100) * ((stats && stats[stat]) || 0) * (fac[stat] ?? 1);
       const mult = Math.min(hi, Math.max(lo, raw));
       return { category: c, base: cw[c] ?? 1, mult, weight: (cw[c] ?? 1) * mult };
@@ -1392,7 +1505,8 @@ export class Game {
     const placed = new Set(this.activePlacements.map((p) => p.creatureID));
     return this.state.creatures.filter((c) => !placed.has(c.id));
   }
-  get freeSlotCount() { return this.openSlots(this.now()).filter((s) => !s.placementID).length; }
+  /** There is no cap on creatures in the forest any more. */
+  get freeSlotCount() { return Infinity; }
   inBounds(t) { return t.x >= 0 && t.y >= 0 && t.x < this.state.size.width && t.y < this.state.size.height; }
   creatureAt(t) { return this.state.placements.find((p) => p.removedAt == null && sameTile(p.tile, t)) || null; }
   spawnAt(t) { return this.state.spawns.find((s) => sameTile(s.tile, t)) || null; }
@@ -1447,8 +1561,6 @@ export class Game {
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (this.activePlacement(creatureID)) throw new GameError('That creature is already out in the forest.');
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
-    const slot = this.openSlots(now).find((s) => !s.placementID);
-    if (!slot) throw new GameError('All open slots are full. Return a creature to the Burrow first.');
     let startLevel = 0;
     const old = this.state.placements.findIndex((p) => p.creatureID === creatureID && p.removedAt != null && sameTile(p.tile, tile));
     if (old >= 0) {
@@ -1464,7 +1576,6 @@ export class Game {
       radius: c.radius, placedAt: now, startLevel, removedAt: null, rampSeconds,
     };
     this.state.placements.push(p);
-    slot.placementID = p.id;
     this.bump('place');
     this.statCache = this.statField(now);
     const tut = this.state.tutorial;
@@ -1601,7 +1712,8 @@ export class Game {
         ? this.rollTable(def.onCollect, def.id, now, { seedDropMult: this.mult(this.effects('seedDrops', spawn.tile)) })
         : [{ item: def.id, count: 1 }];
       if (def.category === 'mushroom') {
-        const c = this.findCreature('mushroom', def.id, spawn.tile, stats, now);
+        const c = (spawn.forcedCreature && this.guaranteedCreature('mushroom', def.id, spawn.forcedCreature.rarity, now))
+          || this.findCreature('mushroom', def.id, spawn.tile, stats, now);
         if (c) pending.push({ creature: c });
       }
       // Verdure: plants on lush tiles drop extra seeds.
@@ -1643,7 +1755,8 @@ export class Game {
     this.consume(itemID);
     // Verdure: plants grow faster on lush tiles.
     const verdure = this.tileStats(tile, now).verdure || 0;
-    const speed = this.mult(this.effects('seedGrowth', tile)) * (1 + verdure * ((this.terrain.verdure || {}).seedGrowthPerPoint ?? 0));
+    const meadow = this.combosAt(this.tileStats(tile, now)).includes('meadow') ? (this.combo('meadow').flowerGrowthMult ?? 1) : 1;
+    const speed = this.mult(this.effects('seedGrowth', tile)) * (1 + verdure * ((this.terrain.verdure || {}).seedGrowthPerPoint ?? 0)) * meadow;
     const grow = this.rng.range(...range(this.t.seeds.growSeconds)) / Math.max(0.01, speed);
     // The plant is chosen now (tile stats + time of day at planting), so its growth stages can show it.
     const plantID = this.choosePlant(tile, now);
@@ -1804,7 +1917,6 @@ export class Game {
   /** Place a fresh creature of any species on a tile, optionally at full strength. */
   devPlace(typeID, tile, now, { full = true, glimmer = false } = {}) {
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
-    if (!this.openSlots(now).some((x) => !x.placementID)) this.devSetSlots(this.maxSlots + 1);
     const c = this.rollCreature(typeID, 'debug', now, glimmer);
     this.grant([{ creature: c }]);
     this.place(c.id, tile, now);

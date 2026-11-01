@@ -1,4 +1,4 @@
-// DOM user interface: HUD, sheets (Burrow, Bag, Field Guide), geode cracking, reveals.
+// DOM user interface: HUD, sheets (Creatures, Bag, Field Guide), geode cracking, reveals.
 import { CORE_STATS, RARITIES, RARITY_NAMES, rarityIndex } from './core.js';
 
 export function h(tag, attrs = {}, ...children) {
@@ -77,10 +77,9 @@ export class UI {
     const bottom = h('div', { class: 'hud-bottom' });
     if (this.mode) bottom.append(this.modeBanner());
     if (this.selectedTile) bottom.append(this.tileCard(this.selectedTile));
-    bottom.append(this.slotsBar());
     const invCount = Object.values(g.state.inventory).reduce((a, b) => a + b, 0);
     bottom.append(h('div', { class: 'nav' },
-      this.navButton('burrow', 'Burrow', g.burrow.length, () => this.open('burrow')),
+      this.navButton('creatures', 'Creatures', g.state.creatures.length, () => this.open('creatures')),
       this.navButton('bag', 'Bag', invCount, () => this.open('bag')),
       this.navButton('guide', 'Guide', 0, () => this.open('guide')),
       g.inTutorial ? null : this.navButton('tasks', 'Tasks', g.activeTasks().filter((t) => t.done).length, () => this.open('tasks')),
@@ -171,26 +170,6 @@ export class UI {
       h('span', { class: 'stat-val' }, Math.round(value)));
   }
 
-  slotsBar() {
-    const g = this.game, now = g.now();
-    return h('div', { class: 'slots' + (g.state.slots.length > 3 ? ' many' : '') }, g.state.slots.map((slot) => {
-      const p = slot.placementID && g.state.placements.find((x) => x.id === slot.placementID);
-      const c = p && g.creature(p.creatureID);
-      const open = g.unlockedSlots(now);
-      const index = g.state.slots.indexOf(slot);
-      if (index >= open) {
-        return h('div', { class: 'slot locked' }, ic('lock', 2),
-          h('span', { class: 'slot-day' }, this.story('messages.lockedSlot', { day: g.slotUnlockDay(index) ?? '?' })));
-      }
-      if (!c) return h('div', { class: 'slot empty' }, ic('plus', 2));
-      const art = this.app.art(c);
-      const lv = g.level(p, now);
-      return h('button', { class: 'slot', onclick: () => { this.selectedTile = null; this.selectedCreatureID = c.id; this.open('creature', c.id); } },
-        this.sprites.element(art.sprite, art.variant, 3),
-        h('span', { class: 'mini-bar' }, h('span', { style: `width:${lv * 100}%` })));
-    }));
-  }
-
   toast(text, sprite) {
     const el = document.getElementById('toast');
     el.replaceChildren(sprite ? this.sprites.element(sprite, null, 2) : '', h('span', {}, text));
@@ -204,7 +183,7 @@ export class UI {
   // -------------------------------------------------------------- sheets
 
   open(type, arg) {
-    this.sheet = { type, arg, stack: this.sheet && type === 'creature' && this.sheet.type === 'burrow' ? 'burrow' : null };
+    this.sheet = { type, arg, stack: this.sheet && type === 'creature' && this.sheet.type === 'creatures' ? 'creatures' : null };
     this.renderSheet();
   }
 
@@ -223,7 +202,8 @@ export class UI {
     if (!this.sheet) { el.classList.remove('show'); return; }
     const { type, arg } = this.sheet;
     const build = {
-      burrow: () => ['Burrow', this.burrowBody()],
+      creatures: () => ['Creatures', this.creaturesBody()],
+      burrow: () => ['Creatures', this.creaturesBody()],
       creature: () => this.creatureBody(arg),
       bag: () => ['Bag', this.bagBody()],
       guide: () => this.guideBody(),
@@ -273,14 +253,15 @@ export class UI {
     return `${name}${def.familyName || def.family} · ${rarityName(def.rarity)}`;
   }
 
-  burrowBody() {
+  /** The Creatures tab: who's out in the forest (no limit) and who's resting. */
+  creaturesBody() {
     const g = this.game;
-    const placed = g.placedCreatures, burrow = g.burrow;
+    const placed = g.placedCreatures, resting = g.burrow;
     return [
-      placed.length ? h('div', { class: 'section' }, `Out in the forest (${placed.length}/${g.state.slots.length})`) : null,
+      placed.length ? h('div', { class: 'section' }, `Out in the forest (${placed.length})`) : null,
       ...placed.map((c) => this.creatureRow(c)),
-      h('div', { class: 'section' }, 'In the Burrow'),
-      burrow.length ? burrow.map((c) => this.creatureRow(c))
+      h('div', { class: 'section' }, 'Resting'),
+      resting.length ? resting.map((c) => this.creatureRow(c))
         : h('p', { class: 'sub' }, g.state.creatures.length ? 'Everyone is out in the forest.'
           : 'No creatures yet. Pick mushrooms (Funglings hide inside), plant seeds (Sproutlings grow from them) and crack geodes (Geode Critters sleep inside).'),
     ];
@@ -304,13 +285,12 @@ export class UI {
         h('div', { class: 'sub' }, lv < 1 ? `Influence ${Math.round(lv * 100)}% · full strength in about ${duration((1 - lv) * (p.rampSeconds || this.content.tuning.rampSecondsToFull))}` : 'At full strength.'),
         h('div', { class: 'row gap' },
           h('button', { class: 'btn', onclick: () => { this.app.view.centerOn(p.tile); this.selectedCreatureID = c.id; this.sheet = null; this.close(); } }, 'Show in forest'),
-          h('button', { class: 'btn red', onclick: () => { this.app.recall(c.id); this.sheet = null; this.close(); } }, 'Return to Burrow')),
+          h('button', { class: 'btn red', onclick: () => { this.app.recall(c.id); this.sheet = null; this.close(); } }, 'Bring home')),
       ];
     } else {
-      const free = g.freeSlotCount > 0;
       status = [
-        h('div', { class: 'sub' }, 'Resting in the Burrow.'),
-        h('button', { class: 'btn green', disabled: !free, onclick: () => { this.app.beginPlacing(c.id); } }, ...(free ? [ic('leaf', 1), 'Place in forest'] : ['All slots are full'])),
+        h('div', { class: 'sub' }, 'Resting.'),
+        h('button', { class: 'btn green', onclick: () => { this.app.beginPlacing(c.id); } }, ic('leaf', 1), 'Place in forest'),
       ];
     }
     const origin = c.origin === 'starter' ? 'Was here from the start' : c.origin === 'wanderer' ? 'Wandered in on its own'
@@ -481,6 +461,13 @@ export class UI {
         return h('div', { class: 'inspect-terrain' },
           row('Elevation', `${e >= 0 ? '+' : ''}${e.toFixed(2)} ${e > 0.15 ? '(raised)' : e < -0.15 ? '(sunken)' : '(level)'}`),
           row('Dominant stat', sh.dominant ? `${cap(sh.dominant)} (${Math.round(sh[sh.dominant] * 100)}%)` : 'none'),
+          row('Combo', (() => { const cs = g.combosAt(stats); return cs.length ? cs.map((id) => g.combo(id).name || id).join(', ') : 'none'; })()),
+          row('Intensity stages', CORE_STATS.map((k) => {
+            const th = this.content.tuning.visuals.intensityStages || [];
+            const v = k === 'glow' ? (stats.glow || 0) * g.glowFactor(now, stats, 'visual') : k === 'bloom' ? (stats.bloom || 0) * g.bloomFactor(now) : (stats[k] || 0);
+            const n = th.filter((x) => v >= x).length;
+            return n ? `${cap(k)} ${n}` : null;
+          }).filter(Boolean).join(' · ') || 'none'),
           row('Ambient Damp', `${amb.toFixed(1)} (seeped / pooled)`),
           row('Glow factor', `×${gf.toFixed(2)} ${g.isNight(now) ? '(night)' : (stats.depth || 0) > 0 ? '(day, deep tiles glow more)' : '(day)'}`),
           row('Bloom cycle', `×${bf.toFixed(2)}`),
@@ -581,7 +568,6 @@ export class UI {
         .map((i) => h('option', { value: i.id }, i.name)))));
     const setupName = h('input', { type: 'text', placeholder: 'Setup name', maxlength: 30 });
     const setups = a.devSetups();
-    const slots = [3, 6, 9, 12];
     return [
       h('div', { class: 'dev-note' }, h('b', {}, 'Developer mode is on'),
         h('span', {}, ` · test forest (${g.state.dev?.createdFrom === 'copy' ? 'copied from your forest' : 'separate'}). Nothing here touches your real forest.`)),
@@ -592,24 +578,22 @@ export class UI {
 
       h('div', { class: 'section' }, 'Unlock'),
       h('div', { class: 'row gap wrap' },
-        b('Unlock everything', () => a.dev((gm, t) => { gm.finishTutorial(); gm.devUnlockCreatures(t, { glimmers: true }); gm.devGrantItems(5); gm.devFillGuide(); gm.devSetSlots(Math.max(gm.maxSlots, 6)); gm.devOpenForest(t); },
-          'Unlocked: all creatures + glimmers, 5 of every item, the whole Field Guide, 6 slots, the whole forest.'), 'orange'),
-        b('All creatures', () => a.dev((gm, t) => gm.devUnlockCreatures(t), (n) => `+${n} creatures in the Burrow.`)),
-        b('+ glimmers', () => a.dev((gm, t) => gm.devUnlockCreatures(t, { glimmers: true }), (n) => `+${n} creatures in the Burrow.`)),
+        b('Unlock everything', () => a.dev((gm, t) => { gm.finishTutorial(); gm.devUnlockCreatures(t, { glimmers: true }); gm.devGrantItems(5); gm.devFillGuide(); gm.devOpenForest(t); },
+          'Unlocked: all creatures + glimmers, 5 of every item, the whole Field Guide, the whole forest.'), 'orange'),
+        b('All creatures', () => a.dev((gm, t) => gm.devUnlockCreatures(t), (n) => `+${n} creatures resting.`)),
+        b('+ glimmers', () => a.dev((gm, t) => gm.devUnlockCreatures(t, { glimmers: true }), (n) => `+${n} creatures resting.`)),
         b('5 of every item', () => a.dev((gm) => gm.devGrantItems(5), (n) => `+5 of ${n} items.`)),
         b('Fill Field Guide', () => a.dev((gm) => gm.devFillGuide(), 'Field Guide complete.')),
         b('Whole forest open', () => a.dev((gm, t) => gm.devOpenForest(t), 'The clearing now covers the whole forest.')),
         g.inTutorial ? b('Finish tutorial', () => a.dev((gm) => gm.finishTutorial(), 'Tutorial finished.')) : null),
-      h('div', { class: 'row gap wrap' }, h('span', { class: 'sub' }, 'Creature slots:'),
-        slots.map((n) => b(String(n), () => { a.dev((gm) => gm.devSetSlots(n), `${n} slots open.`); this.renderSheet(); }, g.maxSlots === n ? 'green' : 'grey'))),
 
       h('div', { class: 'section' }, 'Try combinations'),
-      h('p', { class: 'sub' }, 'Pick a species, then tap tiles to place new ones. A slot is added if they\'re all full.'),
+      h('p', { class: 'sub' }, 'Pick a species, then tap tiles to place new ones. There\'s no limit.'),
       h('div', { class: 'row gap wrap' }, place,
         h('label', { class: 'check' }, full, ' full strength'), h('label', { class: 'check' }, glim, ' glimmer'),
         b('Place on tiles', () => { this.mode = { type: 'devPlace', typeID: place.value, full: full.checked, glimmer: glim.checked }; this.selectedTile = null; done(); a.changed(false); }, 'orange')),
       h('div', { class: 'row gap wrap' },
-        b('Remove all creatures', () => a.dev((gm, t) => gm.devClearPlacements(t), 'All creatures back in the Burrow (instantly, no fade).')),
+        b('Remove all creatures', () => a.dev((gm, t) => gm.devClearPlacements(t), 'All creatures brought home (instantly, no fade).')),
         b('Max strength now', () => a.dev((gm, t) => { for (const p of gm.activePlacements) p.startLevel = 1; gm.statCache = gm.statField(t); }, 'All placed creatures at full strength.')),
         b('Clear wild spawns', () => a.dev((gm) => gm.devClearSpawns(), 'Wild spawns cleared.')),
         b('Run 20 spawn ticks', () => a.dev((gm, t) => gm.devSpawnTicks(t, 20), (n) => `${n} new spawns.`))),
@@ -663,7 +647,7 @@ export class UI {
       h('div', { class: 'rays-wrap' }, this.burst(creature.isGlimmer ? null : '#ffffff'), this.sprites.element(art.sprite, art.variant, 8, 'grow-in', true)),
       h('p', { class: 'sub' }, this.traitSummary(creature)),
       isNew ? h('p', { class: 'new' }, 'New Field Guide entry!') : null,
-      h('button', { class: 'btn green', onclick: done }, 'Welcome to the Burrow')));
+      h('button', { class: 'btn green', onclick: done }, 'Lovely')));
     ov.onclick = (e) => { if (e.target === ov) done(); };
     ov.classList.add('show');
   }
@@ -735,7 +719,7 @@ export class UI {
         text = h('div', { class: 'center' },
           h('h2', { class: 'glimmer' }, r.creature.isGlimmer ? [ic('glimmer', 2), `A glimmer ${app.displayName(r.creature)} was inside!`, ic('glimmer', 2)] : `A ${app.displayName(r.creature)} was curled up inside!`),
           h('p', { class: 'sub' }, this.traitSummary(r.creature)),
-          h('p', { class: 'sub' }, "It's waiting in your Burrow."),
+          h('p', { class: 'sub' }, "It's resting in your Creatures tab."),
           r.isNew ? h('p', { class: 'new' }, 'New Field Guide entry!') : null);
       } else {
         const gem = this.content.items[r.item];

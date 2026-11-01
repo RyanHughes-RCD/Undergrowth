@@ -207,24 +207,24 @@ def draw_mushroom(shape, cap, stem, accent):
 # palette: 2 stem, 3 leaf, 4 leaf light, 5 petal, 6 petal light, 7 centre
 
 PLANTS = {
-    "clover": ("clover", "#5fbf4a", None, None),
+    "clover": ("cloverpatch", "#5fbf4a", None, None),
     "fern": ("fern", "#4fae3a", None, None),
-    "wildflower": ("flower", "#5fbf4a", "#ff9ccf", "#ffd84a"),
+    "wildflower": ("daisies", "#5fbf4a", "#ff9ccf", "#ffd84a"),
     "bluebell": ("bells", "#4f8a2c", "#5a7cff", None),
     "moss-rose": ("rose", "#6a9a48", "#ff6a8a", "#ffd0dc"),
-    "sunpetal": ("bigflower", "#5fbf4a", "#ffd84a", "#c2611f"),
-    "glowbloom": ("bigflower", "#3d7a70", "#7cf2ff", "#ffffff"),
+    "sunpetal": ("sunflower", "#5fbf4a", "#ffd84a", "#c2611f"),
+    "glowbloom": ("tulip", "#3d7a70", "#7cf2ff", "#ffffff"),
     "cave-lily": ("lily", "#6a8a6a", "#c8b8f0", "#f0e8ff"),
     "dandelion": ("dandelion", "#5fbf4a", "#ffd84a", "#fff3a8"),
-    "moss-tuft": ("tuft", "#6a9a48", None, None),
-    "sorrel": ("sorrel", "#6cc24a", "#fff0f0", None),
-    "violet": ("flower", "#4f8a2c", "#8a5ad8", "#ffd84a"),
-    "pebblewort": ("rosette", "#8aa880", "#c8d8c0", None),
+    "moss-tuft": ("mosstuft", "#6a9a48", None, None),
+    "sorrel": ("hearts", "#6cc24a", "#fff0f0", None),
+    "violet": ("violet", "#4f8a2c", "#8a5ad8", "#ffd84a"),
+    "pebblewort": ("pebblewort", "#8aa880", "#c8d8c0", None),
     "foxglove": ("foxglove", "#4f8a2c", "#d870c0", "#f0c0e8"),
     "wild-strawberry": ("berry", "#5fbf4a", "#e0302c", "#fff0a0"),
     "trillium": ("trillium", "#4f8a2c", "#f8f4f0", "#ffd84a"),
-    "stonecrop": ("rosette", "#8ab060", "#ffd84a", None),
-    "moonflower": ("bigflower", "#4f8a2c", "#f4f4ff", "#bfe8ff"),
+    "stonecrop": ("stonecrop", "#8ab060", "#ffd84a", None),
+    "moonflower": ("trumpet", "#4f8a2c", "#f4f4ff", "#bfe8ff"),
     "pitcher-plant": ("pitcher", "#6a9a3a", "#b0402c", None),
     "crystal-thistle": ("thistle", "#6a8a7a", "#7ce0ff", "#e8ffff"),
     "ghost-orchid": ("orchid", "#9ab8a0", "#ffffff", "#e8f0ff"),
@@ -329,6 +329,70 @@ def draw_plant(shape, leaf, petal, centre):
             c.ellipse(11, 8, 2.5, 3, 5 if f == 0 else 6)
             c.set(11, 8, 7)
             c.ellipse(5, 12, 2.5, 1, 3)
+        elif shape == "cloverpatch":                    # low three-leaf clovers with a round white flower head
+            for (cx, cy) in ((4, 12), (11, 13), (7, 10)):
+                for (dx, dy) in ((-1, 0), (1, 0), (0, -1)):
+                    c.ellipse(cx + dx * 1.3, cy + dy * 1.3, 1.3, 1.2, 3)
+                c.set(cx, cy, 4)
+            c.line(9, 12, 9, 6, 2)
+            c.ellipse(9, 5, 1.8, 1.8, 5); c.set(8, 4, 6); c.set(10, 5, 7)
+        elif shape == "hearts":                         # sorrel: heart-shaped leaves on thin stems, tiny bells
+            for (x, top) in ((5, 7), (8, 5), (11, 8)):
+                c.line(x, 14, x, top + 2, 2)
+                c.set(x - 1, top, 3); c.set(x + 1, top, 3); c.ellipse(x, top + 1.2, 1.6, 1.2, 3)
+                c.set(x - 1, top, 4)
+            c.line(13, 14, 13, 4, 2); c.set(13, 3, 5); c.set(12, 4, 5)
+        elif shape == "mosstuft":                       # moss mound with thin spore stalks (brown tips)
+            c.ellipse(8, 13, 6, 2.6, 3)
+            c.ellipse(6.5, 12, 3, 1.4, 4)
+            for x in (5, 8, 10, 12):
+                c.line(x, 12, x, 6 + (x % 3), 2)
+                c.set(x, 5 + (x % 3), 7)
+        elif shape == "pebblewort":                     # a pale rosette tucked between grey pebbles
+            for (dx, dy) in ((-3, 0), (3, 0), (0, -2), (-2, -2), (2, -2)):
+                c.ellipse(8 + dx, 11 + dy, 1.8, 1.1, 3)
+            c.ellipse(8, 10, 1.4, 1, 4)
+            for (x, y) in ((3, 13), (12, 13), (5, 14), (10, 14)):
+                c.rect(x, y, x + 1, y, 6)
+        elif shape == "stonecrop":                      # succulent stars with clusters of yellow flowers
+            for (cx, cy) in ((5, 12), (11, 12)):
+                for (dx, dy) in ((-2, 0), (2, 0), (0, -2), (0, 1)):
+                    c.line(cx, cy, cx + dx, cy + dy, 3)
+                c.set(cx, cy, 4)
+            c.line(8, 13, 8, 6, 2)
+            for (x, y) in ((7, 5), (9, 5), (8, 4), (6, 6), (10, 6)):
+                c.set(x, y, 5)
+            c.set(8, 5, 7)
+        elif shape == "violet":                         # low heart leaves and a nodding five-petal flower
+            c.ellipse(5, 12, 2.6, 1.8, 3); c.ellipse(11, 12.5, 2.6, 1.8, 3); c.set(4, 11, 4)
+            c.line(8, 13, 8, 8, 2); c.line(8, 8, 10, 7, 2)
+            for (dx, dy) in ((0, -2), (-2, -1), (2, -1), (-1, 1), (1, 1)):
+                c.set(10 + dx, 6 + dy, 5)
+            c.set(10, 6, 7)
+        elif shape == "daisies":                        # a few tall daisies of different heights
+            for (x, top) in ((5, 6), (9, 3), (12, 8)):
+                c.line(x, 14, x, top + 1, 2)
+                for (dx, dy) in ((0, -1), (-1, 0), (1, 0), (0, 1)):
+                    c.set(x + dx, top + dy, 5)
+                c.set(x, top, 7)
+            c.ellipse(7, 13, 2.5, 1, 3)
+        elif shape == "sunflower":                      # one tall sunflower: big yellow ring, brown seed head
+            c.line(8, 15, 8, 8, 2)
+            c.ellipse(5.5, 11, 2.5, 1.2, 3); c.ellipse(10.5, 12, 2.5, 1.2, 3)
+            c.ellipse(8, 5, 4.8, 4.5, 5)
+            c.ellipse(8, 5, 2.4, 2.3, 7)
+            c.set(6, 2, 6); c.set(7, 4, hi)
+        elif shape == "tulip":                          # glowbloom: a closed glowing cup on a stem
+            c.line(8, 15, 8, 8, 2)
+            c.ellipse(5, 12, 2.5, 1.2, 3); c.ellipse(11, 11, 2.5, 1.2, 3)
+            c.ellipse(8, 5.5, 3, 3.6, 5)
+            c.line(6, 2, 6, 4, 5); c.line(10, 2, 10, 4, 5); c.set(8, 2, 5)
+            c.set(8, 5, hi); c.set(7, 4, 6)
+        elif shape == "trumpet":                        # moonflower: a vine with pale trumpet blooms
+            c.line(4, 15, 6, 9, 2); c.line(6, 9, 10, 6, 2)
+            c.ellipse(4, 11, 1.8, 1.2, 3); c.ellipse(9, 8, 1.8, 1.2, 3)
+            for (x, y) in ((11, 4), (5, 7)):
+                c.ellipse(x, y, 2.6, 2.2, 5); c.set(x, y, 7); c.set(x - 1, y - 1, 6)
         elif shape == "sapling":
             c.rect(7, 9, 8, 15, 2)
             c.ellipse(8, 6, 5.5, 4.5, 3)
@@ -597,6 +661,20 @@ def main():
         else:
             continue
         sprite(it["sprite"], palette, d, frames=2 if anim else 1, durations=[0.8, 0.8] if anim else None)
+        if cat == "plant":
+            # Its own bud stage while growing from a seed (stem, leaves and a closed bud in its colour).
+            leafy = petal is None
+
+            def bud(c, f, leafy=leafy, key=key):
+                h = 6 + (sum(map(ord, key)) % 4)
+                c.line(8, 14, 8, 15 - h, 2)
+                c.ellipse(6, 12, 2, 1, 3); c.ellipse(10, 11, 2, 1, 3)
+                top = 15 - h
+                if leafy:
+                    c.ellipse(8, top, 1.8, 1.6, 4); c.set(7, top - 1, 3)
+                else:
+                    c.ellipse(8, top, 1.4, 2, 5); c.set(8, top + 1, 3); c.set(7, top - 1, 6)
+            sprite("plant.bud." + key, palette, bud, tags=("plant", "bud"))
     for c in creatures:
         make_creature(c)
         make_creature(c, glimmer=True)

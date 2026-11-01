@@ -59,9 +59,9 @@ export class ForestView {
 
   /** Measure the HUD so the forest sits between the top bar and the bottom controls. */
   measure() {
-    // Only the permanent HUD (name bar, slots + nav), so popping cards don't make the forest jump.
+    // Only the permanent HUD (name bar, nav), so popping cards don't make the forest jump.
     const top = document.querySelector('.name-btn');
-    const bottom = document.querySelector('.slots');
+    const bottom = document.querySelector('.nav');
     const insets = {
       top: top ? top.getBoundingClientRect().bottom + 4 : 80,
       bottom: bottom ? window.innerHeight - bottom.getBoundingClientRect().top + 4 : 170,
@@ -148,7 +148,7 @@ export class ForestView {
     const now = g.now();
     if (this.engineFor !== s.forestID + s.size.width + 'x' + s.size.height) {
       this.engineFor = s.forestID + s.size.width + 'x' + s.size.height;
-      this.engine = new TileRuleEngine(this.app.content.tileRules, this.app.content.tuning.visuals.maxDecorationsPerTile, s.seed);
+      this.engine = new TileRuleEngine(this.app.content.tileRules, this.app.content.tuning.visuals.maxDecorationsPerTile, s.seed, this.app.content.tuning.visuals.intensityStages);
       this.visuals = [];
       this.firstSeen.clear();
       this.edgeCache.clear();
@@ -180,6 +180,9 @@ export class ForestView {
         const vs = g.visualStats(stats, now);
         const v = this.engine.visual(vs, x, y);
         v.elev = vs.elev / 100;
+        v.pool = vs.combos.includes('pool');
+        v.moss = vs.combos.includes('moss');
+        v.meadow = vs.combos.includes('meadow');
         v.glowVis = vs.glowVis;
         v.bloomVis = vs.bloomVis;
         const forced = overrides.get(x + ',' + y);
@@ -327,6 +330,7 @@ export class ForestView {
           ctx.fillStyle = `rgba(${tint[0]},${tint[1]},${tint[2]},${tint[3]})`;
           ctx.fillRect(x * TS, y * TS, TS, TS);
         }
+        if (inside && v.pool) ctx.drawImage(this.waterTile(x, y, t), x * TS, y * TS);
         if (!inside) {
           for (const d of v.decorations) edgeObjs.push({ sprite: d.sprite, x: c.x + d.dx, y: c.y + TS / 2 + d.dy, flip: d.flip, phase: 0 });
         }
@@ -417,6 +421,7 @@ export class ForestView {
       if (o.glimmer) this.sparkles(x, y, t + o.phase);
     }
 
+    this.drawBugs(ctx, view, t);
     this.drawSunlight(ctx, view, t);
     this.drawGlowLight(ctx, x0, y0, x1, y1, t);
     this.drawPetals(ctx, view, t);
@@ -489,6 +494,7 @@ export class ForestView {
    */
   drawElevation(ctx, x0, y0, x1, y1) {
     const cfg = this.app.content.tuning.visuals.elevation || {};
+    if (cfg.enabled === false) return;
     const thr = cfg.threshold ?? 0.15, W = this.game.state.size.width;
     const el = (x, y) => {
       if (x < 0 || y < 0 || x >= W || y >= this.game.state.size.height || !this.game.inClearing({ x, y })) return null;
@@ -519,6 +525,104 @@ export class ForestView {
           ctx.fillStyle = cfg.pitColor || 'rgba(14,8,18,0.55)';
           ctx.fillRect(x * TS, y * TS, TS, h);
         }
+      }
+    }
+  }
+
+  /** Is this tile part of a pool (Damp + Depth combo)? */
+  poolAt(x, y) {
+    const W = this.game.state.size.width;
+    if (x < 0 || y < 0 || x >= W || y >= this.game.state.size.height || !this.game.inClearing({ x, y })) return false;
+    const v = this.visuals[y * W + x];
+    return !!(v && v.pool);
+  }
+
+  /**
+   * Shallow water, autotiled: each quarter of the tile looks at its side and corner neighbours, so
+   * a lone pool tile is a rounded puddle and neighbouring pools join seamlessly (with small rounded
+   * notches on inside corners). Cached per neighbour pattern; two shimmer frames.
+   */
+  waterTile(x, y, t) {
+    const n = (dx, dy) => (this.poolAt(x + dx, y + dy) ? 1 : 0);
+    const mask = [n(0, -1), n(1, 0), n(0, 1), n(-1, 0), n(-1, -1), n(1, -1), n(1, 1), n(-1, 1)].join('');
+    const frame = Math.floor(t / 0.9 + ((x * 7 + y * 3) % 5)) % 2;
+    const key = mask + frame + ((x * 31 + y * 17) % 3);
+    this.waterCache = this.waterCache || new Map();
+    let c = this.waterCache.get(key);
+    if (c) return c;
+    const [N, E, S, Wn, NW, NE, SE, SW] = mask.split('').map(Number);
+    const M = 2, R = 4;                                  // inset from the tile edge, corner radius
+    const isWater = (px, py) => {
+      if (px < 0 || py < 0 || px > 15 || py > 15) {      // outside: trust the neighbour's flag
+        const dx = px < 0 ? -1 : px > 15 ? 1 : 0, dy = py < 0 ? -1 : py > 15 ? 1 : 0;
+        return !!n(dx, dy);
+      }
+      const left = px < 8, top = py < 8;
+      const h = left ? Wn : E, v = top ? N : S, d = top ? (left ? NW : NE) : (left ? SW : SE);
+      const u = left ? 7.5 - px : px - 7.5, w = top ? 7.5 - py : py - 7.5;   // 0.5 .. 7.5 outward
+      if (h && v) return d ? true : Math.hypot(8 - u, 8 - w) >= M + 0.5;
+      if (h) return w <= 8 - M;
+      if (v) return u <= 8 - M;
+      const lim = 8 - M - R;
+      if (u > lim && w > lim) return Math.hypot(u - lim, w - lim) <= R;
+      return u <= 8 - M && w <= 8 - M;
+    };
+    const cfg = this.app.content.tuning.visuals.water || {};
+    const col = { water: cfg.water || '#3f6f94', deep: cfg.deep || '#2f5a80', light: cfg.light || '#7fb0d4', glint: cfg.glint || '#c8e6ff', shore: cfg.shore || '#2e4a2a' };
+    c = document.createElement('canvas');
+    c.width = c.height = TS;
+    const g = c.getContext('2d');
+    const seed = (x * 31 + y * 17) % 3;
+    for (let py = 0; py < TS; py++) for (let px = 0; px < TS; px++) {
+      let fill = null;
+      if (isWater(px, py)) {
+        const deep = isWater(px - 3, py) && isWater(px + 3, py) && isWater(px, py - 3) && isWater(px, py + 3);
+        fill = !isWater(px, py - 1) ? col.light : deep ? col.deep : col.water;
+        if (deep && (px * 3 + py * 5 + seed * 7 + frame * 11) % 113 === 0) fill = col.glint;
+      } else if (isWater(px + 1, py) || isWater(px - 1, py) || isWater(px, py + 1) || isWater(px, py - 1)) {
+        fill = col.shore;                                // a damp rim where the water meets the grass
+      }
+      if (fill) { g.fillStyle = fill; g.fillRect(px, py, 1, 1); }
+    }
+    this.waterCache.set(key, c);
+    return c;
+  }
+
+  /** Bugs drawn to mossy banks (Stone + Damp + Verdure combo): little flitting specks; fireflies at night. */
+  drawBugs(ctx, view, t) {
+    const cfg = this.game.combo('moss');
+    if (!(cfg.bugsPerTile > 0)) return;
+    const W = this.game.state.size.width;
+    const x0 = Math.max(0, Math.floor(view.minX / TS)), x1 = Math.min(W - 1, Math.floor(view.maxX / TS));
+    const y0 = Math.max(0, Math.floor(view.minY / TS)), y1 = Math.min(this.game.state.size.height - 1, Math.floor(view.maxY / TS));
+    const night = this.game.isNight(this.game.now());
+    let drawn = 0;
+    this.bugCount = 0;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const v = this.visuals[y * W + x];
+      if (!v || !v.moss || !this.game.inClearing({ x, y })) continue;
+      const h = hash32(x, y, 77);
+      if (h / 4294967296 >= cfg.bugsPerTile || drawn >= (cfg.maxBugs ?? 40)) continue;
+      drawn++;
+      this.bugCount = drawn;
+      const ph = (h % 1000) / 160;
+      const bx = x * TS + 8 + Math.sin(t * 0.9 + ph) * 5 + Math.sin(t * 2.3 + ph * 2) * 2;
+      const by = y * TS + 6 + Math.cos(t * 0.7 + ph) * 4 + Math.sin(t * 3.1 + ph) * 1.5;
+      const wing = Math.floor(t * 12 + ph) % 2;
+      const X = Math.round(bx), Y = Math.round(by);
+      if (night) {
+        ctx.fillStyle = 'rgba(255,240,140,0.3)';
+        ctx.fillRect(X - 1, Y - 1, 3, 3);
+        ctx.fillStyle = '#fff3a8';
+        ctx.fillRect(X, Y, 1, 1);
+      } else {
+        ctx.fillStyle = '#1e1624';                       // a little beetle: 2x2 body + head
+        ctx.fillRect(X, Y, 2, 2);
+        ctx.fillRect(X + (Math.sin(t + ph) > 0 ? 2 : -1), Y, 1, 1);
+        ctx.fillStyle = '#c84a3a';                       // red shell
+        ctx.fillRect(X, Y + 1, 1, 1);
+        ctx.fillStyle = 'rgba(235,245,255,0.95)';        // flickering wings
+        ctx.fillRect(X + (wing ? -1 : 2), Y - 1, 1, 1);
       }
     }
   }

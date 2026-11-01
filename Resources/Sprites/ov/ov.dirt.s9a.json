@@ -1,0 +1,37 @@
+{
+ "id": "ov.dirt.s9a",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "................",
+    "................",
+    "................",
+    "......XXXXXX....",
+    "....XYYYWWWWX...",
+    ".z.XYYYYYWWWWX..",
+    "..zzzYyyyyyWWW..",
+    "..zWzyMMMMyWWWX.",
+    "...zzyMMMMyWXXX.",
+    "...XWWyyyyYWWWX.",
+    "....XWWWWWWWWzzz",
+    ".....XWWWWWWWWX.",
+    ".......XXWWWWWX.",
+    ".........XXXXX..",
+    "................",
+    "................"
+   ]
+  }
+ ],
+ "tags": [
+  "overlay"
+ ]
+}

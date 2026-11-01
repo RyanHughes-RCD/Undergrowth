@@ -226,3 +226,222 @@ def main():
     damp_decorations()
     verdure_decorations()
     spawn_markers()
+
+
+# ------------------------------------------------------------------ 9 intensity stages per stat
+# Each stat adds to the base grass (never the whole tile); stage 1 is a hint, stage 9 is dramatic.
+# Overlays: ov.<stat>.s<n><a|b> (16x16, ground palette). Stone: deco.spikes.<n><a|b> (rises up).
+STAGES = range(1, 10)
+SPIKE = ["transparent", OUTLINE, "#8a8a96", "#b4b4c0", "#5e5e6a", "#dcdce6", "#44444e", "#9a9aa6"]
+
+
+def stone_spikes():
+    for n in STAGES:
+        for v in "ab":
+            rng = rng_for("spikes%d%s" % (n, v))
+            heights = [0, 0, 3, 4, 6, 8, 11, 14, 18][n - 1]
+            count = [0, 0, 1, 2, 2, 3, 3, 4, 5][n - 1]
+            pebbles = [2, 4, 5, 4, 4, 3, 3, 3, 4][n - 1]
+            H = 22
+
+            def draw(c, f, rng=rng, heights=heights, count=count, pebbles=pebbles):
+                # gravel at the base
+                for _ in range(pebbles):
+                    x, y = rng.randint(2, 13), rng.randint(H - 4, H - 2)
+                    c.set(x, y, 2); c.set(x + 1, y, 4)
+                    if rng.random() < .5:
+                        c.set(x, y - 1, 3)
+                # spikes: tallest in the middle, lit on the left, shaded on the right
+                xs = sorted(rng.sample(range(3, 13), count)) if count else []
+                for i, x in enumerate(xs):
+                    mid = abs(i - (count - 1) / 2)
+                    h = max(2, int(round(heights * (1 - 0.28 * mid) * rng.uniform(.85, 1.05))))
+                    w = 1 + (1 if heights >= 6 else 0) + (1 if heights >= 14 and mid < 1 else 0)
+                    for k in range(h):
+                        y = H - 2 - k
+                        half = max(0, round(w * (1 - k / h)))
+                        for dx in range(-half, half + 1):
+                            col = 3 if dx < 0 else (4 if dx > 0 else 2)
+                            if k > h - 3 and dx == 0:
+                                col = 5 if heights >= 8 else 3
+                            c.set(x + dx, y, col)
+                    if heights >= 11:               # a crack line on big spikes
+                        for k in range(2, h // 2):
+                            c.set(x + (1 if k % 3 else 0), H - 2 - k, 6)
+                    c.set(x - half - 0, H - 1, 6)
+            deco("deco.spikes.%d%s" % (n, v), SPIKE, draw, size=(16, H), anchor=(8, H - 2), outline=n >= 3)
+
+            def mossy(c, f, draw=draw, seed=n * 10 + ord(v)):
+                # Verdure softens Stone: the same spikes with moss over their bases and shoulders.
+                draw(c, f)
+                r2 = rng_for("mossy%d" % seed)
+                rock = [row[:] for row in c.px]                       # decide from the untouched spikes
+                for y in range(c.h):
+                    for x in range(c.w):
+                        if rock[y][x] not in (2, 3, 4, 6):
+                            continue
+                        top = y == 0 or rock[y - 1][x] in (0, 1)        # the upper edge of the rock
+                        if (top and r2.random() < (.25 if n <= 4 else .45)) or (n >= 5 and y >= H - 3 and r2.random() < .4):
+                            c.set(x, y, 8 if r2.random() < .6 else 9)
+                for _ in range(1 + n // 2):                            # a few moss tufts at the foot
+                    x = r2.randint(2, 13)
+                    if c.get(x, H - 2) == 0:
+                        c.set(x, H - 2, 8)
+            deco("deco.spikes.moss.%d%s" % (n, v), SPIKE + ["#7aa82e", "#b4dc5a"], mossy, size=(16, H), anchor=(8, H - 2), outline=n >= 3)
+
+
+def staged_overlays():
+    def dirt(n):
+        def d(c, rng, f):
+            if n == 1:
+                for _ in range(3):
+                    c.set(*pt(rng, 2), P["dirt"])
+                return
+            r = [0, .9, 1.4, 2, 2.6, 3.2, 3.9, 4.6, 5.3][n - 1]
+            patches = [0, 1, 1, 1, 2, 2, 2, 2, 2][n - 1]
+            centres = [(8 + rng.uniform(-2, 2), 8 + rng.uniform(-2, 2))]
+            if patches > 1:
+                centres.append((8 + rng.uniform(-4, 4), 8 + rng.uniform(-4, 4)))
+            for i, (x, y) in enumerate(centres):
+                rr = r * (1 if i == 0 else .6)
+                blob(c, x, y, rr, rr * .8, P["dirt"], edge=P["dirt_d"])
+                c.ellipse(x - rr * .3, y - rr * .3, rr * .45, rr * .3, P["dirt_l"])
+            for _ in range([0, 1, 1, 2, 2, 3, 3, 4, 5][n - 1]):     # roots
+                x, y = centres[0][0] + rng.uniform(-r, r), centres[0][1] + rng.uniform(-r, r)
+                dx = rng.choice((-1, 1))
+                for k in range(rng.randint(2, 3 + n // 2)):
+                    c.set(x, y, P["loam_root"]); x += dx; y += rng.choice((0, 0, 1, -1))
+            if n >= 7:                                               # a burrow hole
+                hr = 1.2 + (n - 7) * .6
+                x, y = centres[0]
+                c.ellipse(x, y + .5, hr + .6, hr * .7 + .4, P["loam_d"])
+                c.ellipse(x, y + .7, hr, hr * .6, P["cave_d"])
+        return d
+
+    def damp(n):
+        def d(c, rng, f):
+            glints = [2, 4, 3, 4, 4, 4, 5, 5, 6][n - 1]
+            if n >= 3:
+                spots = [0, 0, 1, 2, 1, 1, 1, 2, 2][n - 1]
+                for i in range(spots):
+                    x, y = pt(rng, 4)
+                    r = [0, 0, 1.6, 1.8, 3, 3.4, 3.8, 4.2, 5.5][n - 1] * (1 if i == 0 else .7)
+                    blob(c, x, y, r, r * .75, P["grass_dd"], edge=P["lush_d"])   # dark, soaked grass
+                    c.set(x, y, P["water_l"])
+            if n >= 6:
+                pools = [0] * 5 + [1, 1, 2, 2]
+                for i in range(pools[n - 1]):
+                    x, y = pt(rng, 4)
+                    r = 1.2 + (n - 6) * .5
+                    blob(c, x, y, r + .5, r * .7 + .4, P["water"], edge=P["water_d"])
+                    c.set(x - 1, y - 1, P["water_hi"])
+            for _ in range(glints):
+                x, y = pt(rng, 1)
+                c.set(x, y, P["water_hi"] if (n < 3 or rng.random() < .6) else P["water_l"])
+        return d
+
+    def glow(n):
+        def d(c, rng, f):
+            if n >= 4:                                              # glowing moss dots
+                for _ in range(n - 2):
+                    x, y = pt(rng, 2)
+                    c.set(x, y, P["gm_m"]); c.set(x + 1, y, P["gm"])
+            if n >= 7:                                              # tiny glowing caps
+                for _ in range(n - 6):
+                    x, y = pt(rng, 3)
+                    c.set(x, y, P["gm_glow"]); c.set(x - 1, y, P["gm_glow"]); c.set(x + 1, y, P["gm_glow"])
+                    c.set(x, y + 1, P["gm_hi"])
+            for i in range(n * 2):                                  # motes, twinkling between frames
+                x, y = pt(rng, 1)
+                if (i + f) % 2 == 0 or n >= 6:
+                    c.set(x, y, P["gm_hi"] if n >= 5 else P["gm_glow"])
+        return d
+
+    FLOWERS = ["pink", "white", "yellow", "violet"]
+
+    def bloom(n):
+        def d(c, rng, f):
+            total = [1, 2, 3, 4, 5, 6, 7, 9, 12][n - 1]
+            big = [0, 0, 0, 0, 0, 1, 2, 3, 5][n - 1]
+            for i in range(total):
+                x, y = pt(rng, 2)
+                col = P[FLOWERS[rng.randint(0, 3)]]
+                if n >= 3:
+                    c.set(x, y + 1, P["lush_d"])                    # stem
+                if i < big:                                         # a proper blossom
+                    for dx, dy in ((0, -1), (-1, 0), (1, 0), (0, 1)):
+                        c.set(x + dx, y + dy, col)
+                    c.set(x, y, P["yellow"] if col != P["yellow"] else P["white"])
+                elif n >= 4:
+                    c.set(x, y, col); c.set(x + 1, y, col)
+                else:
+                    c.set(x, y, col)
+        return d
+
+    def verdure(n):
+        def d(c, rng, f):
+            blades = 3 + n * 3
+            tall = 2 + n
+            for _ in range(blades):
+                x, y = rng.randint(0, 15), rng.randint(tall // 2 + 1, 15)
+                h = rng.randint(max(1, tall // 2), tall)
+                lean = rng.choice((-1, 0, 1)) if h > 4 else 0
+                for k in range(h):
+                    col = P["lush_d"] if k < h / 3 else (P["lush"] if k < h - 1 else P["lush_l"])
+                    c.set(x + (lean if k > h * .6 else 0), y - k, col)
+            if n >= 6:                                              # leafy fronds
+                for _ in range(n - 4):
+                    x, y = pt(rng, 3)
+                    for k in range(3):
+                        c.set(x - k, y - k, P["lush"]); c.set(x + k, y - k, P["lush"])
+                    c.set(x, y - 3, P["lush_ll"])
+        return d
+
+    fams = {"dirt": dirt, "damp": damp, "glow": glow, "bloom": bloom, "verdure": verdure}
+    for name, fn in fams.items():
+        for n in STAGES:
+            for v in "ab":
+                frames = 2 if name == "glow" else 1
+                overlay("ov.%s.s%d%s" % (name, n, v), fn(n), frames=frames, durations=[0.9, 0.9] if frames > 1 else None)
+
+
+def combo_art():
+    # Stone + Damp + Verdure: patches of moss creeping over everything.
+    def moss(c, rng, f):
+        for _ in range(4):
+            x, y = pt(rng, 3)
+            r = rng.uniform(2.2, 3.6)
+            blob(c, x, y, r, r * .8, P["moss"], edge=P["moss_d"])
+            c.ellipse(x - r * .3, y - r * .3, r * .5, r * .35, P["moss_l"])
+            c.set(x + 1, y, P["moss_ll"])
+    for v in "ab":
+        overlay("ov.moss.%s" % v, moss)
+
+    # Bloom + Verdure: a tangle of flowers through long grass.
+    def meadow(c, rng, f):
+        for _ in range(10):
+            x, y = rng.randint(0, 15), rng.randint(5, 15)
+            for k in range(rng.randint(3, 6)):
+                c.set(x, y - k, P["lush"] if k else P["lush_d"])
+        for _ in range(7):
+            x, y = pt(rng, 2)
+            col = P[("pink", "white", "yellow", "violet")[rng.randint(0, 3)]]
+            for dx, dy in ((0, -1), (-1, 0), (1, 0), (0, 1)):
+                c.set(x + dx, y + dy, col)
+            c.set(x, y, P["yellow"])
+    for v in "ab":
+        overlay("ov.meadow.%s" % v, meadow)
+
+
+def pt(rng, m=1):
+    return rng.randint(m, T - 1 - m), rng.randint(m, T - 1 - m)
+
+
+_old_main = main
+
+
+def main():
+    _old_main()
+    stone_spikes()
+    staged_overlays()
+    combo_art()

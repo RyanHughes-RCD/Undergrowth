@@ -33,6 +33,17 @@ def make_icons():
         c.ellipse(6, 9, 2.2, 2.6, 4, clip=lambda x, y: y <= 9)
     icon("burrow", ["#5ea347", "#8ccf63", "#2a1a14", "#7a5232"], burrow)
 
+    def critter(c, f):
+        # A little round forest critter: antennae, big eyes, cheeks (the Creatures tab).
+        c.ellipse(6, 7.5, 4.6, 3.8, 2)
+        c.ellipse(5, 6, 2.4, 1.6, 3)
+        c.rect(2, 10, 3, 10, 4); c.rect(8, 10, 9, 10, 4)          # feet
+        c.line(4, 4, 3, 1, 4); c.line(8, 4, 9, 1, 4)
+        c.set(3, 1, 5); c.set(9, 1, 5)
+        c.set(4, 7, 1); c.set(8, 7, 1); c.set(4, 6, 3); c.set(8, 6, 3)
+        c.set(3, 8, 5); c.set(9, 8, 5)
+    icon("creatures", ["#7cc35a", "#b8ec8a", "#3f7a32", "#ff9ccf"], critter)
+
     def bag(c, f):
         c.rect(2, 4, 9, 10, 2)
         c.rect(2, 4, 9, 5, 4)

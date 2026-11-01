@@ -42,7 +42,7 @@ class App {
       this.ui.toast(`While you were away, ${report.spawned} new thing${report.spawned === 1 ? '' : 's'} appeared.`);
     }
     if (this.replanted) this.ui.toast('The forest has been replanted for the new spawn table. Creatures now hide in mushrooms, seeds and geodes.');
-    else if (!saved && !this.game.inTutorial) this.ui.toast('Welcome! Your forest is empty. Pick mushrooms, plants and geodes: creatures hide inside.');
+    else if (!saved && !this.game.inTutorial) this.ui.toast(this.ui.story('messages.welcome'));
     this.save();
 
     // Clock: every second, apply the debug time speed; refresh the forest on its normal cadence
@@ -92,16 +92,14 @@ class App {
     this.processEvents();
   }
 
-  /** Shows one-shot game events: tutorial steps, slot unlocks, blend, expansion, hints. */
+  /** Shows one-shot game events: blend, expansion, tasks, hints. */
   processEvents() {
     const events = this.game.takeEvents();
     if (!events.length) return;
     const ui = this.ui;
     const cfg = this.content.tuning;
     for (const e of events) {
-      if (e.type === 'slotUnlocked') {
-        ui.toast(ui.story('messages.slotUnlocked', { count: e.count, max: e.max }));
-      } else if (e.type === 'blend') {
+      if (e.type === 'blend') {
         this.view.highlight(e.tiles, (cfg.blend && cfg.blend.highlightSeconds) || 5);
         ui.celebrate(ui.story('messages.blendTitle'), ui.story('messages.blend'));
       } else if (e.type === 'expansion') {
@@ -309,7 +307,6 @@ class App {
   }
 
   beginPlacing(creatureID) {
-    if (this.game.freeSlotCount === 0) { this.ui.toast('All placement slots are full.'); return; }
     this.ui.sheet = null;
     this.ui.close();
     this.ui.selectedTile = null;
@@ -344,7 +341,7 @@ class App {
     const c = this.game.creature(creatureID);
     if (this.attempt(() => { this.game.recall(creatureID, this.game.now()); return true; })) {
       this.ui.selectedCreatureID = null;
-      this.ui.toast(`${this.displayName(c)} heads back to the Burrow. The land will slowly settle.`);
+      this.ui.toast(`${this.displayName(c)} heads home to rest. The land will slowly settle.`);
       this.changed();
     }
   }

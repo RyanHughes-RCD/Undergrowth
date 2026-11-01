@@ -40,14 +40,14 @@
     }
   },
   "messages": {
-    "slotUnlocked": "A new creature slot has opened ({count} of {max}). There's room for another friend in the clearing.",
     "blend": "Two influences are meeting! Where they overlap, the land takes on a little of both.",
     "blendTitle": "The land is blending",
     "expansion": "The forest is spreading. The clearing has grown!",
     "uncommonHint": "Something new might grow here…",
     "lockedSlot": "Day {day}",
     "taskDone": "Task complete: {task}. Tap Tasks to claim your reward.",
-    "tasksIntro": "New: Tasks! Little goals to get your forest going, each with a reward."
+    "tasksIntro": "New: Tasks! Little goals to get your forest going, each with a reward.",
+    "welcome": "Welcome to your clearing. A few things are waiting by the old log, and one of them has a creature inside."
   },
   "guide": {
     "landmarks": {

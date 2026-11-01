@@ -213,6 +213,8 @@ def main():
             it["onCollect"] = "loot.plant." + slug(name)
             if rarity != "legendary":
                 it["groups"] = ["plants"]
+            # Grown from a Mystery Seed: generic planted/sprout, then its own bud, then the plant itself.
+            it["growthSprites"] = ["seed.stage.planted", "seed.stage.sprout", "plant.bud." + slug(name), it["sprite"]]
         elif category == "geode":
             it["collectVerb"] = "Dig"
             it["onCrack"] = "loot.crack." + slug(name)

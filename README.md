@@ -41,15 +41,13 @@ Then open <http://localhost:8000>.
 ## Opening and early progression (web version)
 
 - **New forest:** a 7×14 clearing in the middle of the 40×56 forest, with all stats at 0. The Old Log sits at its centre (`Content/landmarks.json`). Only spawns with no stat requirements can appear, straight from the normal spawn rules.
-- **Tutorial:** forage, then plant, dig, crack, place, and watch. The pointer and the coach card guide each step, and each step only advances when you do it.
-  - The guaranteed results ride on the tutorial's own spawns: the Clover always drops a seed, and the Pebble Geode always holds a Common creature.
-  - The creature's family is set by `tutorial.creatureFamily`: `"random"` or `"choose"`.
-  - The tutorial creature ramps up in `tutorial.rampSeconds` (60) the first time it's placed. Placing it again later uses its normal time.
-  - Progress is saved, so quitting resumes at the same step. The 🐞 menu can replay or skip the tutorial.
-- **Slots:** 1 to start, then more on the days in `slotUnlocks.unlockDays` (counted from first play). Locked slots show their day.
+- **Start (no guided tutorial):** you arrive in the clearing with a few finds already waiting around the old log: 2 Brown Button Caps, a Red Toadstool, 2 Clovers and a Pebble Geode (`start.spawns` in `tuning.json`). They stay until picked.
+  - One random mushroom or geode among them is guaranteed to hold a creature (`start.guaranteedCreatureRarity`, Common).
+  - Forests saved mid-tutorial just carry on with the tutorial marked done. The old guided tutorial is still in the code, off (`tutorial.enabled: false`).
+- **Creatures:** there's no cap on how many are out in the forest, and no slot bar. The **Creatures** tab lists who's out and who's resting.
 - **Blend celebration:** fires once, the first time two creatures each give a tile `blend.minEach` or more.
 - **Forest expansion:** the clearing grows by `ringTiles` (2) tiles on each side when the `expansion` conditions are met, at most every `minHoursBetween` hours. Newly revealed tiles fade influence in over `revealRampSeconds`, and nothing reaches past the treeline.
-- **Starter tasks:** after the tutorial, a few goals at a time appear under Tasks. Examples are picking 5 mushrooms, harvesting a seed, cracking 3 geodes, and having two creatures out at once. Each gives a reward to claim. They're defined in `Content/tasks.json` (text, counter, target, reward).
+- **Starter tasks:** a few goals at a time appear under Tasks. Examples are picking 5 mushrooms, harvesting a seed, cracking 3 geodes, and having two creatures out at once. Each gives a reward to claim. They're defined in `Content/tasks.json` (text, counter, target, reward).
 - **Spawns:** the cap is `spawns.maxPerOpenTile` × open tiles, at least `minCap` and at most `maxTotal`.
 - **First-Uncommon hint:** shows once, the first time any tile meets an Uncommon spawn's stat requirements.
 - **Story and hint text:** all in `Content/story.json`, including the Old Log's Field Guide entry and the Heartwood Sapling teaser.
@@ -222,39 +220,44 @@ This command builds a forest, places the starter creatures, simulates 24 hours, 
 
 ## Each stat's identity (web)
 
-Every tile stat looks and plays differently, even within a creature pair. All the numbers are in `tuning.json` under `terrain` (behaviour) and `visuals` (`elevation`, `glowLight`, `petals`).
+Every tile stat looks and plays differently, even within a creature pair. Each one is an **addition to the base grass**, never a whole-tile replacement, and grows through **9 intensity stages** at the thresholds in `visuals.intensityStages` (2, 4, 6, 9, 12, 16, 21, 27, 35). Low stages are a hint; high stages are dramatic. All behaviour numbers are in `tuning.json` under `terrain` and `combos`.
 
-- **Elevation:** each tile's height comes from its stats, from −1 to 1: Stone raises it and Depth lowers it (`terrain.elevation`). A raised tile casts a rock face onto the tile below it and gets a lit lip; a sunken tile gets a shadowed back wall.
-- **Stone builds upward and lasts:**
-  - Looks: rocky ground, then rocks, boulders, ledges and cliff tops.
-  - After its creature leaves, Stone fades at 0.25× the normal rate (`terrain.statDecayRate.stone`), so rocky areas stay as landmarks.
-  - Geodes on Stone-dominant tiles sit exposed on the surface: tap to collect.
-- **Depth digs downward and hides things:**
-  - Looks: bare dark soil, burrows, holes, then cavern openings; fairly empty on top.
-  - Items whose highest requirement is Depth (Cave Truffle, Deep Geode, Cave Lily…) are buried, and so are geodes on Depth-dominant tiles.
-  - Buried things show as loose soil; tap to dig them up and find out what they are.
+| Stat | Stage 1 | … | Stage 9 |
+|---|---|---|---|
+| Stone | a few gravel pebbles | small stone spikes | a tall spire cluster |
+| Depth | dirt specks | dirt patches with roots | a big dirt patch with a burrow hole |
+| Damp | dew glints | dark soaked grass | puddles |
+| Glow | one or two faint motes | glowing moss dots | glowing caps and many motes |
+| Bloom | one tiny flower | small flowers | dense blossoms |
+| Verdure | a few extra blades | taller grass | a leafy thicket |
+
+- **Stone lasts:** after its creature leaves, Stone fades at 0.25× the normal rate (`terrain.statDecayRate.stone`). Geodes on Stone-dominant tiles sit exposed: tap to collect.
+- **Depth hides things:** items whose highest requirement is Depth (Cave Truffle, Deep Geode, Cave Lily…) are buried, and so are geodes on Depth-dominant tiles. They show as loose soil; tap to dig.
+- **Elevation** (Stone up, Depth down) still steers Damp downhill. The old cliff-face drawing is off (`visuals.elevation.enabled`).
 - **Damp spreads and pools:**
   - An ambient Damp layer (`terrain.ambientDamp`, saved in `state.ambientDamp`) sits on top of creature Damp, so creature ramp-up and fading are unchanged.
   - Each spawn tick it seeps into wetter-to-drier neighbours, flows more easily downhill, and evaporates more slowly on low ground, so hollows turn boggy. High Stone blocks it.
-  - Looks: dark wet soil, puddles and drips; bog on low wet ground.
   - Damp tiles grow mushrooms faster: extra mushroom-only spawn attempts, weighted to wetter tiles (`terrain.damp.mushroomGrowth`).
 - **Glow follows the clock:**
   - Its effect on spawn weights, and on the forest's category and location weighting, is ×0.4 by day and ×1.6 at night (`terrain.glowCycle`, device local time).
   - Deep tiles glow at full strength even by day.
-  - Looks: a faint shimmer by day, a strong pixel halo at night.
+  - Its stage is drawn from Glow × the time factor, so it's faint by day and strong at night, with a pixel halo.
 - **Bloom has a daily rhythm:**
   - It opens from 6:00, peaks at 12:00 and closes by 19:00, from ×0.15 to ×1.3 (`terrain.bloomCycle`). Its effect on spawn weights follows this cycle.
-  - Looks: flowers and drifting petals while open; closed buds at night.
+  - Its stage follows the cycle; petals drift while it's open, and buds close at night.
   - High Bloom flattens plant weights for more variety (`terrain.bloom.varietyPerPoint`).
   - It attracts wanderers: they favour blooming tiles and arrive more often there (`wandererBonusPerPoint`).
 - **Verdure is mass, speed and hiding:**
-  - Looks: thick grass, tall foliage, and vines over rocks.
   - Seeds grow faster on lush tiles (`seedGrowthPerPoint`), and plants there drop extra seeds (`extraSeedPerPoint`).
   - At Verdure ≥ 30 (`hideThreshold`), surface spawns are hidden in tall grass with an occasional rustle. The first tap reveals them; the next collects.
-- **Interactions:** Damp pools in low (Depth) ground; Stone blocks Damp; deep tiles glow by day; Verdure grows moss and vines over Stone; Bloom draws wanderers.
-- **Tile art:** `Resources/Content/tileRules.json` matches on each stat's share of the tile's total (`share_stone` …), plus `elev`, `glowVis` and `bloomVis`, so the dominant stat drives the look. The art is generated by `tools/gen_terrain.py`.
+- **Combo tiles** (`combos` in `tuning.json`) are the core of the game:
+  - **Shallow pool (Damp + Depth):** the ground pools with water. Pool tiles are autotiled: a lone tile is a rounded puddle, and neighbouring pool tiles join seamlessly with rounded inside corners. Only Damp-loving items spawn on water.
+  - **Mossy bank (Stone + Damp + Verdure):** moss grows over the ground and the stone spikes, and bugs gather (beetles by day, fireflies at night).
+  - **Wild meadow (Bloom + Verdure):** a tangle of flowers in long grass. Plants are favoured ×3 in spawn rolls, extra plant-only spawn attempts sprout there, and Mystery Seeds grow ×2.5 faster.
+- **Tile art:** `Resources/Content/tileRules.json`. A rule with `"staged": true` and `"stat"` expands into the 9 stages (`ov.<stat>.s1a`… / `deco.spikes.<n><v>`). Combo layers use `combo_<id>`. The art is made by `tools/gen_terrain.py`; the water is drawn by the renderer.
+- **Plants:** every plant has its own grown sprite and its own bud stage (`plant.bud.<id>`). A Mystery Seed shows planted, then sprout, then that plant's bud, then the plant itself.
 - **Spawn placement:** item data `spawn.placement` is `surface`, `buried` or `auto` (the default). In the spreadsheet, an optional "Placement" column overrides it per item.
-- **Debug:** the spawn inspector shows elevation, dominant stat, ambient Damp, the Glow and Bloom factors, and how spawns sit on that tile. It also tags each item that would be buried, hidden or exposed.
+- **Debug:** the spawn inspector shows elevation, dominant stat, any combo, each stat's intensity stage, ambient Damp, the Glow and Bloom factors, and how spawns sit on that tile. It also tags each item that would be buried, hidden or exposed.
 
 ## Developer mode (web)
 
@@ -267,10 +270,10 @@ A separate test forest for trying any content or combination without touching yo
   - While it's on, nothing is written to the real key. Test forests are marked (`state.dev`), and saving one over the real forest is refused.
   - **Back to my forest** reloads the real forest exactly as it was. Time speed is remembered separately for each.
 - **Unlock:**
-  - **Unlock everything:** every species and its glimmer, 5 of every item, the whole Field Guide, 6 slots, and the clearing grown to the whole map.
-  - Or each part on its own. Creature slots can be set to 3, 6, 9 or 12.
+  - **Unlock everything:** every species and its glimmer, 5 of every item, the whole Field Guide, and the clearing grown to the whole map.
+  - Or each part on its own.
 - **Try combinations:**
-  - Pick any species, choose full strength and/or glimmer, then tap tiles to place them. A slot is added if all are full.
+  - Pick any species, choose full strength and/or glimmer, then tap tiles to place them (there's no limit).
   - **Remove all creatures** (instantly), **Max strength now**, **Clear wild spawns** and **Run 20 spawn ticks** (to see where things turn up).
 - **Saved setups:** name and save the current test forest, then load it back later to flip between garden configurations.
 - **Views** (both modes):

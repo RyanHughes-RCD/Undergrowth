@@ -76,7 +76,8 @@
     "rareGem": 10
   },
   "visuals": {
-    "maxDecorationsPerTile": 2,
+    "maxDecorationsPerTile": 3,
+    "intensityStages": [2, 4, 6, 9, 12, 16, 21, 27, 35],
     "refreshSeconds": 5,
     "edge": {
       "ground": [
@@ -102,7 +103,7 @@
       3600
     ],
     "viewBorderTiles": 0.5,
-    "elevation": { "threshold": 0.15, "facePx": 7, "faceColor": "#5e5e68", "faceDark": "#3a3a44", "lipColor": "#c8c8d0", "pitPx": 6, "pitColor": "rgba(14,8,18,0.55)" },
+    "elevation": { "enabled": false, "threshold": 0.15, "facePx": 7, "faceColor": "#5e5e68", "faceDark": "#3a3a44", "lipColor": "#c8c8d0", "pitPx": 6, "pitColor": "rgba(14,8,18,0.55)" },
     "glowLight": { "enabled": true, "minGlow": 6, "alphaPerPoint": 0.0125, "maxAlpha": 0.5, "radius": 14, "color": "#7cf2ff" },
     "petals": { "enabled": true, "minBloom": 12, "ratePerPoint": 0.0004, "max": 50, "lifeSeconds": 5, "windX": 8, "windY": 3, "colors": ["#ff9ccf", "#fff3c4", "#c58cff"] },
     "sunlight": {
@@ -130,6 +131,12 @@
   },
   "wanderers": {
     "maxCatchUpDays": 7
+  },
+  "combos": {
+    "_about": "Combo tiles (the core of the game): a tile that meets every requirement becomes that combo. Uses the tile's raw stats.",
+    "pool": { "name": "Shallow pool", "requires": { "damp": { "min": 12 }, "depth": { "min": 8 } }, "onlyDampItems": true },
+    "moss": { "name": "Mossy bank", "requires": { "stone": { "min": 5 }, "damp": { "min": 5 }, "verdure": { "min": 5 } }, "bugsPerTile": 0.85, "maxBugs": 40 },
+    "meadow": { "name": "Wild meadow", "requires": { "bloom": { "min": 8 }, "verdure": { "min": 8 } }, "plantCategoryMult": 3, "extraPlantAttempts": 2, "chancePerPoint": 0.008, "maxChance": 0.6, "flowerGrowthMult": 2.5 }
   },
   "terrain": {
     "_about": "Each stat's identity. Elevation: Stone raises, Depth lowers (-1..1). Shares = a stat's fraction of the tile's total.",
@@ -159,8 +166,19 @@
     "startWidth": 7,
     "startHeight": 14
   },
+  "start": {
+    "_about": "A new forest: no guided tutorial. These wait near the old log; one of the mushrooms/geodes is guaranteed to hold a creature.",
+    "spawns": [
+      { "item": "mushroom.brown-button-cap", "count": 2 },
+      { "item": "mushroom.red-toadstool", "count": 1 },
+      { "item": "plant.clover", "count": 2 },
+      { "item": "geode.pebble-geode", "count": 1 }
+    ],
+    "radius": 3,
+    "guaranteedCreatureRarity": "common"
+  },
   "tutorial": {
-    "enabled": true,
+    "enabled": false,
     "creatureFamily": "random",
     "families": [
       "fungling",

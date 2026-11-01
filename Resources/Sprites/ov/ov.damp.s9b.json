@@ -1,0 +1,37 @@
+{
+ "id": "ov.damp.s9b",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "................",
+    "................",
+    ".......DBBEDEE..",
+    "..bbbbDBEBBBD...",
+    ".bZbZZBBBBBBB...",
+    "bZbZZZDBBBBBD...",
+    "ZEDBBBDDCBBD....",
+    "ZDBEBBBDZZbb....",
+    "ZBBBBBBBZbZb....",
+    "bDBBBBBDbZb.....",
+    ".bDBBBDZZb..E...",
+    "..bbZZZbb.......",
+    "................",
+    "................",
+    "................",
+    "................"
+   ]
+  }
+ ],
+ "tags": [
+  "overlay"
+ ]
+}
