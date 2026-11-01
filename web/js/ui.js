@@ -408,8 +408,9 @@ export class UI {
     const owned = Object.entries(g.state.inventory).filter(([, n]) => n > 0)
       .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def);
     const decor = Object.entries(g.state.decor.owned).filter(([, n]) => n > 0).map(([id, n]) => ({ def: g.decorDef(id), n })).filter((e) => e.def);
-    const head = [h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
-      h('span', { class: 'sub' }, 'Spare finds turn into compost.'))];
+    const compostOn = (this.content.tuning.offerings || {}).compostEnabled !== false;
+    const head = compostOn ? [h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
+      h('span', { class: 'sub' }, 'Spare finds turn into compost.'))] : [];
     if (decor.length) {
       head.push(h('div', { class: 'section' }, 'Decor'), ...decor.map(({ def, n }) => h('div', { class: 'list-row' },
         h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)),
@@ -430,7 +431,8 @@ export class UI {
           h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)),
           h('div', { class: 'grow' }, h('b', {}, def.name),
             h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, rarityName(def.rarity)),
-            def.use ? h('div', { class: 'sub' }, this.useText(def.use)) : null),
+            def.use ? h('div', { class: 'sub' }, this.useText(def.use)) : null,
+            def.tradeOnly ? h('div', { class: 'sub' }, 'Worth keeping: the Old Log trades for it.') : null),
           h('b', {}, `×${n}`),
           def.onGrow ? h('button', { class: 'btn green small', onclick: () => this.app.beginPlanting(def.id) }, 'Plant') : null,
           def.egg ? h('button', { class: 'btn green small', disabled: g.state.nests.length >= g.nestSlots, onclick: () => this.app.beginNest(def.id) }, 'Nest') : null,
@@ -438,7 +440,7 @@ export class UI {
             h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack'),
             n > 1 ? h('button', { class: 'btn orange small', title: `Crack ${Math.min(n, this.batchMax)} at once`, onclick: () => { this.sheet = null; this.close(); this.openBatchCrack(def.id, Math.min(n, this.batchMax)); } }, `×${Math.min(n, this.batchMax)}`) : null) : null,
           def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : 'Crush') : 'Use') : null,
-          g.compostValue(def.id) ? h('button', { class: 'btn grey small', title: `Compost one for ${g.compostValue(def.id)}`, onclick: () => this.app.compostItem(def.id) }, `+${g.compostValue(def.id)}`) : null)),
+          compostOn && g.compostValue(def.id) ? h('button', { class: 'btn grey small', title: `Compost one for ${g.compostValue(def.id)}`, onclick: () => this.app.compostItem(def.id) }, `+${g.compostValue(def.id)}`) : null)),
     ])];
   }
 
@@ -484,10 +486,11 @@ export class UI {
     const open = board.filter((s) => !s.done && !s.locks.length);
     const locked = board.filter((s) => !s.done && s.locks.length);
     const done = board.filter((s) => s.done);
-    const shop = (this.content.cosmetics || []).filter((c) => c.compost != null);
+    const compostOn = (this.content.tuning.offerings || {}).compostEnabled !== false;
+    const shop = compostOn ? (this.content.cosmetics || []).filter((c) => c.compost != null) : [];
     return [
       h('p', { class: 'sub center' }, this.story('messages.offeringsIntro')),
-      h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
+      h('div', { class: 'row space compost-row' }, compostOn ? h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`) : h('span'),
         h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Old Log', sprite: 'landmark.old-log', variant: null, text: this.content.story?.guide?.landmarks?.['landmark.old-log'] }) }, 'About the log')),
       ...this.visitorSection(),
       h('div', { class: 'section' }, 'Requests'),
@@ -524,7 +527,7 @@ export class UI {
           st.done ? h('p', { class: 'sub' }, 'Traded. Thank you!') : [
             ...st.items.map((x) => this.offerItemRow(x)),
             h('div', { class: 'row end gap' },
-              h('button', { class: 'btn grey small', disabled: left <= 0 || g.state.compost < cost, title: `${left} left today`, onclick: () => a.rerollVisitor(req.id) }, `Someone else (${cost} compost)`),
+              (this.content.tuning.offerings || {}).compostEnabled === false ? null : h('button', { class: 'btn grey small', disabled: left <= 0 || g.state.compost < cost, title: `${left} left today`, onclick: () => a.rerollVisitor(req.id) }, `Someone else (${cost} compost)`),
               h('button', { class: 'btn ' + (st.ready ? 'green' : 'grey'), disabled: !st.ready, onclick: () => a.deliverRequest(req.id) }, 'Trade'))]);
       })];
   }
@@ -536,14 +539,14 @@ export class UI {
     if (!d) return ['Decoration', h('p', { class: 'sub' }, 'Gone.')];
     const def = g.decorDef(d.decorID) || { name: d.decorID, sprite: 'ui.icon.board' };
     const cols = def.colors || [];
-    const cost = (this.content.tuning.offerings || {}).recolorCost ?? 0;
+    const cost = (this.content.tuning.offerings || {}).compostEnabled === false ? 0 : ((this.content.tuning.offerings || {}).recolorCost ?? 0);
     return [def.name, [
       h('div', { class: 'hero' }, this.sprites.element(def.sprite, decorVariant(def, d.color), 6)),
       def.text ? h('p', { class: 'sub center' }, def.text) : null,
       cols.length > 1 ? h('p', { class: 'sub center' }, `Colour: ${cols[d.color || 0].name}`) : null,
       h('div', { class: 'row gap wrap center' },
         h('button', { class: 'btn green', onclick: () => a.beginDecorMove(d.id) }, 'Move'),
-        cols.length > 1 ? h('button', { class: 'btn', disabled: g.state.compost < cost, onclick: () => a.recolorDecor(d.id) }, `Recolour (${cost} compost)`) : null,
+        cols.length > 1 ? h('button', { class: 'btn', disabled: g.state.compost < cost, onclick: () => a.recolorDecor(d.id) }, cost ? `Recolour (${cost} compost)` : 'Recolour') : null,
         h('button', { class: 'btn grey', onclick: () => a.removeDecor(d.id) }, 'Put away')),
     ]];
   }
@@ -622,7 +625,8 @@ export class UI {
       .map((i, idx) => ({ i, idx })).sort((a, b) => rarityIndex(a.i.rarity) - rarityIndex(b.i.rarity) || a.idx - b.idx)
       .map(({ i }) => ({
         key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: null, rarity: i.rarity, text: i.guideText,
-        howFound: i.howFound || (i.spawn ? ['Grows wild', (i.spawn.requires && Object.keys(i.spawn.requires).length
+        howFound: i.howFound || (i.spawn && i.spawn.seedOnly ? ['Grows from Mystery Seeds', (i.spawn.requires && Object.keys(i.spawn.requires).length
+          ? [', best where ', this.joinNodes(Object.entries(i.spawn.requires).map(([k, v]) => this.requirementText(k, v.min)), ', ')] : ' anywhere.')] : null) || (i.spawn ? ['Grows wild', (i.spawn.requires && Object.keys(i.spawn.requires).length
           ? [' where ', this.joinNodes(Object.entries(i.spawn.requires).map(([k, v]) => this.requirementText(k, v.min)), ', ')] : ' anywhere.')] : null),
         special: i.use ? this.useText(i.use) : null,
         teaser: content.story?.guide?.teasers?.[i.id] || null,

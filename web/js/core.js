@@ -388,7 +388,8 @@ export function itemHint(item, story) {
   const verb = (H.verbs || {})[item.category] || 'Found';
   const fill = (tpl) => tpl.replace('{verb}', verb).replace('{a}', words[0]).replace('{b}', words[1]).replace('{c}', words[2]);
   let out;
-  if (sp.terrain === 'pool') out = fill(H.pool || '{verb} in shallow pools');
+  if (sp.seedOnly) out = fill(H.seed || 'Grows from Mystery Seeds');
+  else if (sp.terrain === 'pool') out = fill(H.pool || '{verb} in shallow pools');
   else if (!words.length) out = fill(H.none || '{verb} almost anywhere');
   else if (words.length === 1) out = fill(H.one || '{verb} on {a}');
   else if (words.length === 2) out = fill(H.two || '{verb} where {a} meets {b}');
@@ -423,6 +424,7 @@ export class Game {
     state.decor.placed = state.decor.placed || [];
     state.compost = state.compost || 0;
     state.nests = state.nests || [];
+    state.scenery = state.scenery || [];
     this.t = content.tuning;
     this.stats = new StatEngine(this.t);
     this.rng = new RNG(state);
@@ -514,7 +516,7 @@ export class Game {
     state.announcedSlots = g.unlockedSlots(now);
     for (const typeID of content.tuning.starterCreatures) state.creatures.push(g.rollCreature(typeID, 'starter', now, false));
     if (state.tutorial.step === 'forage') g.enterTutorialStep('forage', now);
-    else g.placeStarters(now);
+    else { g.placeScenery(); g.placeStarters(now); }
     g.advance(now);
     g.events = [];
     return g;
@@ -543,13 +545,35 @@ export class Game {
         tile = tile || this.freeNear(centre);
         if (!tile) continue;
         const sp = { id: this.rng.uuid(), itemID: def.id, tile, spawnedAt: now, keep: true, starter: true, placement: 'surface' };
+        if (e.forced) sp.forced = e.forced.map((f) => ({ ...f }));      // e.g. a plant that always drops a seed
         this.state.spawns.push(sp);
         made.push(sp);
       }
     }
-    const holders = made.filter((sp) => ['mushroom', 'geode'].includes(this.content.items[sp.itemID].category));
+    const holdIn = st.guaranteedIn || ['mushroom', 'geode'];
+    const holders = made.filter((sp) => holdIn.includes(this.content.items[sp.itemID].category));
     if (holders.length) holders[this.rng.int(0, holders.length - 1)].forcedCreature = { rarity: st.guaranteedCreatureRarity || 'common' };
     return made;
+  }
+
+  /**
+   * The opening grotto (tuning.start.scenery): mossy rocks, ferns and the like along the edge of the
+   * starting clearing, so it feels like a sheltered nook. Purely visual; they take up their tiles.
+   */
+  placeScenery() {
+    const sc = (this.t.start || {}).scenery;
+    if (!sc || !(sc.sprites || []).length) return;
+    const c = this.clearing, log = this.state.landmarks[0];
+    const edge = [];
+    for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+      const d = Math.min(x - c.x0, c.x1 - x, y - c.y0, c.y1 - y);
+      if (d < (sc.edgeDepth ?? 1) && !(log && Math.abs(x - log.tile.x) <= 1 && Math.abs(y - log.tile.y) <= 1)) edge.push({ x, y });
+    }
+    for (let i = 0; i < (sc.count || 0) && edge.length; i++) {
+      const tile = edge.splice(this.rng.int(0, edge.length - 1), 1)[0];
+      if (!this.isFree(tile)) continue;
+      this.state.scenery.push({ tile, sprite: sc.sprites[this.rng.int(0, sc.sprites.length - 1)], flip: this.rng.chance(0.5) });
+    }
   }
 
   /** A creature that can come from this source item (any rarity if none of the asked rarity). */
@@ -1525,14 +1549,16 @@ export class Game {
       if (!opts.seed && rule.oneAtATime && onMap.has(item.id)) continue;
       const req = rule.requires || {};
       const stats = new Set([...Object.keys(req), ...Object.keys(rule.statScaling || {})]);
-      let ok = true;
+      let ok = true, unmet = false;
+      // From seed, common/uncommon flowers grow even where their needs aren't met (just less likely).
+      const soft = opts.seed && rule.seedOnly && rarityIndex(item.rarity) <= rarityIndex((this.t.seeds && this.t.seeds.softNeedsUpTo) || 'uncommon');
       const mins = {}, vals = {};
       for (const stat of stats) {
         const b = { ...(req[stat] || {}) };
         for (const e of offsetFx) if (e.stat === stat && Game.effectMatches(e, item) && b.min != null) b.min = Math.max(0, b.min + (e.offset || 0));
         let v = s[stat] || 0;
         for (const e of subFx) if (e.from === stat && Game.effectMatches(e, item) && e.to) v = Math.max(v, s[e.to] || 0);
-        if (req[stat] && !boundMatches(b, v)) { ok = false; break; }
+        if (req[stat] && !boundMatches(b, v)) { if (soft) unmet = true; else { ok = false; break; } }
         mins[stat] = b.min || 0;
         vals[stat] = v;
       }
@@ -1544,7 +1570,10 @@ export class Game {
       for (const e of weightFx) if (Game.effectMatches(e, item)) fx *= e.mult ?? 1;
       let weight = rule.baseWeight * mult * fx;
       let affinity = 1;
-      if (aff) {
+      if (unmet) {
+        affinity = (this.t.seeds && this.t.seeds.unmetFactor) ?? 1;
+        weight *= affinity;
+      } else if (aff) {
         const needs = Object.keys(req);
         if (needs.length) {
           // Its home terrain: rarer items are weighted much more heavily where their needs are met.
@@ -1617,8 +1646,13 @@ export class Game {
   }
 
   /** What a Mystery Seed planted on this tile now would grow into (plants it qualifies for). */
+  /**
+   * What a Mystery Seed can grow into: only the seed flowers (spawn.seedOnly), never wild plants like
+   * Clover. Common and uncommon seed flowers can grow anywhere (their stat needs only make them
+   * likelier on matching ground, tuning.seeds.softNeedsUpTo); rarer ones need their terrain.
+   */
   seedDetails(tile, t) {
-    const pool = this.content.itemsInGroup('plants').filter((i) => i.spawn);
+    const pool = this.content.itemList.filter((i) => i.category === 'plant' && i.spawn && i.spawn.seedOnly);
     return this.spawnDetails(tile, t, { seed: true, items: pool });
   }
 
@@ -1750,6 +1784,16 @@ export class Game {
     return pick ? pick.id : null;
   }
 
+  /** The opening's guaranteed egg: its family (or a random one, tuning.start.eggFamily "random"); nesting it hatches quickly. */
+  starterEgg(family, rarity) {
+    const st = this.t.start || {};
+    const fams = [...new Set((this.content.eggs || []).map((e) => e.family))];
+    const fam = st.eggFamily === 'random' && fams.length ? fams[this.rng.int(0, fams.length - 1)] : (st.eggFamily || family);
+    const id = (this.content.eggs || []).find((e) => e.family === fam && e.tier === (rarity || 'common'))?.id || this.eggFor(fam, rarity || 'common');
+    this.state.quickEggs = (this.state.quickEggs || 0) + 1;
+    return { item: id, count: 1 };
+  }
+
   get nestSlots() { return (this.eggCfg.baseNests ?? 1) + (this.state.unlocks.nests || 0); }
   nestAt(t) { return this.state.nests.find((n) => sameTile(n.tile, t)) || null; }
   nestProgress(n, now) { return Math.min(1, Math.max(0, (now - n.startedAt) / (Math.max(1, n.hatchSeconds) * 1000))); }
@@ -1763,7 +1807,10 @@ export class Game {
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
     this.consume(eggID);
-    const n = { id: this.rng.uuid(), eggID, tile: { ...tile }, startedAt: now, hatchSeconds: (egg.hatchHours || 6) * 3600, glimmer: false };
+    let hatchSeconds = (egg.hatchHours || 6) * 3600;
+    // The opening's egg hatches while the player is away the first time (tuning.start.firstEggHatchMinutes).
+    if (this.state.quickEggs > 0) { this.state.quickEggs--; hatchSeconds = ((this.t.start || {}).firstEggHatchMinutes ?? 45) * 60; }
+    const n = { id: this.rng.uuid(), eggID, tile: { ...tile }, startedAt: now, hatchSeconds, glimmer: false };
     this.state.nests.push(n);
     this.bump('nest');
     return n;
@@ -1861,6 +1908,7 @@ export class Game {
   creatureAt(t) { return this.state.placements.find((p) => p.removedAt == null && sameTile(p.tile, t)) || null; }
   spawnAt(t) { return this.state.spawns.find((s) => sameTile(s.tile, t)) || null; }
   seedAt(t) { return this.state.plantedSeeds.find((s) => sameTile(s.tile, t)) || null; }
+  sceneryAt(t) { return (this.state.scenery || []).find((d) => sameTile(d.tile, t)) || null; }
   decorAt(t) { return this.state.decor.placed.find((d) => sameTile(d.tile, t)) || null; }
   /** Every occupied tile ("x,y"), built once so whole-map scans don't search lists per tile. */
   occupied() {
@@ -1872,10 +1920,11 @@ export class Game {
     for (const x of s.visitors || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of (s.decor && s.decor.placed) || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.nests || []) out.add(x.tile.x + ',' + x.tile.y);
+    for (const x of s.scenery || []) out.add(x.tile.x + ',' + x.tile.y);
     return out;
   }
 
-  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t) && !this.nestAt(t); }
+  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t) && !this.nestAt(t) && !this.sceneryAt(t); }
   seedProgress(seed, now) { return Math.min(1, Math.max(0, (now - seed.plantedAt) / (Math.max(1, seed.growSeconds) * 1000))); }
 
   // ---- creatures
@@ -1930,7 +1979,7 @@ export class Game {
       c.contributions = contributions;
       c.radius = Math.round(((def.radius ?? 2) + (c.isGlimmer ? roll.glimmerRadiusBonus ?? 0 : 0)) * 10) / 10;
       c.rampHours = def.rampHours ?? c.rampHours;
-      for (const p of s.placements) if (p.creatureID === c.id) { p.contributions = { ...contributions }; p.radius = c.radius; }
+      for (const p of s.placements) if (p.creatureID === c.id) { p.contributions = { ...contributions }; p.radius = c.radius; if (p.removedAt == null && c.rampHours) p.rampSeconds = c.rampHours * 3600; }
     }
     s.balanceVersion = version;
     this.statCache = null;
@@ -2102,8 +2151,9 @@ export class Game {
         : [{ item: def.id, count: 1 }];
       if (def.category === 'mushroom') {
         // The starter's guaranteed creature comes straight away; other finds are eggs (tuning.creatureFinds).
-        const gc = spawn.forcedCreature && this.guaranteedCreature('mushroom', def.id, spawn.forcedCreature.rarity, now);
-        const c = gc ? { creature: gc } : this.findCreature('mushroom', def.id, spawn.tile, stats, now);
+        const gc = spawn.forcedCreature && !this.eggMode && this.guaranteedCreature('mushroom', def.id, spawn.forcedCreature.rarity, now);
+        const c = spawn.forcedCreature && this.eggMode ? this.starterEgg('fungling', spawn.forcedCreature.rarity)
+          : gc ? { creature: gc } : this.findCreature('mushroom', def.id, spawn.tile, stats, now);
         if (c) pending.push(c);
       }
       // Verdure: plants on lush tiles drop extra seeds.
@@ -2251,6 +2301,7 @@ export class Game {
     let gi = this.state.geodes.findIndex((g) => g.itemID === itemID && g.forcedCreature);
     if (gi < 0) gi = this.state.geodes.findIndex((g) => g.itemID === itemID);
     const found = gi >= 0 ? this.state.geodes.splice(gi, 1)[0] : null;
+    if (found && found.forcedCreature && this.eggMode) return this.grant([this.starterEgg('geodeCritter', found.forcedCreature.rarity)]);
     if (found && found.forcedCreature) return this.crackGuaranteed(found, now, opts.family);
     const tile = found ? found.foundTile : null;
     const c = this.findCreature('geode', itemID, tile, found ? found.foundStats : {}, now);
@@ -2467,6 +2518,7 @@ export class Game {
 
   /** Compost `count` of a spare item for points. */
   compost(itemID, count = 1) {
+    if (this.offeringsCfg.compostEnabled === false) throw new GameError('The compost heap is closed for now.');
     const v = this.compostValue(itemID);
     if (!v) throw new GameError("That can't be composted.");
     const n = Math.min(count, this.state.inventory[itemID] || 0);
@@ -2527,7 +2579,7 @@ export class Game {
     const def = this.decorDef(d.decorID);
     const n = (def && def.colors && def.colors.length) || 1;
     if (n < 2) throw new GameError('That only comes in one colour.');
-    this.spendCompost(this.offeringsCfg.recolorCost ?? 0);
+    if (this.offeringsCfg.compostEnabled !== false) this.spendCompost(this.offeringsCfg.recolorCost ?? 0);
     d.color = ((d.color || 0) + 1) % n;
     return d;
   }
@@ -2679,7 +2731,12 @@ export class Content {
     this.items = Object.fromEntries(bundle.items.map((i) => [i.id, i]));
     this.loot = bundle.loot;
     this.tileRules = bundle.tileRules;
-    this.spawnableItems = bundle.items.filter((i) => i.spawn);
+    // Seed-only garden flowers never spawn wild.
+    this.spawnableItems = bundle.items.filter((i) => i.spawn && !i.spawn.seedOnly);
+    // Gems and geode materials are kept to trade (tuning.gems.soilBoost false): their soil-boost use is set aside.
+    if (bundle.tuning.gems && bundle.tuning.gems.soilBoost === false) {
+      for (const i of bundle.items) if (i.use && i.use.type === 'soilBoost') { i.tradeOnly = true; delete i.use; }
+    }
     this.landmarks = bundle.landmarks || [];
     this.story = bundle.story || {};
     this.tasks = bundle.tasks || [];

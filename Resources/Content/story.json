@@ -47,12 +47,12 @@
     "lockedSlot": "Day {day}",
     "taskDone": "Task complete: {task}. Tap Tasks to claim your reward.",
     "tasksIntro": "New: Tasks! Little goals to get your forest going, each with a reward.",
-    "welcome": "Welcome to your clearing. A few things are waiting by the old log, and one of them has a creature inside.",
+    "welcome": "A quiet grotto around an old log. Things have grown up here while no one was looking.",
     "offeringsIntro": "The old log remembers what this forest used to hold. Bring it what it asks for, and it gives something back.",
     "firstDelivery": "The old log creaks happily. Come back as the forest grows: it will ask for new things.",
     "compostIntro": "Spare finds can go on the compost heap. Compost buys small things: recolouring decor and simple props.",
     "firstEggTitle": "An egg!",
-    "firstEgg": "Creatures come as eggs now. Put it in a nest from your Bag: what hatches depends on the ground you nest it on, so try different terrain.",
+    "firstEgg": "An egg. It feels warm.",
     "firstHatch": "It hatched! Nest eggs on other kinds of ground to meet other creatures."
   },
   "guide": {
@@ -92,6 +92,7 @@
     "strong": ", only where it is strong",
     "night": ", at night",
     "day": ", by day",
-    "rain": ", in the rain"
+    "rain": ", in the rain",
+    "seed": "grows from Mystery Seeds"
   }
 }

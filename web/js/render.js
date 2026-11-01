@@ -252,6 +252,8 @@ export class ForestView {
       if (!def) continue;
       objs.push({ sprite: def.sprite, ...at(l.tile), tile: l.tile, kind: 'landmark', key: l.id, phase: 0 });
     }
+    // The opening grotto's scenery (mossy rocks, ferns) along the clearing's edge.
+    for (const d of s.scenery || []) objs.push({ sprite: d.sprite, ...at(d.tile), tile: d.tile, kind: 'scenery', key: 'sc' + d.tile.x + ',' + d.tile.y, flip: d.flip, phase: 0, still: true });
     // Nests: the nest, with its egg on top (it wobbles once it's ready to hatch).
     for (const n of s.nests || []) {
       const egg = this.app.content.items[n.eggID];

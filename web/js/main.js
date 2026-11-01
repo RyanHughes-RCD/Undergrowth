@@ -206,7 +206,7 @@ class App {
     const egg = results.find((r) => r.item && this.content.items[r.item]?.egg);
     if (egg && !this.game.state.milestones.firstEgg) {
       this.game.state.milestones.firstEgg = true;
-      this.ui.celebrate(this.ui.story('messages.firstEggTitle'), this.ui.story('messages.firstEgg'));
+      this.ui.toast(this.ui.story('messages.firstEgg'), this.content.items[egg.item]?.sprite);
     }
   }
 

@@ -1,11 +1,11 @@
 {
   "_about": "Creature balance. tools/balance_creatures.py writes these into the spawn spreadsheet (Stat 1/2, bonuses, radius, ramp), then tools/import_spawn_table.py builds the content. Bonuses are the maximum at the creature's own tile; each creature rolls rollRange of that (tuning.json creatureRoll.bonusRange) and influence falls off with distance (smoothstep, reach = radius + 1). Intensity bands: Low 6, Moderate 16, Moderate+ 26, Medium 36, Medium+ 46, High 56, High+ 66, Very High 76, Maximum 86 (cap 100).",
   "rarity": {
-    "common":    { "primary": 24, "secondary": 0,  "radius": 2,   "rampHours": 12, "_note": "One focused stat: Moderate at its tile, Low around it. Combine two to reach Medium." },
-    "uncommon":  { "primary": 34, "secondary": 12, "radius": 3.5, "rampHours": 18, "_note": "Stronger specialists; some add a real second stat." },
-    "rare":      { "primary": 46, "secondary": 24, "radius": 5,   "rampHours": 24, "_note": "Medium primary, Moderate secondary: gateways to combos." },
-    "veryRare":  { "primary": 60, "secondary": 36, "radius": 6.5, "rampHours": 36, "_note": "Medium+ primary, strong cross-family pairs." },
-    "legendary": { "primary": 80, "secondary": 50, "third": 24, "radius": 8, "rampHours": 48, "_note": "High+ at its tile, three stats. Radius cut from 10 to 8: power from strength, not coverage." }
+    "common":    { "primary": 24, "secondary": 0,  "radius": 2,   "rampHours": 1, "_note": "One focused stat: Moderate at its tile, Low around it. Combine two to reach Medium." },
+    "uncommon":  { "primary": 34, "secondary": 12, "radius": 3.5, "rampHours": 1.5, "_note": "Stronger specialists; some add a real second stat." },
+    "rare":      { "primary": 46, "secondary": 24, "radius": 5,   "rampHours": 2, "_note": "Medium primary, Moderate secondary: gateways to combos." },
+    "veryRare":  { "primary": 60, "secondary": 36, "radius": 6.5, "rampHours": 3, "_note": "Medium+ primary, strong cross-family pairs." },
+    "legendary": { "primary": 80, "secondary": 50, "third": 24, "radius": 8, "rampHours": 4, "_note": "High+ at its tile, three stats. Radius cut from 10 to 8: power from strength, not coverage." }
   },
   "variants": {
     "standard": { "primary": 1,    "secondary": 1,   "radius": 0 },

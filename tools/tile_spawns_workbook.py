@@ -73,7 +73,8 @@ def load_items():
     items = raw if isinstance(raw, list) else list(raw.values()) if not isinstance(raw, dict) or "items" not in raw else raw["items"]
     if isinstance(items, dict):
         items = list(items.values())
-    return [it for it in items if it.get("spawn")]
+    # Seed flowers (spawn.seedOnly) never spawn wild, so they are not part of the wild-spawn views.
+    return [it for it in items if it.get("spawn") and not it["spawn"].get("seedOnly")]
 
 
 def conditions(it):
@@ -317,7 +318,8 @@ class Export:
         heads = ["Name", "Kind"] + [f"{CAP(s)} min" for s in STATS] + ["Home finds (comma-separated names)", "Home × at night", "Home × by day", "Home × in rain", "Mushrooms ×", "Plants ×", "Geodes ×", "Spawn pull ×", "Notes"]
         header_row(ws, 4, heads, widths=[18, 8] + [8] * 6 + [60, 9, 9, 9, 10, 9, 9, 9, 60])
         ws.row_dimensions[4].height = 30
-        names_by_id = {it["id"]: it["name"] for it in self.items}
+        all_items = load_json(os.path.join(CONTENT, "items.json"))
+        names_by_id = {it["id"]: it["name"] for it in (all_items if isinstance(all_items, list) else all_items.values())}
         terrain_text = {d["id"]: d.get("text", "") for d in load_json(os.path.join(CONTENT, "terrain.json"))}
         r = 5
         self.terrains = []
@@ -671,7 +673,9 @@ def do_import(path):
     changes = []
     t = load_json(TUNING)
     items = load_items()
-    by_name = {it["name"]: it for it in items}
+    # Home finds can be seed flowers too (their terrain pull applies when a seed picks its flower).
+    all_items = load_json(os.path.join(CONTENT, "items.json"))
+    by_name = {it["name"]: it for it in (all_items if isinstance(all_items, list) else all_items.values())}
 
     # --- Items → master spreadsheet
     ws = wb["Items"]

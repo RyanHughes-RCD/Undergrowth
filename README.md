@@ -41,9 +41,21 @@ Then open <http://localhost:8000>.
 ## Opening and early progression (web version)
 
 - **New forest:** a 7×14 clearing in the middle of the 40×56 forest, with all stats at 0. The Old Log sits at its centre (`Content/landmarks.json`). Only spawns with no stat requirements can appear, straight from the normal spawn rules.
-- **Start (no guided tutorial):** you arrive in the clearing with a few finds already waiting around the old log: 2 Brown Button Caps, a Red Toadstool, 2 Clovers and a Pebble Geode (`start.spawns` in `tuning.json`). They stay until picked.
-  - One random mushroom or geode among them is guaranteed to hold a creature (`start.guaranteedCreatureRarity`, Common).
+- **The opening (no guided tutorial, no instructions):** the clearing is a little grotto: mossy rocks, ferns and roots along its edge (`start.scenery`, saved as `scenery`, visual only).
+  - Waiting around the old log (`start.spawns`, kept until picked): 2 Brown Button Caps, a Red Toadstool, a Clover and a Sorrel (each always drops a Mystery Seed, `forced`), and 2 Pebble Geodes.
+  - One geode (`start.guaranteedIn`) holds an egg of a random family (`start.eggFamily`). The first time it's nested it hatches in `start.firstEggHatchMinutes` (45), so it's ready when the player comes back.
+  - The first session is to crack the geodes, plant the seeds, nest the egg, look at the Old Log and leave. The second is to find flowers growing, hatch the creature and place it. Its ground changes within the hour, since creatures now reach full strength in 1h (common) to 4h (legendary) instead of 12–48h (`design/creature_balance.json` rampHours; `creatureRoll.balanceVersion` 3 updates owned creatures). The third session finds new things growing around it.
+  - The welcome line is just atmosphere. The first egg only gets a quiet "It feels warm." The Bag's Plant and Nest buttons do the rest.
   - Forests saved mid-tutorial just carry on with the tutorial marked done. The old guided tutorial is still in the code, off (`tutorial.enabled: false`).
+- **Seeds grow flowers, never weeds:** Mystery Seeds only grow **seed flowers**, items whose spreadsheet row says "Grows from a Mystery Seed" (`spawn.seedOnly`). These never spawn wild:
+  - Wildflower, Violet, Bluebell, Foxglove, Trillium, Moss Rose, Stonecrop, Wild Strawberry, Sunpetal, Glowbloom, Moonflower, Crystal Thistle, Cave Lily, Ghost Orchid and Dandelion.
+  - Six garden flowers: Primrose, Forget-me-not, Poppy, Snowdrop, Columbine and Bleeding Heart. Each leans toward one stat.
+
+  Common and uncommon seed flowers grow anywhere (`seeds.softNeedsUpTo`): their stat needs only make them likelier on matching ground. Rarer ones need their terrain, and the terrain pull (rarity weighting, named terrains' home finds) favours them strongly on the right ground.
+  - In simulation: on plain ground 15 different flowers, 3–12% each. On Glow + Bloom ground, Moonflower and Glowbloom 76%. On Damp + Bloom ground, Violet and Trillium 58%.
+  - Wild plants are the greenery: Clover, Sorrel, Fern, Moss Tuft, Pebblewort, Hollow Root, Water Reed, Pitcher Plant, Deeproot Lantern and the legendary Heartwood Sapling. They keep spawning and dropping seeds. The tile spawn workbook's views show wild spawns only.
+- **Gems are trade goods:** gems and geode materials are kept to trade at the Old Log rather than crushed into tiles (`gems.soilBoost: false`; their old uses stay in the data). The "Crush a gem" task became "Trade with the Old Log".
+- **Compost is paused** (`offerings.compostEnabled: false`): no compost buttons, compost heap or visitor swaps. Recolouring decor is free meanwhile.
 - **Creatures:** there's no cap on how many are out in the forest, and no slot bar. The **Creatures** tab lists who's out and who's resting.
 - **Blend celebration:** fires once, the first time two creatures each give a tile `blend.minEach` or more.
 - **Forest expansion:** the clearing grows by `ringTiles` (2) tiles on each side when the `expansion` conditions are met, at most every `minHoursBetween` hours. Newly revealed tiles fade influence in over `revealRampSeconds`, and nothing reaches past the treeline.

@@ -218,6 +218,9 @@ def main():
             spawn["placement"] = str(pv).strip().lower() if pv and str(pv).strip().lower() in ("surface", "buried", "auto") else "auto"
             if notes and re.search(r"unpicked for a day", notes, re.I):
                 spawn["lifetimeHours"] = 24
+            # "Grows from a Mystery Seed": a garden flower that only ever comes from seeds, never wild.
+            if "mystery seed" in str(how).lower():
+                spawn["seedOnly"] = True
             it["spawn"] = spawn
         if category == "mushroom":
             it["collectVerb"] = "Pick"

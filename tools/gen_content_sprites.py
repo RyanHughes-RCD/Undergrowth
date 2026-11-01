@@ -233,6 +233,12 @@ PLANTS = {
     "water-reed": ("reeds", "#5ea347", "#7a4a24", "#b0804a"),
     "heartwood-sapling": ("sapling", "#7a4a2a", "#5ea347", "#ffd84a"),
     "hollow-root": ("roots", "#5a9a3a", "#8a5a34", "#c8a070"),
+    "primrose": ("primrose", "#5fbf4a", "#f8e070", "#e8a030"),
+    "forget-me-not": ("forgetmenot", "#4f9440", "#6a9cff", "#ffe060"),
+    "poppy": ("poppy", "#4f8a2c", "#e8302c", "#1b1420"),
+    "snowdrop": ("snowdrop", "#5fa04a", "#f4f8ff", "#9ad87a"),
+    "columbine": ("columbine", "#4f8a2c", "#9a5ad8", "#f8e8a0"),
+    "bleeding-heart": ("bleedingheart", "#5a9a3a", "#ff6aa8", "#ffffff"),
 }
 PLANT_GLOW = {"glowbloom", "moonflower", "deeproot-lantern", "crystal-thistle"}
 
@@ -326,6 +332,55 @@ def draw_plant(shape, leaf, petal, centre):
             c.ellipse(6, 13, 3, 1, 3)
             c.ellipse(6, 6, 2.5, 1.6, 5); c.ellipse(11, 6, 2.5, 1.6, 5); c.ellipse(8.5, 4, 1.6, 2, 5)
             c.set(8, 7, 7)
+        elif shape == "primrose":                       # a low rosette of leaves with a few 5-petal pale flowers
+            for (x, y) in ((4, 13), (12, 13), (8, 14), (6, 12), (10, 12)):
+                c.ellipse(x, y, 2, 1, 3); c.set(x - 1, y - 1, 4)
+            for (cx, cy) in ((5, 8), (11, 9), (8, 6)):
+                for (dx, dy) in ((0, -1), (-1, 0), (1, 0), (-1, 1), (1, 1)):
+                    c.set(cx + dx, cy + dy, 5)
+                c.set(cx, cy - 1, 6); c.set(cx, cy, 7)
+                c.line(cx, cy + 2, cx, 12, 2)
+        elif shape == "forgetmenot":                    # many tiny blue flowers with yellow eyes on fine stems
+            for (x, top) in ((4, 7), (7, 4), (10, 6), (12, 9), (6, 10)):
+                c.line(x, 14, x, top + 1, 2)
+            for (cx, cy) in ((4, 6), (7, 3), (10, 5), (12, 8), (6, 9), (9, 8), (3, 9)):
+                for (dx, dy) in ((0, -1), (-1, 0), (1, 0), (0, 1)):
+                    c.set(cx + dx, cy + dy, 5)
+                c.set(cx, cy, 7)
+            c.ellipse(8, 14, 5, 1, 3)
+        elif shape == "poppy":                           # one big red cup on a tall hairy stem, plus a bud
+            c.line(8, 14, 8, 6, 2); c.line(11, 14, 12, 9, 2)
+            c.ellipse(8, 4.5, 4, 3, 5)
+            c.ellipse(7, 3.5, 2, 1.3, 6)
+            c.set(8, 5, 7); c.set(7, 5, 7); c.set(9, 5, 7); c.set(8, 6, 7)
+            c.ellipse(12, 8, 1.2, 1.6, 3); c.set(12, 7, 5)
+            c.ellipse(5, 12, 2.2, 1, 3); c.ellipse(11, 13, 2, 1, 3)
+        elif shape == "snowdrop":                        # arching stems with nodding white bells
+            for (x0, h, d) in ((6, 9, 1), (10, 8, -1), (8, 10, 1)):
+                c.line(x0, 14, x0, 14 - h, 2)
+                tip = (x0 + d * 2, 14 - h + 1)
+                c.line(x0, 14 - h, tip[0], tip[1], 2)
+                c.ellipse(tip[0], tip[1] + 2, 1.4, 2, 5)
+                c.set(tip[0], tip[1] + 3, 7); c.set(tip[0] - 1, tip[1] + 1, 6)
+            for x in (5, 7, 9, 11):
+                c.line(x, 14, x + (1 if x < 8 else -1), 10, 3)
+        elif shape == "columbine":                       # spurred violet flowers with pale centres on branching stems
+            c.line(8, 14, 8, 5, 2); c.line(8, 9, 4, 6, 2); c.line(8, 8, 12, 5, 2)
+            for (cx, cy) in ((4, 5), (12, 4), (8, 3)):
+                c.ellipse(cx, cy, 2, 1.6, 5)
+                c.set(cx - 2, cy - 2, 5); c.set(cx + 2, cy - 2, 5)
+                c.set(cx, cy, 7); c.set(cx, cy + 1, 7)
+            c.ellipse(6, 12, 2, 1, 3); c.ellipse(10, 12, 2, 1, 3); c.set(9, 11, 4)
+        elif shape == "bleedingheart":                   # an arching stem hung with little pink hearts
+            for x in range(3, 14):
+                y = 4 + int(((x - 8) ** 2) * 0.12)
+                c.set(x, y, 2)
+            c.line(3, 6, 3, 14, 2)
+            for i, x in enumerate((5, 7, 9, 11, 13)):
+                y = 5 + int(((x - 8) ** 2) * 0.12) + 1
+                c.set(x - 1, y, 5); c.set(x, y, 5); c.set(x, y + 1, 5); c.set(x - 1, y + 1, 5); c.set(x - 1, y + 2, 6 if i % 2 else 5)
+                c.set(x, y + 2, 7 if i == 2 else 5)
+            c.ellipse(6, 13, 2.5, 1, 3); c.ellipse(11, 13, 2.5, 1, 3); c.set(5, 12, 4)
         elif shape == "roots":                          # hollow root: a knot of bare roots with a few leaves
             for (x0, y0, x1, y1) in ((8, 9, 3, 14), (8, 9, 13, 14), (8, 9, 6, 15), (8, 9, 11, 15)):
                 c.line(x0, y0, x1, y1, 5)

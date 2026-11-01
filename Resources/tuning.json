@@ -27,7 +27,7 @@
   },
   "creatureRoll": {
     "_about": "balanceVersion: bump after rebalancing (design/creature_balance.json); owned creatures are re-rolled to the new species values on load, keeping name, glimmer and placement.",
-    "balanceVersion": 2,
+    "balanceVersion": 3,
     "bonusRange": [
       0.8,
       1.0
@@ -82,10 +82,14 @@
     }
   },
   "seeds": {
-    "growSeconds": [
-      3600,
-      10800
-    ]
+    "growSeconds": [3600, 10800],
+    "_about": "Mystery Seeds only grow seed flowers (items with spawn.seedOnly, from the spawn spreadsheet). Up to softNeedsUpTo rarity they grow anywhere: unmet stat needs just weigh them by unmetFactor; met needs get the usual terrain pull. Rarer seed flowers need their terrain.",
+    "softNeedsUpTo": "uncommon",
+    "unmetFactor": 1
+  },
+  "gems": {
+    "_about": "soilBoost false: gems and geode materials are kept to trade at the Old Log, not crushed into tiles (their uses stay in the data for later).",
+    "soilBoost": false
   },
   "rarityWeights": {
     "common": 60,
@@ -192,7 +196,8 @@
     "_about": "The Old Log board (Resources/Content/requests.json, cosmetics.json from design/Undergrowth_Offerings.xlsx). Compost: spare items of these categories turn into points by rarity; compost only buys recolours, visitor rerolls and cheap decor.",
     "compostCategories": ["mushroom", "plant", "geode", "gem", "seed"],
     "compost": {"common": 1, "uncommon": 3, "rare": 8, "veryRare": 20, "legendary": 50},
-    "recolorCost": 4
+    "recolorCost": 4,
+    "compostEnabled": false
   },
   "creatureFinds": "egg",
   "eggs": {
@@ -270,15 +275,20 @@
     "startHeight": 14
   },
   "start": {
-    "_about": "A new forest: no guided tutorial. These wait near the old log; one of the mushrooms/geodes is guaranteed to hold a creature.",
+    "_about": "A new forest opens on a little grotto around the old log: scenery along its edge, and finds waiting (kept until picked). Plants with 'forced' always drop those items (seeds). One geode holds the guaranteed creature: an egg (family eggFamily, 'random' = any) whose first nesting hatches in firstEggHatchMinutes.",
     "spawns": [
-      { "item": "mushroom.brown-button-cap", "count": 2 },
-      { "item": "mushroom.red-toadstool", "count": 1 },
-      { "item": "plant.clover", "count": 2 },
-      { "item": "geode.pebble-geode", "count": 1 }
+      {"item": "mushroom.brown-button-cap", "count": 2},
+      {"item": "mushroom.red-toadstool", "count": 1},
+      {"item": "plant.clover", "count": 1, "forced": [{"item": "seed.mystery-seed", "count": 1}]},
+      {"item": "plant.sorrel", "count": 1, "forced": [{"item": "seed.mystery-seed", "count": 1}]},
+      {"item": "geode.pebble-geode", "count": 2}
     ],
     "radius": 3,
-    "guaranteedCreatureRarity": "common"
+    "guaranteedIn": ["geode"],
+    "guaranteedCreatureRarity": "common",
+    "eggFamily": "random",
+    "firstEggHatchMinutes": 45,
+    "scenery": {"count": 10, "edgeDepth": 1, "sprites": ["deco.boulder.moss", "deco.mossrock.a", "deco.fern.a", "deco.fern.a", "deco.bush.a", "deco.lichen.a", "deco.roots.a"]}
   },
   "tutorial": {
     "enabled": false,
