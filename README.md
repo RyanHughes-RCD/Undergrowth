@@ -40,7 +40,7 @@ Then open <http://localhost:8000>.
 
 ## Opening and early progression (web version)
 
-- **New forest:** a 7×14 clearing in the middle of the 40×56 forest, with all stats at 0. The Old Log sits at its centre (`Content/landmarks.json`). Only spawns with no stat requirements can appear, straight from the normal spawn rules.
+- **New forest:** a 7×14 clearing in the middle of the 40×56 forest, with all stats at 0. The Old Log, a mossy stump two tiles wide, sits at its centre (`Content/landmarks.json`, `footprint: [2, 1]`). It's solid: creatures walk around it rather than through it (`solid: true`). Its sprite is made from `design/stump_source.jpg` by `tools/gen_stump.py`. Only spawns with no stat requirements can appear, straight from the normal spawn rules.
 - **The opening (no guided tutorial, no instructions):** the clearing is a little grotto: mossy rocks, ferns and roots along its edge (`start.scenery`, saved as `scenery`, visual only).
   - Waiting around the old log (`start.spawns`, kept until picked): 2 Brown Button Caps, a Red Toadstool, a Clover and a Sorrel (each always drops a Mystery Seed, `forced`), and 2 Pebble Geodes.
   - One geode (`start.guaranteedIn`) holds an egg of a random family (`start.eggFamily`). The first time it's nested it hatches in `start.firstEggHatchMinutes` (45), so it's ready when the player comes back.
@@ -54,12 +54,12 @@ Then open <http://localhost:8000>.
   Common and uncommon seed flowers grow anywhere (`seeds.softNeedsUpTo`): their stat needs only make them likelier on matching ground. Rarer ones need their terrain, and the terrain pull (rarity weighting, named terrains' home finds) favours them strongly on the right ground.
   - In simulation: on plain ground 15 different flowers, 3–12% each. On Glow + Bloom ground, Moonflower and Glowbloom 76%. On Damp + Bloom ground, Violet and Trillium 58%.
   - Wild plants are the greenery: Clover, Sorrel, Fern, Moss Tuft, Pebblewort, Hollow Root, Water Reed, Pitcher Plant, Deeproot Lantern and the legendary Heartwood Sapling. They keep spawning and dropping seeds. The tile spawn workbook's views show wild spawns only.
-- **Gems are trade goods:** gems and geode materials are kept to trade at the Old Log rather than crushed into tiles (`gems.soilBoost: false`; their old uses stay in the data). The "Crush a gem" task became "Trade with the Old Log".
+- **Gems are trade goods:** gems and geode materials are kept to trade in the Store rather than crushed into tiles (`gems.soilBoost: false`; their old uses stay in the data). The "Crush a gem" task became "Make a trade at the Store".
 - **Compost is paused** (`offerings.compostEnabled: false`): no compost buttons, compost heap or visitor swaps. Recolouring decor is free meanwhile.
 - **Creatures:** there's no cap on how many are out in the forest, and no slot bar. The **Creatures** tab lists who's out and who's resting.
 - **Blend celebration:** fires once, the first time two creatures each give a tile `blend.minEach` or more.
 - **Forest expansion is bought:**
-  - The clearing only grows when you buy **Room to grow** at the Old Log. It's an upgrade line of 10 tiers, chained in the Offerings spreadsheet (`expand-1`…`expand-10`), with prices rising from commons to rare finds. Each tier pushes the treeline back `ringTiles` (2) on each side.
+  - The clearing only grows when you buy **Room to grow** in the Store (Upgrades tab). It's an upgrade line of 10 tiers, chained in the Offerings spreadsheet (`expand-1`…`expand-10`), with prices rising from commons to rare finds. Each tier pushes the treeline back `ringTiles` (2) on each side.
   - `expansion.automatic: false` turns off the old condition-based growth.
   - Once the whole forest is open, the next tier says so.
   - Newly revealed tiles fade influence in over `revealRampSeconds`, and nothing reaches past the treeline.
@@ -344,9 +344,18 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
   - **Each page:** what makes the terrain appear (as intensities), what can spawn there, the spawn bonuses (named as bonuses, at named intensities), other properties, and the selected tile's current intensity against what's needed. All of it is computed from `tuning.json`.
   - **Developer mode** can open every entry (marked as a developer view) without marking it found.
 
-## Offerings: the Old Log board (web)
+## The Store (web)
 
-Mushrooms, plants and geodes now pay for things. Tap the **Old Log** to open its board.
+Mushrooms, plants and geodes now pay for things. The **Store** tab in the bottom bar lists everything you can trade for, in four tabs:
+
+- **Decor:** listings that give a decoration (reward `cosmetic`), plus the Compost heap when compost is on.
+- **Trades:** repeatable listings for seeds, soil packs and other things to use (kind `shop`, not eggs).
+- **Eggs:** anything that gives an egg: the repeatable common eggs, then the one-off special eggs.
+- **Upgrades:** upgrade lines (Quick Roots, Warm Nest, Keen Eye, Wide Spread, Room to grow) and unlocks (the trowel, extra nests).
+
+Each tab, and the Store button, shows how many one-off listings you could get right now. Repeatable trades aren't counted. The tab a listing goes in comes from its reward (`storeTabOf` in `web/js/ui.js`), so new spreadsheet rows sort themselves.
+
+Tapping the **Old Log** now shows only today's visitors (see Visitors below), with a button to the Store.
 
 - **Requests** (`Resources/Content/requests.json`) each ask for specific items, usually from two or three kinds of ground. Items are recipes for terrain (their stat minimums), so a request means building several terrains.
   - Each card shows the items with have/need and the reward, plus a Deliver button.
@@ -368,7 +377,7 @@ Mushrooms, plants and geodes now pay for things. Tap the **Old Log** to open its
 - **Compost** is a soft currency:
   - Spare items of `offerings.compostCategories` turn into points by rarity (`offerings.compost`), using the "+N" button in the Bag.
   - Compost only buys recolours, cheap decor (props with a `compost` price, on the board's Compost heap) and, in phase 3, visitor rerolls. It never buys unlocks or eggs.
-- **Creature slots:** the game has no creature cap (an earlier decision). `tuning.creatureCap.enabled` (false by default) turns on a cap of the day-based slots (`slotUnlocks`) plus slots bought at the Old Log. The two slot requests are in the spreadsheet with Status "Off" until you turn the cap on.
+- **Creature slots:** the game has no creature cap (an earlier decision). `tuning.creatureCap.enabled` (false by default) turns on a cap of the day-based slots (`slotUnlocks`) plus slots bought in the Store. The two slot requests are in the spreadsheet with Status "Off" until you turn the cap on.
 - **Timing:** with the current spawn rates, the first requests take a few hours of forest time with the right one or two creatures. Mid-game ones need items with a stat minimum of 20 or more, which means stacking creatures or rarer ones. Late ones need rare finds.
 - **Spreadsheet:** `design/Undergrowth_Offerings.xlsx` has these sheets:
   - **Requests:** status, id, name, kind, up to four items with counts, reward, gating, text, art notes.
@@ -383,9 +392,9 @@ Mushrooms, plants and geodes now pay for things. Tap the **Old Log** to open its
   - `tools/gen_offerings_sprites.py` draws the placeholder decor and the board icon.
 - **Save** (older saves get empty defaults): `offerings.delivered`, `unlocks` (slots, nests, expansions, trowel), `decor` (owned, placed with colour) `compost` and `nests`.
 
-### The Old Log shop (web)
+### Trades and upgrades (web)
 
-The board's **Shop** and **Upgrades** sections sell things for bundles of specific items (as with requests), paid from what you've collected, gems included.
+The Store's **Trades**, **Eggs** and **Upgrades** tabs sell things for bundles of specific items (as with requests), paid from what you've collected, gems included.
 
 - **Shop** (kind `shop`): listings you can buy again and again (`offerings.bought` counts them):
   - Six **soil packs**: Dew moss, Glow dust, Petal mulch, Leaf mould, River grit and Loose loam. Each adds 14 of its stat to a tile for 24h (`Resources/Content/supplies.json`, from the spreadsheet's **Supplies** sheet), spread from the Bag.
@@ -425,7 +434,7 @@ The board's **Shop** and **Upgrades** sections sell things for bundles of specif
 - **Eggs are Bag items** (category `egg`, ids like `egg.fungling.common`, built from `Resources/Content/eggs.json`).
 - **Nesting:**
   - Tap **Nest** on an egg in the Bag, then tap an open tile. A card previews what it could hatch into on that ground, with rough odds (silhouettes until you've met a species); "Nest it here" confirms.
-  - Nests are limited to `eggs.baseNests` (1) plus nests earned at the Old Log.
+  - Nests are limited to `eggs.baseNests` (1) plus nests earned in the Store.
   - Hatch time comes from the egg's tier (common 6h up to legendary 24h) and runs on timestamps, so it carries on while the app is closed.
   - Tap a nest to see the time left and the current odds.
 - **Hatching** picks the species at hatch time, from the nest tile's stats right then:

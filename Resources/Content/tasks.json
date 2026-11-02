@@ -4,7 +4,7 @@
   {"id": "harvest-seed", "text": "Harvest a seed you planted", "counter": "harvest", "target": 1, "reward": [{"item": "gem.quartz", "count": 1}]},
   {"id": "dig-geodes", "text": "Dig up 3 geodes", "counter": "dig", "target": 3, "reward": [{"item": "seed.mystery-seed", "count": 2}]},
   {"id": "crack-geodes", "text": "Crack 3 geodes", "counter": "crack", "target": 3, "reward": [{"item": "gem.agate", "count": 1}]},
-  {"id": "first-trade", "text": "Trade with the Old Log", "counter": "deliver", "target": 1, "reward": [{"item": "geode.mossy-geode", "count": 1}]},
+  {"id": "first-trade", "text": "Make a trade at the Store", "counter": "deliver", "target": 1, "reward": [{"item": "geode.mossy-geode", "count": 1}]},
   {"id": "guide-10", "text": "Discover 10 Field Guide entries", "counter": "guide", "target": 10, "reward": [{"item": "gem.jasper", "count": 1}]},
   {"id": "second-creature", "text": "Find a second creature", "counter": "creatures", "target": 2, "reward": [{"item": "seed.mystery-seed", "count": 3}]},
   {"id": "plant-5", "text": "Plant 5 seeds", "counter": "plant", "target": 5, "reward": [{"item": "gem.malachite", "count": 1}]},

@@ -9,6 +9,21 @@ export const TS = 16;
 const FOOT = 5; // objects stand a little below the tile centre
 export const centre = (x, y) => ({ x: x * TS + TS / 2, y: y * TS + TS / 2 });
 export const tileAt = (wx, wy) => ({ x: Math.floor(wx / TS), y: Math.floor(wy / TS) });
+/** How far a solid landmark's no-walk box reaches past its tiles (art px): its sprite overhangs a little. */
+const SOLID_MARGIN = { side: 3, top: 3, bottom: 2 };
+const inBox = (r, x, y, pad = 0) => x > r.x0 - pad && x < r.x1 + pad && y > r.y0 - pad && y < r.y1 + pad;
+
+/** True if the segment (ax, ay)→(bx, by) passes through the inside of box r (Liang–Barsky clip). */
+function segmentHitsBox(r, ax, ay, bx, by) {
+  let t0 = 0, t1 = 1;
+  const dx = bx - ax, dy = by - ay;
+  for (const [p, q] of [[-dx, ax - r.x0], [dx, r.x1 - ax], [-dy, ay - r.y0], [dy, r.y1 - ay]]) {
+    if (p === 0) { if (q <= 0) return false; continue; }
+    const t = q / p;
+    if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+  }
+  return t1 - t0 > 1e-6;
+}
 
 /** 0..1 breathing level for a pulsing overlay: min..1 over `seconds`, offset by `wave` per tile. */
 export function breathe(t, p, x, y) {
@@ -247,10 +262,19 @@ export class ForestView {
       objs.push({ sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: view !== 'hidden' && view !== 'buried', rustle: view === 'hidden', dig: view === 'buried', view, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100,
         flip: !!def.flipInWorld && (hash32(sp.tile.x, sp.tile.y, 3) & 1) === 1 });
     }
+    // Landmarks: a wide one (the Old Log stump, two tiles) is drawn centred across its footprint, and
+    // a solid one is an obstacle creatures walk around (this.solids, in feet coordinates).
+    this.solids = [];
     for (const l of s.landmarks || []) {
       const def = (this.app.content.landmarks || []).find((d) => d.id === l.id);
       if (!def) continue;
-      objs.push({ sprite: def.sprite, ...at(l.tile), tile: l.tile, kind: 'landmark', key: l.id, phase: 0 });
+      const [fw, fh] = g.landmarkFootprint(l);
+      const pos = at({ x: l.tile.x, y: l.tile.y + fh - 1 });
+      objs.push({ sprite: def.sprite, x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: l.tile, kind: 'landmark', key: l.id, phase: 0 });
+      if (def.solid) {
+        const m = SOLID_MARGIN;
+        this.solids.push({ x0: l.tile.x * TS - m.side, x1: (l.tile.x + fw) * TS + m.side, y0: l.tile.y * TS + m.top, y1: (l.tile.y + fh) * TS + m.bottom });
+      }
     }
     // The opening grotto's scenery (mossy rocks, ferns) along the clearing's edge.
     for (const d of s.scenery || []) objs.push({ sprite: d.sprite, ...at(d.tile), tile: d.tile, kind: 'scenery', key: 'sc' + d.tile.x + ',' + d.tile.y, flip: d.flip, phase: 0, still: true });
@@ -519,6 +543,7 @@ export class ForestView {
       // Done: back to ordinary wandering after a short pause, from wherever it is now.
       w.script = null; w.tx = w.x; w.ty = w.y; w.wait = now + 600 + Math.random() * 1400;
     }
+    if (this.blockedAt(w.tx, w.ty)) { w.tx = w.x; w.ty = w.y; }   // its spot is under a solid landmark now
     const dx = w.tx - w.x, dy = w.ty - w.y, d = Math.hypot(dx, dy);
     w.moving = false;
     if (now < w.wait) return w;
@@ -528,7 +553,7 @@ export class ForestView {
       for (let i = 0; i < 8; i++) {
         const a = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * o.roam;
         const nx = home.x + Math.cos(a) * rr, ny = home.y + Math.sin(a) * rr;
-        if (nx > r.x + pad && nx < r.x + r.w - pad && ny > r.y + pad && ny < r.y + r.h - 1) { w.tx = nx; w.ty = ny; break; }
+        if (nx > r.x + pad && nx < r.x + r.w - pad && ny > r.y + pad && ny < r.y + r.h - 1 && !this.blockedAt(nx, ny)) { w.tx = nx; w.ty = ny; break; }
       }
       w.wait = now + 1500 + Math.random() * 4000;
       return w;
@@ -537,10 +562,59 @@ export class ForestView {
     return w;
   }
 
-  /** One movement step toward (tx, ty) at `speed` art px/s; splashes when wading. Returns true on arrival. */
-  moveToward(w, tx, ty, speed, dt, now) {
-    const dx = tx - w.x, dy = ty - w.y, d = Math.hypot(dx, dy);
-    if (d < 0.6) { w.moving = false; return true; }
+  /** True if a creature's feet at (x, y) would be inside a solid landmark (the Old Log stump). */
+  blockedAt(x, y) { return (this.solids || []).some((r) => inBox(r, x, y, 1)); }
+
+  /**
+   * Where to head next on the way to (tx, ty) without walking through a solid landmark: the target
+   * itself when the way is clear, else the corner of the obstacle that makes the shortest detour.
+   * A target inside an obstacle is moved to its nearest edge; a creature caught inside steps out.
+   */
+  steer(w, tx, ty) {
+    for (const r of this.solids || []) {
+      if (inBox(r, w.x, w.y)) {
+        // Step out the nearest side (only happens if something moved under it).
+        const opts = [[r.x0 - 0.5, w.y], [r.x1 + 0.5, w.y], [w.x, r.y0 - 0.5], [w.x, r.y1 + 0.5]];
+        [w.x, w.y] = opts.reduce((a, b) => (Math.hypot(a[0] - w.x, a[1] - w.y) <= Math.hypot(b[0] - w.x, b[1] - w.y) ? a : b));
+      }
+      if (inBox(r, tx, ty)) {
+        const opts = [[r.x0 - 1, ty], [r.x1 + 1, ty], [tx, r.y0 - 1], [tx, r.y1 + 1]];
+        [tx, ty] = opts.reduce((a, b) => (Math.hypot(a[0] - tx, a[1] - ty) <= Math.hypot(b[0] - tx, b[1] - ty) ? a : b));
+      }
+    }
+    for (const r of this.solids || []) {
+      if (!segmentHitsBox(r, w.x, w.y, tx, ty)) continue;
+      // Shortest way round: start, the box's four corners (just outside it) and the target, joined
+      // wherever the straight line misses the box; head for the first corner on that path.
+      const e = 1.5;
+      const pts = [[w.x, w.y], [r.x0 - e, r.y0 - e], [r.x1 + e, r.y0 - e], [r.x1 + e, r.y1 + e], [r.x0 - e, r.y1 + e], [tx, ty]];
+      const n = pts.length, distTo = new Array(n).fill(Infinity), prev = new Array(n).fill(-1), done = new Array(n).fill(false);
+      distTo[0] = 0;
+      for (let k = 0; k < n; k++) {
+        let u = -1;
+        for (let i = 0; i < n; i++) if (!done[i] && (u < 0 || distTo[i] < distTo[u])) u = i;
+        if (u < 0 || distTo[u] === Infinity) break;
+        done[u] = true;
+        for (let v = 0; v < n; v++) {
+          if (done[v] || segmentHitsBox(r, pts[u][0], pts[u][1], pts[v][0], pts[v][1])) continue;
+          if (v > 0 && v < n - 1 && Math.hypot(pts[v][0] - w.x, pts[v][1] - w.y) < 0.3) continue;   // the corner it's standing on
+          const d = distTo[u] + Math.hypot(pts[v][0] - pts[u][0], pts[v][1] - pts[u][1]);
+          if (d < distTo[v]) { distTo[v] = d; prev[v] = u; }
+        }
+      }
+      let hop = n - 1;
+      while (prev[hop] > 0) hop = prev[hop];
+      if (prev[hop] === 0) return { tx, ty, wx: pts[hop][0], wy: pts[hop][1] };
+    }
+    return { tx, ty, wx: tx, wy: ty };
+  }
+
+  /** One movement step toward (tx, ty) at `speed` art px/s, around solid landmarks; splashes when wading. Returns true on arrival. */
+  moveToward(w, tx0, ty0, speed, dt, now) {
+    const { tx, ty, wx, wy } = this.steer(w, tx0, ty0);
+    if (Math.hypot(tx - w.x, ty - w.y) < 0.6) { w.moving = false; return true; }
+    const dx = wx - w.x, dy = wy - w.y, d = Math.hypot(dx, dy);
+    if (d < 0.01) { w.moving = false; return false; }
     const step = Math.min(d, speed * dt);
     w.x += (dx / d) * step; w.y += (dy / d) * step;
     if (Math.abs(dx) > 0.5) w.flip = dx < 0;

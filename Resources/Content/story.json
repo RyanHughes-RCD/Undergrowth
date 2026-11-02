@@ -48,8 +48,8 @@
     "taskDone": "Task complete: {task}. Tap Tasks to claim your reward.",
     "tasksIntro": "New: Tasks! Little goals to get your forest going, each with a reward.",
     "welcome": "A quiet grotto around an old log. Things have grown up here while no one was looking.",
-    "offeringsIntro": "The old log remembers what this forest used to hold. Bring it what it asks for, and it gives something back.",
-    "firstDelivery": "The old log creaks happily. Come back as the forest grows: it will ask for new things.",
+    "offeringsIntro": "Wanderers passing through the forest stop by the old log to rest and trade.",
+    "firstDelivery": "Come back to the Store as the forest grows: new things open as your Field Guide fills.",
     "compostIntro": "Spare finds can go on the compost heap. Compost buys small things: recolouring decor and simple props.",
     "firstEggTitle": "An egg!",
     "firstEgg": "An egg. It feels warm.",
@@ -133,7 +133,7 @@
     "empty": "You have nothing the well would take right now. Mushrooms, plants and gems can be offered.",
     "confirmTitle": "Offer these to the well?",
     "confirmText": "These will be gone for good:",
-    "neededNote": "the Old Log is asking for some of these",
+    "neededNote": "the Store is asking for some of these",
     "pending": "The well kept your last offering's gifts for you.",
     "tooLittle": "The water doesn't stir. It seems to want more than that."
   }

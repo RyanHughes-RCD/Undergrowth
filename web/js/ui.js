@@ -49,6 +49,7 @@ export class UI {
     this.statOverlay = false;
     this.sheet = null;           // { type, arg }
     this.guideTab = 'fungling';
+    this.storeTab = 'decor';
     this.root = document.getElementById('ui');
     SPRITES = app.sprites;
     this.toastTimer = null;
@@ -91,6 +92,7 @@ export class UI {
     bottom.append(h('div', { class: 'nav' },
       this.navButton('creatures', 'Creatures', g.state.creatures.length, () => this.open('creatures')),
       this.navButton('bag', 'Bag', invCount, () => this.open('bag')),
+      (this.content.requests || []).length ? this.navButton('store', 'Store', this.storeReadyCount(now), () => this.open('store')) : null,
       this.navButton('guide', 'Guide', 0, () => this.open('guide')),
       g.inTutorial ? null : this.navButton('tasks', 'Tasks', g.activeTasks().filter((t) => t.done).length, () => this.open('tasks')),
     ));
@@ -316,6 +318,7 @@ export class UI {
       entry: () => [arg.name, this.entryBody(arg)],
       terrain: () => [(this.terrainDef(arg) || {}).name || 'Terrain', this.terrainBody(arg)],
       offerings: () => ['The Old Log', this.offeringsBody()],
+      store: () => ['Store', this.storeBody()],
       decor: () => this.decorBody(arg),
       nest: () => this.nestBody(arg),
       landmark: () => this.landmarkBody(arg),
@@ -450,7 +453,7 @@ export class UI {
           h('div', { class: 'grow' }, h('b', {}, def.name),
             h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, rarityName(def.rarity)),
             def.use ? h('div', { class: 'sub' }, this.useText(def.use)) : null,
-            def.tradeOnly ? h('div', { class: 'sub' }, 'Worth keeping: the Old Log trades for it.') : null),
+            def.tradeOnly ? h('div', { class: 'sub' }, 'Worth keeping: the Store trades for it.') : null),
           h('b', {}, `×${n}`),
           def.onGrow ? h('button', { class: 'btn green small', onclick: () => this.app.beginPlanting(def.id) }, 'Plant') : null,
           def.egg ? h('button', { class: 'btn green small', disabled: g.state.nests.length >= g.nestSlots, onclick: () => this.app.beginNest(def.id) }, 'Nest') : null,
@@ -531,34 +534,109 @@ export class UI {
     })];
   }
 
+  /** The Old Log: where wandering visitors stop by to trade. Buying things is in the Store tab. */
   offeringsBody() {
-    const g = this.game, now = g.now();
-    const all = g.requestBoard(now);
-    const shopList = all.filter((s) => s.req.kind === 'shop');
-    const board = all.filter((s) => s.req.kind !== 'shop' && s.req.kind !== 'upgrade');
-    const open = board.filter((s) => !s.done && !s.locks.length);
-    const locked = board.filter((s) => !s.done && s.locks.length);
-    const done = board.filter((s) => s.done);
-    const compostOn = (this.content.tuning.offerings || {}).compostEnabled !== false;
-    const shop = compostOn ? (this.content.cosmetics || []).filter((c) => c.compost != null) : [];
+    const visitors = this.visitorSection();
     return [
       h('p', { class: 'sub center' }, this.story('messages.offeringsIntro')),
-      h('div', { class: 'row space compost-row' }, compostOn ? h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`) : h('span'),
-        h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Old Log', sprite: 'landmark.old-log', variant: null, text: this.content.story?.guide?.landmarks?.['landmark.old-log'] }) }, 'About the log')),
-      ...this.visitorSection(),
-      shopList.length ? [h('div', { class: 'section' }, 'Shop'), h('p', { class: 'sub' }, 'Trade your finds. These can be bought again whenever you like.'),
-        ...shopList.filter((s) => !s.locks.length).map((st) => this.shopCard(st)),
-        ...shopList.filter((s) => s.locks.length).map((st) => this.shopCard(st))] : null,
-      ...this.upgradeSection(all),
-      h('div', { class: 'section' }, 'Requests'),
-      open.length ? open.map((st) => this.offerCard(st)) : h('p', { class: 'sub' }, 'Nothing open right now. New requests open as your Field Guide grows.'),
+      h('div', { class: 'row space compost-row' }, h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Old Log', sprite: 'landmark.old-log', variant: null, text: this.content.story?.guide?.landmarks?.['landmark.old-log'] }) }, 'About the log'),
+        h('button', { class: 'btn small green', onclick: () => this.open('store') }, ic('store', 1), ' Open the Store')),
+      ...visitors,
+      visitors.length ? null : h('p', { class: 'sub center' }, 'No visitors at the log right now. Wanderers stop by each day.'),
+    ];
+  }
+
+  /**
+   * Store tabs: which listing goes where. Decor is anything that gives a decoration; Eggs is anything
+   * that gives an egg; Upgrades are upgrade lines, Room to grow and unlocks (trowel, nests); Trades is
+   * the rest (supplies, seeds and other consumables).
+   */
+  storeTabOf(st) {
+    const r = st.req, rw = r.reward || {};
+    if (rw.type === 'cosmetic') return 'decor';
+    if (rw.type === 'egg' || ((rw.type === 'item') && (this.content.items[rw.id]?.category === 'egg' || /^egg\./.test(rw.id || '')))) return 'eggs';
+    if (r.kind === 'upgrade' || rw.type === 'upgrade' || rw.type === 'unlock') return 'upgrades';
+    return 'trades';
+  }
+
+  /** One-off listings (decor, special eggs, upgrades, unlocks) you could get right now, per Store tab. Repeatable trades aren't counted. */
+  storeReady(now = this.game.now()) {
+    const out = { decor: 0, trades: 0, eggs: 0, upgrades: 0 };
+    const board = this.game.requestBoard(now);
+    for (const st of board) {
+      if (st.done || st.locks.length || !st.ready || st.req.kind === 'shop') continue;
+      // Only the next tier of an upgrade line counts.
+      if (st.req.kind === 'upgrade' && board.find((x) => x.req.kind === 'upgrade' && x.req.reward.id === st.req.reward.id && !x.done) !== st) continue;
+      out[this.storeTabOf(st)]++;
+    }
+    return out;
+  }
+
+  storeReadyCount(now) {
+    const r = this.storeReady(now);
+    return r.decor + r.trades + r.eggs + r.upgrades;
+  }
+
+  /** The Store: everything you can trade your finds for, in tabs (Decor, Trades, Eggs, Upgrades). */
+  storeBody() {
+    const g = this.game, now = g.now();
+    const tabs = [['decor', 'Decor'], ['trades', 'Trades'], ['eggs', 'Eggs'], ['upgrades', 'Upgrades']];
+    if (!tabs.some(([id]) => id === this.storeTab)) this.storeTab = 'decor';
+    const ready = this.storeReady(now);
+    const all = g.requestBoard(now);
+    const mine = all.filter((st) => this.storeTabOf(st) === this.storeTab);
+    const repeat = mine.filter((st) => st.req.kind === 'shop');
+    const once = mine.filter((st) => st.req.kind !== 'shop' && st.req.kind !== 'upgrade');
+    const open = once.filter((st) => !st.done && !st.locks.length);
+    const locked = once.filter((st) => !st.done && st.locks.length);
+    const done = once.filter((st) => st.done);
+    const repeatCards = () => [...repeat.filter((st) => !st.locks.length), ...repeat.filter((st) => st.locks.length)].map((st) => this.shopCard(st));
+    const onceCards = (emptyText) => [
+      open.length ? open.map((st) => this.offerCard(st)) : (emptyText ? h('p', { class: 'sub' }, emptyText) : null),
       locked.length ? [h('div', { class: 'section' }, 'Coming later'), ...locked.map((st) => this.offerCard(st))] : null,
-      shop.length ? [h('div', { class: 'section' }, 'Compost heap'), h('p', { class: 'sub' }, this.story('messages.compostIntro')),
-        ...shop.map((c) => h('div', { class: 'list-row' },
-          h('div', { class: 'thumb' }, this.sprites.element(c.sprite, null, 3)),
-          h('div', { class: 'grow' }, h('b', {}, c.name), c.text ? h('div', { class: 'sub' }, c.text) : null),
-          h('button', { class: 'btn small ' + (g.state.compost >= c.compost ? 'green' : 'grey'), disabled: g.state.compost < c.compost, onclick: () => this.app.buyDecor(c.id) }, `${c.compost} compost`)))] : null,
-      done.length ? [h('div', { class: 'section' }, `Delivered (${done.length})`), h('p', { class: 'sub' }, done.map((st) => st.req.name).join(' · '))] : null,
+      done.length ? [h('div', { class: 'section' }, `${this.storeTab === 'decor' ? 'Owned' : 'Done'} (${done.length})`), h('p', { class: 'sub' }, done.map((st) => st.req.name).join(' · '))] : null,
+    ];
+    let body;
+    if (this.storeTab === 'decor') {
+      const compostOn = (this.content.tuning.offerings || {}).compostEnabled !== false;
+      const heap = compostOn ? (this.content.cosmetics || []).filter((c) => c.compost != null) : [];
+      body = [
+        h('p', { class: 'sub' }, 'Things to set out in your forest. Each one is made once; find it in your Bag under Decor.'),
+        compostOn ? h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`)) : null,
+        ...onceCards('Nothing to make right now. More opens as your Field Guide grows.'),
+        heap.length ? [h('div', { class: 'section' }, 'Compost heap'), h('p', { class: 'sub' }, this.story('messages.compostIntro')),
+          ...heap.map((c) => h('div', { class: 'list-row' },
+            h('div', { class: 'thumb' }, this.sprites.element(c.sprite, null, 3)),
+            h('div', { class: 'grow' }, h('b', {}, c.name), c.text ? h('div', { class: 'sub' }, c.text) : null),
+            h('button', { class: 'btn small ' + (g.state.compost >= c.compost ? 'green' : 'grey'), disabled: g.state.compost < c.compost, onclick: () => this.app.buyDecor(c.id) }, `${c.compost} compost`)))] : null,
+      ];
+    } else if (this.storeTab === 'trades') {
+      body = [
+        h('p', { class: 'sub' }, 'Trade your finds for seeds, soil and other things to use. These can be bought again whenever you like.'),
+        ...repeatCards(), ...onceCards(null),
+        !mine.length ? h('p', { class: 'sub' }, 'Nothing to trade for yet.') : null,
+      ];
+    } else if (this.storeTab === 'eggs') {
+      body = [
+        h('p', { class: 'sub' }, 'Eggs to nest and hatch. The plain ones can be bought again; the special ones only once.'),
+        ...repeatCards(),
+        once.length ? [h('div', { class: 'section' }, 'Special eggs'), ...onceCards('No special eggs right now. More opens as your Field Guide grows.')] : null,
+        !mine.length ? h('p', { class: 'sub' }, 'No eggs for trade yet.') : null,
+      ];
+    } else {
+      const lines = this.upgradeSection(mine);
+      body = [
+        h('p', { class: 'sub' }, 'Lasting improvements: each tier is bought once.'),
+        ...lines.slice(1),
+        once.length ? [h('div', { class: 'section' }, 'Unlocks'), ...onceCards(null)] : null,
+        !mine.length ? h('p', { class: 'sub' }, 'No upgrades yet.') : null,
+      ];
+    }
+    return [
+      h('div', { class: 'tabs store-tabs' }, tabs.map(([id, label]) => h('button', {
+        class: 'tab' + (id === this.storeTab ? ' on' : ''), onclick: () => { this.storeTab = id; this.renderSheet(); },
+      }, label, ready[id] ? h('span', { class: 'tab-count' }, ready[id]) : null))),
+      ...body,
     ];
   }
 
@@ -932,7 +1010,7 @@ export class UI {
       lines.spawns.push('Nothing spawns in the treeline, and creature influence stops at its edge.');
       const e = T.expansion || {};
       lines.other.push(e.automatic ? `The clearing pushes it back by ${e.ringTiles ?? 2} tiles on each side as the land develops.`
-        : `Trade with the Old Log ("Room to grow") to push it back by ${e.ringTiles ?? 2} tiles on each side.`);
+        : `Buy "Room to grow" in the Store (Upgrades) to push it back by ${e.ringTiles ?? 2} tiles on each side.`);
     }
     // Compare with the tile you have selected (required vs current), without raw values.
     let compare = null;

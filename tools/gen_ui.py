@@ -161,6 +161,18 @@ def make_icons():
         c.set(3, 3, 3)
     icon("heart", ["#e04a6a", "#ffb0c0"], heart)
 
+    def stall(c, f):
+        # A little market stall: striped awning over a wooden counter (the Store tab).
+        for x in range(1, 11):
+            c.rect(x, 1, x, 3, 2 if (x // 2) % 2 == 0 else 3)
+        for x in range(1, 11, 2):
+            c.set(x, 4, 2 if (x // 2) % 2 == 0 else 3)
+        c.rect(2, 5, 2, 10, 4); c.rect(9, 5, 9, 10, 4)            # posts
+        c.rect(2, 7, 9, 10, 4)                                     # counter
+        c.rect(3, 7, 8, 7, 5)                                      # counter top (lit)
+        c.set(4, 6, 6); c.set(7, 6, 6)                             # goods on the counter
+    icon("store", ["#d8584a", "#f4ead0", "#8a6440", "#c49a6c", "#ffd84a"], stall)
+
 
 def make_burst():
     """Stepped pixel rays for reveal moments (2 frames, alternate ray sets)."""

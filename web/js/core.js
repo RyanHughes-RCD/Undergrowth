@@ -571,7 +571,7 @@ export class Game {
     const edge = [];
     for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
       const d = Math.min(x - c.x0, c.x1 - x, y - c.y0, c.y1 - y);
-      if (d < (sc.edgeDepth ?? 1) && !(log && Math.abs(x - log.tile.x) <= 1 && Math.abs(y - log.tile.y) <= 1)) edge.push({ x, y });
+      if (d < (sc.edgeDepth ?? 1) && !(log && x >= log.tile.x - 1 && x <= log.tile.x + this.landmarkFootprint(log)[0] && Math.abs(y - log.tile.y) <= 1)) edge.push({ x, y });
     }
     for (let i = 0; i < (sc.count || 0) && edge.length; i++) {
       const tile = edge.splice(this.rng.int(0, edge.length - 1), 1)[0];
@@ -606,7 +606,30 @@ export class Game {
     const ramp = ((this.t.expansion && this.t.expansion.revealRampSeconds) || 0) * 1000;
     return ramp <= 0 ? 1 : Math.min(1, Math.max(0, (now - at) / ramp));
   }
-  landmarkAt(t) { return this.state.landmarks.find((l) => sameTile(l.tile, t)) || null; }
+  landmarkAt(t) { return this.state.landmarks.find((l) => this.landmarkTiles(l).some((u) => sameTile(u, t))) || null; }
+  /** [w, h] tiles a landmark covers (landmarks.json "footprint"), from its tile rightward and down. */
+  landmarkFootprint(l) { const f = (this.landmarkDef(l.id) || {}).footprint; return Array.isArray(f) ? f : [1, 1]; }
+  /** Every tile a landmark covers (the Old Log stump sits across two). */
+  landmarkTiles(l) {
+    const [w, h] = this.landmarkFootprint(l);
+    if (w === 1 && h === 1) return [l.tile];
+    const out = [];
+    for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) out.push({ x: l.tile.x + dx, y: l.tile.y + dy });
+    return out;
+  }
+  /** Moves anything off a landmark's tiles: spawns and seeds make way, the rest is nudged next door. */
+  clearLandmarkTiles(l) {
+    const s = this.state, tiles = this.landmarkTiles(l);
+    const on = (t) => tiles.some((u) => sameTile(u, t));
+    s.spawns = s.spawns.filter((sp) => !on(sp.tile));
+    s.plantedSeeds = s.plantedSeeds.filter((sp) => !on(sp.tile));
+    s.scenery = (s.scenery || []).filter((d) => !on(d.tile));
+    const nudge = (list) => { for (const x of list || []) if (on(x.tile)) { const t = this.freeNear(l.tile); if (t) x.tile = t; } };
+    nudge(this.activePlacements);
+    nudge(s.decor && s.decor.placed);
+    nudge(s.nests);
+    nudge(s.visitors);
+  }
 
   /** Puts data-defined landmarks (the old log) on the map, once. */
   placeLandmarks() {
@@ -616,13 +639,12 @@ export class Game {
       const c = this.state.clearing;
       let tile = { x: Math.floor((c.x0 + c.x1) / 2), y: Math.floor((c.y0 + c.y1) / 2) };
       if (def.position && typeof def.position === 'object') tile = { ...def.position };
-      // Clear the spot (spawns move out of the way; creatures are nudged to a neighbour).
-      this.state.spawns = this.state.spawns.filter((sp) => !sameTile(sp.tile, tile));
-      this.state.plantedSeeds = this.state.plantedSeeds.filter((sp) => !sameTile(sp.tile, tile));
-      this.state.landmarks.push({ id: def.id, tile });
-      for (const p of this.activePlacements) if (sameTile(p.tile, tile)) p.tile = this.freeNear(tile) || p.tile;
       if (def.inGuide !== false) this.discover('landmark:' + def.id.replace(/^landmark\./, ''));
+      this.state.landmarks.push({ id: def.id, tile });
     }
+    // Clear every landmark's tiles (spawns move out of the way; creatures are nudged to a neighbour).
+    // Runs on every load, so a landmark that grew (the Old Log stump now covers two tiles) makes room.
+    for (const l of this.state.landmarks) this.clearLandmarkTiles(l);
   }
 
   /** Nearest free clearing tile to `t` (ring search). */
@@ -1334,7 +1356,7 @@ export class Game {
     return added;
   }
 
-  /** Automatic expansion is off by default (tuning.expansion.automatic): the treeline is pushed back by buying 'Room to grow' at the Old Log. */
+  /** Automatic expansion is off by default (tuning.expansion.automatic): the treeline is pushed back by buying 'Room to grow' in the Store. */
   checkExpansion(now) { if ((this.t.expansion || {}).automatic && this.expansionReady(now)) this.expand(now); }
   get forestFullyOpen() { const c = this.clearing, s = this.state.size; return c.x0 <= 0 && c.y0 <= 0 && c.x1 >= s.width - 1 && c.y1 >= s.height - 1; }
 
@@ -1844,7 +1866,7 @@ export class Game {
     const egg = this.eggDef(eggID);
     if (!egg) throw new GameError("That isn't an egg.");
     if (!(this.state.inventory[eggID] > 0)) throw new GameError("You don't have that.");
-    if (this.state.nests.length >= this.nestSlots) throw new GameError('Every nest is in use. Earn another nest at the Old Log.');
+    if (this.state.nests.length >= this.nestSlots) throw new GameError('Every nest is in use. Earn another nest in the Store.');
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
     this.consume(eggID);
@@ -1957,7 +1979,7 @@ export class Game {
   /** Every occupied tile ("x,y"), built once so whole-map scans don't search lists per tile. */
   occupied() {
     const s = this.state, out = new Set();
-    for (const l of s.landmarks || []) out.add(l.tile.x + ',' + l.tile.y);
+    for (const l of s.landmarks || []) for (const t of this.landmarkTiles(l)) out.add(t.x + ',' + t.y);
     for (const p of this.activePlacements) out.add(p.tile.x + ',' + p.tile.y);
     for (const x of s.spawns) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.plantedSeeds) out.add(x.tile.x + ',' + x.tile.y);
@@ -2042,7 +2064,7 @@ export class Game {
     if (this.activePlacement(creatureID)) throw new GameError('That creature is already out in the forest.');
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
     const cap = this.creatureCap(now);
-    if (cap != null && this.activePlacements.length >= cap) throw new GameError('Every creature slot is in use. Bring one home, or earn another slot at the Old Log.');
+    if (cap != null && this.activePlacements.length >= cap) throw new GameError('Every creature slot is in use. Bring one home, or earn another slot in the Store.');
     let startLevel = 0;
     const old = this.state.placements.findIndex((p) => p.creatureID === creatureID && p.removedAt != null && sameTile(p.tile, tile));
     if (old >= 0) {

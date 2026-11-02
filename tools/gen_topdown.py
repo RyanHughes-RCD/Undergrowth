@@ -255,7 +255,15 @@ def make_shrubs():
 
 
 def make_landmarks():
-    """The fallen old log at the centre of the clearing."""
+    """The Old Log at the centre of the clearing: the stump from design/stump_source.jpg (gen_stump.py),
+    or this placeholder fallen log if that picture is missing."""
+    try:
+        import gen_stump
+        if os.path.exists(gen_stump.SOURCE):
+            gen_stump.main()
+            return
+    except ImportError:
+        pass
     pal = ["transparent", "#24160e", "#6b4a2f", "#8a6440", "#4a3322", "#c49a6c", "#6a9a48", "#83b45a", "#e8d4b0"]
     c = Canvas(30, 16)
     c.ellipse(15, 9.5, 13, 4.5, 2)                       # trunk

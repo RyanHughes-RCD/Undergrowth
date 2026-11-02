@@ -340,7 +340,7 @@ class App {
     const landmark = g.landmarkAt(tile);
     if (landmark) {
       const def = (this.content.landmarks || []).find((l) => l.id === landmark.id);
-      // The Old Log is the trading place: its Offerings board (requests, compost heap).
+      // The Old Log is where wandering visitors stop by to trade (the Store has its own tab).
       if (landmark.id === 'landmark.old-log' && (this.content.requests || []).length) { ui.selectedTile = null; ui.open('offerings'); this.changed(false); return; }
       if (landmark.id === 'landmark.spirit-well') { ui.selectedTile = null; this.openWishing(); return; }
       if (def && def.earned) { ui.selectedTile = null; ui.open('landmark', def.id); this.changed(false); return; }
@@ -426,7 +426,7 @@ class App {
           : { trowel: 'the gardener\'s trowel: open a placed creature to move it', slot: 'another creature slot', nest: 'another nest', expansion: 'more room: the treeline stepped back' }[r.id] || r.id;
     const sprite = r.type === 'cosmetic' ? g.decorDef(r.id)?.sprite : (r.type === 'item' || r.type === 'egg') ? this.content.items[r.id]?.sprite : r.type === 'upgrade' ? g.upgradeDef(r.id)?.sprite : 'ui.icon.board';
     this.ui.toast(req.kind === 'shop' ? `Traded for ${what}.` : `${req.name}: done! You got ${what}.`, sprite);
-    if (first && req.kind !== 'shop') this.ui.celebrate('The old log creaks', this.ui.story('messages.firstDelivery'));
+    if (first && req.kind !== 'shop') this.ui.celebrate('Your first trade', this.ui.story('messages.firstDelivery'));
     this.changed();
   }
 
