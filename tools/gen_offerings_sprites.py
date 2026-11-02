@@ -352,4 +352,6 @@ if __name__ == "__main__":
     landmarks()
     spirit_well()
     board_icon()
+    import gen_landmark_art  # landmarks drawn from design/landmark_*.jpg replace the placeholders above
+    gen_landmark_art.main()
     print("wrote Offerings sprites")

@@ -141,9 +141,11 @@
     "glowLight": { "enabled": true, "minGlow": 6, "alphaPerPoint": 0.0125, "maxAlpha": 0.5, "radius": 14, "color": "#7cf2ff" },
     "petals": { "enabled": true, "minBloom": 12, "ratePerPoint": 0.0004, "max": 50, "lifeSeconds": 5, "windX": 8, "windY": 3, "colors": ["#ff9ccf", "#fff3c4", "#c58cff"] },
     "canopy": {
-      "_about": "Tree shadows from design/canopy_source.webp (processed by tools/gen_canopy.py into img/canopy.png: alpha = sunlight). Layer 1 at full strength, layer 2 offset/scaled/flipped and added at secondAlpha so the flecks never repeat on a grid, and a large soft region layer that lifts the shade in some areas (clearings).",
+      "_about": "Tree shadows from design/shadow_overlay_v2.webp (processed by tools/gen_canopy.py into img/canopy.png: alpha = sunlight, texelsPerPx image px per art px, drawn smooth at up to maxRes buffer px per art px). Layer 1 at full strength, layer 2 offset/scaled/flipped and added at secondAlpha so the flecks never repeat on a grid, and a large soft region layer that lifts the shade in some areas (clearings).",
       "enabled": true,
       "image": "img/canopy.png",
+      "texelsPerPx": 2,
+      "maxRes": 3,
       "scale": 1,
       "second": { "scale": 1.21, "offset": [233, 151], "flip": true, "alpha": 0 },
       "region": { "image": "img/canopy-region.png", "scale": 5, "strength": 0, "offset": [211, 47] },

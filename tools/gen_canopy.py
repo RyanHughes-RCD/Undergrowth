@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Canopy textures for the tree-shadow effect.
 
-1. web/img/canopy.png - the tree-shadow asset (design/canopy_source.webp: a black shade layer whose
-   alpha holes are sunlight), turned into a seamless pixel-art light mask: scaled so flecks are a few
-   art pixels, flecks touching the tile edge removed (so tiles join with no seams), soft edges
-   quantised. Stored as white with alpha = light.
+1. web/img/canopy.png - the tree-shadow asset (design/shadow_overlay_v2.webp: a black shade layer
+   whose alpha holes are sunlight), turned into a seamless, smooth light mask: resampled with
+   Lanczos at TEXELS image pixels per world pixel, flecks touching the tile edge removed (so tiles
+   join with no seams), and the soft edges kept as they are (no banding). Stored as white with
+   alpha = light. The renderer draws it with smoothing (visuals.canopy.texelsPerPx must match).
 2. web/img/canopy-region.png - big soft blobs (the earlier dappled-light layout), used at a large
    scale to vary shade depth by region so the fleck pattern never reads as wallpaper.
 
@@ -28,9 +29,9 @@ from PIL import Image, ImageFilter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "web", "img", "canopy-region.png")
 FLECKS_OUT = os.path.join(ROOT, "web", "img", "canopy.png")
-SOURCE = os.path.join(ROOT, "design", "canopy_source.webp")
+SOURCE = os.path.join(ROOT, "design", "shadow_overlay_v2.webp")
 FLECK_W = 600   # tile width in world pixels for the fleck layer (bigger = fewer, larger patches of light)
-STEPS = 6
+TEXELS = 2      # image pixels per world pixel, for smooth edges when zoomed in
 
 
 # The canopy-light picture's layout (traced from the reference image, 1080x1920):
@@ -47,7 +48,7 @@ W, H = 144, 256          # tile size in world pixels (about a phone screen wide 
 def make_flecks():
     src = Image.open(SOURCE).convert("RGBA")
     light = src.split()[3].point(lambda a: 255 - a)              # holes in the shade = sunlight
-    w = FLECK_W
+    w = FLECK_W * TEXELS
     h = round(src.height * w / src.width)
     small = light.resize((w, h), Image.LANCZOS)
     px = small.load()
@@ -55,14 +56,13 @@ def make_flecks():
     seen, stack = set(), [(x, y) for x in range(w) for y in (0, h - 1)] + [(x, y) for y in range(h) for x in (0, w - 1)]
     while stack:
         x, y = stack.pop()
-        if (x, y) in seen or not (0 <= x < w and 0 <= y < h) or px[x, y] < 12:
+        if (x, y) in seen or not (0 <= x < w and 0 <= y < h) or px[x, y] < 3:
             continue
         seen.add((x, y))
         px[x, y] = 0
         stack += [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
-    quant = small.point(lambda v: int(round(v / 255 * (STEPS - 1))) * 255 // (STEPS - 1))
     img = Image.new("LA", (w, h), 255)
-    img.putalpha(quant)
+    img.putalpha(small)
     img.save(FLECKS_OUT, optimize=True)
     print("wrote", os.path.relpath(FLECKS_OUT, ROOT), (w, h))
 
@@ -89,10 +89,9 @@ def main():
                         if u * u + v * v <= 1:
                             px[x, y] = 255
     soft = big.filter(ImageFilter.GaussianBlur(7)).crop((W, H, 2 * W, 2 * H))
-    # Quantise into a few hard steps (pixel-art banding) and store as white with alpha.
-    alpha = soft.point(lambda v: int(round(v / 255 * (STEPS - 1))) * 255 // (STEPS - 1))
+    # Kept smooth (no banding), stored as white with alpha.
     img = Image.new("LA", (W, H), 255)
-    img.putalpha(alpha)
+    img.putalpha(soft)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     img.save(OUT, optimize=True)
     print("wrote", os.path.relpath(OUT, ROOT))

@@ -40,7 +40,7 @@ Then open <http://localhost:8000>.
 
 ## Opening and early progression (web version)
 
-- **New forest:** a 7×14 clearing in the middle of the 40×56 forest, with all stats at 0. The Old Log, a mossy stump two tiles wide, sits at its centre (`Content/landmarks.json`, `footprint: [2, 1]`). It's solid: creatures walk around it rather than through it (`solid: true`). Its sprite is made from `design/stump_source.jpg` by `tools/gen_stump.py`. Only spawns with no stat requirements can appear, straight from the normal spawn rules.
+- **New forest:** a 7×14 clearing in the middle of the 40×56 forest, with all stats at 0. The Old Log, a mossy stump two tiles wide, sits at its centre (`Content/landmarks.json`, `footprint: [2, 1]`). It's solid: creatures walk around it rather than through it (`solid: true`). Its sprite is made from `design/landmark_old_log.jpg` by `tools/gen_landmark_art.py` (see Landmark art below). Only spawns with no stat requirements can appear, straight from the normal spawn rules.
 - **The opening (no guided tutorial, no instructions):** the clearing is a little grotto: mossy rocks, ferns and roots along its edge (`start.scenery`, saved as `scenery`, visual only).
   - Waiting around the old log (`start.spawns`, kept until picked): 2 Brown Button Caps, a Red Toadstool, a Clover and a Sorrel (each always drops a Mystery Seed, `forced`), and 2 Pebble Geodes.
   - One geode (`start.guaranteedIn`) holds an egg of a random family (`start.eggFamily`). The first time it's nested it hatches in `start.firstEggHatchMinutes` (45), so it's ready when the player comes back.
@@ -459,7 +459,7 @@ An old well that takes offerings and gives something back, while keeping its wor
   - It sits in the newly opened ground, one tile in from the treeline and away from the Old Log, with a few ferns and stones around it as a small clearing. Spawns nearby make way.
   - A celebration card, the camera moving to it, and a highlight mark the moment. It happens once and is saved (`wish.discovered`, plus the landmark in `landmarks`).
   - Older saves that have already expanded find it on load.
-  - Its data entry is `landmark.spirit-well` in `landmarks.json` (`discovery: "firstExpansion"`). Art: `landmark.spirit-well` (forest) and `wish.well-top` (the stone rim seen from above), both from `tools/gen_offerings_sprites.py`.
+  - Its data entry is `landmark.spirit-well` in `landmarks.json` (`discovery: "firstExpansion"`). Art: `landmark.spirit-well` (forest, the wishing well from `design/landmark_spirit_well.jpg`) and `wish.well-top` (the stone rim seen from above, `tools/gen_offerings_sprites.py`).
 - **Wishing screen** (`web/js/wish.js`): tap the well to open it.
   - The top shows the well from above, with water that shimmers, ripples now and then and sparkles.
   - Below it is a line hinting at what the well wants (`story.json` → `wish.demand`, five per group, varied each visit). It never names the group.
@@ -646,11 +646,17 @@ A separate test forest for trying any content or combination without touching yo
 - **Treeline:** the edge bushes and the ground under them use deep, shadowed greens (`SHRUB_PALETTES` and the edge palette in `tools/gen_topdown.py`), so the clearing has a clear dark border.
 - **Movement:** wild spawns (mushrooms, plants, geodes, seed stages) stand still and show their first frame. Placed creatures keep their animation and wander inside their influence radius around the tile they were placed on: walk, pause, repeat, staying in the clearing. This is visual only; their influence still comes from the placement tile, and tapping a creature wherever it is selects it.
 - **Grass:** a deeper, verdant forest green (the ground palette in `tools/gen_placeholders.py`), so every grass tile, variant and overlay stays consistent.
+- **Landmark art:** `tools/gen_landmark_art.py` turns the pixel-art pictures in `design/` (`landmark_*.jpg`, drawn on a 20 px grid on white) into sprites: one colour per art pixel, shrunk to the width set in its `LANDMARKS` table, with the picture's own colours and a clean dark outline (greenery stays unoutlined).
+  - **Old Log** (stump, 40 px, two tiles), **Spirit Well** (wishing well, 28 px), **Hollow Cave** (40 px) and **Moonwell** (stone pool, 38 px) are solid: creatures walk around them (`solid`, with `solidPad` [side, top, bottom] in `landmarks.json` for how far past the tile).
+  - **Moonwell:** 10 frames of ripples spreading across the water.
+  - **Fairy Ring:** its mushrooms keep their drawn size and are pulled closer together (`spread`), since they're too small to shrink. The picture's baked-in sparkles are removed and replaced by 12 frames of twinkling stars. It lies flat (`ground`), so creatures walk over it.
+  - The fruit tree, standing stones, spring and nest hollow still use placeholder art.
+  - `gen_placeholders.py` runs this too, so regenerating the placeholders keeps the drawn landmarks.
 - **Tree shadows (canopy):**
-  - **Source:** your asset, `design/canopy_source.webp`, is a black shade layer whose see-through holes are sunlight.
-  - **Processing:** `tools/gen_canopy.py` turns it into `web/img/canopy.png` (a 600×475 seamless light mask; `FLECK_W` sets the size, bigger means fewer, larger patches of light). It scales the flecks to a few art pixels, removes any fleck touching the tile edge so tiles join with no seams, and quantises the soft edges into pixel steps.
+  - **Source:** your asset, `design/shadow_overlay_v2.webp`, is a black shade layer whose see-through holes are sunlight.
+  - **Processing:** `tools/gen_canopy.py` turns it into `web/img/canopy.png`, a seamless light mask covering 600×475 world pixels (`FLECK_W` sets the size; bigger means fewer, larger patches of light). It's stored at 2 image pixels per world pixel (`TEXELS`, matched by `visuals.canopy.texelsPerPx`). It removes any fleck touching the tile edge so tiles join with no seams, and keeps the soft edges smooth (no pixel steps).
   - **One layer:** every light patch comes straight from your asset, with even shade around it. The texture is large (about 37 × 30 tiles), so repeats are rare. An optional faint second fleck layer (`visuals.canopy.second.alpha`) and a soft "clearings" layer (`region.strength`) can be turned back on to hide repetition. Both are off (0), because they made some patches fade in more softly than others.
-  - **Rendering:** it's built each frame at one buffer pixel per art pixel for just the view, then scaled up without smoothing, so it's crisp at any zoom with no moiré. It's world-anchored, so it stays stable while panning, with only a slow 3 px sway.
+  - **Rendering:** it's built each frame for just the view at up to 3 buffer pixels per art pixel (`visuals.canopy.maxRes`), then drawn with smoothing, so the shade edges are soft and smooth at any zoom. It's world-anchored, so it stays stable while panning, with only a slow, smooth 3 px sway.
   - **Settings:** `visuals.canopy`.
 - **Day and night (real local clock):** the hours are in `clock` in `tuning.json`: dawn 5:00–7:00, day 7:00–17:00, dusk 17:00–19:00, night 19:00–5:00. Lighting blends across 50 minutes around each boundary (`clock.transitionMinutes`). The same night range drives night-only spawns and Glow.
   - Each state sets the canopy shade and light strength and colour, a scene-wide ambient tint (multiply), firefly amount and sparkle colour (`visuals.lighting.states`):

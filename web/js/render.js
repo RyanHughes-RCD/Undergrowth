@@ -9,7 +9,7 @@ export const TS = 16;
 const FOOT = 5; // objects stand a little below the tile centre
 export const centre = (x, y) => ({ x: x * TS + TS / 2, y: y * TS + TS / 2 });
 export const tileAt = (wx, wy) => ({ x: Math.floor(wx / TS), y: Math.floor(wy / TS) });
-/** How far a solid landmark's no-walk box reaches past its tiles (art px): its sprite overhangs a little. */
+/** How far a solid landmark's no-walk box reaches past its tiles (art px): its sprite overhangs a little. landmarks.json "solidPad" [side, top, bottom] overrides it. */
 const SOLID_MARGIN = { side: 3, top: 3, bottom: 2 };
 const inBox = (r, x, y, pad = 0) => x > r.x0 - pad && x < r.x1 + pad && y > r.y0 - pad && y < r.y1 + pad;
 
@@ -270,10 +270,11 @@ export class ForestView {
       if (!def) continue;
       const [fw, fh] = g.landmarkFootprint(l);
       const pos = at({ x: l.tile.x, y: l.tile.y + fh - 1 });
-      objs.push({ sprite: def.sprite, x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: l.tile, kind: 'landmark', key: l.id, phase: 0 });
+      // A ground-level one (the Fairy Ring) is drawn under everything that stands on it.
+      objs.push({ sprite: def.sprite, x: pos.x + (fw - 1) * TS / 2, y: pos.y, sortY: def.ground ? pos.y - TS * 4 : undefined, tile: l.tile, kind: 'landmark', key: l.id, phase: 0 });
       if (def.solid) {
-        const m = SOLID_MARGIN;
-        this.solids.push({ x0: l.tile.x * TS - m.side, x1: (l.tile.x + fw) * TS + m.side, y0: l.tile.y * TS + m.top, y1: (l.tile.y + fh) * TS + m.bottom });
+        const [side, top, bottom] = def.solidPad || [SOLID_MARGIN.side, SOLID_MARGIN.top, SOLID_MARGIN.bottom];
+        this.solids.push({ x0: l.tile.x * TS - side, x1: (l.tile.x + fw) * TS + side, y0: l.tile.y * TS + top, y1: (l.tile.y + fh) * TS + bottom });
       }
     }
     // The opening grotto's scenery (mossy rocks, ferns) along the clearing's edge.
@@ -1101,9 +1102,9 @@ export class ForestView {
   }
 
   /**
-   * Tree shadows (visuals.canopy). Built each frame at one-buffer-pixel-per-art-pixel for just the
-   * view, then drawn scaled with no smoothing, so it stays crisp at any zoom and costs the same
-   * whatever the zoom. Light = flecks layer 1 + (offset, scaled, flipped) layer 2; shade covers the
+   * Tree shadows (visuals.canopy). Built each frame for just the view at `res` buffer pixels per art
+   * pixel (up to visuals.canopy.maxRes, never more than the screen shows), then drawn with smoothing,
+   * so the shade has soft, smooth edges at any zoom. Light = flecks layer 1 + (offset, scaled, flipped) layer 2; shade covers the
    * rest, lifted in places by a large soft region layer. All world-anchored (stable when panning)
    * with only a slow, gentle sway.
    */
@@ -1139,34 +1140,39 @@ export class ForestView {
     }
     if (this.canopy.ready < 2) return;
     const C = this.canopy;
+    const R = Math.max(1, Math.min(cfg.maxRes || 3, Math.round(this.k || 1)));   // buffer px per art px
+    const tex = cfg.texelsPerPx || 1;                                            // image px per art px
     const vx0 = Math.floor(view.minX) - 1, vy0 = Math.floor(view.minY) - 1;
-    const w = Math.ceil(view.maxX - view.minX) + 3, h = Math.ceil(view.maxY - view.minY) + 3;
+    const ww = Math.ceil(view.maxX - view.minX) + 3, wh = Math.ceil(view.maxY - view.minY) + 3;
+    const w = ww * R, h = wh * R;
     const buf = (key) => {
       let b = C[key + 'Buf'];
       if (!b) { b = C[key + 'Buf'] = document.createElement('canvas'); }
       if (b.width !== w || b.height !== h) { b.width = w; b.height = h; }
       const g = b.getContext('2d');
-      g.imageSmoothingEnabled = false;
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = 'high';
       g.globalCompositeOperation = 'source-over';
       g.globalAlpha = 1;
       g.clearRect(0, 0, w, h);
       return [b, g];
     };
     const period = Math.max(1, cfg.swaySeconds || 23), a = (t / period) * Math.PI * 2, sw = cfg.swayPx || 0;
-    const pat = (g, img, scale, ox, oy, flip) => {
+    const pat = (g, img, scale, ox, oy, flip, texels = tex) => {
       const p = g.createPattern(img, 'repeat');
-      p.setTransform(new DOMMatrix().translate(ox - vx0, oy - vy0).scale(flip ? -scale : scale, scale));
+      const k = scale * R / texels;
+      p.setTransform(new DOMMatrix().translate((ox - vx0) * R, (oy - vy0) * R).scale(flip ? -k : k, k));
       return p;
     };
     // Light: the flecks, two layers unioned (additive) so the pattern is effectively aperiodic.
     const [lb, lg] = buf('light');
     const sec = cfg.second || {};
-    lg.fillStyle = pat(lg, C.flecks, cfg.scale || 1, Math.round(Math.sin(a) * sw), Math.round(Math.sin(a * 0.7 + 1) * sw * 0.6), false);
+    lg.fillStyle = pat(lg, C.flecks, cfg.scale || 1, Math.sin(a) * sw, Math.sin(a * 0.7 + 1) * sw * 0.6, false);   // smooth sway, no pixel steps
     lg.fillRect(0, 0, w, h);
     if ((sec.alpha ?? 0.7) > 0) {                     // optional second layer (0 = off)
     lg.globalCompositeOperation = 'lighter';
     lg.globalAlpha = sec.alpha ?? 0.7;
-    lg.fillStyle = pat(lg, C.flecks, sec.scale || 1.37, (sec.offset || [0, 0])[0] + Math.round(Math.sin(a * 0.8 + 2) * sw), (sec.offset || [0, 0])[1] + Math.round(Math.cos(a * 0.6) * sw * 0.6), !!sec.flip);
+    lg.fillStyle = pat(lg, C.flecks, sec.scale || 1.37, (sec.offset || [0, 0])[0] + Math.sin(a * 0.8 + 2) * sw, (sec.offset || [0, 0])[1] + Math.cos(a * 0.6) * sw * 0.6, !!sec.flip);
     lg.fillRect(0, 0, w, h);
     }
     // Shade: everything except the light, with large regions lifted (clearings).
@@ -1177,7 +1183,7 @@ export class ForestView {
     sg.drawImage(lb, 0, 0);
     const reg = cfg.region || {};
     if ((reg.strength ?? 0.4) > 0) {                  // optional soft "clearings" layer (0 = off)
-      sg.fillStyle = pat(sg, C.region, reg.scale || 2.6, (reg.offset || [0, 0])[0], (reg.offset || [0, 0])[1], false);
+      sg.fillStyle = pat(sg, C.region, reg.scale || 2.6, (reg.offset || [0, 0])[0], (reg.offset || [0, 0])[1], false, 1);
       sg.fillRect(0, 0, w, h);
     }
     // Tint the light to the time of day (warm sun, silver moon).
@@ -1186,12 +1192,13 @@ export class ForestView {
     lg.fillStyle = L.lightColor;
     lg.fillRect(0, 0, w, h);
     ctx.save();
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.globalAlpha = L.shade;
-    ctx.drawImage(sb, vx0, vy0);
+    ctx.drawImage(sb, vx0, vy0, ww, wh);
     ctx.globalCompositeOperation = 'screen';
     ctx.globalAlpha = L.light;
-    ctx.drawImage(lb, vx0, vy0);
+    ctx.drawImage(lb, vx0, vy0, ww, wh);
     ctx.restore();
   }
 
