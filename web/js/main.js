@@ -340,7 +340,8 @@ class App {
     if (nest) { ui.selectedTile = null; ui.open('nest', nest.id); this.changed(false); return; }
     const decor = g.decorAt(tile);
     if (decor) { ui.selectedTile = null; ui.open('decor', decor.id); this.changed(false); return; }
-    const p = g.creatureAt(tile);
+    // Only tapping the creature itself opens it (it roams around its spot); its empty home tile doesn't.
+    const p = tile.hitKind === 'creature' ? g.state.placements.find((x) => x.id === tile.hitKey && x.removedAt == null) : null;
     if (p) {
       ui.selectedTile = null;
       ui.selectedCreatureID = p.creatureID;

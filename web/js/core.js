@@ -838,12 +838,26 @@ export class Game {
   }
 
   /** Placements with radius links (Mycelium Weaver) and ramp speed (Grove Heart) applied. */
-  effectivePlacements() {
+  /**
+   * Placements as they act right now: creature effects (radius links, ramp speed), landmark radius
+   * boosts, and the influence spread: a newly placed creature's influence starts close around it and
+   * reaches its full radius over tuning.influenceSpreadHours (strength ramps separately, rampHours).
+   */
+  effectivePlacements(now = this.now()) {
     const links = this.activeEffects('radiusLink');
     const speeds = this.activeEffects('rampSpeed');
-    if (!links.length && !speeds.length) return this.state.placements;
+    const spread = (this.t.influenceSpreadHours || 0) * 3600 * 1000;
+    const lmBoost = this.landmarkEffects ? this.landmarkEffects('radiusBoost') : [];
+    if (!links.length && !speeds.length && !spread && !lmBoost.length) return this.state.placements;
     return this.state.placements.map((p) => {
       const q = { ...p };
+      for (const [e, lm] of lmBoost) if (dist(lm.tile, p.tile) <= (e.range || 0)) q.radius += e.add || 0;
+      if (spread) {
+        const until = p.removedAt == null ? now : Math.min(now, p.removedAt);
+        const frac = Math.min(1, Math.max(p.startLevel || 0, (until - p.placedAt) / spread));
+        const min = this.t.influenceSpreadMinRadius ?? 0.5;
+        q.radius = Math.min(q.radius, min + (q.radius - min) * frac);
+      }
       let bonus = 0;
       for (const [e, src] of links) if (src.id !== p.id && dist(src.tile, p.tile) <= (e.range || 0)) bonus = Math.max(bonus, e.bonus || 0);
       q.radius += bonus;
@@ -1106,7 +1120,7 @@ export class Game {
 
   /** Tile stats for every tile. Values below intensity.minInfluence are 0 (inactive) unless opts.raw. */
   statField(now, opts = {}) {
-    const f = this.stats.field(this.state.size, this.effectivePlacements(), now);
+    const f = this.stats.field(this.state.size, this.effectivePlacements(now), now);
     for (const b of this.activeBoosts(now)) for (const t of this.boostTiles(b)) f.add(t.x, t.y, b.stats);
     // Ambient Damp (seeped and pooled water) on top of what creatures give.
     const amb = this.state.ambientDamp || {}, kd = f.keys.indexOf('damp'), KK = f.keys.length, idx = this.tileKeys.index;
@@ -1143,7 +1157,7 @@ export class Game {
   field(now) { return this.statCache || (this.statCache = this.statField(now)); }
 
   tileStats(tile, now, opts = {}) {
-    const s = this.stats.statsAt(tile, this.effectivePlacements(), now);
+    const s = this.stats.statsAt(tile, this.effectivePlacements(now), now);
     for (const b of this.activeBoosts(now)) if (Math.max(Math.abs(b.tile.x - tile.x), Math.abs(b.tile.y - tile.y)) <= (b.radius || 0)) for (const k in b.stats) s[k] = (s[k] || 0) + b.stats[k];
     s.damp = (s.damp || 0) + this.ambientAt(tile.x, tile.y);
     const m = this.revealFactor(tile.x, tile.y, now);
@@ -1262,7 +1276,7 @@ export class Game {
 
   /** Tiles where at least two placed creatures each contribute blend.minEach or more. */
   blendedTiles(now) {
-    const active = this.effectivePlacements().filter((p) => p.removedAt == null);
+    const active = this.effectivePlacements(now).filter((p) => p.removedAt == null);
     if (active.length < 2) return [];
     const minEach = (this.t.blend && this.t.blend.minEach) || 3;
     const out = [];
@@ -1440,7 +1454,7 @@ export class Game {
     const sources = new Float32Array(W * H), fx = new Float32Array(W * H);
     if (on) {
       field = field || this.statField(t);
-      for (const p of this.effectivePlacements()) {
+      for (const p of this.effectivePlacements(t)) {
         if (this.stats.level(p, t) <= 0.01) continue;
         const reach = this.stats.reach(p.radius), r = Math.ceil(reach);
         const sp = this.species(p);

@@ -7,6 +7,9 @@
   "starterCreatures": [],
   "statCap": 100,
   "rampSecondsToFull": 43200,
+  "influenceSpreadHours": 6,
+  "influenceSpreadMinRadius": 0.5,
+  "_influenceSpread": "A placed creature's influence starts close around it (influenceSpreadMinRadius) and spreads to its full radius over influenceSpreadHours; its strength ramps separately (each species' rampHours).",
   "decaySecondsToZero": 43200,
   "falloff": {
     "curve": "smoothstep",

@@ -259,7 +259,8 @@ export class ForestView {
       const egg = this.app.content.items[n.eggID];
       const pos = at(n.tile);
       objs.push({ sprite: 'egg.nest', ...pos, tile: n.tile, kind: 'nest', key: n.id + ':nest', phase: 0, still: true });
-      if (egg) objs.push({ sprite: egg.sprite, x: pos.x, y: pos.y - 3, tile: n.tile, kind: 'nest', key: n.id, phase: hash32(n.tile.x, n.tile.y, 9) % 1000 / 250, dig: g.nestProgress(n, now) >= 1 });
+      if (egg) objs.push({ sprite: egg.sprite, x: pos.x, y: pos.y - 2, sortY: pos.y + 0.01, tile: n.tile, kind: 'nest', key: n.id, phase: hash32(n.tile.x, n.tile.y, 9) % 1000 / 250, dig: g.nestProgress(n, now) >= 1 });
+      objs.push({ sprite: 'egg.nest.front', ...pos, sortY: pos.y + 0.02, tile: n.tile, kind: 'nest', key: n.id + ':front', phase: 0, still: true });
     }
     // Decor props from the Old Log (purely visual), in their chosen colour.
     for (const d of (s.decor && s.decor.placed) || []) {
@@ -423,7 +424,7 @@ export class ForestView {
     const pad = 32;
     const drawn = this.objects.filter((o) => o.x >= view.minX - pad && o.x <= view.maxX + pad && o.y >= view.minY - pad && o.y <= view.maxY + pad * 2)
       .concat(edgeObjs);
-    const sortY = (o) => (o.roam && this.roam.has(o.key) ? this.roam.get(o.key).y : o.y);
+    const sortY = (o) => (o.roam && this.roam.has(o.key) ? this.roam.get(o.key).y : o.sortY ?? o.y);
     drawn.sort((a, b) => sortY(a) - sortY(b) || a.x - b.x);
     this.drawn = drawn;
     for (const o of drawn) {
@@ -1210,7 +1211,7 @@ export class ForestView {
       // Generous: accept a hit within 2px of an opaque pixel (small sprites on phones).
       for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
         const qx = px + dx, qy = py + dy;
-        if (qx >= 0 && qy >= 0 && qx < f.w && qy < f.h && f.alpha[qy * f.w + qx] > 0) return o.tile;
+        if (qx >= 0 && qy >= 0 && qx < f.w && qy < f.h && f.alpha[qy * f.w + qx] > 0) return { ...o.tile, hitKind: o.kind, hitKey: o.key };
       }
     }
     return tileAt(w.x, w.y);

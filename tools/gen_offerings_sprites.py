@@ -179,6 +179,17 @@ def eggs():
         c.ellipse(8, 11.6, 3.6, 1.2, 5)
     sprite("egg.nest", WOOD + ["#3a2616"], nest)
 
+    def nest_front(c, f):
+        # The front lip of the nest, drawn over an egg sitting in it (same shape as the nest's lower half).
+        nest(c, f)
+        for y in range(0, 12):
+            for x in range(16):
+                c.set(x, y, 0)
+        for x in range(4, 13):
+            if c.get(x, 12) == 5:
+                c.set(x, 12, 0)
+    sprite("egg.nest.front", WOOD + ["#3a2616"], nest_front)
+
 
 SUPPLY = {   # stat: (band colour, sparkle)
     "damp": ("#4a7dff", "#a8c8ff"), "glow": ("#4fe3f0", "#e8ffff"), "bloom": ("#ff79b8", "#ffd0e8"),
