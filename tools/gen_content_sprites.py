@@ -647,8 +647,8 @@ def leaf(c, bx, by, tx, ty, width, fill=2, light=3, vein=7):
 
 def sproutling(c, dy, rank, f, variant):
     # Body: a round bulb sitting on two little feet.
-    c.ellipse(8, 11 + dy * 0.3, 5.2, 2.9, 2)
-    c.ellipse(6.5, 10 + dy * 0.3, 2.0, 1.0, 3)               # highlight
+    c.ellipse(8, 10.5 + dy * 0.3, 4.9, 3.7, 2)
+    c.ellipse(6.4, 9.0 + dy * 0.3, 1.8, 1.2, 3)               # highlight
     for x in range(4, 13):                                    # shaded belly
         if c.get(x, 13) == 2:
             c.set(x, 13, 7)
@@ -659,13 +659,13 @@ def sproutling(c, dy, rank, f, variant):
     c.set(4, 14, 4); c.set(11, 14, 4)
     # A short stem with two pointed leaves held up and out, clear of the body (on the bob frame the
     # stem dips and the leaf tips droop a little).
-    top = 4 + dy
-    c.line(8, 8, 8, top, 4)
+    top = 3 + dy
+    c.line(8, 7, 8, top, 4)
     droop = 1 if dy else 0
-    leaf(c, 7.3, top + 0.3, 2.2, top - 2.4 + droop, 1.5)
-    leaf(c, 8.7, top, 13.8, top - 3.0 + droop, 1.5)
+    leaf(c, 7.4, top + 0.8, 2.8, top - 1.9 + droop * 0.6, 1.45)
+    leaf(c, 8.6, top + 0.6, 13.4, top - 2.3 + droop * 0.6, 1.45)
     if variant % 2:                                           # some have a small extra leaf on the stem
-        leaf(c, 8.5, 7.2, 11.6, 5.8 + droop, 0.9)
+        leaf(c, 8.5, 6.0, 11.6, 4.8 + droop, 0.9)
     # Rarer ones carry a bud on the stem tip, then petals, then a crown of light.
     if rank >= 1:
         c.set(8, top - 1, 5)
