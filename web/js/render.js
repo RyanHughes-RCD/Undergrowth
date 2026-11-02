@@ -1133,13 +1133,22 @@ export class ForestView {
         };
         img.src = src;
       };
-      load(cfg.image || 'img/canopy.png', 'flecks', (m) => m);
+      // Sunlight patches: the raw mask (the classic look), a firmer one (solid core, short soft rim:
+      // visuals.canopy.edge) and the hot centres (visuals.canopy.hot) that get a warm glow.
+      const ss = (e0, e1) => (m) => { const k = Math.min(1, Math.max(0, (m - e0) / Math.max(1e-6, e1 - e0))); return k * k * (3 - 2 * k); };
+      const src = cfg.image || 'img/canopy.png';
+      load(src, 'flecksRaw', (m) => m);
+      load(src, 'flecks', ss(...(cfg.edge || [0.22, 0.55])));
+      load(src, 'hot', ss(...(cfg.hot || [0.6, 0.95])));
       const reg = cfg.region || {};
       load(reg.image || 'img/canopy-region.png', 'region', (m) => m * (reg.strength ?? 0.4));
       return;
     }
-    if (this.canopy.ready < 2) return;
+    if (this.canopy.ready < 4) return;
     const C = this.canopy;
+    const classic = !!this.app.canopyClassic;      // debug switch: the earlier, softer look
+    const LC = classic ? { ...L, ...(L.classic || {}) } : L;
+    const mask = classic ? C.flecksRaw : C.flecks;
     const R = Math.max(1, Math.min(cfg.maxRes || 3, Math.round(this.k || 1)));   // buffer px per art px
     const tex = cfg.texelsPerPx || 1;                                            // image px per art px
     const vx0 = Math.floor(view.minX) - 1, vy0 = Math.floor(view.minY) - 1;
@@ -1167,17 +1176,18 @@ export class ForestView {
     // Light: the flecks, two layers unioned (additive) so the pattern is effectively aperiodic.
     const [lb, lg] = buf('light');
     const sec = cfg.second || {};
-    lg.fillStyle = pat(lg, C.flecks, cfg.scale || 1, Math.sin(a) * sw, Math.sin(a * 0.7 + 1) * sw * 0.6, false);   // smooth sway, no pixel steps
+    const swayX = Math.sin(a) * sw, swayY = Math.sin(a * 0.7 + 1) * sw * 0.6;
+    lg.fillStyle = pat(lg, mask, cfg.scale || 1, Math.sin(a) * sw, Math.sin(a * 0.7 + 1) * sw * 0.6, false);   // smooth sway, no pixel steps
     lg.fillRect(0, 0, w, h);
     if ((sec.alpha ?? 0.7) > 0) {                     // optional second layer (0 = off)
     lg.globalCompositeOperation = 'lighter';
     lg.globalAlpha = sec.alpha ?? 0.7;
-    lg.fillStyle = pat(lg, C.flecks, sec.scale || 1.37, (sec.offset || [0, 0])[0] + Math.sin(a * 0.8 + 2) * sw, (sec.offset || [0, 0])[1] + Math.cos(a * 0.6) * sw * 0.6, !!sec.flip);
+    lg.fillStyle = pat(lg, mask, sec.scale || 1.37, (sec.offset || [0, 0])[0] + Math.sin(a * 0.8 + 2) * sw, (sec.offset || [0, 0])[1] + Math.cos(a * 0.6) * sw * 0.6, !!sec.flip);
     lg.fillRect(0, 0, w, h);
     }
     // Shade: everything except the light, with large regions lifted (clearings).
     const [sb, sg] = buf('shade');
-    sg.fillStyle = L.shadeColor;
+    sg.fillStyle = LC.shadeColor;
     sg.fillRect(0, 0, w, h);
     sg.globalCompositeOperation = 'destination-out';
     sg.drawImage(lb, 0, 0);
@@ -1189,16 +1199,69 @@ export class ForestView {
     // Tint the light to the time of day (warm sun, silver moon).
     lg.globalCompositeOperation = 'source-in';
     lg.globalAlpha = 1;
-    lg.fillStyle = L.lightColor;
+    lg.fillStyle = LC.lightColor;
     lg.fillRect(0, 0, w, h);
     ctx.save();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.globalAlpha = L.shade;
+    ctx.globalAlpha = LC.shade;
     ctx.drawImage(sb, vx0, vy0, ww, wh);
-    ctx.globalCompositeOperation = 'screen';
-    ctx.globalAlpha = L.light;
+    // Sunlight adds warm colour to the ground under it ("lighter", additive: a dim gold adds more red
+    // than green, so grass turns sunny yellow-green and keeps its texture) instead of whitening it
+    // (screen, the classic look, reads as haze).
+    ctx.globalCompositeOperation = classic ? 'screen' : (cfg.lightBlend || 'lighter');
+    ctx.globalAlpha = Math.min(1, LC.light);
     ctx.drawImage(lb, vx0, vy0, ww, wh);
+    if (!classic && L.glow > 0) {
+      // Hot spots: a soft warm glow only in the brightest centres.
+      const [hb, hg] = buf('hot');
+      hg.fillStyle = pat(hg, C.hot, cfg.scale || 1, swayX, swayY, false);
+      hg.fillRect(0, 0, w, h);
+      hg.globalCompositeOperation = 'source-in';
+      hg.fillStyle = L.glowColor || L.lightColor;
+      hg.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = Math.min(1, L.glow);
+      ctx.drawImage(hb, vx0, vy0, ww, wh);
+    }
+    ctx.restore();
+    if (!classic) this.drawShafts(ctx, view, t, L);
+  }
+
+  /**
+   * Light shafts (visuals.canopy.shafts): very soft diagonal beams slanting down from the canopy,
+   * world-anchored, each drifting and breathing slowly. Strength per time of day: lighting "shafts".
+   */
+  drawShafts(ctx, view, t, L) {
+    const s = (this.app.content.tuning.visuals.canopy || {}).shafts;
+    const strength = L.shafts || 0;
+    if (!s || s.enabled === false || strength <= 0.005) return;
+    const th = -((s.angleDeg ?? 22) * Math.PI) / 180;           // beams lean down to the right
+    const cos = Math.cos(th), sin = Math.sin(th);
+    const cx = (view.minX + view.maxX) / 2, cy = (view.minY + view.maxY) / 2;
+    const diag = Math.hypot(view.maxX - view.minX, view.maxY - view.minY) + 40;
+    const uc = cx * cos + cy * sin;                             // view centre across the beams
+    const spacing = s.spacing || 64, keep = s.keep ?? 0.6;
+    const [r, g, b] = hex2rgb(L.shaftColor || L.lightColor || '#fff0c0');
+    ctx.save();
+    ctx.globalCompositeOperation = s.blend || 'screen';
+    ctx.translate(cx, cy);
+    ctx.rotate(th);
+    const i0 = Math.floor((uc - diag / 2) / spacing) - 1, i1 = Math.ceil((uc + diag / 2) / spacing) + 1;
+    for (let i = i0; i <= i1; i++) {
+      const hv = hash32(i, 77, 31), f1 = (hv % 1000) / 1000, f2 = ((hv >>> 10) % 1000) / 1000;
+      if (f1 > keep) continue;                                  // only some lanes have a beam
+      const width = (s.width || 26) * (0.6 + 0.8 * f2);
+      const u = i * spacing + Math.sin(t * (s.driftSpeed ?? 0.05) + i * 2.3) * (s.drift ?? 10) - uc;
+      const pulse = 0.55 + 0.45 * Math.sin(t * (0.12 + 0.1 * f2) + i * 1.7);
+      const a = strength * pulse * (0.6 + 0.4 * f1 / Math.max(0.01, keep));
+      const grad = ctx.createLinearGradient(u - width / 2, 0, u + width / 2, 0);
+      grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+      grad.addColorStop(0.5, `rgba(${r},${g},${b},${a.toFixed(3)})`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(u - width / 2, -diag / 2, width, diag);
+    }
     ctx.restore();
   }
 

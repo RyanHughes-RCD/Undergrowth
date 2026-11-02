@@ -1159,6 +1159,11 @@ export class UI {
       h('p', { class: 'sub' }, '60× = a minute per second · 3600× = an hour per second. Creatures take 12–48 forest-hours to reach full strength.'),
       h('div', { class: 'section' }, 'Skip ahead'),
       h('div', { class: 'row gap wrap' }, b('+1 hour', () => a.debugSkip(1)), b('+6 hours', () => a.debugSkip(6)), b('+1 day', () => a.debugSkip(24))),
+      h('div', { class: 'section' }, 'Sunlight'),
+      h('div', { class: 'row gap wrap' },
+        b('New', () => { a.canopyClassic = false; this.renderSheet(); }, a.canopyClassic ? 'grey' : 'green'),
+        b('Classic', () => { a.canopyClassic = true; this.renderSheet(); }, a.canopyClassic ? 'green' : 'grey')),
+      h('p', { class: 'sub' }, 'Compare the sunlight through the trees with the earlier, softer look. Only for this visit.'),
       // Raw values (inspector, overlay, heatmap) are developer-only.
       ...(a.devMode ? this.devViewTools() : []),
     ];

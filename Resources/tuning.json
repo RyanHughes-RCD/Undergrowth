@@ -145,6 +145,10 @@
       "enabled": true,
       "image": "img/canopy.png",
       "texelsPerPx": 2,
+      "edge": [0.1, 0.75],
+      "hot": [0.55, 1],
+      "lightBlend": "lighter",
+      "shafts": { "enabled": true, "angleDeg": 22, "spacing": 72, "width": 40, "keep": 0.6, "drift": 10, "driftSpeed": 0.05, "blend": "screen" },
       "maxRes": 3,
       "scale": 1,
       "second": { "scale": 1.21, "offset": [233, 151], "flip": true, "alpha": 0 },
@@ -153,14 +157,14 @@
       "swaySeconds": 23
     },
     "lighting": {
-      "_about": "Per state; values blend smoothly across clock.transitionMinutes around each boundary. shade/light = canopy shade and sun/moon-ray strength; ambient multiplies the whole scene.",
+      "_about": "Per state; values blend smoothly across clock.transitionMinutes around each boundary. shade/light = canopy shade and sunlight-patch strength (light is drawn with canopy.lightBlend); glow = warm glow on the brightest centres; shafts = strength of the diagonal light beams; classic = the earlier look's values (Debug: Sunlight classic). ambient multiplies the whole scene.",
       "refreshSeconds": 5,
       "fireflies": { "perTile": 0.07, "max": 60 },
       "states": {
-        "dawn": { "shade": 0.36, "shadeColor": "#0e1a16", "light": 0.32, "lightColor": "#ffd6b0", "ambient": "#e8ccd8", "ambientAlpha": 0.22, "fireflies": 0.15, "sparkle": "#ffe6d0", "sparkleEvery": 6 },
-        "day": { "shade": 0.44, "shadeColor": "#04120a", "light": 0.55, "lightColor": "#fff1c0", "ambient": "#ffffff", "ambientAlpha": 0, "fireflies": 0, "sparkle": "#fff8d8", "sparkleEvery": 4 },
-        "dusk": { "shade": 0.42, "shadeColor": "#140e1c", "light": 0.24, "lightColor": "#ffb070", "ambient": "#d8b4a8", "ambientAlpha": 0.26, "fireflies": 0.45, "sparkle": "#ffd0a0", "sparkleEvery": 6 },
-        "night": { "shade": 0.34, "shadeColor": "#02060e", "light": 0.2, "lightColor": "#b8d0ff", "ambient": "#56688f", "ambientAlpha": 0.46, "fireflies": 1, "sparkle": "#c8dcff", "sparkleEvery": 10 }
+        "dawn": { "shade": 0.44, "shadeColor": "#0e1a16", "light": 0.7, "lightColor": "#a2603e", "glow": 0.22, "glowColor": "#ffd8c0", "shafts": 0.2, "shaftColor": "#ffd0b0", "classic": { "shade": 0.36, "light": 0.32, "lightColor": "#ffd6b0" }, "ambient": "#e8ccd8", "ambientAlpha": 0.22, "fireflies": 0.15, "sparkle": "#ffe6d0", "sparkleEvery": 6 },
+        "day": { "shade": 0.55, "shadeColor": "#04120a", "light": 0.75, "lightColor": "#a2743a", "glow": 0.28, "glowColor": "#ffe8b8", "shafts": 0.2, "shaftColor": "#fff0c0", "classic": { "shade": 0.44, "light": 0.55, "lightColor": "#fff1c0" }, "ambient": "#ffffff", "ambientAlpha": 0, "fireflies": 0, "sparkle": "#fff8d8", "sparkleEvery": 4 },
+        "dusk": { "shade": 0.5, "shadeColor": "#140e1c", "light": 0.7, "lightColor": "#a24e1c", "glow": 0.2, "glowColor": "#ffc890", "shafts": 0.2, "shaftColor": "#ffb070", "classic": { "shade": 0.42, "light": 0.24, "lightColor": "#ffb070" }, "ambient": "#d8b4a8", "ambientAlpha": 0.26, "fireflies": 0.45, "sparkle": "#ffd0a0", "sparkleEvery": 6 },
+        "night": { "shade": 0.4, "shadeColor": "#02060e", "light": 0.55, "lightColor": "#3c4c74", "glow": 0.12, "glowColor": "#d8e6ff", "shafts": 0.06, "shaftColor": "#b8d0ff", "classic": { "shade": 0.34, "light": 0.2, "lightColor": "#b8d0ff" }, "ambient": "#56688f", "ambientAlpha": 0.46, "fireflies": 1, "sparkle": "#c8dcff", "sparkleEvery": 10 }
       }
     },
     "overlayFadeSeconds": 0.6
