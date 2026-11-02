@@ -306,6 +306,7 @@ export class UI {
       offerings: () => ['The Old Log', this.offeringsBody()],
       decor: () => this.decorBody(arg),
       nest: () => this.nestBody(arg),
+      landmark: () => this.landmarkBody(arg),
     }[type];
     if (!build) return;
     const [title, body] = build();
@@ -651,6 +652,10 @@ export class UI {
       return (content.landmarks || []).filter((l) => l.inGuide !== false).map((l) => ({
         key: 'landmark:' + l.id.replace(/^landmark\./, ''), name: l.name, sprite: l.sprite, variant: null,
         text: content.story?.guide?.landmarks?.[l.id] || null,
+        howFound: l.earned ? this.landmarkHowFound(l) : null,
+        special: l.purpose || null,
+        // Earned landmarks can be read as a silhouette with how they form, before they're found.
+        teaser: l.earned ? this.landmarkHowFound(l) : null,
       }));
     }
     const fam = FAMILY_TABS.find(([id]) => id === tab);
@@ -715,6 +720,31 @@ export class UI {
       e.text ? h('p', { class: 'sub center' }, e.text) : null,
       e.special ? h('p', { class: 'center' }, ic('sparkle', 1), ' ' + e.special) : null,
     ];
+  }
+
+  /** How an earned landmark forms: "Forms where Stone ▮▮… and Depth ▮▮… cover a 3×3 patch." */
+  landmarkHowFound(def) {
+    const e = def.earned || {};
+    const n = e.size || 3;
+    return ['Forms where ', this.joinNodes(Object.entries(e.requires || {}).map(([k, v]) => this.requirementText(k, v.min)), ' and '), ` cover a whole ${n}×${n} patch of ground. Once formed, it stays.`];
+  }
+
+  /** A landmark in the forest: what it is, what it does, and when it next gives something. */
+  landmarkBody(id) {
+    const g = this.game, now = g.now();
+    const l = g.state.landmarks.find((x) => x.id === id);
+    const def = g.landmarkDef(id) || { name: 'Landmark' };
+    const lines = [];
+    if (def.purpose) lines.push(h('p', { class: 'center' }, ic('sparkle', 1), ' ' + def.purpose));
+    if (def.aura) lines.push(h('p', { class: 'sub center' }, 'Around it: ', this.joinNodes(Object.entries(def.aura.stats).map(([k, v]) => this.amountText(k, v)), ', '),
+      def.aura.radius ? ` within ${def.aura.radius} tile${def.aura.radius > 1 ? 's' : ''}.` : ' on its tile.'));
+    if (def.effect && def.effect.type === 'produce' && l) {
+      const waiting = g.state.spawns.some((sp) => sp.fromLandmark === l.id);
+      const left = (l.lastProduced || l.formedAt || now) + (def.effect.everyHours || 8) * 3600e3 - now;
+      lines.push(h('p', { class: 'sub center' }, waiting ? 'Something is waiting beside it.' : `Next in about ${duration(Math.max(0, left) / 1000)}.`));
+    }
+    const story = this.content.story?.guide?.landmarks?.[id];
+    return [def.name, [h('div', { class: 'hero' }, this.sprites.element(def.sprite, null, 5, '', true)), story ? h('p', { class: 'sub center' }, story) : null, ...lines]];
   }
 
   // -------------------------------------------------------------- terrain (Field Guide)
@@ -1168,14 +1198,21 @@ export class UI {
   /** A short celebratory card (blend moment). */
   celebrate(title, text) {
     const ov = document.getElementById('overlay');
-    if (ov.classList.contains('show')) { this.toast(text); return; }
-    const done = () => { ov.classList.remove('show'); ov.replaceChildren(); };
+    // Another card is up: this one waits its turn (a few at most).
+    if (ov.classList.contains('show')) { (this.cardQueue = this.cardQueue || []).splice(3); this.cardQueue.push([title, text]); return; }
+    const done = () => { ov.classList.remove('show'); ov.replaceChildren(); this.nextCard(); };
     ov.replaceChildren(h('div', { class: 'reveal-card pop' },
       h('div', { class: 'rays-wrap small' }, this.burst(null, 2.5), h('span', { class: 'row' }, ic('leaf', 4), ic('sparkle', 4))),
       h('h2', {}, title), h('p', { class: 'sub' }, text),
       h('button', { class: 'btn green', onclick: done }, 'Lovely')));
     ov.onclick = (e) => { if (e.target === ov) done(); };
     ov.classList.add('show');
+  }
+
+  /** Shows the next waiting celebration card, if any. */
+  nextCard() {
+    const next = (this.cardQueue || []).shift();
+    if (next) this.celebrate(...next);
   }
 
   showReveal(creature, isNew, source) {
@@ -1186,7 +1223,7 @@ export class UI {
     const done = () => {
       ov.classList.remove('show'); ov.replaceChildren();
       const next = (this.revealQueue || []).shift();
-      if (next) this.showReveal(...next);
+      if (next) this.showReveal(...next); else this.nextCard();
     };
     ov.replaceChildren(h('div', { class: 'reveal-card pop' },
       h('h2', { class: creature.isGlimmer ? 'glimmer' : '' }, creature.isGlimmer ? [ic('glimmer', 2), `A glimmer ${this.app.displayName(creature)}!`, ic('glimmer', 2)] : `You found a ${this.app.displayName(creature)}!`),

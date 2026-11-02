@@ -609,6 +609,7 @@ export class Game {
   /** Puts data-defined landmarks (the old log) on the map, once. */
   placeLandmarks() {
     for (const def of this.content.landmarks || []) {
+      if (def.earned) continue;                       // earned landmarks form in play (checkLandmarks)
       if (this.state.landmarks.some((l) => l.id === def.id)) continue;
       const c = this.state.clearing;
       let tile = { x: Math.floor((c.x0 + c.x1) / 2), y: Math.floor((c.y0 + c.y1) / 2) };
@@ -1121,7 +1122,7 @@ export class Game {
   /** Tile stats for every tile. Values below intensity.minInfluence are 0 (inactive) unless opts.raw. */
   statField(now, opts = {}) {
     const f = this.stats.field(this.state.size, this.effectivePlacements(now), now);
-    for (const b of this.activeBoosts(now)) for (const t of this.boostTiles(b)) f.add(t.x, t.y, b.stats);
+    for (const b of [...this.activeBoosts(now), ...this.landmarkAuras()]) for (const t of this.boostTiles(b)) f.add(t.x, t.y, b.stats);
     // Ambient Damp (seeped and pooled water) on top of what creatures give.
     const amb = this.state.ambientDamp || {}, kd = f.keys.indexOf('damp'), KK = f.keys.length, idx = this.tileKeys.index;
     for (const key in amb) {
@@ -1158,7 +1159,7 @@ export class Game {
 
   tileStats(tile, now, opts = {}) {
     const s = this.stats.statsAt(tile, this.effectivePlacements(now), now);
-    for (const b of this.activeBoosts(now)) if (Math.max(Math.abs(b.tile.x - tile.x), Math.abs(b.tile.y - tile.y)) <= (b.radius || 0)) for (const k in b.stats) s[k] = (s[k] || 0) + b.stats[k];
+    for (const b of [...this.activeBoosts(now), ...this.landmarkAuras()]) if (Math.max(Math.abs(b.tile.x - tile.x), Math.abs(b.tile.y - tile.y)) <= (b.radius || 0)) for (const k in b.stats) s[k] = (s[k] || 0) + b.stats[k];
     s.damp = (s.damp || 0) + this.ambientAt(tile.x, tile.y);
     const m = this.revealFactor(tile.x, tile.y, now);
     const floor = opts.raw ? 0 : this.minInfluence;
@@ -1267,6 +1268,7 @@ export class Game {
       if (tiles.length) { s.milestones.blend = now; this.events.push({ type: 'blend', tiles }); }
     }
     if (!this.inTutorial) this.checkExpansion(now);
+    this.checkLandmarks(now);
     this.checkTasks();
     if (!s.milestones.uncommonHint) {
       const tile = this.firstUncommonTile(now);
@@ -1469,7 +1471,7 @@ export class Game {
           }
         }
       }
-      for (const b of this.activeBoosts(t)) for (const bt of this.boostTiles(b)) sources[bt.y * W + bt.x] += 1;
+      for (const b of [...this.activeBoosts(t), ...this.landmarkAuras()]) for (const bt of this.boostTiles(b)) sources[bt.y * W + bt.x] += 1;
     }
     const tiles = [];
     let total = 0;
@@ -1828,7 +1830,7 @@ export class Game {
     return { item: id, count: 1 };
   }
 
-  get nestSlots() { return (this.eggCfg.baseNests ?? 1) + (this.state.unlocks.nests || 0); }
+  get nestSlots() { return (this.eggCfg.baseNests ?? 1) + (this.state.unlocks.nests || 0) + this.landmarkEffects('extraNest').reduce((a, [e]) => a + (e.add || 1), 0); }
   nestAt(t) { return this.state.nests.find((n) => sameTile(n.tile, t)) || null; }
   nestProgress(n, now) { return Math.min(1, Math.max(0, (now - n.startedAt) / (Math.max(1, n.hatchSeconds) * 1000))); }
 
@@ -1908,7 +1910,10 @@ export class Game {
     const key = 'hatch:' + egg.family;
     const isNewSpecies = !this.discovered.has('creature:' + def.id);
     this.state.pity[key] = isNewSpecies ? 0 : (this.state.pity[key] || 0) + 1;
-    const creature = n.glimmer ? this.rollCreature(def.id, 'egg', now, true) : this.makeCreature(def.id, 'egg', now);
+    // A Moonwell nearby makes a Glimmer likelier (landmark effect glimmerBoost).
+    const well = this.landmarkEffects('glimmerBoost').filter(([e, lm]) => dist(lm.tile, n.tile) <= (e.range || 0)).reduce((m, [e]) => Math.max(m, e.mult || 1), 1);
+    const boosted = well > 1 && this.rng.chance(Math.min(1, (this.t.glimmerChance || 0) * well));
+    const creature = n.glimmer || boosted ? this.rollCreature(def.id, 'egg', now, true) : this.makeCreature(def.id, 'egg', now);
     this.state.nests.splice(i, 1);
     this.bump('hatch');
     const results = this.grant([{ creature }]);
@@ -2407,6 +2412,82 @@ export class Game {
     throw new GameError("That can't be used.");
   }
 
+  // ---- earned landmarks (landmarks.json "earned"): they form where two stats are strong across a
+  // whole size×size patch, then stay for good, each with its own purpose (effect) and maybe an aura.
+  landmarkDef(id) { return (this.content.landmarks || []).find((d) => d.id === id) || null; }
+
+  /** [effect, landmark] for every formed landmark whose effect has this type. */
+  landmarkEffects(type) {
+    const out = [];
+    for (const l of this.state.landmarks || []) {
+      const def = this.landmarkDef(l.id);
+      if (def && def.effect && def.effect.type === type) out.push([def.effect, l]);
+    }
+    return out;
+  }
+
+  /** Landmark auras as permanent boosts: { tile, stats, radius }. */
+  landmarkAuras() {
+    const out = [];
+    for (const l of this.state.landmarks || []) {
+      const def = this.landmarkDef(l.id);
+      if (def && def.aura) out.push({ tile: l.tile, stats: def.aura.stats, radius: def.aura.radius || 0 });
+    }
+    return out;
+  }
+
+  /** Where an earned landmark could form right now: the centre of the first patch that qualifies, or null. */
+  landmarkSite(def, field) {
+    const e = def.earned, n = e.size || 3, h = Math.floor(n / 2), c = this.clearing;
+    for (let y = c.y0 + h; y <= c.y1 - h; y++) for (let x = c.x0 + h; x <= c.x1 - h; x++) {
+      if (!groupMatches(e.requires, field.statsAt(x, y))) continue;   // quick check on the centre first
+      let all = true;
+      for (let dy = -h; dy <= h && all; dy++) for (let dx = -h; dx <= h && all; dx++) if (!groupMatches(e.requires, field.statsAt(x + dx, y + dy))) all = false;
+      if (!all) continue;
+      // The landmark takes a tile in the patch that nothing permanent is on (spawns and seeds make way).
+      const spots = [{ x, y }];
+      for (let dy = -h; dy <= h; dy++) for (let dx = -h; dx <= h; dx++) if (dx || dy) spots.push({ x: x + dx, y: y + dy });
+      const tile = spots.find((t) => !this.landmarkAt(t) && !this.creatureAt(t) && !this.nestAt(t) && !this.decorAt(t) && !this.sceneryAt(t));
+      if (tile) return { tile, centre: { x, y }, size: n };
+    }
+    return null;
+  }
+
+  /** Forms any earned landmarks whose conditions are met, and lets formed ones produce. */
+  checkLandmarks(now) {
+    const defs = (this.content.landmarks || []).filter((d) => d.earned);
+    if (!defs.length) return;
+    let field = null;
+    for (const def of defs) {
+      const have = this.state.landmarks.filter((l) => l.id === def.id).length;
+      if (have >= (def.earned.max ?? 1)) continue;
+      field = field || this.field(now);
+      const site = this.landmarkSite(def, field);
+      if (!site) continue;
+      const t = site.tile;
+      this.state.spawns = this.state.spawns.filter((sp) => !sameTile(sp.tile, t));
+      this.state.plantedSeeds = this.state.plantedSeeds.filter((sp) => !sameTile(sp.tile, t));
+      this.state.landmarks.push({ id: def.id, tile: { ...t }, formedAt: now, lastProduced: now });
+      this.discover('landmark:' + def.id.replace(/^landmark\./, ''));
+      const tiles = [];
+      const h = Math.floor(site.size / 2);
+      for (let dy = -h; dy <= h; dy++) for (let dx = -h; dx <= h; dx++) tiles.push({ x: site.centre.x + dx, y: site.centre.y + dy });
+      this.events.push({ type: 'landmarkFormed', id: def.id, tile: t, tiles });
+      this.statCache = null;
+    }
+    // Producers (the cave, the fruit tree): one thing waiting at a time, next to the landmark.
+    for (const [e, l] of this.landmarkEffects('produce')) {
+      if (now - (l.lastProduced || l.formedAt || now) < (e.everyHours || 8) * HOUR) continue;
+      if (this.state.spawns.some((sp) => sp.fromLandmark === l.id)) { l.lastProduced = now; continue; }
+      const item = weightedPick((e.items || []).map((x) => [x.item, x.weight || 1]), this.rng);
+      const def = item && this.content.items[item];
+      const tile = def && this.freeNear(l.tile);
+      if (!tile) continue;
+      this.state.spawns.push({ id: this.rng.uuid(), itemID: item, tile, spawnedAt: now, keep: true, placement: 'surface', fromLandmark: l.id });
+      l.lastProduced = now;
+    }
+  }
+
   // ---- offerings (the Old Log board: requests, rewards, decor, compost)
   get offeringsCfg() { return this.t.offerings || {}; }
 
@@ -2449,7 +2530,8 @@ export class Game {
     let v = this.state.visitorReqs;
     if (!v || v.day !== day) {
       v = this.state.visitorReqs = { day, offers: [], done: [], rerolls: 0 };
-      for (let i = 0; i < (this.visitorCfg.perDay ?? 2); i++) {
+      const perDay = (this.visitorCfg.perDay ?? 2) + this.landmarkEffects('extraVisitor').reduce((a, [e]) => a + (e.add || 1), 0);
+      for (let i = 0; i < perDay; i++) {
         const o = this.pickVisitor(now, hash32(this.state.seed, day, i));
         if (o) v.offers.push(o);
       }

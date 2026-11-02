@@ -211,6 +211,85 @@ def supplies():
         sprite(f"supply.{stat}", ["#6a4a2a", "#a07848", "#c8a070", band, light], sack, tags=("supply",))
 
 
+def landmarks():
+    """Earned landmarks (Resources/Content/landmarks.json 'earned'): they form where two stats are strong
+    across a 3x3 patch and stay for good. 28x24, anchored at the base."""
+    size, anchor = (28, 24), (14, 21)
+
+    def cave(c, f):                      # a mound of rock with a dark mouth
+        c.ellipse(14, 15, 12, 8, 3, clip=lambda x, y: y <= 21)
+        c.ellipse(10, 11, 5, 3, 4)
+        c.ellipse(14, 17, 5, 4.5, 5, clip=lambda x, y: y <= 21)
+        c.ellipse(14, 18, 3, 3, 6, clip=lambda x, y: y <= 21)
+        for (x, y) in ((4, 14), (22, 12), (19, 7), (7, 18)):
+            c.set(x, y, 2)
+        c.rect(3, 21, 25, 21, 2)
+    sprite("landmark.cave", ["#5e5e68", "#8a8a96", "#b8b8c4", "#2a2430", "#120c18"], cave, size=size, anchor=anchor, tags=("landmark",))
+
+    def fruit_tree(c, f):                # a round crown with red fruit on a short trunk
+        c.rect(12, 13, 15, 21, 2)
+        c.set(11, 21, 2); c.set(16, 21, 2)
+        c.ellipse(14, 9, 10, 7.5, 3)
+        c.ellipse(11, 7, 5, 3.5, 4)
+        for (x, y) in ((8, 10), (13, 5), (18, 8), (20, 12), (10, 13), (16, 11)):
+            c.set(x, y, 5); c.set(x + 1, y, 5); c.set(x, y + 1, 6)
+    sprite("landmark.fruit-tree", ["#6a4426", "#3f8a3a", "#6cc24a", "#e0302c", "#ff8a70"], fruit_tree, size=size, anchor=anchor, tags=("landmark",))
+
+    def moonwell(c, f):                  # a stone ring around glowing water
+        c.ellipse(14, 17, 10, 4.5, 2)
+        c.ellipse(14, 16.5, 7.5, 3, 4 if f == 0 else 5)
+        c.ellipse(12, 16, 3, 1, 5 if f == 0 else 6)
+        for x in (5, 9, 14, 19, 23):
+            c.set(x, 19, 3)
+        for (x, y) in ((10, 10), (17, 8), (14, 12)):
+            c.set(x, y - f, 6)
+    sprite("landmark.moonwell", ["#6a6a78", "#9a9aa6", "#3aa8b8", "#7cf2ff", "#e8ffff"], moonwell, size=size, anchor=anchor, frames=2, durations=[1.1, 1.1], tags=("landmark",))
+
+    def standing_stones(c, f):           # three upright stones with glowing marks
+        for (x, h) in ((6, 12), (14, 16), (22, 11)):
+            c.rect(x - 2, 21 - h, x + 2, 21, 2)
+            c.rect(x - 2, 21 - h, x - 1, 21, 3)
+            c.set(x, 21 - h + 4, 4 if f == 0 else 5); c.set(x, 21 - h + 5, 4)
+        c.rect(2, 21, 26, 21, 6)
+    sprite("landmark.standing-stones", ["#7c7c86", "#a0a0b0", "#4fe3f0", "#e8ffff", "#3a3446"], standing_stones, size=size, anchor=anchor, frames=2, durations=[1.3, 1.3], tags=("landmark",))
+
+    def fairy_ring(c, f):                # a ring of pale mushrooms in the grass
+        import math
+        for i in range(9):
+            a = i / 9 * 6.283
+            x, y = 14 + math.cos(a) * 10, 16 + math.sin(a) * 4.5
+            c.rect(int(x), int(y), int(x), int(y) + 1, 4)
+            c.ellipse(x, y - 0.5, 1.8, 1.1, 2 if (i + f) % 3 else 3)
+        c.set(14, 15, 5 if f else 4)
+    sprite("landmark.fairy-ring", ["#d8c0e8", "#ffffff", "#efe2c8", "#ffd84a"], fairy_ring, size=size, anchor=anchor, frames=2, durations=[0.9, 0.9], tags=("landmark",))
+
+    def spring(c, f):                    # water welling up between mossy stones
+        c.ellipse(14, 17, 9, 4, 4)
+        for (x, y) in ((6, 16), (22, 17), (10, 20), (19, 20), (14, 13)):
+            c.ellipse(x, y, 2.5, 1.8, 2); c.set(x - 1, y - 1, 3)
+        c.ellipse(14, 17, 5, 2, 5)
+        for k in range(3):
+            c.set(13 + k, 14 - (k + f) % 2, 6)
+    sprite("landmark.spring", ["#8a8a96", "#7aa85a", "#2f6aa8", "#4a90d8", "#c8f0ff"], spring, size=size, anchor=anchor, frames=2, durations=[0.6, 0.6], tags=("landmark",))
+
+    def nest_hollow(c, f):               # a hollow stump lined with moss and twigs
+        c.rect(7, 9, 21, 21, 2)
+        c.rect(7, 9, 9, 21, 3)
+        c.ellipse(14, 9, 7, 2.5, 4)
+        c.ellipse(14, 9, 5, 1.6, 5)
+        for x in range(8, 21, 3):
+            c.set(x, 8, 6)
+        c.rect(5, 21, 23, 21, 2)
+    sprite("landmark.nest-hollow", ["#6a4426", "#8a5a36", "#3a2616", "#1b120c", "#7aa85a"], nest_hollow, size=size, anchor=anchor, tags=("landmark",))
+
+    def fruit(c, f):
+        c.ellipse(8, 10, 4.5, 4.2, 2)
+        c.ellipse(6.5, 8.5, 1.6, 1.2, 3)
+        c.rect(8, 4, 8, 6, 4)
+        c.ellipse(10, 5, 2, 1, 5)
+    sprite("item.material.forest-fruit", ["#d8302c", "#ff8a70", "#6a4426", "#4fae3a"], fruit, tags=("item",))
+
+
 def board_icon():
     def board(c, f):
         c.rect(1, 2, 10, 8, 3)
@@ -225,5 +304,6 @@ if __name__ == "__main__":
     decor()
     eggs()
     supplies()
+    landmarks()
     board_icon()
     print("wrote Offerings sprites")

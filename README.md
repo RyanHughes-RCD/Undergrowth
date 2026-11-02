@@ -442,6 +442,28 @@ The board's **Shop** and **Upgrades** sections sell things for bundles of specif
 - **Developer mode → Eggs:** one of every egg, hatch nests now, +2 nests.
 - **Developer mode → Offerings:** +50 compost, complete open or all requests, reset requests, one of every decor.
 
+## Earned landmarks (web)
+
+Landmarks aren't placed on the map; they're earned. When two stats reach the needed level on **every tile of a 3×3 patch**, a landmark forms on that patch. It then stays for good, even after the creatures that made it leave.
+- Definitions live in `Resources/Content/landmarks.json` (`earned.requires`, `earned.size`, `earned.max`, `aura`, `effect`, `purpose`).
+- Each forms once, with a celebration and a highlight of its patch.
+- Before it has formed, the Field Guide's Landmarks tab shows it as a silhouette with how it forms.
+- Tap a landmark to see what it does and, for producers, when the next thing comes.
+
+| Landmark | Forms from (16+ each) | Aura | Purpose |
+|---|---|---|---|
+| Hollow Cave | Stone + Depth | Stone 8, Depth 8 (radius 2) | A geode rolls out every 8h: Pebble, Mossy, Rootbound or (rarely) Deep. One waits at a time. |
+| Fruit Tree | Bloom + Verdure | Bloom 8, Verdure 8 (radius 2) | Bears **Forest Fruit** every 6h, a new trade good (shop: 1 fruit = 3 seeds, 2 fruit + 3 Sorrel = a Fine Sproutling egg; a fruit-loving visitor). |
+| Moonwell | Damp + Glow | Glow 8 (radius 2) | Eggs hatched in nests within 3 tiles are 5× as likely to be Glimmers. |
+| Standing Stones | Stone + Glow | Glow 6 (radius 1) | Creatures placed within 3 tiles reach one tile farther. |
+| Fairy Ring | Damp + Verdure | Damp 6, Verdure 6 (radius 1) | One more visitor at the Old Log each day. |
+| Spring | Damp + Stone | Damp 20 (radius 1) | A permanent water source: its Damp feeds the ambient water, which spreads and pools even with no creatures nearby. |
+| Nest Hollow | Depth + Verdure | Verdure 6 (radius 1) | One more nest for eggs. |
+
+- Auras work like permanent soil boosts (they count as an effect for where spawns land).
+- Forming one takes a cluster of creatures: for example, four of each stat's commons packed around a tile, or fewer uncommons. In tests, 8 commons in a ring formed each one.
+- Celebration cards now queue, so a landmark's card isn't lost behind another one.
+
 ## Named terrains (web)
 
 > Creature family balance: sproutlings (found only when a planted Mystery Seed finishes growing) have 3× the find chance of the other families (common 12%, uncommon 9%, rare 4.5%, very rare 1.5%, legendary 0.3%), since a forest yields far fewer harvests than mushroom picks or cracked geodes.

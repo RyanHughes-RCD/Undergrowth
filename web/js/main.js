@@ -111,6 +111,10 @@ class App {
       } else if (e.type === 'blend') {
         this.view.highlight(e.tiles, (cfg.blend && cfg.blend.highlightSeconds) || 5);
         ui.celebrate(ui.story('messages.blendTitle'), ui.story('messages.blend'));
+      } else if (e.type === 'landmarkFormed') {
+        const def = (this.content.landmarks || []).find((x) => x.id === e.id);
+        this.view.highlight(e.tiles, 6, '255,230,150');
+        if (def) ui.celebrate(`${def.name} has formed`, def.purpose || '');
       } else if (e.type === 'expansion') {
         this.view.highlight(e.tiles, 4, '170,255,150');
         ui.toast(ui.story('messages.expansion'));
@@ -333,6 +337,7 @@ class App {
       const def = (this.content.landmarks || []).find((l) => l.id === landmark.id);
       // The Old Log is the trading place: its Offerings board (requests, compost heap).
       if (landmark.id === 'landmark.old-log' && (this.content.requests || []).length) { ui.selectedTile = null; ui.open('offerings'); this.changed(false); return; }
+      if (def && def.earned) { ui.selectedTile = null; ui.open('landmark', def.id); this.changed(false); return; }
       if (def) ui.open('entry', { name: def.name, sprite: def.sprite, variant: null, text: this.content.story?.guide?.landmarks?.[def.id] });
       return;
     }
