@@ -330,3 +330,30 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .price { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .price-item { display: flex; align-items: center; gap: 3px; }
 .price-item.met b { color: var(--green-hi); }
+
+/* Active buffs (Spirit Well) under the top bar */
+.buffs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; pointer-events: auto; }
+.buff-chip { display: flex; align-items: center; gap: 4px; padding: 3px 8px; font-size: var(--t-tiny); }
+
+/* The Spirit Well's Wishing screen */
+.wish { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: #0f1a12;
+  padding: calc(env(safe-area-inset-top) + 8px) 12px calc(env(safe-area-inset-bottom) + 10px); color: var(--text, #e8f0e0); }
+.wish-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px 8px; font-size: var(--t-big, 18px); }
+.wish-stage { position: relative; display: flex; justify-content: center; flex: none; }
+.wish-well { width: min(92vw, 380px); height: auto; max-height: 32vh; aspect-ratio: 112 / 88; image-rendering: pixelated; }
+.wish-reveal { position: absolute; left: 0; right: 0; bottom: 6px; display: flex; justify-content: center; pointer-events: none; }
+.wish-reveal-text { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 10px; background: rgba(10, 20, 14, 0.75); }
+.wish-reveal-text.bonus { opacity: 0.9; }
+.wish-msg { text-align: center; font-style: italic; color: #bfe8dc; margin: 8px 6px; min-height: 2.6em; }
+.wish-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
+.wish-row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px dashed rgba(255,255,255,0.08); }
+.wish-row.on { background: rgba(120, 220, 200, 0.07); }
+.wish-row.primary { background: rgba(255, 216, 74, 0.08); }
+.qty { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; max-width: 52%; }
+.qty .btn.small { min-width: 30px; padding-left: 6px; padding-right: 6px; }
+.qty-n { min-width: 22px; text-align: center; opacity: 0.5; }
+.qty-n.on { opacity: 1; color: #9ff4e8; }
+.wish-foot { flex: none; display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
+.wish-foot .btn.green { margin-left: auto; }
+.wish-confirm { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.sub.new { color: #ffe9a8; }

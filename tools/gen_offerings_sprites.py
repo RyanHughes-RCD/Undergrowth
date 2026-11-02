@@ -290,6 +290,51 @@ def landmarks():
     sprite("item.material.forest-fruit", ["#d8302c", "#ff8a70", "#6a4426", "#4fae3a"], fruit, tags=("item",))
 
 
+def spirit_well():
+    """The Spirit Well: an old round well of mossy stone with a little wooden roof and a faintly
+    glowing surface (forest view, 28x24), and its stone rim seen from above for the Wishing screen
+    (the screen draws the water, ripples and glow inside it)."""
+    pal = ["#5e5e68", "#8a8a96", "#b8b8c4", "#3f6a2e", "#7aa85a", "#5a3a22", "#8a5a36", "#9ff4e8", "#2f7a8a"]
+
+    def well(c, f):
+        c.rect(5, 3, 6, 15, 7); c.rect(21, 3, 22, 15, 7)          # posts
+        for x in range(3, 25):                                     # roof
+            y = 3 - (1 if 8 < x < 19 else 0) - (1 if 11 < x < 16 else 0)
+            c.set(x, y, 8); c.set(x, y + 1, 7)
+        c.rect(13, 5, 14, 9, 7)                                    # rope
+        c.ellipse(14, 17, 10, 4.2, 3)                              # stone rim
+        c.ellipse(14, 16.6, 7.4, 2.6, 10)                          # water
+        c.ellipse(12, 16, 3, 1, 9 if f == 0 else 2)                # glint
+        c.rect(4, 17, 24, 21, 3)                                   # stone body
+        for (x, y) in ((6, 19), (11, 20), (16, 19), (21, 20), (8, 18), (19, 18)):
+            c.set(x, y, 2); c.set(x + 1, y, 4)
+        for (x, y) in ((5, 17), (9, 21), (17, 21), (23, 18), (13, 18)):
+            c.set(x, y, 5); c.set(x, y - 1, 6)                     # moss
+        if f == 1:
+            c.set(10, 12, 9); c.set(18, 11, 9)                     # rising motes
+    sprite("landmark.spirit-well", pal, well, size=(28, 24), anchor=(14, 21), frames=2, durations=[1.0, 1.0], tags=("landmark",))
+
+    def rim(c, f):                        # top-down: a ring of mossy stones around a round opening
+        import math
+        cx = cy = 31.5
+        for y in range(64):
+            for x in range(64):
+                d = math.hypot(x - cx, y - cy)
+                if 22 <= d <= 30:
+                    a = math.atan2(y - cy, x - cx)
+                    block = int((a + math.pi) / (2 * math.pi) * 18)
+                    seam = abs(((a + math.pi) / (2 * math.pi) * 18) - round((a + math.pi) / (2 * math.pi) * 18)) < 0.06 or abs(d - 26) < 0.5
+                    col = 2 if seam else (3 if block % 3 else 4)
+                    if d < 23.2:
+                        col = 2
+                    if (x * 7 + y * 3 + block) % 23 == 0 and d > 25:
+                        col = 5
+                    if (x * 5 + y * 11) % 29 == 0 and d > 26:
+                        col = 6
+                    c.set(x, y, col)
+    sprite("wish.well-top", pal, rim, size=(64, 64), anchor=(32, 32), tags=("ui",))
+
+
 def board_icon():
     def board(c, f):
         c.rect(1, 2, 10, 8, 3)
@@ -305,5 +350,6 @@ if __name__ == "__main__":
     eggs()
     supplies()
     landmarks()
+    spirit_well()
     board_icon()
     print("wrote Offerings sprites")

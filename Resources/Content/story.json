@@ -64,7 +64,8 @@
       "landmark.standing-stones": "Stones lit from within, standing in a ring. Creatures near them feel stronger.",
       "landmark.fairy-ring": "A ring of pale mushrooms in damp grass. Wanderers can't resist stepping into it.",
       "landmark.spring": "Water welling up between mossy stones. It never stops.",
-      "landmark.nest-hollow": "An old stump hollowed by roots and lined with moss: a safe place for an egg."
+      "landmark.nest-hollow": "An old stump hollowed by roots and lined with moss: a safe place for an egg.",
+      "landmark.spirit-well": "An old stone well in a small clearing past the first trees. The water is very still, and very deep."
     },
     "teasers": {
       "plant.heartwood-sapling": "Some say the old forest's heart could sprout again, if the land were ever rich enough."
@@ -101,5 +102,39 @@
     "day": ", by day",
     "rain": ", in the rain",
     "seed": "grows from Mystery Seeds"
+  },
+  "wish": {
+    "_about": "Spirit Well text. demand.<group>: atmospheric lines hinting (never naming) what the well wants this half-day; one is picked each time the screen opens.",
+    "title": "The Spirit Well",
+    "discovered": "Past the old treeline, a small clearing, and in it a well of old stone. The water is perfectly still.",
+    "demand": {
+      "mushrooms": [
+        "Something stirs beneath the water. It remembers the forest floor...",
+        "A quiet hunger lingers in the depths.",
+        "The water carries the scent of damp earth and forgotten things.",
+        "Pale shapes drift far below, like caps in the dark.",
+        "The well smells of rain on rotting wood."
+      ],
+      "plants": [
+        "A gentle current rises from below, carrying the promise of new growth...",
+        "The depths stir with a life of their own.",
+        "Something beneath the surface reaches toward the living world.",
+        "A green light wavers deep down, like sun through leaves.",
+        "The water hums the way a meadow does at noon."
+      ],
+      "gems": [
+        "A distant glimmer answers from somewhere deep below...",
+        "The water shimmers with a light that does not belong to the sun.",
+        "Something precious sleeps beneath the surface.",
+        "Far below, something catches the light and holds it.",
+        "The stones of the well feel cold, and faintly bright."
+      ]
+    },
+    "empty": "You have nothing the well would take right now. Mushrooms, plants and gems can be offered.",
+    "confirmTitle": "Offer these to the well?",
+    "confirmText": "These will be gone for good:",
+    "neededNote": "the Old Log is asking for some of these",
+    "pending": "The well kept your last offering's gifts for you.",
+    "tooLittle": "The water doesn't stir. It seems to want more than that."
   }
 }

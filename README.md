@@ -442,6 +442,72 @@ The board's **Shop** and **Upgrades** sections sell things for bundles of specif
 - **Developer mode → Eggs:** one of every egg, hatch nests now, +2 nests.
 - **Developer mode → Offerings:** +50 compost, complete open or all requests, reset requests, one of every decor.
 
+## The Spirit Well (web)
+
+An old well that takes offerings and gives something back, while keeping its workings hidden.
+
+- **Discovery:** the first "Room to grow" (the first forest expansion) always reveals it.
+  - It sits in the newly opened ground, one tile in from the treeline and away from the Old Log, with a few ferns and stones around it as a small clearing. Spawns nearby make way.
+  - A celebration card, the camera moving to it, and a highlight mark the moment. It happens once and is saved (`wish.discovered`, plus the landmark in `landmarks`).
+  - Older saves that have already expanded find it on load.
+  - Its data entry is `landmark.spirit-well` in `landmarks.json` (`discovery: "firstExpansion"`). Art: `landmark.spirit-well` (forest) and `wish.well-top` (the stone rim seen from above), both from `tools/gen_offerings_sprites.py`.
+- **Wishing screen** (`web/js/wish.js`): tap the well to open it.
+  - The top shows the well from above, with water that shimmers, ripples now and then and sparkles.
+  - Below it is a line hinting at what the well wants (`story.json` → `wish.demand`, five per group, varied each visit). It never names the group.
+  - Then the offerable items: icon, name, how many you have, and how many are chosen, with −, +, +5, All and × controls.
+  - The **Make an Offering** button is disabled until something is chosen, and you can't choose more than you have.
+  - Nothing on the screen shows a value, multiplier or odds.
+- **What can be offered** (`tuning.spiritWell`):
+  - Mushrooms, plants and gems, grouped by their item category (`categories`).
+  - Seeds, eggs, geodes, materials and supplies aren't offerable.
+  - `exclude` keeps the legendary Heartwood Sapling and Ancient Sporecrown out entirely.
+  - Offering a rare or rarer item (`confirmRarities`), or one an open Old Log request or upgrade still needs (if it would leave too few), asks for confirmation first. The confirmation lists what will be lost, never values.
+- **Hidden values and demand:**
+  - Each item has a value: by rarity (`values`: 1 / 3 / 8 / 20 / 50), with surplus commons (Clover, Sorrel, Brown Button Cap) at 0.6 (`itemValues`).
+  - Each local half-day (midnight to noon, noon to midnight), one group is wanted, picked at random when the half-day starts and saved in `wish.demand`. Restarts, closing the screen and backgrounding never reroll it. Coming back after days away just sets the current half-day; the local day count handles time zones and daylight saving.
+  - Wanted items count ×`demandMult` (1.6).
+  - Offerings worth less than `minValue` (5) leave the water still and take nothing, so tiny offerings can't beat the shop's prices.
+- **Rewards:**
+  - Strength s = min(1, ln(1 + V/12) / ln(1 + 400/12)), where V is the offering's total value, so returns diminish and are capped.
+  - Tier weights blend from `tierWeightsLow` (common 70 / uncommon 24 / rare 5 / epic 0.9 / legendary 0.1) to `tierWeightsHigh` (8 / 30 / 36 / 20 / 6) as s rises.
+  - **One primary reward** comes from that tier's pool in `rewards`: Mystery Seeds, soil packs, gems, geodes, eggs of a random family at a set tier, Forest Fruit, the Moonfall Shard, or buffs. Entries above the player's Field Guide count (`minGuide`) are skipped, so rare eggs and Glimmering Geodes wait until mid-game; an empty tier falls to the one below.
+  - Then up to `bonus.max` (2) **bonus rewards**: the first with chance 6%–40% (rising with s), each further one half as likely, rolled at a lower tier.
+  - In simulation (primary tier common / uncommon / rare / epic / legendary, average bonuses):
+
+    | Offering | Primary tier % | Avg bonuses |
+    |---|---|---|
+    | 9 Brown Button Caps | 59 / 28 / 10 / 3 / 1 | 0.12 |
+    | 20 Ink Caps | 52 / 27 / 14 / 6 / 2 | 0.16 |
+    | 10 Garnets + 30 Ink Caps | 27 / 30 / 27 / 15 / 2 | 0.32 |
+    | 200 Opals | 7 / 30 / 37 / 21 / 6 | 0.49 (never more than 2) |
+
+  - Rewards go through the normal Bag (`grant`) and buff paths. The game has no coin currency, so rewards are items, eggs and buffs.
+- **Temporary buffs** (`spiritWell.buffs`, saved in `buffs` as start and expiry timestamps). Each multiplies one existing calculation:
+
+  | Buff | Effect |
+  |---|---|
+  | Lively grove | Spawn chance (and Damp/meadow growth) ×1.3 |
+  | Lucky finds | Creature/egg find chance ×1.6 |
+  | Deep veins | Geode category weight ×1.6 |
+  | Quick sprouts | Seeds planted now grow ×1.4 faster |
+  | Warm brood | Eggs nested now hatch ×1.4 faster |
+
+  - Each lasts 4–6h by default; stronger versions at higher tiers last up to 8–12h.
+  - Getting one again keeps the stronger multiplier and extends the time, up to `maxHours` (12).
+  - Expired buffs stop at once and are cleared on the next tick.
+  - Active buffs show as chips under the top bar (name and time left; tap for what it does).
+- **The ritual** runs after the offering is committed and saved:
+  - The chosen items, grouped by kind (up to 8 groups, with ×N), fall into the water one after another, shrinking, fading and splashing.
+  - The well answers with ripples and a glow (brighter for bigger offerings, never shown as a number).
+  - The primary reward rises with a label (rays for rare and better), then any bonus rewards.
+  - A summary follows, with "Return to the Well" to offer again.
+  - It takes about 4 seconds, and less with reduced motion.
+- **Transactions:** an offering is one atomic step (`makeOffering`): validate, take the items, roll, grant, and save the result in `wish.pending` with an id.
+  - The next offering waits until that result has been seen, so rapid taps or a second submit do nothing.
+  - Closing the app mid-ritual keeps the same result: reopening the well shows the summary, and nothing is taken or given twice.
+  - Older saves get empty defaults (`wish`, `buffs`).
+- **Developer mode → Spirit Well:** reveal the well, new demand now, clear buffs.
+
 ## Earned landmarks (web)
 
 Landmarks aren't placed on the map; they're earned. When two stats reach the needed level on **every tile of a 3×3 patch**, a landmark forms on that patch. It then stays for good, even after the creatures that made it leave.

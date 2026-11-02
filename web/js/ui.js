@@ -76,7 +76,7 @@ export class UI {
           g.state.debugTimeOffset > 0 ? h('span', {}, `+${duration(g.state.debugTimeOffset / 1000)}`) : null),
         h('button', { class: 'round-btn' + (this.app.devMode ? ' dev-on' : ''), title: this.app.devMode ? 'Developer mode' : 'Debug', onclick: () => this.open('debug') },
           ic('bug', 2), this.app.devMode ? h('span', { class: 'dev-tag' }, 'DEV') : null)) : null,
-    ), this.coachCard());
+    ), this.buffChips(now), this.coachCard());
 
     const bottom = h('div', { class: 'hud-bottom' });
     if (this.mode) bottom.append(this.modeBanner());
@@ -96,6 +96,18 @@ export class UI {
     ));
     this.root.replaceChildren(top, bottom);
     if (this.sheet && withSheet) this.renderSheet();
+  }
+
+  /** Active temporary buffs (from the Spirit Well): icon, name and time left; tap for what it does. */
+  buffChips(now) {
+    const g = this.game, list = g.activeBuffs(now);
+    if (!list.length) return null;
+    return h('div', { class: 'buffs' }, list.map((b) => {
+      const d = g.buffDef(b.id) || { name: b.id };
+      const left = duration((b.expiresAt - now) / 1000);
+      return h('button', { class: 'buff-chip', title: d.text, onclick: () => this.toast(`${d.name}: ${d.text}. ${left} left.`, d.sprite) },
+        d.sprite ? this.sprites.element(d.sprite, null, 1) : null, h('span', {}, `${d.name} · ${left}`));
+    }));
   }
 
   /** Story/hint text from Content/story.json with {placeholders} filled in. */
@@ -655,7 +667,7 @@ export class UI {
         howFound: l.earned ? this.landmarkHowFound(l) : null,
         special: l.purpose || null,
         // Earned landmarks can be read as a silhouette with how they form, before they're found.
-        teaser: l.earned ? this.landmarkHowFound(l) : null,
+        teaser: l.earned ? this.landmarkHowFound(l) : l.discovery ? 'Somewhere past the first trees, something old is waiting for the forest to grow.' : null,
       }));
     }
     const fam = FAMILY_TABS.find(([id]) => id === tab);
@@ -1170,6 +1182,11 @@ export class UI {
         b('Reset requests', () => a.dev((gm) => gm.devResetRequests(), 'Requests reset (rewards kept).')),
         b('New visitors', () => a.dev((gm, t) => gm.devNewVisitors(t), (n) => `${n} new visitor(s).`)),
         b('One of every decor', () => a.dev((gm) => gm.devGrantDecor(), (n) => `+${n} decor.`))),
+      h('div', { class: 'section' }, 'Spirit Well'),
+      h('div', { class: 'row gap wrap' },
+        b('Reveal the well', () => a.dev((gm, t) => gm.discoverSpiritWell(t, null), 'The Spirit Well is in the clearing.')),
+        b('New demand now', () => a.dev((gm, t) => { gm.state.wish.demand = null; gm.wishDemand(t); }, 'The well wants something new.')),
+        b('Clear buffs', () => a.dev((gm) => { gm.state.buffs = []; }, 'Buffs cleared.'))),
       h('div', { class: 'section' }, 'Eggs'),
       h('div', { class: 'row gap wrap' },
         b('One of every egg', () => a.dev((gm) => gm.devGiveEggs(1), (n) => `+${n} eggs.`)),

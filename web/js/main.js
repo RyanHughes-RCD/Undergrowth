@@ -3,6 +3,7 @@ import { Content, Game, GameError, SAVE_VERSION } from './core.js';
 import { SpriteRegistry } from './sprites.js';
 import { ForestView } from './render.js';
 import { UI } from './ui.js';
+import { WishScreen } from './wish.js';
 
 const SAVE_KEY = 'undergrowth.forest.v1';
 // Developer mode plays a separate test forest under its own key; the real save is never written while it's on.
@@ -111,6 +112,10 @@ class App {
       } else if (e.type === 'blend') {
         this.view.highlight(e.tiles, (cfg.blend && cfg.blend.highlightSeconds) || 5);
         ui.celebrate(ui.story('messages.blendTitle'), ui.story('messages.blend'));
+      } else if (e.type === 'spiritWellFound') {
+        this.view.highlight(e.tiles, 6, '160,255,240');
+        this.view.centerOn(e.tile);
+        ui.celebrate('The Spirit Well', ui.story('wish.discovered'));
       } else if (e.type === 'landmarkFormed') {
         const def = (this.content.landmarks || []).find((x) => x.id === e.id);
         this.view.highlight(e.tiles, 6, '255,230,150');
@@ -337,6 +342,7 @@ class App {
       const def = (this.content.landmarks || []).find((l) => l.id === landmark.id);
       // The Old Log is the trading place: its Offerings board (requests, compost heap).
       if (landmark.id === 'landmark.old-log' && (this.content.requests || []).length) { ui.selectedTile = null; ui.open('offerings'); this.changed(false); return; }
+      if (landmark.id === 'landmark.spirit-well') { ui.selectedTile = null; this.openWishing(); return; }
       if (def && def.earned) { ui.selectedTile = null; ui.open('landmark', def.id); this.changed(false); return; }
       if (def) ui.open('entry', { name: def.name, sprite: def.sprite, variant: null, text: this.content.story?.guide?.landmarks?.[def.id] });
       return;
@@ -438,6 +444,13 @@ class App {
   buyDecor(id) {
     const ok = this.attempt(() => { this.game.buyDecor(id); return true; });
     if (ok) { this.ui.toast(`${this.game.decorDef(id)?.name} is in your Bag, under Decor.`, this.game.decorDef(id)?.sprite); this.changed(); }
+  }
+
+  /** The Spirit Well's Wishing screen (its own full-screen view; the forest stays as it was). */
+  openWishing() {
+    this.ui.sheet = null; this.ui.close();
+    if (!this.wish) this.wish = new WishScreen(this);
+    this.wish.open();
   }
 
   beginNest(eggID) { this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'nest', eggID }; this.changed(false); }

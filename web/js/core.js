@@ -427,6 +427,8 @@ export class Game {
     state.compost = state.compost || 0;
     state.nests = state.nests || [];
     state.scenery = state.scenery || [];
+    state.buffs = state.buffs || [];
+    state.wish = { discovered: null, demand: null, pending: null, count: 0, ...(state.wish || {}) };
     this.t = content.tuning;
     this.stats = new StatEngine(this.t);
     this.rng = new RNG(state);
@@ -609,7 +611,7 @@ export class Game {
   /** Puts data-defined landmarks (the old log) on the map, once. */
   placeLandmarks() {
     for (const def of this.content.landmarks || []) {
-      if (def.earned) continue;                       // earned landmarks form in play (checkLandmarks)
+      if (def.earned || def.discovery) continue;      // earned / discovered landmarks appear in play
       if (this.state.landmarks.some((l) => l.id === def.id)) continue;
       const c = this.state.clearing;
       let tile = { x: Math.floor((c.x0 + c.x1) / 2), y: Math.floor((c.y0 + c.y1) / 2) };
@@ -1328,6 +1330,7 @@ export class Game {
     this.state.lastExpansionAt = now;
     this.statCache = this.statField(now);
     this.events.push({ type: 'expansion', tiles: added });
+    this.discoverSpiritWell(now, added);
     return added;
   }
 
@@ -1356,6 +1359,7 @@ export class Game {
   }
 
   expireSpawns(t) {
+    if (this.state.buffs && this.state.buffs.length) this.state.buffs = this.state.buffs.filter((b) => b.expiresAt > t);
     const before = this.state.spawns.length;
     this.state.spawns = this.state.spawns.filter((s) => { const life = this.lifetime(s.itemID); return s.keep || life <= 0 || t - s.spawnedAt < life; });
     return before - this.state.spawns.length;
@@ -1371,7 +1375,7 @@ export class Game {
     const shared = () => field || (field = this.statField(t));
     for (let i = 0; i < st.attemptsPerTick; i++) {
       if (this.state.spawns.length >= cap) break;
-      if (!this.rng.chance(st.spawnChance)) continue;
+      if (!this.rng.chance(Math.min(1, st.spawnChance * this.buffMult('lively', t)))) continue;
       // Where: weighted towards tiles with active effects (see spawnLocations). The free/area
       // check keeps the overall spawn rate the same as picking any tile at random.
       loc = loc || this.spawnLocations(t, shared());
@@ -1402,7 +1406,7 @@ export class Game {
   growthBonuses(t, cap, field) {
     const st = this.t.spawns, c = this.clearing;
     const area = (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1);
-    const perTile = (st.attemptsPerTick * st.spawnChance) / Math.max(1, area);   // the normal rate for one tile
+    const perTile = (st.attemptsPerTick * st.spawnChance * this.buffMult('lively', t)) / Math.max(1, area);   // the normal rate for one tile
     const mg = (this.terrain.damp || {}).mushroomGrowth || {};
     const meadow = this.combo('meadow'), pg = meadow.plantGrowth || {};
     const K = field.keys.length, W = this.state.size.width, names = this.tileKeys.names;
@@ -1661,7 +1665,8 @@ export class Game {
       for (const stat in cs[c] || {}) raw += (cs[c][stat] / 100) * ((stats && stats[stat]) || 0) * (fac[stat] ?? 1);
       // A named terrain's category tilt applies after the clamp, so it still counts on strong ground.
       const mult = Math.min(hi, Math.max(lo, raw)) * (terCat[c] ?? 1);
-      return { category: c, base: cw[c] ?? 1, mult, weight: (cw[c] ?? 1) * mult };
+      const veins = c === 'geode' ? this.buffMult('deepVeins', t ?? this.now()) : 1;   // Spirit Well buff
+      return { category: c, base: cw[c] ?? 1, mult: mult * veins, weight: (cw[c] ?? 1) * mult * veins };
     });
     const total = rows.reduce((x, r) => x + r.weight, 0) || 1;
     for (const r of rows) r.share = r.weight / total;
@@ -1773,7 +1778,7 @@ export class Game {
     let hit = null;
     for (const def of [...candidates].sort((a, b) => (a.chance || 0) - (b.chance || 0))) {
       const m = this.mult(chanceFx.filter((e) => !e.family || e.family === def.family));
-      if (this.rng.chance((def.chance || 0) * m)) { hit = def; break; }
+      if (this.rng.chance(Math.min(1, (def.chance || 0) * m * this.buffMult('luckyFinds', now)))) { hit = def; break; }
     }
     const key = candidates[0].family;
     const threshold = this.t.pity[key];
@@ -1843,7 +1848,7 @@ export class Game {
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
     this.consume(eggID);
-    let hatchSeconds = (egg.hatchHours || 6) * 3600 / (1 + this.upgradeTier('hatchSpeed') * ((this.upgradeDef('hatchSpeed') || {}).perTier ?? 0));   // Warm Nest
+    let hatchSeconds = (egg.hatchHours || 6) * 3600 / (1 + this.upgradeTier('hatchSpeed') * ((this.upgradeDef('hatchSpeed') || {}).perTier ?? 0)) / this.buffMult('warmBrood', now);   // Warm Nest, Warm brood
     // The opening's egg hatches while the player is away the first time (tuning.start.firstEggHatchMinutes).
     if (this.state.quickEggs > 0) { this.state.quickEggs--; hatchSeconds = ((this.t.start || {}).firstEggHatchMinutes ?? 45) * 60; }
     const n = { id: this.rng.uuid(), eggID, tile: { ...tile }, startedAt: now, hatchSeconds, glimmer: false };
@@ -2244,7 +2249,7 @@ export class Game {
     const meadow = this.combosAt(this.tileStats(tile, now)).includes('meadow') ? (this.combo('meadow').flowerGrowthMult ?? 1) : 1;
     const speed = this.mult(this.effects('seedGrowth', tile)) * (1 + verdure * ((this.terrain.verdure || {}).seedGrowthPerPoint ?? 0)) * meadow;
     const quick = 1 + this.upgradeTier('seedSpeed') * ((this.upgradeDef('seedSpeed') || {}).perTier ?? 0);   // Quick Roots
-    const grow = this.rng.range(...range(this.t.seeds.growSeconds)) / Math.max(0.01, speed * quick);
+    const grow = this.rng.range(...range(this.t.seeds.growSeconds)) / Math.max(0.01, speed * quick * this.buffMult('quickSprouts', now));
     // The plant is chosen now (tile stats + time of day at planting), so its growth stages can show it.
     const plantID = this.choosePlant(tile, now);
     const seed = { id: this.rng.uuid(), seedItemID: itemID, tile: { ...tile }, plantedAt: now, growSeconds: grow, plantID, ...extra };
@@ -2412,6 +2417,233 @@ export class Game {
     throw new GameError("That can't be used.");
   }
 
+  // ---- temporary buffs (a small reusable framework; the Spirit Well grants them)
+  // state.buffs: [{ id, mult, startedAt, expiresAt }]. Each type multiplies one existing calculation
+  // (tuning.spiritWell.buffs): lively → spawn chance, luckyFinds → creature/egg find chance,
+  // deepVeins → geode category weight, quickSprouts → seed growth, warmBrood → egg hatching.
+  buffDef(id) { return ((this.t.spiritWell || {}).buffs || {})[id] || null; }
+  activeBuffs(now) { return (this.state.buffs || []).filter((b) => now >= b.startedAt && now < b.expiresAt); }
+  buffMult(id, now) { const b = (this.state.buffs || []).find((x) => x.id === id && now >= x.startedAt && now < x.expiresAt); return b ? b.mult : 1; }
+
+  /** Starts a buff, or refreshes it: the stronger multiplier is kept and the time is extended, up to maxHours. */
+  addBuff(id, now, opts = {}) {
+    const def = this.buffDef(id);
+    if (!def) throw new GameError('Unknown effect.');
+    const mult = opts.mult ?? def.mult ?? 1, hours = opts.hours ?? def.hours ?? 4, max = (def.maxHours ?? hours * 2) * HOUR;
+    this.state.buffs = (this.state.buffs || []).filter((b) => b.expiresAt > now);
+    const cur = this.state.buffs.find((b) => b.id === id);
+    if (cur) {
+      cur.mult = Math.max(cur.mult, mult);
+      cur.expiresAt = Math.min(now + max, Math.max(cur.expiresAt, now) + hours * HOUR);
+      return cur;
+    }
+    const b = { id, mult, startedAt: now, expiresAt: now + Math.min(max, hours * HOUR) };
+    this.state.buffs.push(b);
+    return b;
+  }
+
+  // ---- the Spirit Well (tuning.spiritWell): offerings for rewards, with a hidden value system
+  get wishCfg() { return this.t.spiritWell || {}; }
+  get spiritWell() { return this.state.landmarks.find((l) => l.id === 'landmark.spirit-well') || null; }
+
+  /** The first forest expansion reveals a small clearing with the Spirit Well (once). */
+  discoverSpiritWell(now, tiles) {
+    if (this.state.wish.discovered || this.spiritWell) return null;
+    const def = (this.content.landmarks || []).find((d) => d.id === 'landmark.spirit-well');
+    if (!def) return null;
+    const c = this.clearing;
+    const blocked = (t) => this.landmarkAt(t) || this.creatureAt(t) || this.nestAt(t) || this.decorAt(t) || this.seedAt(t) || this.visitorAt(t);
+    // Prefer the newly revealed ground, one tile in from the treeline; else anywhere near the edge.
+    const inner = (t) => t.x > c.x0 && t.x < c.x1 && t.y > c.y0 && t.y < c.y1;
+    let pool = (tiles || []).filter((t) => inner(t) && !blocked(t));
+    if (!pool.length) pool = this.clearingTiles().filter((t) => inner(t) && !blocked(t) && Math.min(t.x - c.x0, c.x1 - t.x, t.y - c.y0, c.y1 - t.y) <= 2);
+    if (!pool.length) pool = this.clearingTiles().filter((t) => !blocked(t));
+    if (!pool.length) return null;
+    // Keep away from the old log so it feels like its own clearing.
+    const log = this.state.landmarks.find((l) => l.id === 'landmark.old-log');
+    pool.sort((a, b) => (log ? dist(b, log.tile) - dist(a, log.tile) : 0));
+    const top = pool.slice(0, Math.max(1, Math.ceil(pool.length / 3)));
+    const tile = top[this.rng.int(0, top.length - 1)];
+    // A small clearing: spawns around it make way, and a few ferns and stones ring it.
+    this.state.spawns = this.state.spawns.filter((sp) => Math.max(Math.abs(sp.tile.x - tile.x), Math.abs(sp.tile.y - tile.y)) > 1);
+    this.state.scenery = (this.state.scenery || []).filter((d) => !sameTile(d.tile, tile));
+    this.state.landmarks.push({ id: def.id, tile: { ...tile }, formedAt: now });
+    const ring = [[-2, 0], [2, 0], [0, -2], [-2, -1], [2, 1]];
+    for (const [dx, dy] of ring) {
+      const t = { x: tile.x + dx, y: tile.y + dy };
+      if (this.inClearing(t) && this.isFree(t) && this.rng.chance(0.6)) this.state.scenery.push({ tile: t, sprite: ['deco.fern.a', 'deco.mossrock.a', 'deco.lichen.a'][this.rng.int(0, 2)], flip: this.rng.chance(0.5) });
+    }
+    this.state.wish.discovered = now;
+    this.discover('landmark:spirit-well');
+    const area = [];
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) area.push({ x: tile.x + dx, y: tile.y + dy });
+    this.events.push({ type: 'spiritWellFound', tile, tiles: area });
+    return tile;
+  }
+
+  /** Which of the well's groups (mushrooms / plants / gems) an item belongs to, by its item category; null if none. */
+  wishGroup(itemID) {
+    const def = this.content.items[itemID];
+    if (!def) return null;
+    for (const [g, cats] of Object.entries(this.wishCfg.categories || {})) if (cats.includes(def.category)) return g;
+    return null;
+  }
+
+  /** Whether an item can be offered at all (a well group, not on the exclude list). */
+  wishEligible(itemID) { return !!this.wishGroup(itemID) && !(this.wishCfg.exclude || []).includes(itemID); }
+
+  /** Hidden value of one of an item. Never shown to the player. */
+  wishValue(itemID) {
+    const cfg = this.wishCfg, def = this.content.items[itemID];
+    if (!def || !this.wishEligible(itemID)) return 0;
+    return (cfg.itemValues || {})[itemID] ?? (cfg.values || {})[def.rarity || 'common'] ?? 1;
+  }
+
+  /** The local half-day index (midnight-noon, noon-midnight) for a time. DST/time-zone safe. */
+  static halfDay(t) { return Game.dayNumber(t) * 2 + (new Date(t).getHours() >= 12 ? 1 : 0); }
+
+  /** The group the well wants this half-day: picked at random when the half-day begins, then saved. */
+  wishDemand(now) {
+    const w = this.state.wish, iv = Game.halfDay(now);
+    if (!w.demand || w.demand.interval !== iv) {
+      const groups = Object.keys(this.wishCfg.categories || {});
+      w.demand = { interval: iv, group: groups[this.rng.int(0, groups.length - 1)] };
+    }
+    return w.demand.group;
+  }
+
+  /** Items the player could offer, with how many they own. */
+  wishInventory() {
+    return Object.entries(this.state.inventory).filter(([id, n]) => n > 0 && this.wishEligible(id)).map(([id, n]) => ({ item: id, owned: n }));
+  }
+
+  /** Normalises a selection [{item, count}] (merges repeats, whole numbers) or throws if it's invalid. */
+  wishSelection(selection) {
+    const merged = new Map();
+    for (const x of selection || []) {
+      if (!x || typeof x.item !== 'string') throw new GameError('That offering is not valid.');
+      const n = Number(x.count);
+      if (!Number.isInteger(n) || n < 0) throw new GameError('That offering is not valid.');
+      if (n) merged.set(x.item, (merged.get(x.item) || 0) + n);
+    }
+    const out = [...merged.entries()].map(([item, count]) => ({ item, count }));
+    if (!out.length) throw new GameError('Choose something to offer first.');
+    for (const x of out) {
+      if (!this.content.items[x.item] || !this.wishEligible(x.item)) throw new GameError("The well won't take that.");
+      if ((this.state.inventory[x.item] || 0) < x.count) throw new GameError(`You don't have ${x.count} ${this.content.items[x.item].name}.`);
+    }
+    return out;
+  }
+
+  /**
+   * What needs an extra confirmation before it's offered: unusually valuable items (confirmRarities), and
+   * items an open Old Log request or upgrade still asks for, if the offering would leave too few.
+   */
+  wishWarnings(selection, now) {
+    const sel = this.wishSelection(selection);
+    const rare = new Set(this.wishCfg.confirmRarities || []);
+    const need = {};
+    // One-off requests and upgrade tiers that are open now (repeatable shop listings don't count).
+    for (const st of this.requestBoard(now)) if (!st.done && !st.locks.length && st.req.kind !== 'shop') for (const x of st.req.items) need[x.item] = Math.max(need[x.item] || 0, x.count);
+    const out = [];
+    for (const x of sel) {
+      const def = this.content.items[x.item];
+      const reasons = [];
+      if (rare.has(def.rarity)) reasons.push('rare');
+      if (need[x.item] && (this.state.inventory[x.item] || 0) - x.count < need[x.item]) reasons.push('needed');
+      if (reasons.length) out.push({ item: x.item, count: x.count, reasons });
+    }
+    return out;
+  }
+
+  /** Effective (hidden) value of an offering: Σ count × value, × demandMult for the wanted group. */
+  wishRawValue(sel, now) {
+    const cfg = this.wishCfg, want = this.wishDemand(now);
+    let v = 0;
+    for (const x of sel) v += x.count * this.wishValue(x.item) * (this.wishGroup(x.item) === want ? (cfg.demandMult ?? 1) : 1);
+    return v;
+  }
+
+  /** Effective value s in 0..1 for an offering (demand applied, capped with diminishing returns). */
+  wishStrength(sel, now) {
+    const cfg = this.wishCfg;
+    const v = this.wishRawValue(sel, now);
+    const scale = cfg.valueScale || 10, cap = cfg.valueCap || 400;
+    return Math.min(1, Math.log(1 + v / scale) / Math.log(1 + cap / scale));
+  }
+
+  /** A reward tier for strength s: weights blend from tierWeightsLow to tierWeightsHigh. */
+  wishTier(s) {
+    const cfg = this.wishCfg, tiers = cfg.tiers || ['common'];
+    const lo = cfg.tierWeightsLow || [], hi = cfg.tierWeightsHigh || [];
+    return weightedPick(tiers.map((t, i) => [t, (lo[i] || 0) * (1 - s) + (hi[i] || 0) * s]), this.rng) || tiers[0];
+  }
+
+  /** One reward from a tier's pool (respecting progression); empty tiers fall to the one below. */
+  wishRollReward(tier) {
+    const cfg = this.wishCfg, tiers = cfg.tiers || [];
+    const guide = this.guideCount;
+    for (let i = tiers.indexOf(tier); i >= 0; i--) {
+      const pool = ((cfg.rewards || {})[tiers[i]] || []).filter((r) => (r.minGuide || 0) <= guide && this.wishRewardValid(r));
+      const r = weightedPick(pool.map((x) => [x, x.weight || 1]), this.rng);
+      if (!r) continue;
+      const out = { type: r.type, tier: tiers[i] };
+      if (r.type === 'item') { out.item = r.item; out.count = this.rng.int((r.count || [1, 1])[0], (r.count || [1, 1])[1]); }
+      if (r.type === 'egg') {
+        const eggs = (this.content.eggs || []).filter((e) => e.tier === r.tier);
+        out.type = 'item'; out.item = eggs[this.rng.int(0, eggs.length - 1)].id; out.count = 1;
+      }
+      if (r.type === 'buff') { out.buff = r.buff; if (r.mult) out.mult = r.mult; if (r.hours) out.hours = r.hours; }
+      return out;
+    }
+    return { type: 'item', item: 'seed.mystery-seed', count: 1, tier: tiers[0] || 'common' };
+  }
+
+  wishRewardValid(r) {
+    if (r.type === 'item') return !!this.content.items[r.item];
+    if (r.type === 'egg') return (this.content.eggs || []).some((e) => e.tier === r.tier);
+    if (r.type === 'buff') return !!this.buffDef(r.buff);
+    return false;
+  }
+
+  /**
+   * Make an offering (one atomic transaction): validate, take the items, roll one primary reward and any
+   * bonus rewards, grant them, and save the result as the pending gift until the player has seen it. A new
+   * offering waits until the last one is acknowledged, so nothing can be offered or granted twice.
+   */
+  makeOffering(selection, now, opts = {}) {
+    const w = this.state.wish;
+    if (!this.spiritWell) throw new GameError('There is no well here yet.');
+    if (w.pending && !w.pending.seen) throw new GameError('The well is still answering your last offering.');
+    const sel = this.wishSelection(selection);
+    if (!opts.confirmed && this.wishWarnings(sel, now).length) throw new GameError('Confirm the offering first.');
+    // Too little and the water doesn't stir (keeps tiny offerings from beating the shop's prices). Nothing is taken.
+    if (this.wishRawValue(sel, now) < (this.wishCfg.minValue ?? 0)) throw new GameError(((this.content.story || {}).wish || {}).tooLittle || "The water doesn't stir. It wants more than that.");
+    const s = this.wishStrength(sel, now);
+    for (const x of sel) { const n = (this.state.inventory[x.item] || 0) - x.count; if (n > 0) this.state.inventory[x.item] = n; else delete this.state.inventory[x.item]; }
+    const cfg = this.wishCfg, b = cfg.bonus || {};
+    const rewards = [{ ...this.wishRollReward(this.wishTier(s)), primary: true }];
+    const chance = (b.baseChance ?? 0.05) + ((b.maxChance ?? 0.4) - (b.baseChance ?? 0.05)) * s;
+    for (let i = 0; i < (b.max ?? 2); i++) {
+      if (!this.rng.chance(chance / (i + 1))) break;            // each extra bonus is half as likely as the last
+      rewards.push(this.wishRollReward(this.wishTier(s * (b.tierShift ?? 0.5))));
+    }
+    for (const r of rewards) {
+      if (r.type === 'item') r.isNew = this.grant([{ item: r.item, count: r.count }])[0].isNew;
+      else if (r.type === 'buff') { const bf = this.addBuff(r.buff, now, { mult: r.mult, hours: r.hours }); r.expiresAt = bf.expiresAt; }
+    }
+    w.pending = { id: this.rng.uuid(), at: now, offered: sel, rewards, strength: Math.round(s * 100) / 100, seen: false };
+    w.count = (w.count || 0) + 1;
+    this.bump('wish');
+    return w.pending;
+  }
+
+  /** The player has seen an offering's result: the well is ready for the next one. */
+  acknowledgeOffering(id) {
+    const p = this.state.wish.pending;
+    if (p && p.id === id) p.seen = true;
+  }
+
   // ---- earned landmarks (landmarks.json "earned"): they form where two stats are strong across a
   // whole size×size patch, then stay for good, each with its own purpose (effect) and maybe an aura.
   landmarkDef(id) { return (this.content.landmarks || []).find((d) => d.id === id) || null; }
@@ -2455,6 +2687,8 @@ export class Game {
 
   /** Forms any earned landmarks whose conditions are met, and lets formed ones produce. */
   checkLandmarks(now) {
+    // Saves from before the Spirit Well: a forest that has already grown finds it now.
+    if (!this.state.wish.discovered && ((this.state.unlocks.expansions || 0) > 0 || Object.keys(this.state.revealed || {}).length)) this.discoverSpiritWell(now, null);
     const defs = (this.content.landmarks || []).filter((d) => d.earned);
     if (!defs.length) return;
     let field = null;
