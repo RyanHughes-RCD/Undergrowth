@@ -58,7 +58,11 @@ Then open <http://localhost:8000>.
 - **Compost is paused** (`offerings.compostEnabled: false`): no compost buttons, compost heap or visitor swaps. Recolouring decor is free meanwhile.
 - **Creatures:** there's no cap on how many are out in the forest, and no slot bar. The **Creatures** tab lists who's out and who's resting.
 - **Blend celebration:** fires once, the first time two creatures each give a tile `blend.minEach` or more.
-- **Forest expansion:** the clearing grows by `ringTiles` (2) tiles on each side when the `expansion` conditions are met, at most every `minHoursBetween` hours. Newly revealed tiles fade influence in over `revealRampSeconds`, and nothing reaches past the treeline.
+- **Forest expansion is bought:**
+  - The clearing only grows when you buy **Room to grow** at the Old Log. It's an upgrade line of 10 tiers, chained in the Offerings spreadsheet (`expand-1`…`expand-10`), with prices rising from commons to rare finds. Each tier pushes the treeline back `ringTiles` (2) on each side.
+  - `expansion.automatic: false` turns off the old condition-based growth.
+  - Once the whole forest is open, the next tier says so.
+  - Newly revealed tiles fade influence in over `revealRampSeconds`, and nothing reaches past the treeline.
 - **Starter tasks:** a few goals at a time appear under Tasks. Examples are picking 5 mushrooms, harvesting a seed, cracking 3 geodes, and having two creatures out at once. Each gives a reward to claim. They're defined in `Content/tasks.json` (text, counter, target, reward).
 - **Spawns:** the cap is `spawns.maxPerOpenTile` × open tiles, at least `minCap` and at most `maxTotal`.
   - Rates were halved for a calmer pace: `spawnChance` 0.25 (was 0.5) and `maxPerOpenTile` 0.08 (was 0.14).

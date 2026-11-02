@@ -216,6 +216,7 @@
     "keenMushroom": {"name": "Keen Eye: mushrooms", "text": "Rarer mushrooms", "category": "mushroom", "perTierPerRarity": 0.35, "maxTier": 3, "sprite": "item.mushroom.glowcap"},
     "keenPlant": {"name": "Keen Eye: plants", "text": "Rarer plants and flowers", "category": "plant", "perTierPerRarity": 0.35, "maxTier": 3, "sprite": "item.plant.foxglove"},
     "keenGeode": {"name": "Keen Eye: geodes", "text": "Rarer geodes", "category": "geode", "perTierPerRarity": 0.35, "maxTier": 3, "sprite": "item.geode.mossy-geode"},
+    "expansion": {"name": "Room to grow", "text": "The treeline steps back", "maxTier": 10, "sprite": "deco.shrub.a"},
     "wideSpread": {"name": "Wide Spread", "text": "Soil packs reach the tiles around them too", "radiusPerTier": 1, "maxTier": 1, "sprite": "supply.verdure"}
   },
   "visitors": {
@@ -325,6 +326,8 @@
     "highlightSeconds": 5
   },
   "expansion": {
+    "automatic": false,
+    "_automatic": "false: the clearing only grows when the player buys 'Room to grow' at the Old Log (unlock 'expansion', chained tiers in the Offerings spreadsheet). true brings back growth by the conditions below.",
     "mode": "any",
     "conditions": [
       {

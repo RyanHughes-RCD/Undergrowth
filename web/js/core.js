@@ -1329,7 +1329,9 @@ export class Game {
     return added;
   }
 
-  checkExpansion(now) { if (this.expansionReady(now)) this.expand(now); }
+  /** Automatic expansion is off by default (tuning.expansion.automatic): the treeline is pushed back by buying 'Room to grow' at the Old Log. */
+  checkExpansion(now) { if ((this.t.expansion || {}).automatic && this.expansionReady(now)) this.expand(now); }
+  get forestFullyOpen() { const c = this.clearing, s = this.state.size; return c.x0 <= 0 && c.y0 <= 0 && c.x1 >= s.width - 1 && c.y1 >= s.height - 1; }
 
   /** First open tile whose stats meet an Uncommon spawn's requirements (ignores time/weather). */
   firstUncommonTile(now) {
@@ -2425,6 +2427,7 @@ export class Game {
   requestStatus(req, now) {
     const visitor = req.kind === 'visitor';
     const locks = visitor ? [] : this.requestLocks(req, now);
+    if (req.reward && req.reward.type === 'unlock' && req.reward.id === 'expansion' && this.forestFullyOpen) locks.push({ type: 'full' });
     const items = req.items.map((x) => ({ item: x.item, count: x.count, have: Math.min(x.count, this.state.inventory[x.item] || 0), owned: this.state.inventory[x.item] || 0 }));
     const done = visitor ? this.visitorsToday(now).done.includes(req.id) : req.kind === 'shop' ? false : this.isDelivered(req.id);
     return { req, done, locks, items, ready: !done && !locks.length && items.every((x) => x.owned >= x.count) };
@@ -2549,7 +2552,7 @@ export class Game {
   }
 
   upgradeDef(id) { const u = (this.t.upgrades || {})[id]; return u && typeof u === 'object' ? u : null; }
-  upgradeTier(id) { return (this.state.unlocks.upgrades || {})[id] || 0; }
+  upgradeTier(id) { return id === 'expansion' ? (this.state.unlocks.expansions || 0) : (this.state.unlocks.upgrades || {})[id] || 0; }
 
   /** Compost value of one of an item (tuning.offerings.compost by rarity), or 0 if it can't be composted. */
   compostValue(itemID) {

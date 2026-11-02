@@ -491,7 +491,7 @@ export class UI {
     const r = st.req, a = this.app;
     return h('div', { class: 'card offer shop' + (st.ready ? ' ready' : '') + (st.locks.length ? ' locked' : '') },
       h('div', { class: 'row space' }, h('b', {}, r.name), h('span', { class: 'sub reward' }, this.rewardText(r.reward))),
-      st.locks.length ? h('p', { class: 'sub lock' }, ic('lock', 1), ' Opens with ', st.locks.map((l) => (l.type === 'guide' ? `${l.need} Field Guide entries (${l.have} so far)` : l.type === 'request' ? `“${l.name}” first` : `forest day ${l.need}`)).join(', '), '.')
+      st.locks.length ? h('p', { class: 'sub lock' }, ic('lock', 1), ' Opens with ', st.locks.map((l) => (l.type === 'guide' ? `${l.need} Field Guide entries (${l.have} so far)` : l.type === 'request' ? `“${l.name}” first` : l.type === 'full' ? 'nothing: the whole forest is open' : `forest day ${l.need}`)).join(', '), '.')
         : h('div', { class: 'price' }, st.items.map((x) => {
           const d = this.content.items[x.item], known = g0(this).discovered.has('item:' + x.item);
           return h('span', { class: 'price-item' + (x.owned >= x.count ? ' met' : ''), title: known && d ? d.name : (d ? itemHint(d, this.content.story) : x.item) },
@@ -889,12 +889,8 @@ export class UI {
       lines.appears.push('Everywhere outside your clearing.');
       lines.spawns.push('Nothing spawns in the treeline, and creature influence stops at its edge.');
       const e = T.expansion || {};
-      const conds = (e.conditions || []).map((cd) => {
-        if (cd.type === 'tilesAboveThreshold') return [`${Math.round(cd.fraction * 100)}% of the clearing has any stat at `, this.miniMeter('any', 0, { min: cd.threshold }), ' or more'];
-        if (cd.type === 'slotsUnlocked') { const d = ((T.slotUnlocks || {}).unlockDays || [])[cd.count - 1]; return d != null ? `the forest is ${d + 1} days old` : null; }
-        return null;
-      }).filter(Boolean);
-      lines.other.push([`The clearing pushes it back by ${e.ringTiles ?? 2} tiles on each side when `, this.joinNodes(conds, e.mode === 'all' ? ' and ' : ' or '), `, at most every ${e.minHoursBetween ?? 12} hours.`]);
+      lines.other.push(e.automatic ? `The clearing pushes it back by ${e.ringTiles ?? 2} tiles on each side as the land develops.`
+        : `Trade with the Old Log ("Room to grow") to push it back by ${e.ringTiles ?? 2} tiles on each side.`);
     }
     // Compare with the tile you have selected (required vs current), without raw values.
     let compare = null;
