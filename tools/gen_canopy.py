@@ -3,8 +3,8 @@
 
 1. web/img/canopy.png - the tree-shadow asset (design/canopy_source.webp: a black shade layer whose
    alpha holes are sunlight), turned into a seamless pixel-art light mask: scaled so flecks are a few
-   art pixels, flecks touching the tile edge removed (so tiles join with no seams), soft edges
-   quantised. Stored as white with alpha = light.
+   art pixels, flecks touching the tile edge removed (so tiles join with no seams). The soft
+   light-to-dark falloff is kept at full precision (no quantising). Stored as white with alpha = light.
 2. web/img/canopy-region.png - big soft blobs (the earlier dappled-light layout), used at a large
    scale to vary shade depth by region so the fleck pattern never reads as wallpaper.
 
@@ -60,9 +60,8 @@ def make_flecks():
         seen.add((x, y))
         px[x, y] = 0
         stack += [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
-    quant = small.point(lambda v: int(round(v / 255 * (STEPS - 1))) * 255 // (STEPS - 1))
     img = Image.new("LA", (w, h), 255)
-    img.putalpha(quant)
+    img.putalpha(small)                                          # full 0-255 falloff, no steps
     img.save(FLECKS_OUT, optimize=True)
     print("wrote", os.path.relpath(FLECKS_OUT, ROOT), (w, h))
 

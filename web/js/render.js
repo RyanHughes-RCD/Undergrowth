@@ -1028,8 +1028,8 @@ export class ForestView {
 
   /**
    * Tree shadows (visuals.canopy). Built each frame at one-buffer-pixel-per-art-pixel for just the
-   * view, then drawn scaled with no smoothing, so it stays crisp at any zoom and costs the same
-   * whatever the zoom. Light = flecks layer 1 + (offset, scaled, flipped) layer 2; shade covers the
+   * view, then drawn scaled (smoothed unless visuals.canopy.smooth is false, so the light-to-dark
+   * falloff is a smooth gradient), costing the same whatever the zoom. Light = flecks layer 1 + (offset, scaled, flipped) layer 2; shade covers the
    * rest, lifted in places by a large soft region layer. All world-anchored (stable when panning)
    * with only a slow, gentle sway.
    */
@@ -1112,7 +1112,8 @@ export class ForestView {
     lg.fillStyle = L.lightColor;
     lg.fillRect(0, 0, w, h);
     ctx.save();
-    ctx.imageSmoothingEnabled = false;
+    // Smoothed upscale by default so the light fades into the shade with no visible pixel bands.
+    ctx.imageSmoothingEnabled = cfg.smooth !== false;
     ctx.globalAlpha = L.shade;
     ctx.drawImage(sb, vx0, vy0);
     ctx.globalCompositeOperation = 'screen';
