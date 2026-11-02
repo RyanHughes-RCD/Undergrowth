@@ -287,12 +287,26 @@ export class UI {
   // -------------------------------------------------------------- sheets
 
   open(type, arg) {
-    this.sheet = { type, arg, stack: this.sheet && type === 'creature' && this.sheet.type === 'creatures' ? 'creatures' : null };
+    // Opened from a list sheet (the Guide, Creatures, the Old Log), a detail sheet gets a Back button
+    // that returns to that list as it was: same tab (kept on the UI) and scroll position.
+    const prev = this.sheet;
+    const fromList = prev && prev.type !== type && ['guide', 'creatures', 'burrow', 'offerings'].includes(prev.type);
+    let stack = null;
+    if (fromList) {
+      const scroll = document.querySelector('#sheet .sheet-body')?.scrollTop || 0;
+      stack = { type: prev.type, arg: prev.arg, stack: prev.stack || null, scroll };
+    }
+    this.sheet = { type, arg, stack };
     this.renderSheet();
   }
 
   close() {
-    if (this.sheet && this.sheet.stack) { this.sheet = { type: this.sheet.stack }; this.renderSheet(); return; }
+    if (this.sheet && this.sheet.stack) {
+      const back = this.sheet.stack;
+      this.sheet = { type: back.type, arg: back.arg, stack: back.stack || null };
+      this.renderSheet(back.scroll || 0);
+      return;
+    }
     this.sheet = null;
     if (this.selectedCreatureID && !this.mode) this.selectedCreatureID = null;
     const el = document.getElementById('sheet');
@@ -301,7 +315,7 @@ export class UI {
     this.app.changed(false);
   }
 
-  renderSheet() {
+  renderSheet(restoreScroll = null) {
     const el = document.getElementById('sheet');
     if (!this.sheet) { el.classList.remove('show'); return; }
     const { type, arg } = this.sheet;
@@ -332,7 +346,7 @@ export class UI {
         h('b', {}, title),
         h('button', { class: 'btn small', onclick: () => { this.sheet = null; this.close(); } }, 'Done')),
       h('div', { class: 'sheet-body' }, body)));
-    el.querySelector('.sheet-body').scrollTop = scrollTop;
+    el.querySelector('.sheet-body').scrollTop = restoreScroll ?? scrollTop;
     el.classList.add('show');
     el.onclick = (e) => { if (e.target === el) { this.sheet = null; this.close(); } };
   }
@@ -755,6 +769,7 @@ export class UI {
         return {
           key: `creature:${def.id}${glimmer ? ':glimmer' : ''}`, name: glimmer ? `Glimmer ${def.name}` : def.name, ...art,
           rarity: glimmer ? null : def.rarity, glimmer, howFound: def.howFound, special: def.special,
+          creatureStats: this.speciesStats(def, glimmer),
           text: def.requires && Object.keys(def.requires).length
             ? ['Needs a tile with ', this.joinNodes(Object.entries(def.requires).map(([k, v]) => this.requirementText(k, v.min)), ', ')] : null,
         };
@@ -797,15 +812,36 @@ export class UI {
         },
           this.sprites.element(e.sprite, known ? e.variant : sil, 4),
           h('span', {}, known ? e.name : '???', teaser ? ic('sparkle', 1) : null),
+          known && e.creatureStats ? this.guideStats(e.creatureStats) : null,
           e.rarity ? h('i', { class: 'dot', style: `background:${RARITY_COLORS[e.rarity]}` }) : e.glimmer ? ic('glimmer', 1) : null);
       })),
     ]];
   }
 
+  /** A species' best bonuses and radius (Glimmers: +50% and a wider radius), for the Field Guide. */
+  speciesStats(def, glimmer) {
+    const R = this.content.tuning.creatureRoll || {};
+    const mult = glimmer ? (R.glimmerBonusMult ?? 1.5) : 1;
+    const bonuses = Object.entries(def.bonuses || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, v * mult]);
+    return { bonuses, radius: (def.radius || 0) + (glimmer ? (R.glimmerRadiusBonus ?? 1) : 0) };
+  }
+
+  /** Compact stats for a Guide cell: a meter per stat, then the radius. */
+  guideStats(st) {
+    return h('div', { class: 'guide-stats' },
+      st.bonuses.map(([k, v]) => h('div', { class: 'gs-row' }, h('b', { style: `color:${STAT_COLORS[k] || '#fff'}` }, cap(k)), this.miniMeter(k, v))),
+      h('div', { class: 'gs-row' }, h('b', {}, 'Radius'), h('span', {}, `${st.radius}`)));
+  }
+
   entryBody(e) {
+    const st = e.creatureStats;
+    const R = this.content.tuning.creatureRoll || {};
     return [
       h('div', { class: 'hero' }, this.sprites.element(e.sprite, e.variant, 9)),
       e.rarity ? h('p', { class: 'rarity', style: `color:${RARITY_COLORS[e.rarity]}` }, rarityName(e.rarity).toUpperCase()) : null,
+      st ? [h('div', { class: 'section' }, 'What it gives the ground'),
+        h('div', { class: 'stat-grid' }, st.bonuses.map(([k, v]) => this.intensityRow(k, v))),
+        h('p', { class: 'sub' }, `Radius ${st.radius} tiles. Each one you find rolls ${Math.round(((R.bonusRange || [0.6])[0]) * 100)}–100% of these bonuses` + (e.glimmer ? '.' : `; Glimmers get +${Math.round(((R.glimmerBonusMult ?? 1.5) - 1) * 100)}% and +${R.glimmerRadiusBonus ?? 1} radius.`))] : null,
       e.howFound ? h('p', { class: 'sub center' }, e.howFound) : null,
       e.text ? h('p', { class: 'sub center' }, e.text) : null,
       e.special ? h('p', { class: 'center' }, ic('sparkle', 1), ' ' + e.special) : null,

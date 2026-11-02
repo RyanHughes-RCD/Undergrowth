@@ -176,6 +176,10 @@ button { border: 0; background: none; cursor: pointer; padding: 0; }
 .guide-cell { padding: 10px 4px; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: var(--t-tiny);
   font-weight: 600; min-height: 124px; text-align: center; }
 .guide-cell.unknown { --f-bg: #171f15; color: var(--dim); }
+.guide-stats { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 0 4px; font-weight: 400; }
+.gs-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.gs-row b { font-weight: 600; }
+.gs-row .pips.mini { flex-shrink: 1; }
 .guide-cell.glim { --f-hi: #8a7a2a; }
 .guide-cell.teaser { --f-hi: #9a8a3a; }
 .dot { width: 8px; height: 8px; display: block; box-shadow: 0 0 0 var(--px) var(--edge); }
