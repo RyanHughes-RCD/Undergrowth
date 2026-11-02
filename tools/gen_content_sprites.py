@@ -9,6 +9,7 @@ each gets a ".glimmer" variant with a shifted, brighter "shiny" palette.
 """
 import colorsys
 import json
+import math
 import os
 import zlib
 
@@ -622,24 +623,58 @@ def fungling(c, dy, rank, f, variant):
     crown(c, rank, dy + 1, f)
 
 
+def leaf(c, bx, by, tx, ty, width, fill=2, light=3, vein=7):
+    """A pointed leaf from its base (bx, by) to its tip (tx, ty): widest a third of the way out,
+    tapering to a point, lit on its upper side, with a darker midrib."""
+    ax, ay = tx - bx, ty - by
+    length = math.hypot(ax, ay)
+    ux, uy = ax / length, ay / length
+    for y in range(int(min(by, ty) - width - 1), int(max(by, ty) + width + 2)):
+        for x in range(int(min(bx, tx) - width - 1), int(max(bx, tx) + width + 2)):
+            px, py = x - bx, y - by
+            t = (px * ux + py * uy) / length              # 0 at the base, 1 at the tip
+            d = -px * uy + py * ux                        # across the leaf (negative = upper side)
+            if not 0 <= t <= 1.05:
+                continue
+            half = width * (math.sin(math.pi * min(1, t) ** 0.75) ** 0.9)
+            if abs(d) > half + 0.15:
+                continue
+            col = light if d < -0.35 else fill
+            if abs(d) < 0.5 and 0.12 < t < 0.85:
+                col = vein
+            c.set(x, y, col)
+
+
 def sproutling(c, dy, rank, f, variant):
-    c.ellipse(8, 11 + dy * 0.5, 5.5, 3.8, 2)
-    c.ellipse(7, 10 + dy * 0.5, 2.5, 1.6, 3)
-    c.set(6, 11, 6); c.set(10, 11, 6)
-    for x in (5, 6, 9, 10):
-        c.set(x, 14, 4)
-    c.line(8, 7, 8, 4 + dy, 4)
-    c.ellipse(5.5, 5 + dy, 2.5, 1.3, 3)
-    c.ellipse(10.5, 4 + dy, 2.5, 1.3, 3)
-    if variant % 2:
-        c.ellipse(4, 8 + dy, 1.5, 1, 3)
-    petals = [(8, 2), (7, 3), (9, 3), (8, 1)][: 2 + min(2, rank)]
-    for (x, y) in petals:
-        c.set(x, y + dy, 5)
+    # Body: a round bulb sitting on two little feet.
+    c.ellipse(8, 11 + dy * 0.3, 5.2, 2.9, 2)
+    c.ellipse(6.5, 10 + dy * 0.3, 2.0, 1.0, 3)               # highlight
+    for x in range(4, 13):                                    # shaded belly
+        if c.get(x, 13) == 2:
+            c.set(x, 13, 7)
+    c.set(6, 11, 6); c.set(10, 11, 6)                         # eyes
+    # Feet: two rounded nubs with a gap between them (so the outline separates them).
+    for fx in (5, 10):
+        c.rect(fx - 1, 14, fx, 14, 4)
+    c.set(4, 14, 4); c.set(11, 14, 4)
+    # A short stem with two pointed leaves held up and out, clear of the body (on the bob frame the
+    # stem dips and the leaf tips droop a little).
+    top = 4 + dy
+    c.line(8, 8, 8, top, 4)
+    droop = 1 if dy else 0
+    leaf(c, 7.3, top + 0.3, 2.2, top - 2.4 + droop, 1.5)
+    leaf(c, 8.7, top, 13.8, top - 3.0 + droop, 1.5)
+    if variant % 2:                                           # some have a small extra leaf on the stem
+        leaf(c, 8.5, 7.2, 11.6, 5.8 + droop, 0.9)
+    # Rarer ones carry a bud on the stem tip, then petals, then a crown of light.
+    if rank >= 1:
+        c.set(8, top - 1, 5)
+    if rank >= 2:
+        c.set(7, top - 1, 5); c.set(9, top - 1, 5)
     if rank >= 3:
-        c.set(6, 2 + dy, 5); c.set(10, 2 + dy, 5)
+        c.set(8, top - 2, 5)
     if rank >= 4 and f == 0:
-        c.set(3, 3, 3); c.set(13, 2, 3)
+        c.set(1, 1, 5); c.set(14, 9, 5)
 
 
 def geode_critter(c, dy, rank, f, variant):
