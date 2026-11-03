@@ -131,6 +131,12 @@ export class ForestView {
   }
 
   centerOn(tile) { const p = centre(tile.x, tile.y); this.cam = { x: p.x, y: p.y }; this.clamp(); }
+  /** A brief, eased camera move to a tile (instant with reduced motion). */
+  panTo(tile, seconds = 1.2) {
+    if (reducedMotion() || !(seconds > 0)) { this.centerOn(tile); return; }
+    const p = centre(tile.x, tile.y);
+    this.camAnim = { from: { ...this.cam }, to: { x: p.x, y: p.y }, start: performance.now(), ms: seconds * 1000 };
+  }
 
   /**
    * Keep the view inside the bounds: across the full screen width, and down the play area
@@ -353,6 +359,12 @@ export class ForestView {
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     if (!this.engine) return;
     this.measure();
+    if (this.camAnim) {
+      const a = this.camAnim, k = Math.min(1, (performance.now() - a.start) / a.ms), e = k * k * (3 - 2 * k);
+      this.cam = { x: a.from.x + (a.to.x - a.from.x) * e, y: a.from.y + (a.to.y - a.from.y) * e };
+      this.clamp();
+      if (k >= 1) this.camAnim = null;
+    }
 
     const { scale, ox, oy } = this.transform();
     ctx.setTransform(scale, 0, 0, scale, ox, oy);

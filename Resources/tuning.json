@@ -43,7 +43,7 @@
     "attemptsPerTick": 3,
     "spawnChance": 0.25,
     "maxTotal": 160,
-    "lifetimeSeconds": 172800,
+    "lifetimeSeconds": 172800, "wilting": {"_about": "Unpicked finds fade after this many hours by rarity (an item's own lifetimeHours wins), so the grove follows its terrain instead of clogging up. Starting finds never fade.", "common": 30, "uncommon": 60, "rare": 120, "veryRare": 168, "legendary": 168},
     "maxCatchUpTicks": 288,
     "maxPerOpenTile": 0.08,
     "minCap": 5,
@@ -230,6 +230,16 @@
     "findDrop": {"chance": 0.006, "minStat": 26, "minAgeHours": 24, "tierWeights": {"common": 10, "uncommon": 3, "rare": 0.5}}
   },
   "creaturePlacement": {"_about": "false: creatures no longer shape the land. Placing, the Creatures tab, wanderers arriving and creature finds are off (the code stays). Older saves' placed creatures became relics (save version 6); resting creatures are kept, hidden.", "enabled": false},
+  "returnHarvest": {
+    "_about": "Growth while the player is away. When the game opens after at least minAwayMinutes of real time away (developer time speed doesn't count), it grows extra finds for the time away, capped at maxHours: perHour finds per hour, placed on developed ground (stat total at least minStatTotal) weighted by that total, so relic terrain gets most of it; bare ground only gets the normal light scatter. It may go past the normal spawn cap by overCap, and each find is chosen by the normal spawn rules (terrain affinity, home finds, rarity) at a time inside the away window. Seeded from the forest and the away window, so a reload never grants twice. firstReturn: the first return after the first relic is buried puts at least minFinds finds of its school on its ground, minUncommon of them uncommon or rarer. reveal: the camera pans to the best find for panSeconds (instant with reduced motion) and a card sums it up.",
+    "minAwayMinutes": 45,
+    "maxHours": 10,
+    "perHour": 2,
+    "minStatTotal": 6,
+    "overCap": 16,
+    "firstReturn": {"minFinds": 8, "minUncommon": 1},
+    "reveal": {"panSeconds": 1.2}
+  },
   "schoolSeeds": {
     "_about": "School seeds (Content/schoolSeeds.json): buried from the Bag on an open tile, a seed adds its school's stat around that tile with the creature falloff (strength at its own tile, radius like a creature's). It ramps in over rampHours, holds until durationHours after burying, then fades out over fadeHours. strength 12 / radius 1.5 makes a Low patch of about 5 tiles (about the patch two neighbouring commons make); Wide Spread adds radiusPerTier. At most maxBuried at once. Each pick of a find whose main need is a school (its highest stat minimum) drops that school's seed with dropChance. Buried seeds count as soil boosts: they are effects for where spawns land, form terrain and show in the spawn inspector.",
     "strength": 12,

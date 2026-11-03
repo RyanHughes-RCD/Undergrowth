@@ -54,7 +54,10 @@
     "firstEggTitle": "An egg!",
     "firstEgg": "An egg. It feels warm.",
     "firstHatch": "It hatched! Nest eggs on other kinds of ground to meet other creatures.",
-    "firstRelic": "The grotto will need time."
+    "firstRelic": "The grotto will need time.",
+    "harvestTitle": "While you were away",
+    "harvestNew": "something new",
+    "harvestNewNearRelic": "something new near the relic"
   },
   "guide": {
     "landmarks": {

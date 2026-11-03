@@ -1476,6 +1476,10 @@ export class Game {
   // ---- time passing
   advance(now) {
     const report = { spawned: 0, despawned: 0, ticks: 0, visitors: 0 };
+    // Real time away (developer time speed and skips don't count as being away).
+    const realNow = now - (this.state.debugTimeOffset || 0);
+    const lastReal = this.state.lastRealSeen ?? ((this.state.lastUpdated ?? now) - (this.state.debugTimeOffset || 0));
+    const away = Math.max(0, realNow - lastReal);
     // Revealed tiles that have finished fading in no longer need tracking (keeps per-tile scans fast).
     const ramp = ((this.t.expansion && this.t.expansion.revealRampSeconds) || 0) * 1000;
     for (const k in this.state.revealed || {}) if (now - this.state.revealed[k] >= ramp) delete this.state.revealed[k];
@@ -1509,10 +1513,102 @@ export class Game {
     for (let d = first; d <= today; d++) report.visitors += this.checkWanderers(now);
     this.state.lastWandererDay = today;
 
+    // The return harvest: extra growth for real time away, mostly on relic ground.
+    const harvest = this.returnHarvest(now, away);
+    if (harvest) report.harvest = harvest;
+    this.state.lastRealSeen = realNow;
+
     this.state.lastUpdated = now;
     this.statCache = this.statField(now);
     this.checkProgress(now);
     return report;
+  }
+
+  // ---- the return harvest (tuning.returnHarvest)
+  get harvestCfg() { return this.t.returnHarvest || {}; }
+  /**
+   * Extra growth for time away. Deterministic: its random choices are seeded from the forest and the away
+   * window, and it runs once per return (state.lastRealSeen moves on), so reloading never grants twice.
+   * Returns a summary for the morning reveal (and pushes a returnHarvest event), or null.
+   */
+  returnHarvest(now, awayMs) {
+    const cfg = this.harvestCfg;
+    if (!cfg.perHour || awayMs < (cfg.minAwayMinutes ?? 45) * 60000) return null;
+    const hours = Math.min(awayMs / HOUR, cfg.maxHours ?? 10);
+    const start = now - hours * HOUR;
+    const saved = this.rng;
+    this.rng = new RNG({ rng: hash32(this.state.seed, Math.floor(start / 60000), Math.floor(now / 60000)) });
+    const made = [];
+    try {
+      const field = this.statField(now);
+      const st = this.t.spawns, c = this.clearing, area = (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1);
+      const cap = Math.min(st.maxTotal, Math.max(st.minCap || 3, Math.round(area * (st.maxPerOpenTile || 0.1)))) + (cfg.overCap ?? 0);
+      const occ = this.occupied(), minTotal = cfg.minStatTotal ?? 6;
+      const cands = [];
+      for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+        if (occ.has(x + ',' + y)) continue;
+        const sv = field.statsAt(x, y);
+        const total = CORE_STATS.reduce((a, k) => a + (sv[k] || 0), 0);
+        if (total >= minTotal) cands.push({ tile: { x, y }, w: total, stats: sv });
+      }
+      const when = () => start + this.rng.next() * (now - start);
+      const put = (item, tile, t) => {
+        const sp = this.newSpawn(item, tile, t);
+        sp.harvest = true;
+        this.state.spawns.push(sp);
+        made.push(sp);
+        const i = cands.findIndex((x) => sameTile(x.tile, tile));
+        if (i >= 0) cands.splice(i, 1);
+      };
+      // The first return after the first relic: its ground is thick with finds of its school.
+      const h = this.state.harvest = this.state.harvest || {};
+      const first = (this.state.relics || [])[0];
+      if (first && !h.firstDone) {
+        const fr = cfg.firstReturn || {};
+        const near = cands.filter((x) => (x.stats[first.school] || 0) > 0 && dist(x.tile, first.tile) < this.stats.reach(this.relicTier(first.tier).radius))
+          .sort((a, b) => (b.stats[first.school] || 0) - (a.stats[first.school] || 0));
+        const ofSchool = (tile, t, minRarity) => this.spawnDetails(tile, t)
+          .filter((d) => this.schoolOf(d.item) === first.school && rarityIndex(d.item.rarity) >= rarityIndex(minRarity)).map((d) => [d.item, d.weight]);
+        let uncommon = 0, n = 0;
+        for (const x of [...near]) {
+          if (n >= (fr.minFinds ?? 8) || this.state.spawns.length >= cap) break;
+          const t = when();
+          const wantRare = uncommon < (fr.minUncommon ?? 1);
+          const item = (wantRare && weightedPick(ofSchool(x.tile, t, 'uncommon'), this.rng)) || weightedPick(ofSchool(x.tile, t, 'common'), this.rng);
+          if (!item) continue;
+          if (rarityIndex(item.rarity) >= 1) uncommon++;
+          put(item, x.tile, t);
+          n++;
+        }
+        h.firstDone = now;
+      }
+      // Then growth for the time away, weighted by how developed each tile is.
+      let budget = Math.round(hours * cfg.perHour) - made.length;
+      while (budget-- > 0 && cands.length && this.state.spawns.length < cap) {
+        const pick = weightedPick(cands.map((x) => [x, x.w]), this.rng);
+        if (!pick) break;
+        const t = when();
+        const item = this.pickSpawn(pick.tile, t);
+        if (!item) { cands.splice(cands.indexOf(pick), 1); continue; }
+        put(item, pick.tile, t);
+      }
+    } finally {
+      this.rng = saved;
+    }
+    if (!made.length) return null;
+    // The best find: the rarest, nearest a relic.
+    const relicDist = (t) => Math.min(99, ...(this.state.relics || []).map((r) => dist(r.tile, t)));
+    const best = [...made].sort((a, b) => rarityIndex(this.content.items[b.itemID].rarity) - rarityIndex(this.content.items[a.itemID].rarity) || relicDist(a.tile) - relicDist(b.tile))[0];
+    const fresh = made.filter((sp) => !this.discovered.has('item:' + sp.itemID));
+    const summary = {
+      at: now, hours: Math.round(hours * 10) / 10, finds: made.length,
+      uncommon: made.filter((sp) => rarityIndex(this.content.items[sp.itemID].rarity) >= 1).length,
+      best: { itemID: best.itemID, tile: best.tile }, somethingNew: fresh.length > 0,
+      newNearRelic: fresh.some((sp) => relicDist(sp.tile) <= 4),
+    };
+    this.state.harvest.last = summary;
+    this.events.push({ type: 'returnHarvest', ...summary });
+    return summary;
   }
 
   // ---- progression: slots, blend, expansion, first-uncommon hint
@@ -1636,9 +1732,14 @@ export class Game {
 
   takeEvents() { const e = this.events; this.events = []; return e; }
 
+  /** How long an unpicked find lasts: its own lifetimeHours, else by rarity (tuning.spawns.wilting). */
   lifetime(itemID) {
-    const h = this.content.items[itemID]?.spawn?.lifetimeHours;
-    return h != null ? h * HOUR : this.t.spawns.lifetimeSeconds * 1000;
+    const def = this.content.items[itemID];
+    const h = def?.spawn?.lifetimeHours;
+    if (h != null) return h * HOUR;
+    const w = this.t.spawns.wilting || {};
+    if (def && w[def.rarity] != null) return w[def.rarity] * HOUR;
+    return this.t.spawns.lifetimeSeconds * 1000;
   }
 
   expireSpawns(t) {

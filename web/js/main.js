@@ -39,7 +39,8 @@ class App {
     this.view = new ForestView(document.getElementById('forest'), this);
     this.view.sync();
     this.ui.render();
-    if (saved && report.spawned > 0 && report.ticks > 2) {
+    this.processEvents();                       // the morning reveal, if the forest grew while we were away
+    if (saved && !report.harvest && report.spawned > 0 && report.ticks > 2) {
       this.ui.toast(`While you were away, ${report.spawned} new thing${report.spawned === 1 ? '' : 's'} appeared.`);
     }
     if (this.replanted) this.ui.toast('The forest has been replanted for the new spawn table. Creatures now hide in mushrooms, seeds and geodes.');
@@ -70,7 +71,7 @@ class App {
       if (document.hidden) { this.save(); return; }
       const before = this.game.state.lastUpdated;
       const r = this.game.advance(this.game.now());
-      if (r.spawned > 0 && this.game.now() - before > 600000) {
+      if (!r.harvest && r.spawned > 0 && this.game.now() - before > 600000) {
         this.ui.toast(`While you were away, ${r.spawned} new thing${r.spawned === 1 ? '' : 's'} appeared.`);
       }
       this.changed();
@@ -111,6 +112,14 @@ class App {
         this.view.relicReaction(e.relic.tile, e.relic.school);
         // The first relic ends the first session quietly; later ones just say so.
         ui.toast((this.game.state.relics || []).length <= 1 ? ui.story('messages.firstRelic') : `${def ? def.name : 'The relic'} is in the ground. The land around it will answer.`);
+      } else if (e.type === 'returnHarvest') {
+        // Morning reveal: a brief pan to the best find, then a small card. Collect All does the rest.
+        if (e.best) { this.view.panTo(e.best.tile, (cfg.returnHarvest?.reveal || {}).panSeconds ?? 1.2); this.view.highlight([e.best.tile], 4, '255,236,140'); }
+        const parts = [`${e.finds} find${e.finds === 1 ? '' : 's'}`];
+        if (e.uncommon) parts.push(`${e.uncommon} uncommon`);
+        if (e.newNearRelic) parts.push(ui.story('messages.harvestNewNearRelic'));
+        else if (e.somethingNew) parts.push(ui.story('messages.harvestNew'));
+        ui.celebrate(ui.story('messages.harvestTitle'), parts.join(', ') + '.');
       } else if (e.type === 'terrainDiscovered') {
         const t = (this.content.terrain || []).find((x) => x.id === e.id);
         if (t) ui.toast(`New terrain in your Field Guide: ${t.name}.`);
@@ -719,6 +728,16 @@ class App {
     this.view.lightAt = 0;
     const r = this.game.advance(this.game.now());
     this.ui.toast(`Skipped ${hours} hour${hours === 1 ? '' : 's'}. ${r.spawned} new spawn${r.spawned === 1 ? '' : 's'}.`);
+    this.changed();
+  }
+
+  /** Developer: as if the player closed the game for `hours` and came back now (counts as real time away). */
+  debugReturn(hours) {
+    const g = this.game;
+    g.debugSkip(hours * 3600);
+    g.state.lastRealSeen = (g.state.lastRealSeen ?? Date.now()) - hours * 3600 * 1000;
+    this.view.lightAt = 0;
+    g.advance(g.now());
     this.changed();
   }
 

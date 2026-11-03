@@ -566,6 +566,18 @@ Relics are the only way to change the land for good. A buried relic is a permane
 - **Older saves (save version 6):** each placed creature becomes a buried relic of its main stat's school, at the creature's tier, on its tile, already at full strength. Resting creatures, eggs in the Bag and nests are kept in the save and hidden; nothing is deleted. Creatures that were already fading keep fading as before.
 - **School seeds can't do a relic's job:** a search over every arrangement of the six seeds that can be buried at once (with and without Wide Spread, now +0.5 radius) never reaches a triple (best 17.8 of the 30 needed) or an earned landmark (best 13.9 of 16).
 
+## Return harvest (web)
+
+The grotto grows while the player is away, mostly on relic ground (`tuning.json` → `returnHarvest`).
+
+- **Away growth:** when the game opens after at least `minAwayMinutes` (45) of real time away, it grows extra finds for the time away, capped at `maxHours` (10): `perHour` (2) finds per hour. They go on developed ground (a stat total of at least `minStatTotal`, Low), weighted by that total, so relic terrain gets most of it. Bare ground only gets the normal light scatter from the ordinary spawn ticks, which still run for the offline time as before.
+  - The harvest may go past the normal spawn cap by `overCap` (16). Each find is chosen by the normal spawn rules (terrain affinity, home finds, rarity) at a moment inside the away window, so rich ground grows rich finds, and night finds come from the night part of the absence.
+  - Away time is real time (`state.lastRealSeen`). Developer time speed and skips don't count, so watching the land change at 3600× doesn't trigger it; the developer tool "simulate a return" does.
+  - It's deterministic: its random choices are seeded from the forest seed and the away window, and it runs once per return, so reloading never grants twice.
+- **First return:** the first return after the first relic is buried (`firstReturn`) puts at least `minFinds` (8) finds of the relic's school on its ground (where its stat is high enough for them), `minUncommon` (1) of them uncommon. To make that possible for every school, the spawn table gained one uncommon find per school that needs only that school at 12, which a common relic gives its 8 neighbours: Velvet Shank (Spore), Ember Cap (Glow), Honeybell (Bloom), Feather Fern (Verdure), Glassbell (Shimmer) and Veil Cap (Spirit). Bloom also gained a common wild find, the Meadow Daisy (Bloom 10), since it had none. In simulation, a first return after 8h gives 9–10 harvest finds on the 18 or so open tiles around a common relic, with 1–4 uncommon, for every school.
+- **Wilting:** unpicked finds fade after `spawns.wilting` hours by rarity: common 30, uncommon 60, rare 120, very rare and legendary 168 (an item's own `lifetimeHours`, like Ink Cap's 24, still wins). The grove changes to follow its terrain instead of clogging up. Starting finds never fade.
+- **Morning reveal:** after a return with away growth, the camera pans briefly to the best find (the rarest, nearest a relic; `reveal.panSeconds`, instant with reduced motion) and highlights it. A small card sums it up: "While you were away: 13 finds, 2 uncommon, something new near the relic." Then Collect All does the rest. The old "While you were away, N new things appeared" toast only shows when there was no harvest.
+
 ## School seeds (web)
 
 One seed per school: Spore, Glow, Bloom, Verdure, Shimmer and Spirit Seeds (`seed.<school>`, `Resources/Content/schoolSeeds.json`, from the Offerings spreadsheet's **School Seeds** sheet). Mystery Seeds are unchanged: they're still planted and still grow flowers.
