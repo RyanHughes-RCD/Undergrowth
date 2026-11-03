@@ -266,6 +266,12 @@ PLANTS = {
     "columbine": ("columbine", "#4f8a2c", "#9a5ad8", "#f8e8a0"),
     "bleeding-heart": ("bleedingheart", "#5a9a3a", "#ff6aa8", "#ffffff"),
     "meadow-daisy": ("flower", "#5fbf4a", "#f8f8f0", "#ffd84a"),
+    # More Bloom flowers
+    "marigold": ("flower", "#4f8a2c", "#f08a20", "#c85a10"),
+    "sweet-pea": ("rose", "#5fbf4a", "#f0b0e0", "#c8a0f0"),
+    "lavender": ("foxglove", "#6a8a5a", "#a07ae0", "#d8c8ff"),
+    "sunfire-daisy": ("daisies", "#4f8a2c", "#ffb020", "#ff6020"),
+    "petalwhirl": ("bigflower", "#4f8a2c", "#ff9ccf", "#fff3c4"),
     # Plant & Fungi Catalogue (flora)
     "silver-ragwort": ("rosette", "#a8b0b8", "#e8e8f0", "#ffffff"),
     "jewelweed": ("trumpet", "#4f9440", "#f0a030", "#ffd84a"),
@@ -311,7 +317,7 @@ PLANTS = {
     "feather-fern": ("fern", "#4f9440", None, None),
     "glassbell": ("snowdrop", "#7a9a9a", "#d8ccf8", "#f4f0ff"),
 }
-PLANT_GLOW = {"stargrass", "lantern-lily", "moonpetal", "foxfire-orchid", "prismbell", "opal-fern", "lantern-flower", "starwort", "prism-rose", "glassbell", "glowbloom", "moonflower", "deeproot-lantern", "crystal-thistle"}
+PLANT_GLOW = {"sunfire-daisy", "stargrass", "lantern-lily", "moonpetal", "foxfire-orchid", "prismbell", "opal-fern", "lantern-flower", "starwort", "prism-rose", "glassbell", "glowbloom", "moonflower", "deeproot-lantern", "crystal-thistle"}
 
 
 def draw_plant(shape, leaf, petal, centre):
