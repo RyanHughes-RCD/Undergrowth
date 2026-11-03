@@ -42,7 +42,7 @@ Then open <http://localhost:8000>.
 
 - **New forest:** a 7×14 clearing in the middle of the 40×56 forest, with all stats at 0. The Old Log, a mossy stump two tiles wide, sits at its centre (`Content/landmarks.json`, `footprint: [2, 1]`). It's solid: creatures walk around it rather than through it (`solid: true`). Its sprite is made from `design/landmark_old_log.jpg` by `tools/gen_landmark_art.py` (see Landmark art below). Only spawns with no stat requirements can appear, straight from the normal spawn rules.
 - **The opening (no guided tutorial, no instructions):** the clearing is a little grotto: mossy rocks, ferns and roots along its edge (`start.scenery`, saved as `scenery`, visual only).
-  - Waiting around the old log (`start.spawns`, kept until picked): 2 Brown Button Caps, a Red Toadstool (always drops a Spore Seed), a Clover (a Mystery Seed), a Sorrel (a Mystery Seed and a Bloom Seed) and 2 Pebble Geodes. There's no guaranteed egg or quick first egg any more.
+  - Waiting around the old log (`start.spawns`, kept until picked): 2 Brown Button Caps, a Red Toadstool (always drops a Spore Seed), a Clover (a Mystery Seed), a Sorrel (a Mystery Seed and a Bloom Seed), plus another Clover and Brown Button Cap (these replaced the 2 Pebble Geodes while geodes are off). There's no guaranteed egg or quick first egg any more.
   - **The relic** (`start.relic`): beside the old log sits a relic unlike any other find, faintly shimmering (`relic.unknown`). Collect All leaves it alone.
   - Tapping it opens a card with its inscription (`Resources/Content/opening.json` → `card`): it can change the land around it to suit its keeper's wishes.
   - **Questions:** "Hold it" leads into five quiet questions ("Where do you go to think?", "What do you hope to find when you wake?"…), each with four answers. No answer names a school, a stat or a mechanic. Each answer adds weight to one or two schools (`questions[].answers[].weights`); the highest total chooses the relic's school, ties broken at random among the leaders. Closing the card before the end changes nothing; the relic waits.
@@ -52,13 +52,13 @@ Then open <http://localhost:8000>.
   - The moment it's buried, its tile answers (see Relics). One quiet line follows: "The grotto will need time." (`story.json` → `messages.firstRelic`). Nothing else pushes the player on, so the first session comes to a natural end.
 - **Older saves:** forests from before this opening keep what they have; their placed creatures became relics (see Relics).
 - **Seeds grow flowers, never weeds:** Mystery Seeds only grow **seed flowers**, items whose spreadsheet row says "Grows from a Mystery Seed" (`spawn.seedOnly`). These never spawn wild:
-  - Wildflower, Violet, Bluebell, Foxglove, Trillium, Moss Rose, Stonecrop, Wild Strawberry, Sunpetal, Glowbloom, Moonflower, Crystal Thistle, Cave Lily, Ghost Orchid and Dandelion.
-  - Six garden flowers: Primrose, Forget-me-not, Poppy, Snowdrop, Columbine and Bleeding Heart. Each leans toward one stat.
+  - Wildflower, Violet, Bluebell, Trillium, Moss Rose, Stonecrop, Wild Strawberry, Sunpetal, Glowbloom, Moonflower, Crystal Thistle, Cave Lily and Dandelion (Foxglove, Bleeding Heart and Ghost Orchid are wild finds now; see School flora).
+  - Five garden flowers: Primrose, Forget-me-not, Poppy, Snowdrop and Columbine. Each leans toward one school.
 
   Common and uncommon seed flowers grow anywhere (`seeds.softNeedsUpTo`): their stat needs only make them likelier on matching ground. Rarer ones need their terrain, and the terrain pull (rarity weighting, named terrains' home finds) favours them strongly on the right ground.
   - In simulation: on plain ground 15 different flowers, 3–12% each. On Glow + Bloom ground, Moonflower and Glowbloom 76%. On Spore + Bloom ground, Violet and Trillium 58%.
   - Wild plants are the greenery: Clover, Sorrel, Fern, Moss Tuft, Pebblewort, Hollow Root, Water Reed, Pitcher Plant, Deeproot Lantern and the legendary Heartwood Sapling. They keep spawning and dropping seeds. The tile spawn workbook's views show wild spawns only.
-- **Gems are trade goods:** gems and geode materials are kept to trade in the Store rather than crushed into tiles (`gems.soilBoost: false`; their old uses stay in the data). The "Crush a gem" task became "Make a trade at the Store".
+- **Gems are trade goods** (all of this is dormant while geodes are off; see below): gems and geode materials are kept to trade in the Store rather than crushed into tiles (`gems.soilBoost: false`; their old uses stay in the data). The "Crush a gem" task became "Make a trade at the Store".
 - **Compost is paused** (`offerings.compostEnabled: false`): no compost buttons, compost heap or visitor swaps. Recolouring decor is free meanwhile.
 - **Creatures** (off while `creaturePlacement.enabled` is false): there's no cap on how many are out in the forest, and no slot bar. The **Creatures** tab lists who's out and who's resting; it's hidden while creatures are off.
 - **Blend celebration:** fires once, the first time two creatures each give a tile `blend.minEach` or more.
@@ -137,7 +137,7 @@ python3 tools/gen_placeholders.py
   - Minimums, time of day, rain and one-at-a-time still gate whether an item can spawn at all.
   - If every scaling cell is left blank, the importer falls back to a rate per required stat by rarity: Common 1, Uncommon 1.5, Rare 2, Very rare 2.5, Legendary 3.
   - **Category first:** each spawn first picks mushroom, plant or geode (among categories that have something qualifying on that tile), then an item within it by effective weight.
-  - **Category tilt:** a category's weight is `spawns.categoryWeights` × a multiplier from the tile's own-family stats (`spawns.categoryScaling`, % per point, clamped to 0.25..6). The default is +10% per point of Spore/Glow for mushrooms, Bloom/Verdure for plants and Shimmer/Spirit for geodes. So an area full of Geode Critters turns up mostly geodes: one Common critter nearby gives about 50% geodes and 25% each of the others.
+  - **Category tilt:** a category's weight is `spawns.categoryWeights` × a multiplier from the tile's own-family stats (`spawns.categoryScaling`, % per point, clamped to 0.25..6). Mushrooms tilt +10%/pt with Spore, +6% with Glow and −12% with Bloom; plants +10% with Bloom, +8% with Verdure and −12% with Spore (geodes +10% with Shimmer/Spirit); clamped to 0.05..6. So Spore ground grows only fungi and Bloom ground only flowers (see School flora), while the plain Brown Button Cap and Clover fade away on them. So an area full of Geode Critters turns up mostly geodes: one Common critter nearby gives about 50% geodes and 25% each of the others.
   - **Where spawns land (effect-driven):** each spawn attempt picks a free tile by weight (`spawns.locationWeighting`):
     - `weight = base × general`, capped at `maxWeight` (24).
     - `general = generalByEffectCount[effects] × (1 + min(maxIntensityBonus, perStatPoint × tile stat total))`.
@@ -303,7 +303,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
 - **Verdure is mass, speed and hiding:**
   - Seeds grow faster on lush tiles (`seedGrowthPerPoint`), and plants there drop extra seeds (`extraSeedPerPoint`).
   - At Verdure ≥ 30 (`hideThreshold`), surface spawns are hidden in tall grass with an occasional rustle. The first tap reveals them; the next collects.
-- **Combo tiles** (`combos` in `tuning.json`) are the core of the game:
+- **Combo tiles** (`combos` in `tuning.json`; **off for now**, `combos.enabled: false`):
   - **Shallow pool (Spore + Spirit):** the ground pools with water, a small ecosystem of its own.
     - **Shape:** pool tiles are autotiled. A lone tile is a rounded puddle, and neighbouring tiles join seamlessly with rounded inside corners.
     - **Shoreline:** thin and broken, made of soil, mud and dark wet grass. It's stable because it comes from a world-pixel hash.
@@ -314,6 +314,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
     - Only Spore-loving items spawn on water.
   - **Mossy bank (Shimmer + Spore + Verdure):** moss grows over the ground and the crystal spikes, and bugs gather (beetles by day, fireflies at night): each connected patch of moss gets one per `tilesPerBug` (8) tiles, rounded and at least one, so 1–2 per 12 tiles.
   - **Wild meadow (Bloom + Verdure):** a tangle of flowers in long grass. Plants are favoured ×3 in spawn rolls. Each meadow tile gets an extra plant-only chance per tick (normal rate × min(2.5, (Bloom + Verdure) × 0.06), `combos.meadow.plantGrowth`). Mystery Seeds grow ×2.5 faster there.
+- **Ground tiles and tint:** every school has its own grass (`tile.<school>.<level><a|b>`, from `school_ground` in `tools/gen_terrain.py`): the ordinary grass with its greens shifted toward the school's hue (Spore dark damp moss, Glow teal, Bloom golden, Verdure vivid green, Shimmer lilac-grey, Spirit blue-violet) plus a few motif specks, at four levels: Low, Moderate, Medium and High. A tile shows the ground of its dominant school (a share of at least `terrain.dominantShare`) at the level its intensity has reached (`ground-<school>-<level>` rules). On top, a light tint in the school's colour (`tint-<school>` rules, `strength` 0.3) colours just the grass, a little more as intensity rises, so the ground shifts smoothly between levels and where schools meet. It's drawn under the overlays, so flowers, crystals and the rest keep their own colours.
 - **Tile art:** `Resources/Content/tileRules.json`. A rule with `"staged": true` and `"stat"` expands into the 9 stages (`ov.<stat>.s1a`… / `deco.spikes.<n><v>`). Combo layers use `combo_<id>`. The art is made by `tools/gen_terrain.py`; the water is drawn by the renderer.
 - **Plants:** every plant has its own grown sprite and its own bud stage (`plant.bud.<id>`). A Mystery Seed shows planted, then sprout, then that plant's bud, then the plant itself.
 - **Spawn placement:** item data `spawn.placement` is `surface`, `buried` or `auto` (the default). In the spreadsheet, an optional "Placement" column overrides it per item.
@@ -344,7 +345,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
   - Creature traits show what the creature gives at full strength on its own tile.
   - Everywhere else intensity is a small inline meter too: Field Guide requirements, terrain pages ("needs" and "has" for your selected tile), spawn bonuses, creature traits, and gem uses. A half-filled pip means a requirement sits partway through that level (20 = two full pips and a half), so the true threshold is never overstated. Amounts below the floor read "a touch of Shimmer".
 - **Raw values are developer-only:** the spawn inspector (raw value plus label), stat overlay and spawn heatmap live in developer mode, and switch off when you leave it.
-- **Field Guide → Terrain:** Forest floor, Shimmering ground, Fae-touched ground, Mossy ground, Glowing ground, Flowering ground, Lush grass, Shallow pool, Mossy bank, Wild meadow, Treeline (`Resources/Content/terrain.json`).
+- **Field Guide → Terrain:** Forest floor, the six base terrains (Shimmering ground, Fae-touched ground, Mossy ground, Glowing ground, Flowering ground, Lush grass) and the Treeline (`Resources/Content/terrain.json`). Mixed terrain (pools, banks, meadows, named pairs and triples) is hidden while it's switched off.
   - **Discovery:** a terrain is discovered the first time it appears in your clearing (a stat reaching Low, or a combo forming). It's saved with the other guide discoveries (`terrain:<id>`), and older saves discover whatever is already in their clearing.
   - **Illustrations:** built from the game's own sprites: rising stages across six tiles, a joined pond for pools, bushes for the treeline.
   - **Each page:** what makes the terrain appear (as intensities), what can spawn there, the spawn bonuses (named as bonuses, at named intensities), other properties, and the selected tile's current intensity against what's needed. All of it is computed from `tuning.json`.
@@ -543,13 +544,43 @@ The six tile stats are six garden schools. In version 5 three of them were renam
 - **Save version 5** (`migrateSchools` in `web/js/core.js`, run before anything else when a forest loads, real and developer saves alike): creature and placement contributions, soil boosts, `ambientDamp` → `ambientSpore`, guide discoveries (`terrain:<id>`, `landmark:<id>`), formed landmarks, soil packs in the Bag (each becomes the matching school seed, and that seed counts as found), shop purchase counts and any pending Spirit Well result are remapped. The old → new ids are in `SCHOOL_RENAMES`.
 - **iOS:** `StatKey` constants in `Packages/UndergrowthCore` are renamed (`.spore`, `.shimmer`, `.spirit`) so the shared Resources load. iOS saves are not migrated.
 
+## Six base terrains only, no creatures, no geodes (for now)
+
+The game is narrowed down while the core loop settles. Everything below is switched off with flags; the data, art and code stay.
+
+- **Mixed terrain is off:** no named pair or triple terrains (`terrains.enabled: false`) and no combo tiles: Shallow pool, Mossy bank, Wild meadow (`combos.enabled: false`). Only the six base terrains show, in the world and in the Field Guide. The "land is blending" card is off too. Finds that need two schools can still turn up where two relics' ground overlaps; there's just no mixed terrain drawn for it.
+- **Earned landmarks** each belong to one school now, and Singing Crystals is gone (see Earned landmarks).
+- **The two rare visitors** that need a named terrain (Foxfire Newt, Petal Stag) sit out; the six one-per-school visitors stay.
+- **Geodes are out** (`geodes.enabled: false`): none spawn, and geodes left on the map leave when a forest loads. Gems and the materials cracked from geodes can't be found any more, so geodes, gems and those materials are hidden from the Bag, the Field Guide, the Store and the Spirit Well (no gem offerings or rewards; the well's demand never asks for gems). They're kept in saves. Everything that asked for a gem or geode was repriced in the Offerings spreadsheet with a find of similar rarity from the school it suits (quartz → Pebble Cap, mica → Foxfire Button, pyrite → Ink Cap, agate → Meadow Daisy, flint → Hollow Root, and so on up to opal → Dawn Peony; Pebble Geode → Clover), and Water Reed (pools only) became Moss Tuft. Keen Eye: geodes is hidden. Task rewards that were gems or geodes are school seeds now; "Dig up 3 geodes" and "Crack 3 geodes" became "Pick 10 flowers" and "Pick 10 mushrooms".
+- **Creatures are gone from play:** besides placing, creature finds, eggs and wanderers (already off), the traders at the Old Log no longer show a creature, and developer mode hides its creature and egg tools ("Unlock everything" skips creatures). Older saves keep their creatures in the save, hidden.
+
+## School flora (web)
+
+Every school has its own set of finds; each one needs only its own school (single-school needs in the spawn spreadsheet). Spore is all fungi, Bloom all flowers, and the other four a mix of both. Brown Button Cap and Clover are plain-ground finds that need nothing (Clover leans to Bloom). The sets include the **Plant & Fungi Catalogue** (`terrain_school_ecosystem_catalogue_expanded.xlsx`): its 50 new finds are in italics, and the 10 it shares with the game took the catalogue's school and description (Earthstar and Turkey Tail moved to Spore, Amethyst Deceiver to Spirit, Ghost Fungus to Glow; Foxglove, Bleeding Heart and Ghost Orchid became wild finds instead of Mystery Seed flowers). The catalogue gives no rarities, so each new find's rarity and minimum were chosen to spread every school from Low to Very High.
+
+| School | Common | Uncommon | Rare | Very rare | Legendary |
+|---|---|---|---|---|---|
+| **Spore** (all fungi) | Ink Cap 10, *Shaggy Inkcap* 15, Red Toadstool 20, Turkey Tail 20, *Fly Agaric* 25, Oyster Mushroom 30 | Velvet Shank 12, *Dead Man's Fingers* 20, Bloom Bonnet 25, Earthstar 30, *Violet Webcap* 30, Shelf Fungus 35, *Stinkhorn* 35, Lion's Mane 40 | *Morel* 40, Coral Fungus 50, *Spore Lantern* 55 | *Crown Puffball* 60, Ring Morel 65 | Ancient Sporecrown 85 (night) |
+| **Bloom** (all flowers) | Meadow Daisy 10, *Cornflower* 15, Marigold 15, Buttercup 20, Sweet Pea 20, *Cosmos* 25 | Honeybell 12, Bleeding Heart 25, Lavender 25, Wild Rose 30, *Lupine* 30, Foxglove 35 | *Anemone* 40, Sun Lily 45 (day), Sunfire Daisy 45 (day), *Mooncup Blossom* 50 (night) | Dawn Peony 65, Petalwhirl 70 |  |
+| **Glow** (mostly fungi) | Foxfire Button 10, *Stargrass* 15, Lantern Flower 20, *Honey Mushroom* 20 | Ember Cap 12, *Jack-o'-Lantern Mushroom* 25, Blue Stain Cap 30, *Lantern Lily* 30, *Bluebell Glowcap* 35 | Glowcap 45, Ghost Fungus 45 (night), *Moonpetal* 45 (night), Starwort 50 (night), *Foxfire Orchid* 50 (night), *Nightlight Bracket* 55 (night) | *Starspore* 60, Moonlight Morel 65 (night), Starlight Bonnet 70 (night) |  |
+| **Verdure** (mostly plants) | Sorrel 10, Moss Tuft 15, *Wood Sorrel* 15, Fern 20, *Wild Ginger* 20, Chanterelle 25, *Hosta* 25 | Feather Fern 12, *Maidenhair Fern* 20, *Green Elf Cup* 25, Puffball 30, *Ostrich Fern* 30, *Solomon's Seal* 35 | *Hellebore* 40, Pitcher Plant 45, *Canopy Bells* 50 | *Heartleaf Canopy* 60, Greenheart Vine 65 | Heartwood Sapling 85 |
+| **Shimmer** (mixed) | Pebble Cap 10, *Silver Ragwort* 15, *Mirrorcap* 15, Pebblewort 20, *Jewelweed* 20 | Glassbell 12, *Pearlroot* 25, *Glassreed* 30, *Glimmerlace* 30 | *Prismbell* 40, Prism Rose 45, Crystal Cap 50, *Opal Fern* 50 | *Opaline Shelf* 60, *Rainbow Eucalyptus* 65 |  |
+| **Spirit** (mixed) | Hollow Root 10, *Moonwort* 15, Wisp Cap 20, *Ghostpipe* 20 | Veil Cap 12, *White Sage* 25, *Veil Shank* 25, Mistbell 30, *Wisp Puff* 30 | *Ancestor's Lace* 45, Cave Truffle 55, *Wispwillow* 55 | Amethyst Deceiver 60, Ghost Orchid 65, Deeproot Lantern 65, *Corpse Flower* 70 |  |
+
+The numbers are each find's minimum for its school. Fungi and flowers per school: Spore 20 fungi; Bloom 18 flowers (five more added after the catalogue: Marigold, Sweet Pea, Lavender, Sunfire Daisy, Petalwhirl); Glow 12 fungi and 6 flowers; Verdure 3 fungi and 16 plants; Shimmer 5 fungi and 10 flowers; Spirit 6 fungi and 10 flowers.
+
+- **Mystery Seed flowers** (18) lean to one school too: Wildflower, Dandelion, Violet, Bluebell, Sunpetal and Forget-me-not to Bloom; Wild Strawberry and Primrose to Verdure; Moss Rose, Stonecrop, Crystal Thistle and Snowdrop to Shimmer; Glowbloom, Moonflower and Columbine to Glow; Trillium and Cave Lily to Spirit. None lean to Spore, so it stays all fungi.
+- **Keeping each school's character:** the category tilt (see Spawn table) makes Spore ground pick fungi and Bloom ground pick flowers. In a simulation with one rare relic, Spore's ground grew only fungi and Bloom's ground only flowers; the mixed schools grew both (Glow about 2 fungi to 1 flower, Verdure about 4 plants to 1 fungus, Shimmer and Spirit about even). Bare ground around a relic still grows the plain finds. Every school still gets its guaranteed uncommon on the first return.
+- **Art:** every new find has a generated placeholder sprite (`tools/gen_content_sprites.py`, shape and colours per find).
+- **Animal Visitors** from the same catalogue are noted for later in `design/animal_visitors_notes.md` (not in the game yet).
+
 ## Relics (web)
 
 Relics are the only way to change the land for good. A buried relic is a permanent source of its school's stat; school seeds only change it for a while, and more weakly.
 
 - **Data:** `Resources/Content/relics.json` (kept by hand): 30 relics, one per school and tier (`relic.<school>.<tier>`), each with a name, an inscription, a Bag sprite (`relic.<school>.<tier>`) and the stone shown where it's buried (`relic.world.<school>`). Numbers: `tuning.json` → `relics`.
 - **Burying:** in the Bag a relic has **Bury**. Tap an open tile; a card shows its inscription and "Once it is in the ground, it stays." Occupied tiles, landmarks and the treeline are refused. Buried relics can't be dug up.
-- **Effect:** built like a placed creature and fed through the same code (`relicSources` in `effectivePlacements`): its strength at its own tile with the creature falloff, ramping up over `rampHours`, and influence that starts close around it and reaches its full radius over `spreadHours`. It never fades. Relics count as effects for where spawns land, form terrain through the normal rules (different schools overlapping make the pair terrains and triples), and are listed in the spawn inspector.
+- **Effect:** built like a placed creature and fed through the same code (`relicSources` in `effectivePlacements`): its strength at its own tile with the creature falloff, ramping up over `rampHours`, and influence that starts close around it and reaches its full radius over `spreadHours`. It never fades. Relics count as effects for where spawns land, form their school's terrain through the normal rules, and are listed in the spawn inspector. (Overlapping schools used to make the pair terrains and triples; mixed terrain is off for now.)
 
   | Tier | Strength | Radius | Ramp | Spread | Full footprint (Low+ / Moderate+ tiles) |
   |---|---|---|---|---|---|
@@ -596,8 +627,8 @@ Small forest animals come to the grotto, mostly while the player is away. They l
   | Fern Rabbit | Verdure, Moderate | | dawn |
   | Prism Beetle | Shimmer, Moderate | Pebble Cap | day |
   | Mist Fox | Spirit, Moderate | | dawn |
-  | Foxfire Newt (rare) | Foxfire Fen | | night, in rain |
-  | Petal Stag (rare) | Moonlit Garden | | night |
+  | Foxfire Newt (rare, off while mixed terrain is off) | Foxfire Fen | | night, in rain |
+  | Petal Stag (rare, off while mixed terrain is off) | Moonlit Garden | | night |
 
 - **Interest** (saved per visitor in `state.guests`): checked every `checkMinutes` (30) of game time, offline catch-up included (up to `maxCatchUpDays`, 7). Each check's random choices are seeded from the forest, the visitor and the check's time, so it's deterministic. Interest rises by `interest.gain` (1.5, ×`rainMult` in rain for rain lovers) while the grotto meets its preferences (at least `minTiles` (2) tiles of its ground, plus its find growing there if it has one), and falls by `interest.decay` (1) when it doesn't. It drives four stages (`stages`):
   1. **Signs** (10): during its time window, tracks appear on tiles of its ground (`tracks.chance` per check, at most `maxPerVisitor`, fading over `tracks.hours`, 24). They're little footprints drawn on the ground, visual only.
@@ -615,7 +646,7 @@ One seed per school: Spore, Glow, Bloom, Verdure, Shimmer and Spirit Seeds (`see
 - **Bury:** in the Bag a school seed has a **Bury** button. Tap an open tile, as with Nest and Plant. Occupied tiles, landmarks and the treeline are refused, and at most `maxBuried` (6) seeds can be in the ground at once.
 - **What it does:** on its own, with no creature, it adds its school's stat around its tile with the creature falloff: `strength` (12) at its tile over `radius` (1.5). That's a Low patch of about 5 tiles, about what two neighbouring commons make. It ramps in over `rampHours` (3), holds until `durationHours` (72) after burying, then fades over `fadeHours` (6) and is gone.
 - **Soil-boost machinery:** a buried seed is saved in `state.soilBoosts` (with `seed`, `school`, `rampMs`, `fullUntil`, `fadeMs`), so it counts as an effect for where spawns land, forms terrain and appears in the spawn inspector (with its falloff, level, phase and time left). Its tile stays occupied while it's there.
-- **On the map:** a small mound with a sprout in the school's colour (`seed.buried.<school>`). Tap it for the school, its phase (rooting, growing, fading), time left and its Field Guide text.
+- **On the map:** a small, soft heap of earth (no outline, so it sits quietly in the grass) with a sprout (`seed.buried.<school>`) that grows into a bud (`seed.bud.<school>`) as the seed reaches full strength, then opens into a flower in its school's colour (`seed.bloom.<school>`; pale petals for Verdure, so they show on green ground). It stays in flower as it fades. Tap it for the school, its phase (rooting, growing, fading), time left and its Field Guide text.
 - **Sources:**
   - The Old Log shop, at the old soil-pack prices (`shop-seed-<school>`).
   - Picking a find whose main need (its highest stat minimum) is a school drops that school's seed with `dropChance` (4%).
@@ -627,29 +658,30 @@ One seed per school: Spore, Glow, Bloom, Verdure, Shimmer and Spirit Seeds (`see
 
 ## Earned landmarks (web)
 
-Landmarks aren't placed on the map; they're earned. When two stats reach the needed level on **every tile of a 3×3 patch**, a landmark forms on that patch. It then stays for good, even after the creatures that made it leave.
+Landmarks aren't placed on the map; they're earned. Each belongs to one school: when that school reaches Moderate+ (26) on **every tile of a 3×3 patch**, the landmark forms there and stays for good. That takes a rare relic, or two uncommon ones close together; a single uncommon relic isn't quite enough. (They used to need two schools at 16 each; that changed when mixed terrain was switched off. Singing Crystals was removed, and an older save that had one simply loses it from the map.)
 - Definitions live in `Resources/Content/landmarks.json` (`earned.requires`, `earned.size`, `earned.max`, `aura`, `effect`, `purpose`).
 - Each forms once, with a celebration and a highlight of its patch.
 - Before it has formed, the Field Guide's Landmarks tab shows it as a silhouette with how it forms.
 - Tap a landmark to see what it does and, for producers, when the next thing comes.
 
-| Landmark | Forms from (16+ each) | Aura | Purpose |
+| Landmark | School (26+ over 3×3) | Aura | Purpose |
 |---|---|---|---|
-| Crystal Grotto | Shimmer + Spirit | Shimmer 8, Spirit 8 (radius 2) | A geode rolls out every 8h: Pebble, Mossy, Rootbound or (rarely) Deep. One waits at a time. |
-| Fruit Tree | Bloom + Verdure | Bloom 8, Verdure 8 (radius 2) | Bears **Forest Fruit** every 6h, a new trade good (shop: 1 fruit = 3 seeds, 2 fruit + 3 Sorrel = a Fine Sproutling egg; a fruit-loving visitor). |
-| Moonwell | Spore + Glow | Glow 8 (radius 2) | Eggs hatched in nests within 3 tiles are 5× as likely to be Glimmers. |
-| Singing Crystals | Shimmer + Glow | Glow 6 (radius 1) | Creatures placed within 3 tiles reach one tile farther. |
-| Fairy Ring | Spore + Verdure | Spore 6, Verdure 6 (radius 1) | One more visitor at the Old Log each day. |
-| Spring | Spore + Shimmer | Spore 20 (radius 1) | A permanent water source: its Spore feeds the ambient water, which spreads and pools even with no creatures nearby. |
-| Nest Hollow | Spirit + Verdure | Verdure 6 (radius 1) | One more nest for eggs. |
+| Crystal Grotto | Shimmer | Shimmer 8 (radius 2) | Something shimmering grows at its mouth every 8h: Pebble Cap, Glassbell, Earthstar or (rarely) Crystal Cap. One waits at a time. (It made geodes before geodes were switched off.) |
+| Fruit Tree | Bloom | Bloom 8 (radius 2) | Bears **Forest Fruit** every 6h, a trade good for the Store and traders. |
+| Moonwell | Glow | Glow 8 (radius 2) | Eggs hatched nearby are likelier to be Glimmers (dormant while eggs are off). |
+| Fairy Ring | Spirit | Spirit 6 (radius 1) | One more trader at the Old Log each day. |
+| Spring | Spore | Spore 20 (radius 1) | A permanent water source: its Spore feeds the ambient layer, which spreads and settles in low ground. |
+| Nest Hollow | Verdure | Verdure 6 (radius 1) | One more nest for eggs (dormant while eggs are off). |
 
 - Auras work like permanent soil boosts (they count as an effect for where spawns land).
-- Forming one takes a cluster of creatures: for example, four of each stat's commons packed around a tile, or fewer uncommons. In tests, 8 commons in a ring formed each one.
+- A landmark never takes a tile with a relic or a buried seed on it.
 - Celebration cards now queue, so a landmark's card isn't lost behind another one.
 
 ## Named terrains (web)
 
 > Creature family balance: sproutlings (found only when a planted Mystery Seed finishes growing) have 3× the find chance of the other families (common 12%, uncommon 9%, rare 4.5%, very rare 1.5%, legendary 0.3%), since a forest yields far fewer harvests than mushroom picks or cracked geodes.
+
+> **Off for now** (`terrains.enabled: false`): only the six base terrains show. The data and art below stay, ready to switch back on.
 
 Where two stats meet on a tile, the ground becomes a named terrain with its own art, Field Guide page and spawns (`tuning.terrains`, `Resources/Content/terrain.json`).
 

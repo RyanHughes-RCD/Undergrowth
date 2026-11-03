@@ -17,7 +17,7 @@
     "radiusPadding": 1
   },
   "glimmerChance": 0.01,
-  "geodes": { "batchMax": 5 },
+  "geodes": { "_about": "enabled false: geodes are out of the game for now: none spawn, geodes on the map leave on load, and geodes, gems and geode-only materials are hidden from the Bag, Field Guide, Store and Spirit Well (kept in saves). The data stays.", "enabled": false, "batchMax": 5 },
   "interactions": {
     "_about": "Creatures whose influence reaches overlap can interact. Cosmetic moments are visual only (renderer). Reward moments are rolled per spawn tick per eligible pair: pairChancePerTick, then rewardChance x rarity bonus, capped at maxRewardsPerDay; each pair then waits pairCooldownMinutes.",
     "pairChancePerTick": 0.02,
@@ -72,10 +72,10 @@
       "genericMinFactor": 0.08
     },
     "categoryScaling": {
-      "minMultiplier": 0.25,
+      "minMultiplier": 0.05,
       "maxMultiplier": 6,
-      "mushroom": {"spore": 10, "glow": 10},
-      "plant": {"bloom": 10, "verdure": 10},
+      "mushroom": {"spore": 10, "glow": 6, "bloom": -12},
+      "plant": {"bloom": 10, "verdure": 8, "spore": -12},
       "geode": {"shimmer": 10, "spirit": 10}
     },
     "categoryWeights": {
@@ -282,8 +282,8 @@
     "_about": "Off by default (no creature cap). When enabled, placed creatures are limited to the day-based slots (slotUnlocks) plus slots earned at the Old Log (unlock 'slot').",
     "enabled": false
   },
-  "terrains": {
-    "_about": "Named terrains formed by stat pairs (Low intensity, 10+ each, so two neighbouring commons make one) and triples (30+ each, for the legendary ones). A tile shows one: the most specific match (more stats first), then the one with the highest total of its stats. Its home items get x homeMult; its rule adds: night / day / rain (home items x that at those times), category (that category likelier to be chosen there), location (spawns land there x that often). The tile also counts one extra effect for where spawns land.",
+  "terrains": { "enabled": false,
+    "_about": "enabled false: named pair and triple terrains are off for now (only the six base terrains show); the data below stays. Named terrains formed by stat pairs (Low intensity, 10+ each, so two neighbouring commons make one) and triples (30+ each, for the legendary ones). A tile shows one: the most specific match (more stats first), then the one with the highest total of its stats. Its home items get x homeMult; its rule adds: night / day / rain (home items x that at those times), category (that category likelier to be chosen there), location (spawns land there x that often). The tile also counts one extra effect for where spawns land.",
     "homeMult": 3,
     "foxfire-fen": {"name": "Foxfire Fen", "requires": {"spore": {"min": 10}, "glow": {"min": 10}}, "home": ["mushroom.foxfire-button", "mushroom.blue-stain-cap", "mushroom.glowcap", "mushroom.moonlight-morel"], "rule": {"night": 2}},
     "rain-garden": {"name": "Rain Garden", "requires": {"spore": {"min": 10}, "bloom": {"min": 10}}, "home": ["plant.violet", "mushroom.bloom-bonnet", "plant.trillium", "plant.bluebell", "mushroom.coral-fungus", "plant.ghost-orchid"], "rule": {"rain": 3}},
@@ -303,8 +303,8 @@
     "heartstone-vein": {"name": "Heartstone Vein", "requires": {"glow": {"min": 30}, "shimmer": {"min": 30}, "spirit": {"min": 30}}, "home": ["geode.ancient-heartstone", "geode.deep-geode", "geode.glimmering-geode", "mushroom.crystal-cap"], "rule": {"category": {"geode": 3}}},
     "amethyst-seep": {"name": "Amethyst Seep", "requires": {"spore": {"min": 30}, "glow": {"min": 30}, "shimmer": {"min": 30}}, "home": ["mushroom.amethyst-deceiver", "mushroom.crystal-cap", "geode.mossy-geode", "mushroom.glowcap"], "rule": {"night": 2}}
   },
-  "combos": {
-    "_about": "Combo tiles (the core of the game): a tile that meets every requirement becomes that combo. Uses the tile's raw stats.",
+  "combos": { "enabled": false,
+    "_about": "enabled false: mixed ground (Shallow pool, Mossy bank, Wild meadow) is off for now; the data below stays. Combo tiles (the core of the game): a tile that meets every requirement becomes that combo. Uses the tile's raw stats.",
     "pool": { "name": "Shallow pool", "requires": { "spore": { "min": 12 }, "spirit": { "min": 8 } }, "onlySporeItems": true,
       "clusterBonus": 2.5,
       "lilyPads": { "minTiles": 6, "chance": 0.75, "tilesPerExtraPad": 6, "maxPads": 5, "flowerChance": 0.3 },
@@ -348,7 +348,8 @@
       {"item": "mushroom.red-toadstool", "count": 1, "forced": [{"item": "seed.spore", "count": 1}]},
       {"item": "plant.clover", "count": 1, "forced": [{"item": "seed.mystery-seed", "count": 1}]},
       {"item": "plant.sorrel", "count": 1, "forced": [{"item": "seed.mystery-seed", "count": 1}, {"item": "seed.bloom", "count": 1}]},
-      {"item": "geode.pebble-geode", "count": 2}
+      {"item": "plant.clover", "count": 1},
+      {"item": "mushroom.brown-button-cap", "count": 1}
     ],
     "radius": 3,
     "guaranteedIn": ["geode"],

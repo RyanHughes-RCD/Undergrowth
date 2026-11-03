@@ -62,11 +62,10 @@
   "guide": {
     "landmarks": {
       "landmark.old-log": "The last remnant of an ancient forest. Moss still clings to it, and something in its rings remembers what this place used to be. The creatures you welcome are slowly bringing that forest back.",
-      "landmark.crystal-grotto": "Where crystals and old fae mist met long enough, a grotto opened among them. Cool, glittering air breathes out of it.",
-      "landmark.fruit-tree": "Flowers and long grass fed this tree until it fruited. Birds and wanderers alike come for it.",
-      "landmark.moonwell": "Water and light pooled together into a well that glows softly, brightest under the moon.",
-      "landmark.singing-crystals": "Tall crystals lit from within, standing in a ring and humming softly. Creatures near them feel stronger.",
-      "landmark.fairy-ring": "A ring of pale mushrooms in mossy grass. Wanderers can't resist stepping into it.",
+      "landmark.crystal-grotto": "Where crystals grew thick for long enough, a grotto opened among them. Cool, glittering air breathes out of it.",
+      "landmark.fruit-tree": "Flowers fed this tree until it fruited. Birds and wanderers alike come for it.",
+      "landmark.moonwell": "Light pooled so deep here that it became a well, glowing softly, brightest under the moon.",
+      "landmark.fairy-ring": "A ring of pale mushrooms in the fae mist. Wanderers can't resist stepping into it.",
       "landmark.spring": "Water welling up between mossy stones. It never stops.",
       "landmark.nest-hollow": "An old stump hollowed by roots and lined with moss: a safe place for an egg.",
       "landmark.spirit-well": "An old stone well in a small clearing past the first trees. The water is very still, and very deep."

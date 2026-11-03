@@ -389,7 +389,7 @@ export class TileRuleEngine {
     }
     let tint = null;
     if (total > 0.001) {
-      const amount = Math.round(Math.min(0.6, total) * 20) / 20;
+      const amount = Math.round(Math.min(0.6, total) * 50) / 50;   // fine steps so even Low ground tints a little
       if (amount > 0) tint = [Math.round(r / total), Math.round(gg / total), Math.round(b / total), amount];
     }
     return { ground, overlays, decorations, tint };
@@ -522,6 +522,10 @@ export class Game {
     }
     s.revealed = s.revealed || {};
     s.milestones = s.milestones || {};
+    // Geodes sitting on the map while geodes are off leave it (dug ones in the Bag are kept, hidden).
+    if (!this.geodesOn && s.spawns) s.spawns = s.spawns.filter((sp) => (this.content.items[sp.itemID] || {}).category !== 'geode');
+    // Landmarks taken out of the game (landmarks.json) leave the map; their guide discovery stays.
+    if (s.landmarks) s.landmarks = s.landmarks.filter((l) => this.landmarkDef(l.id));
     s.tutorial = s.tutorial || { step: 'done' };
     s.landmarks = s.landmarks || [];
     s.counters = s.counters || {};
@@ -1095,10 +1099,15 @@ export class Game {
   }
 
   /** Combo tiles on this tile (tuning.combos: pool, moss, meadow …), from its raw stats. */
+  /** Mixed ground (combos: pool, moss, meadow) only while tuning.combos.enabled isn't false. */
+  get combosOn() { return (this.t.combos || {}).enabled !== false; }
+  /** Named pair and triple terrains only while tuning.terrains.enabled isn't false. */
+  get terrainsOn() { return (this.t.terrains || {}).enabled !== false; }
   combosAt(stats) {
     const out = [];
+    if (!this.combosOn) return out;
     for (const id in this.t.combos || {}) {
-      if (id.startsWith('_')) continue;
+      if (id.startsWith('_') || !this.t.combos[id] || typeof this.t.combos[id] !== 'object') continue;
       if (groupMatches(this.t.combos[id].requires || {}, stats)) out.push(id);
     }
     return out;
@@ -1109,7 +1118,7 @@ export class Game {
   get terrainDefs() {
     if (this._terrainDefs && this._terrainDefs.src === this.t.terrains) return this._terrainDefs.list;
     const src = this.t.terrains || {};
-    const list = Object.entries(src).filter(([id, d]) => !id.startsWith('_') && d && typeof d === 'object' && d.requires)
+    const list = src.enabled === false ? [] : Object.entries(src).filter(([id, d]) => !id.startsWith('_') && d && typeof d === 'object' && d.requires)
       .map(([id, d]) => ({ id, ...d, home: new Set(d.home || []), keys: Object.keys(d.requires) }));
     this._terrainDefs = { src: this.t.terrains, list };
     return list;
@@ -1530,7 +1539,7 @@ export class Game {
 
   // ---- visitors (Content/visitors.json, tuning.visitors): forest animals drawn by the grotto's ground
   get guestCfg() { return this.t.visitors || {}; }
-  guestDefs() { return this.content.visitorList || []; }
+  guestDefs() { return (this.content.visitorList || []).filter((v) => !v.likes.terrain || this.terrainsOn); }
   guestDef(id) { return this.guestDefs().find((v) => v.id === id) || null; }
   guest(id) {
     const g = this.state.guests[id] = this.state.guests[id] || { interest: 0, known: [], befriended: false, present: null, presDay: -1, presCount: 0 };
@@ -1825,7 +1834,7 @@ export class Game {
     this.discoverTerrain(now);
     if (this.inTutorial) this.tutorialTick(now);
 
-    if (!s.milestones.blend) {
+    if (!s.milestones.blend && (this.terrainsOn || this.combosOn)) {   // the blend card celebrates mixed ground: off while it is
       const tiles = this.blendedTiles(now);
       if (tiles.length) { s.milestones.blend = now; this.events.push({ type: 'blend', tiles }); }
     }
@@ -2362,6 +2371,13 @@ export class Game {
 
   // ---- eggs (tuning.creatureFinds "egg"): finds give eggs; eggs hatch in nests from the nest tile's stats
   get eggMode() { return (this.t.creatureFinds || 'egg') === 'egg' && (this.content.eggs || []).length > 0; }
+  /** Geodes (and the gems and materials cracked from them) are in the game only while tuning.geodes.enabled isn't false. */
+  get geodesOn() { return (this.t.geodes || {}).enabled !== false; }
+  /** Items that sit out while their system is off: geodes, gems and geode-only materials (kept in saves, hidden). */
+  itemOff(def) {
+    if (!def || this.geodesOn) return false;
+    return def.category === 'geode' || def.category === 'gem' || (def.category === 'material' && /^cracked from/i.test(def.howFound || ''));
+  }
   /** Creatures shape the land only while tuning.creaturePlacement.enabled (off: relics do). */
   get creaturesOn() { return (this.t.creaturePlacement || {}).enabled !== false; }
   /** The egg system (finds give eggs, nests) runs only while creatures are on and tuning.eggs.enabled. */
@@ -3073,7 +3089,7 @@ export class Game {
   /** Which of the well's groups (mushrooms / plants / gems) an item belongs to, by its item category; null if none. */
   wishGroup(itemID) {
     const def = this.content.items[itemID];
-    if (!def) return null;
+    if (!def || this.itemOff(def)) return null;          // gems sit out while geodes are off
     for (const [g, cats] of Object.entries(this.wishCfg.categories || {})) if (cats.includes(def.category)) return g;
     return null;
   }
@@ -3095,7 +3111,8 @@ export class Game {
   wishDemand(now) {
     const w = this.state.wish, iv = Game.halfDay(now);
     if (!w.demand || w.demand.interval !== iv) {
-      const groups = Object.keys(this.wishCfg.categories || {});
+      // Only groups something can still be found for (no gems while geodes are off).
+      const groups = Object.entries(this.wishCfg.categories || {}).filter(([, cats]) => cats.some((c) => this.content.itemList.some((i) => i.category === c && !this.itemOff(i)))).map(([g]) => g);
       w.demand = { interval: iv, group: groups[this.rng.int(0, groups.length - 1)] };
     }
     return w.demand.group;
@@ -3192,7 +3209,7 @@ export class Game {
   }
 
   wishRewardValid(r) {
-    if (r.type === 'item') return !!this.content.items[r.item] && (this.eggsOn || this.content.items[r.item].category !== 'egg');
+    if (r.type === 'item') return !!this.content.items[r.item] && (this.eggsOn || this.content.items[r.item].category !== 'egg') && !this.itemOff(this.content.items[r.item]);
     if (r.type === 'egg') return this.eggsOn && (this.content.eggs || []).some((e) => e.tier === r.tier);
     if (r.type === 'relic') return CORE_STATS.every((k) => this.content.items['relic.' + k + '.' + (r.tier || 'common')]);
     if (r.type === 'buff') return !!this.buffDef(r.buff);
@@ -3272,7 +3289,7 @@ export class Game {
       // The landmark takes a tile in the patch that nothing permanent is on (spawns and seeds make way).
       const spots = [{ x, y }];
       for (let dy = -h; dy <= h; dy++) for (let dx = -h; dx <= h; dx++) if (dx || dy) spots.push({ x: x + dx, y: y + dy });
-      const tile = spots.find((t) => !this.landmarkAt(t) && !this.creatureAt(t) && !this.nestAt(t) && !this.decorAt(t) && !this.sceneryAt(t));
+      const tile = spots.find((t) => !this.landmarkAt(t) && !this.creatureAt(t) && !this.nestAt(t) && !this.decorAt(t) && !this.sceneryAt(t) && !this.relicAt(t) && !this.buriedSeedAt(t));
       if (tile) return { tile, centre: { x, y }, size: n };
     }
     return null;
@@ -3347,6 +3364,7 @@ export class Game {
     const r = req.reward || {};
     if (!this.eggsOn && (r.type === 'egg' || (r.type === 'item' && this.content.items[r.id]?.category === 'egg') || (r.type === 'unlock' && r.id === 'nest') || (r.type === 'upgrade' && r.id === 'hatchSpeed'))) return true;
     if (!this.creaturesOn && ((r.type === 'unlock' && (r.id === 'slot' || r.id === 'trowel')))) return true;
+    if (!this.geodesOn && ((r.type === 'upgrade' && r.id === 'keenGeode') || (r.type === 'item' && this.itemOff(this.content.items[r.id])) || (req.items || []).some((x) => this.itemOff(this.content.items[x.item])))) return true;
     return false;
   }
 
@@ -3617,7 +3635,8 @@ export class Game {
 
   /** `count` of every item in the content (mushrooms, plants, seeds, geodes, gems, materials). */
   devGrantItems(count = 5) {
-    const list = Object.values(this.content.items);
+    // Not the opening's unchosen relic, and no eggs while the egg system is off.
+    const list = Object.values(this.content.items).filter((it) => it.id !== 'relic.unknown' && (this.eggsOn || it.category !== 'egg') && !this.itemOff(it));
     this.grant(list.map((it) => ({ item: it.id, count })));
     return list.length;
   }
@@ -3713,7 +3732,9 @@ export class Content {
     this.loot = bundle.loot;
     this.tileRules = bundle.tileRules;
     // Seed-only garden flowers never spawn wild.
-    this.spawnableItems = bundle.items.filter((i) => i.spawn && !i.spawn.seedOnly);
+    // Geodes don't spawn while tuning.geodes.enabled is false.
+    const geodesOn = (bundle.tuning.geodes || {}).enabled !== false;
+    this.spawnableItems = bundle.items.filter((i) => i.spawn && !i.spawn.seedOnly && (geodesOn || i.category !== 'geode'));
     // Gems and geode materials are kept to trade (tuning.gems.soilBoost false): their soil-boost use is set aside.
     if (bundle.tuning.gems && bundle.tuning.gems.soilBoost === false) {
       for (const i of bundle.items) if (i.use && i.use.type === 'soilBoost') { i.tradeOnly = true; delete i.use; }

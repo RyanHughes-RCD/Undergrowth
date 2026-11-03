@@ -277,7 +277,7 @@ export class UI {
     const phaseText = ph.phase === 'rooting' ? `Rooting: reaches full strength in ${duration(ph.left / 1000)}.`
       : ph.phase === 'growing' ? `Growing: starts to fade in ${duration(ph.left / 1000)}.` : `Fading: gone in ${duration(ph.left / 1000)}.`;
     return [def.name || 'School seed', [
-      h('div', { class: 'hero' }, this.sprites.element(def.marker || def.sprite, null, 6, '', true)),
+      h('div', { class: 'hero' }, this.sprites.element(def.school ? 'seed.bloom.' + def.school : (def.marker || def.sprite), null, 6, '', true)),
       h('p', { class: 'center' }, h('b', {}, `${cap(b.school)} school`)),
       h('div', { class: 'progress' }, h('span', { style: `width:${level * 100}%` })),
       h('p', { class: 'sub center' }, phaseText, ` ${duration(ph.ends / 1000)} left in all.`),
@@ -480,7 +480,7 @@ export class UI {
   bagBody() {
     const g = this.game;
     const owned = Object.entries(g.state.inventory).filter(([, n]) => n > 0)
-      .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def && (g.eggsOn || e.def.category !== 'egg'));   // eggs are kept, hidden, while the egg system is off
+      .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def && (g.eggsOn || e.def.category !== 'egg') && !g.itemOff(e.def));   // eggs are kept, hidden, while the egg system is off
     const decor = Object.entries(g.state.decor.owned).filter(([, n]) => n > 0).map(([id, n]) => ({ def: g.decorDef(id), n })).filter((e) => e.def);
     const compostOn = (this.content.tuning.offerings || {}).compostEnabled !== false;
     const head = compostOn ? [h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
@@ -492,7 +492,7 @@ export class UI {
         h('b', {}, `×${n}`),
         h('button', { class: 'btn green small', onclick: () => this.app.beginDecor(def.id) }, 'Place'))));
     }
-    if (!owned.length) return [...head, h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms, plants and geodes in the forest to collect them.')];
+    if (!owned.length) return [...head, h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms and flowers in the forest to collect them.')];
     const order = ['relic', 'egg', 'seed', 'schoolSeed', 'geode', 'material', 'gem', 'plant', 'mushroom'];
     const cats = [...new Set(owned.map((e) => e.def.category))].sort((a, b) =>
       ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
@@ -706,11 +706,11 @@ export class UI {
         const req = g.requestDef(o.requestID);
         if (!req) return null;
         const st = g.requestStatus(req, now);
-        const w = this.content.creatures[o.wandererID];
+        const w = g.creaturesOn ? this.content.creatures[o.wandererID] : null;   // no creature art while creatures are off
         const art = w ? this.app.artForType(w, false) : null;
         return h('div', { class: 'card offer visitor' + (st.ready ? ' ready' : '') + (st.done ? ' locked' : '') },
           h('div', { class: 'row gap' }, art ? h('div', { class: 'thumb small' }, this.sprites.element(art.sprite, art.variant, 2, '', true)) : null,
-            h('div', { class: 'grow' }, h('b', {}, req.name), h('div', { class: 'sub' }, `${/^[aeiou]/i.test(w ? w.name : 'w') ? 'An' : 'A'} ${w ? w.name : 'wanderer'} stops by. ${req.text || ''}`))),
+            h('div', { class: 'grow' }, h('b', {}, req.name), h('div', { class: 'sub' }, `${w ? `${/^[aeiou]/i.test(w.name) ? 'An' : 'A'} ${w.name}` : 'A trader'} stops by. ${req.text || ''}`))),
           h('div', { class: 'sub reward row gap' }, 'Pays: ', this.rewardText(req.reward)),
           st.done ? h('p', { class: 'sub' }, 'Traded. Thank you!') : [
             ...st.items.map((x) => this.offerItemRow(x)),
@@ -814,7 +814,10 @@ export class UI {
   guideEntries(tab) {
     const content = this.content;
     if (tab === TERRAIN_TAB) {
-      return (content.terrain || []).map((t) => ({ key: 'terrain:' + t.id, name: t.name, terrain: t }));
+      // Only the terrains that can appear: mixed ground (combos, named pairs and triples) is off for now.
+      const g = this.game;
+      return (content.terrain || []).filter((t) => (t.kind !== 'terrain' || g.terrainsOn) && (t.kind !== 'combo' || g.combosOn))
+        .map((t) => ({ key: 'terrain:' + t.id, name: t.name, terrain: t }));
     }
     if (tab === VISITOR_TAB) {
       return (content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, variant: null, visitor: v }));
@@ -842,7 +845,7 @@ export class UI {
         };
       }));
     }
-    return content.itemList.filter((i) => i.inGuide !== false && i.category === tab)
+    return content.itemList.filter((i) => i.inGuide !== false && i.category === tab && !this.game.itemOff(i))
       .map((i, idx) => ({ i, idx })).sort((a, b) => rarityIndex(a.i.rarity) - rarityIndex(b.i.rarity) || a.idx - b.idx)
       .map(({ i }) => ({
         key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: null, rarity: i.rarity, text: i.guideText,
@@ -857,7 +860,7 @@ export class UI {
   guideBody() {
     const content = this.content;
     const order = ['mushroom', 'plant', 'geode', 'gem', 'material'];
-    const cats = [...new Set(content.itemList.filter((i) => i.inGuide !== false).map((i) => i.category))]
+    const cats = [...new Set(content.itemList.filter((i) => i.inGuide !== false && !this.game.itemOff(i)).map((i) => i.category))]
       .sort((a, b) => ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
     const famTabs = this.game.creaturesOn ? FAMILY_TABS.filter(([id]) => content.creatureList.some((c) => c.family === id)).map(([id]) => id) : [];
     if (this.guideTab === 'creatures') this.guideTab = famTabs[0];
@@ -1074,24 +1077,25 @@ export class UI {
     if (def.kind === 'base') {
       lines.appears.push('Every tile until a stat reaches Low intensity.');
       lines.spawns.push(`Can appear: ${itemList(this.content.spawnableItems.filter((i) => !i.spawn.requires || !Object.keys(i.spawn.requires).length))}.`);
-      lines.spawns.push('Mushrooms, plants and geodes are equally likely to be the kind that turns up.');
+      lines.spawns.push(g.geodesOn ? 'Mushrooms, plants and geodes are equally likely to be the kind that turns up.' : 'Mushrooms and plants are equally likely to be the kind that turns up.');
     } else if (def.kind === 'stat') {
       const k = def.stat;
       lines.appears.push([this.requirementText(k, band(0).min), ' or more. It grows through every level of the meter.']);
       const needs = this.content.spawnableItems.filter((i) => i.spawn.requires && i.spawn.requires[k]);
       if (needs.length) lines.spawns.push(`Wild finds that need ${cap(k)}: ${itemList(needs)}. Each appears once its own need is met (see its Field Guide entry).`);
-      for (const cat of ['mushroom', 'plant', 'geode']) {
+      for (const cat of ['mushroom', 'plant', 'geode'].filter((c) => c !== 'geode' || g.geodesOn)) {
         const lo = this.categoryMultAt(cat, k, band(0).min), mid = this.categoryMultAt(cat, k, band(3).min);
         if (lo) lines.spawns.push([`${catName[cat]} become likelier to be the kind chosen here: about ×${lo.toFixed(1)} at `, this.miniMeter(k, band(0).min), `, ×${mid.toFixed(1)} at `, this.miniMeter(k, band(3).min), `, up to ×${(T.spawns.categoryScaling || {}).maxMultiplier ?? 6}.`]);
       }
       lines.spawns.push(general);
       const tr = T.terrain || {};
       if (k === 'shimmer') {
-        lines.other.push(`After its creature leaves, Shimmer fades ${Math.round(1 / ((tr.statDecayRate || {}).shimmer || 1))}× more slowly than other stats.`);
-        lines.other.push('Where Shimmer is the strongest stat, geodes lie exposed among the crystals: tap to collect.');
+        if (g.creaturesOn) lines.other.push(`After its creature leaves, Shimmer fades ${Math.round(1 / ((tr.statDecayRate || {}).shimmer || 1))}× more slowly than other stats.`);
+        if (g.geodesOn) lines.other.push('Where Shimmer is the strongest stat, geodes lie exposed among the crystals: tap to collect.');
       }
       if (k === 'spirit') {
-        lines.other.push('Where Spirit is the strongest stat, geodes are veiled. Things whose main need is Spirit are always veiled: they show as a stirring mound, tap to uncover.');
+        lines.other.push(g.geodesOn ? 'Where Spirit is the strongest stat, geodes are veiled. Things whose main need is Spirit are always veiled: they show as a stirring mound, tap to uncover.'
+          : 'Things whose main need is Spirit are veiled: they show as a stirring mound, tap to uncover.');
         lines.other.push('Spirit lowers the ground, so mist and water drift here and collect.');
       }
       if (k === 'spore') {
@@ -1222,7 +1226,7 @@ export class UI {
         h('span', { class: 'num' }, fmt(d.weight)),
         h('b', { class: 'num' }, (d.weight / total * 100).toFixed(1) + '%')));
     };
-    const cats = ['mushroom', 'plant', 'geode'];
+    const cats = ['mushroom', 'plant', 'geode'].filter((c) => c !== 'geode' || g.geodesOn);
     const seed = g.seedDetails(tile, now);
     const raw = g.tileStats(tile, now, { raw: true });
     return [
@@ -1371,7 +1375,7 @@ export class UI {
     const glim = h('input', { type: 'checkbox' });
     const give = speciesSelect();
     const guestSel = h('select', { class: 'select' }, (this.content.visitorList || []).map((v) => h('option', { value: v.id }, v.name)));
-    const itemSel = h('select', { class: 'select' }, ['relic', 'mushroom', 'plant', 'seed', 'schoolSeed', 'geode', 'gem', 'material'].map((cat) =>
+    const itemSel = h('select', { class: 'select' }, ['relic', 'mushroom', 'plant', 'seed', 'schoolSeed', 'geode', 'gem', 'material'].filter((cat) => this.game.geodesOn || (cat !== 'geode' && cat !== 'gem')).map((cat) =>
       h('optgroup', { label: catTitle(cat) }, Object.values(this.content.items).filter((i) => i.category === cat)
         .map((i) => h('option', { value: i.id }, i.name)))));
     const setupName = h('input', { type: 'text', placeholder: 'Setup name', maxlength: 30 });
@@ -1386,23 +1390,25 @@ export class UI {
 
       h('div', { class: 'section' }, 'Unlock'),
       h('div', { class: 'row gap wrap' },
-        b('Unlock everything', () => a.dev((gm, t) => { gm.finishTutorial(); gm.devUnlockCreatures(t, { glimmers: true }); gm.devGrantItems(5); gm.devFillGuide(); gm.devOpenForest(t); },
-          'Unlocked: all creatures + glimmers, 5 of every item, the whole Field Guide, the whole forest.'), 'orange'),
-        b('All creatures', () => a.dev((gm, t) => gm.devUnlockCreatures(t), (n) => `+${n} creatures resting.`)),
-        b('+ glimmers', () => a.dev((gm, t) => gm.devUnlockCreatures(t, { glimmers: true }), (n) => `+${n} creatures resting.`)),
+        b('Unlock everything', () => a.dev((gm, t) => { gm.finishTutorial(); if (gm.creaturesOn) gm.devUnlockCreatures(t, { glimmers: true }); gm.devGrantItems(5); gm.devFillGuide(); gm.devOpenForest(t); },
+          g.creaturesOn ? 'Unlocked: all creatures + glimmers, 5 of every item, the whole Field Guide, the whole forest.' : 'Unlocked: 5 of every item, the whole Field Guide, the whole forest.'), 'orange'),
+        // Creature tools only while creatures are in the game (tuning.creaturePlacement.enabled).
+        g.creaturesOn ? b('All creatures', () => a.dev((gm, t) => gm.devUnlockCreatures(t), (n) => `+${n} creatures resting.`)) : null,
+        g.creaturesOn ? b('+ glimmers', () => a.dev((gm, t) => gm.devUnlockCreatures(t, { glimmers: true }), (n) => `+${n} creatures resting.`)) : null,
         b('5 of every item', () => a.dev((gm) => gm.devGrantItems(5), (n) => `+5 of ${n} items.`)),
         b('Fill Field Guide', () => a.dev((gm) => gm.devFillGuide(), 'Field Guide complete.')),
         b('Whole forest open', () => a.dev((gm, t) => gm.devOpenForest(t), 'The clearing now covers the whole forest.')),
         g.inTutorial ? b('Finish tutorial', () => a.dev((gm) => gm.finishTutorial(), 'Tutorial finished.')) : null),
 
       h('div', { class: 'section' }, 'Try combinations'),
-      h('p', { class: 'sub' }, 'Pick a species, then tap tiles to place new ones. There\'s no limit.'),
-      h('div', { class: 'row gap wrap' }, place,
-        h('label', { class: 'check' }, full, ' full strength'), h('label', { class: 'check' }, glim, ' glimmer'),
-        b('Place on tiles', () => { this.mode = { type: 'devPlace', typeID: place.value, full: full.checked, glimmer: glim.checked }; this.selectedTile = null; done(); a.changed(false); }, 'orange')),
+      g.creaturesOn ? [h('p', { class: 'sub' }, 'Pick a species, then tap tiles to place new ones. There\'s no limit.'),
+        h('div', { class: 'row gap wrap' }, place,
+          h('label', { class: 'check' }, full, ' full strength'), h('label', { class: 'check' }, glim, ' glimmer'),
+          b('Place on tiles', () => { this.mode = { type: 'devPlace', typeID: place.value, full: full.checked, glimmer: glim.checked }; this.selectedTile = null; done(); a.changed(false); }, 'orange'))]
+        : h('p', { class: 'sub' }, 'Bury relics and school seeds from the Bag (Give → Relics, School seeds) to shape the land.'),
       h('div', { class: 'row gap wrap' },
-        b('Remove all creatures', () => a.dev((gm, t) => gm.devClearPlacements(t), 'All creatures brought home (instantly, no fade).')),
-        b('Max strength now', () => a.dev((gm, t) => { for (const p of gm.activePlacements) p.startLevel = 1; gm.statCache = gm.statField(t); }, 'All placed creatures at full strength.')),
+        g.creaturesOn ? b('Remove all creatures', () => a.dev((gm, t) => gm.devClearPlacements(t), 'All creatures brought home (instantly, no fade).')) : null,
+        g.creaturesOn ? b('Max strength now', () => a.dev((gm, t) => { for (const p of gm.activePlacements) p.startLevel = 1; gm.statCache = gm.statField(t); }, 'All placed creatures at full strength.')) : null,
         b('Clear wild spawns', () => a.dev((gm) => gm.devClearSpawns(), 'Wild spawns cleared.')),
         b('Run 20 spawn ticks', () => a.dev((gm, t) => gm.devSpawnTicks(t, 20), (n) => `${n} new spawns.`))),
 
@@ -1426,11 +1432,11 @@ export class UI {
         b('Reveal the well', () => a.dev((gm, t) => gm.discoverSpiritWell(t, null), 'The Spirit Well is in the clearing.')),
         b('New demand now', () => a.dev((gm, t) => { gm.state.wish.demand = null; gm.wishDemand(t); }, 'The well wants something new.')),
         b('Clear buffs', () => a.dev((gm) => { gm.state.buffs = []; }, 'Buffs cleared.'))),
-      h('div', { class: 'section' }, 'Eggs'),
-      h('div', { class: 'row gap wrap' },
-        b('One of every egg', () => a.dev((gm) => gm.devGiveEggs(1), (n) => `+${n} eggs.`)),
-        b('Hatch nests now', () => a.dev((gm, t) => gm.devHatchNow(t), (n) => `${n} nest(s) ready to hatch.`)),
-        b('+2 nests', () => a.dev((gm) => { gm.state.unlocks.nests += 2; }, 'Two more nests.'))),
+      g.eggsOn ? [h('div', { class: 'section' }, 'Eggs'),
+        h('div', { class: 'row gap wrap' },
+          b('One of every egg', () => a.dev((gm) => gm.devGiveEggs(1), (n) => `+${n} eggs.`)),
+          b('Hatch nests now', () => a.dev((gm, t) => gm.devHatchNow(t), (n) => `${n} nest(s) ready to hatch.`)),
+          b('+2 nests', () => a.dev((gm) => { gm.state.unlocks.nests += 2; }, 'Two more nests.')))] : null,
 
       h('div', { class: 'section' }, 'Opening and relics'),
       h('p', { class: 'sub' }, 'Choose the opening relic\'s school without the questions (needs the opening relic on the map). Any relic: Give → Relics below.'),
@@ -1447,9 +1453,9 @@ export class UI {
         b('Present now', () => { a.dev((gm, t) => gm.devGuestPresent(guestSel.value, t), 'It has come to the grotto.'); this.sheet = null; this.close(); })),
 
       h('div', { class: 'section' }, 'Give'),
-      h('div', { class: 'row gap wrap' }, give,
+      g.creaturesOn ? h('div', { class: 'row gap wrap' }, give,
         b('Give', () => a.debugGiveCreature(give.value, false)),
-        b('Give glimmer', () => a.debugGiveCreature(give.value, true))),
+        b('Give glimmer', () => a.debugGiveCreature(give.value, true))) : null,
       h('div', { class: 'row gap wrap' }, itemSel,
         b('+1', () => a.debugGive(itemSel.value, 1)), b('+5', () => a.debugGive(itemSel.value, 5))),
 
