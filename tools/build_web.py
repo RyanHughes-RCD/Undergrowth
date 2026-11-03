@@ -3,7 +3,7 @@
 
 Copies web/ and bundles the shared game data from Resources/ (tuning, content
 files, every sprite and palette) into dist/content.json, so the browser loads
-one file. (The iOS app reads Resources/ directly, with its own frozen ios/tuning.json.)
+one file.
 
     python3 tools/build_web.py            # build
     python3 -m http.server -d dist 8000   # then open http://localhost:8000

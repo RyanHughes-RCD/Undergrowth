@@ -1,5 +1,5 @@
 {
- "_about": "Every tuning number for the web game. The Swift package reads its own frozen copy (ios/tuning.json).",
+ "_about": "Every tuning number for the web game.",
  "grid": {
   "width": 40,
   "height": 56

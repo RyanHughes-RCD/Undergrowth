@@ -87,7 +87,6 @@ Plants live in `Resources/Content/plants.json`, which is kept by hand. A plant h
 
 ## Open questions
 
-- The Swift iOS package keeps its creature-era engine. It now reads a frozen `Resources/ios/tuning.json` so it still loads, but it doesn't know about plants. Should it be ported, or retired?
 - Should amendments wear off over time? Here they're permanent until changed, as asked.
 - Is ×0.6 on plain soil gentle enough? It turns an 8h plant into 13h, which still lands on the next morning.
 - Rain had no remaining job once wild spawns went, so it's gone. Bring it back as watering, or as a visitor condition?

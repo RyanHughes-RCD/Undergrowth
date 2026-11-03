@@ -11,8 +11,6 @@ The rework was built in phases:
 
 ## Running it
 
-### Web game (play in a phone browser)
-
 `web/` is a dependency-free JavaScript game. It reads all its data from `Resources/` (`tuning.json`, `Content/*.json`, `Sprites/`).
 
 ```bash
@@ -26,22 +24,8 @@ Then open <http://localhost:8000>.
 
 - **Live:** the workflow `.github/workflows/pages.yml` builds and deploys it to GitHub Pages on every push that touches `web/`, `Resources/` or the build script. One-time setup: repo **Settings → Pages → Source: GitHub Actions**.
 - **On iPhone:** open the Pages URL in Safari, tap Share, then *Add to Home Screen*. It launches full-screen like an app.
+- **iOS:** the native iOS app and its Swift package were retired with the garden rework; the web game is the only version. (They're in git history before this change if a native port is wanted later.)
 - **Saves:** stored in the browser's `localStorage` (`undergrowth.forest.v1`). Safari may clear them after a long period without visiting.
-
-### iOS app
-
-Requirements: Xcode 15+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
-
-```bash
-xcodegen generate
-open Undergrowth.xcodeproj
-```
-
-The iOS app and its Swift package (`Packages/UndergrowthCore`) are an older port of the creature-era game. They are not part of the garden rework. They still load the shared `Resources/` folder (catalogue items, sprites) and read their own frozen tuning, `Resources/ios/tuning.json`. With no creatures or wild spawns left in the data they show an empty forest. Tests:
-
-```bash
-cd Packages/UndergrowthCore && swift test
-```
 
 ## Saves from before the garden
 
@@ -285,9 +269,8 @@ web/                            the web game
   js/ui.js                      HUD, sheets (Bag, Store, Old Log, Field Guide, developer tools), cards
   js/main.js                    boot, clock, saving (and the old-save archive), taps and actions
   js/sprites.js                 sprite data → canvases
-Resources/                      all data, shared with the iOS app
+Resources/                      all game data
   tuning.json                   every number the web game uses
-  ios/tuning.json               frozen tuning for the Swift package
   Content/*.json                catalogue items, Old Log, opening, visitors, relics, Store, decor, story text
   Sprites/**/*.json             one sprite per file; Sprites/Palettes/ for shared palettes
 design/                         spreadsheets, design notes, source pictures
@@ -300,7 +283,6 @@ tools/
                                 gen_ui and gen_terrain); gen_offerings_sprites.py and gen_landmark_art.py
                                 for decor, relics and the Old Log; gen_canopy.py, gen_app_icon.py,
                                 gen_numeral_font.py for the canopy, icons and number font
-App/, Packages/UndergrowthCore/ the older iOS port (see above)
 ```
 
 ## Data formats
