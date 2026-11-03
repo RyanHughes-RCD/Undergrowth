@@ -42,10 +42,10 @@
     "tickSeconds": 180,
     "attemptsPerTick": 3,
     "spawnChance": 0.25,
-    "maxTotal": 320,
+    "maxTotal": 640,
     "lifetimeSeconds": 172800, "wilting": {"_about": "Unpicked finds fade after this many hours by rarity (an item's own lifetimeHours wins), so the grove follows its terrain instead of clogging up. Starting finds never fade.", "common": 30, "uncommon": 60, "rare": 120, "veryRare": 168, "legendary": 168},
     "maxCatchUpTicks": 288,
-    "maxPerOpenTile": 0.16,
+    "maxPerOpenTile": 0.32,
     "minCap": 5,
     "scaling": {
       "minMultiplier": 0.25,

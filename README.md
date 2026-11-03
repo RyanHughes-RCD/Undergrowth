@@ -69,7 +69,7 @@ Then open <http://localhost:8000>.
   - Newly revealed tiles fade influence in over `revealRampSeconds`, and nothing reaches past the treeline.
 - **Starter tasks:** a few goals at a time appear under Tasks. Examples are picking 5 mushrooms, harvesting a seed, cracking 3 geodes, and having two creatures out at once. Each gives a reward to claim. They're defined in `Content/tasks.json` (text, counter, target, reward).
 - **Spawns:** the cap is `spawns.maxPerOpenTile` × open tiles, at least `minCap` and at most `maxTotal`.
-  - `spawnChance` 0.25 (halved earlier for a calmer pace). The cap was doubled later for a fuller grove: `maxPerOpenTile` 0.16 (was 0.08) and `maxTotal` 320 (was 160), so the starting clearing holds 16 finds instead of 8.
+  - `spawnChance` 0.25 (halved earlier for a calmer pace). The cap was doubled twice for a fuller grove: `maxPerOpenTile` 0.32 (was 0.16, first 0.08) and `maxTotal` 640 (was 320, first 160), so the starting clearing holds 31 finds (was 16, first 8).
   - An active player now picks about 125 finds a day in a starting forest (was about 245). Creature finds from picking drop by about the same share; pity counters still guarantee them.
 - **No Collect all:** the "Collect all" button was removed; every find is picked by tapping it. (The code is still there, `collectAll` in `main.js`.)
 - **Veiled finds** (buried, in the data): these show as a raised, outlined mound (placeholder art). Every few seconds it stirs: a little hop and a puff of crumbs.
