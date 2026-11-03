@@ -126,6 +126,7 @@ export function varietySwap(palette, hue, leaves = false) {
   return Object.keys(swap).length ? { swap } : null;
 }
 
+export const SIDES = ['top', 'bottom', 'left', 'right'];
 const sameTile = (a, b) => a.x === b.x && a.y === b.y;
 const key = (t) => t.x + ',' + t.y;
 const HOUR = 3600 * 1000;
@@ -321,17 +322,67 @@ export class Game {
     return null;
   }
 
-  /** Grows the clearing by one ring on every side (clipped to the forest). */
-  expand(now) {
+  /** Sides of the clearing that can still be pushed back (not yet at the forest's edge). */
+  openSides() {
     const c = this.clearing, s = this.state.size;
-    const r = (this.t.expansion && this.t.expansion.ringTiles) || 1;
-    const next = { x0: Math.max(0, c.x0 - r), y0: Math.max(0, c.y0 - r), x1: Math.min(s.width - 1, c.x1 + r), y1: Math.min(s.height - 1, c.y1 + r) };
+    return SIDES.filter((d) => (d === 'top' ? c.y0 > 0 : d === 'bottom' ? c.y1 < s.height - 1 : d === 'left' ? c.x0 > 0 : c.x1 < s.width - 1));
+  }
+
+  /**
+   * Room to grow: the trees on one side the player chose (top, bottom, left or right) step back
+   * expansion.sideTiles rows (clipped to the forest). The new ground fades in; see revealWild.
+   */
+  expand(now, side = null) {
+    const open = this.openSides();
+    if (!side) side = open[0];
+    if (!open.includes(side)) throw new GameError('The forest ends on that side.');
+    const c = this.clearing, s = this.state.size;
+    const r = (this.t.expansion && this.t.expansion.sideTiles) || 3;
+    const next = { ...c };
+    if (side === 'top') next.y0 = Math.max(0, c.y0 - r);
+    if (side === 'bottom') next.y1 = Math.min(s.height - 1, c.y1 + r);
+    if (side === 'left') next.x0 = Math.max(0, c.x0 - r);
+    if (side === 'right') next.x1 = Math.min(s.width - 1, c.x1 + r);
     const added = [];
     for (let y = next.y0; y <= next.y1; y++) for (let x = next.x0; x <= next.x1; x++) if (!this.inClearing({ x, y })) { this.state.revealed[x + ',' + y] = now; added.push({ x, y }); }
     this.state.clearing = next;
-    this.events.push({ type: 'expansion', tiles: added });
+    const wild = this.revealWild(c, added);
+    this.events.push({ type: 'expansion', side, tiles: added, ...wild });
     return added;
   }
+
+  /**
+   * New ground isn't empty: a patch of one school's soil (a different school each tier, in an order
+   * shuffled by the garden seed) and, beside it, that school's wild feature (tuning.expansion.features).
+   * Both go on the inner band of the new ring (next to the old clearing), so the outer edge stays free for
+   * the foraging patch. Deterministic from the garden seed and the tier.
+   */
+  revealWild(old, added) {
+    const cfg = this.t.expansion || {}, feats = cfg.features || {};
+    const tier = this.state.revealCount = (this.state.revealCount || 0) + 1;
+    const order = SCHOOLS.slice().sort((a, b) => hash32(this.state.seed, hashStr(a)) - hash32(this.state.seed, hashStr(b)));
+    const school = order[(tier - 1) % order.length];
+    // The inner band: new tiles touching the old clearing (including diagonally).
+    const inner = added.filter((t) => t.x >= old.x0 - 1 && t.x <= old.x1 + 1 && t.y >= old.y0 - 1 && t.y <= old.y1 + 1 && this.isFree(t));
+    if (!inner.length) return {};
+    const start = inner[hash32(this.state.seed, tier, 0x501) % inner.length];
+    // Grow the patch along the band from the start tile (nearest first).
+    const near = inner.slice().sort((a, b) => (Math.abs(a.x - start.x) + Math.abs(a.y - start.y)) - (Math.abs(b.x - start.x) + Math.abs(b.y - start.y)));
+    const n = cfg.wildSoilTiles ?? 4;
+    const patch = near.slice(0, n);
+    for (const t of patch) this.state.soil[key(t)] = school;
+    this.discover('soil:' + school);
+    let feature = null;
+    const f = feats[school], spot = near[n];
+    if (f && spot) {
+      this.state.scenery.push({ tile: { ...spot }, sprite: f.sprite, feature: school, flip: (hash32(this.state.seed, tier, 0x502) & 1) === 1 });
+      feature = school;
+      this.discover('feature:' + school);
+    }
+    return { soil: school, soilTiles: patch, feature, featureTile: spot || null };
+  }
+  /** A wild feature uncovered by Room to grow: { name, sprite, beauty, text }. */
+  featureDef(school) { return ((this.t.expansion || {}).features || {})[school] || null; }
 
   // ---- the opening grotto
   /** Mossy rocks, ferns and the like along the edge of the starting clearing. Visual; they take up their tiles. */
@@ -890,9 +941,11 @@ export class Game {
     const rank = (s) => (s.done ? 2 : s.locks.length ? 1 : 0);
     return (this.content.requests || []).filter((r) => !kinds || kinds.includes(r.kind)).map((r) => this.requestStatus(r, now)).sort((a, b) => rank(a) - rank(b));
   }
-  deliver(id, now) {
+  deliver(id, now, opts = {}) {
     const req = this.requestDef(id);
     if (!req) throw new GameError('Unknown listing.');
+    if (req.kind === 'order' && !this.ordersToday(now).offers.includes(id)) throw new GameError("That order isn't on the log today.");
+    if (req.reward.type === 'unlock' && req.reward.id === 'expansion' && !this.openSides().includes(opts.side)) throw new GameError(opts.side ? 'The forest ends on that side.' : 'Choose which side to clear.');
     const st = this.requestStatus(req, now);
     if (st.done) throw new GameError('Already done.');
     if (st.locks.length) throw new GameError("That isn't open yet.");
@@ -900,15 +953,14 @@ export class Game {
     if (!st.ready) throw new GameError('You need more of the things it asks for.');
     for (const x of req.items) this.consume(x.item, x.count);
     if (st.coins) this.spend(st.coins);
-    if (req.kind === 'order' && !this.ordersToday(now).offers.includes(id)) throw new GameError("That order isn't on the log today.");
     if (req.kind === 'shop') { const b = this.state.offerings.bought; b[id] = (b[id] || 0) + 1; }
     else if (req.kind === 'order') this.ordersToday(now).done.push(id);
     else this.state.offerings.delivered[id] = now;
     this.bump('deliver');
-    return this.grantReward(req.reward, now);
+    return this.grantReward(req.reward, now, opts);
   }
   /** Gives a reward. Returns { type, id, count, ... } for the UI. */
-  grantReward(r, now) {
+  grantReward(r, now, opts = {}) {
     const out = { ...r };
     if (r.type === 'cosmetic') this.state.decor.owned[r.id] = (this.state.decor.owned[r.id] || 0) + (r.count || 1);
     else if (r.type === 'item') out.results = this.grant([{ item: r.id, count: r.count || 1 }]);
@@ -916,7 +968,7 @@ export class Game {
     else if (r.type === 'unlock' && r.id === 'expansion') {
       this.state.unlocks.expansions += r.count || 1;
       out.tiles = 0;
-      for (let i = 0; i < (r.count || 1); i++) out.tiles += this.expand(now).length;
+      for (let i = 0; i < (r.count || 1); i++) out.tiles += this.expand(now, opts.side).length;
     }
     return out;
   }
@@ -1120,7 +1172,8 @@ export class Game {
     const b = this.gcfg.beauty || {};
     const kinds = new Set(this.state.plants.map((p) => p.plantID)).size;
     const blooming = this.state.plants.filter((p) => this.isBlooming(p, now)).length;
-    const decor = this.state.decor.placed.reduce((a, d) => a + (this.decorKind(this.decorDef(d.decorID)).beauty || 0), 0);
+    const decor = this.state.decor.placed.reduce((a, d) => a + (this.decorKind(this.decorDef(d.decorID)).beauty || 0), 0)
+      + this.state.scenery.reduce((a, x) => a + (x.feature ? (this.featureDef(x.feature) || {}).beauty || 0 : 0), 0);
     return kinds * (b.variety ?? 3) + blooming * (b.blooming ?? 1) + decor;
   }
   get beautyTiers() { return (this.gcfg.beauty || {}).tiers || [{ name: 'Bare', at: 0 }]; }
@@ -1184,7 +1237,7 @@ export class Game {
     for (const st of this.requestBoard(now)) {
       if (st.done || (!all && st.locks.length)) continue;
       this.state.offerings.delivered[st.req.id] = now;
-      this.grantReward(st.req.reward, now);
+      this.grantReward(st.req.reward, now, { side: this.openSides()[0] });
       n++;
     }
     return n;

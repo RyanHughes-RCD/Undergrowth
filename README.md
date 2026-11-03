@@ -38,7 +38,9 @@ The garden is a new game, so older forests aren't carried over:
 
 ## The garden (web)
 
-- **The clearing:** a 7×14 clearing in the middle of the 40×56 forest (`tuning.json` → `grid`, `clearing`). At full zoom-out the clearing plus a thin treeline border (`visuals.viewBorderTiles`) fills the screen width at a crisp whole-pixel scale. Drag to look around; pinch to zoom in.
+- **The clearing:** a small 5×8 clearing in the middle of the 40×56 forest (`tuning.json` → `grid`, `clearing`). After the Old Log and the edge scenery that leaves about 30 open tiles, so the starter kit and the first few days of buying fill it and Room to grow matters.
+  - At full zoom-out the whole clearing and a thin treeline border fit the play area both ways (`visuals.viewBorderTiles`), at a crisp whole-pixel scale. Spare room shows more treeline.
+  - Drag to look around; pinch to zoom in.
 - **The Old Log**, a mossy two-tile stump, sits at the centre (`Content/landmarks.json`). Tap it for the Old Log board and the Store.
 - **The opening** (no guided tutorial, no instructions):
   - The clearing is a little grotto: mossy rocks, ferns and roots along its edge (`start.scenery`, visual only).
@@ -55,7 +57,13 @@ The garden is a new game, so older forests aren't carried over:
   - Which hour gets a find, its tile and the item are hashed from the garden seed and the hour, so it's deterministic.
   - Tap one to pick it. `forage.enabled: false` turns the patch off.
 - **Decor:** props bought in the Store go in the Bag under Decor. Place one on an open tile, then tap it to move it, recolour it or put it away.
-- **Room to grow:** a line of Store upgrades. Each pushes the treeline back `expansion.ringTiles` (2) on each side.
+- **Room to grow:** a line of Store upgrades (`expansion`). Each purchase clears **one side the player chooses**: top, bottom, left or right.
+  - That side's trees step back 3 rows (`sideTiles`). A side already at the forest's edge can't be chosen.
+  - On the 5×8 start, the top or bottom gives 15 tiles and a side gives 24.
+  - **The new ground isn't empty.** Along the old edge it uncovers a 4-tile patch of one school's soil (`wildSoilTiles`), a different school each time in an order shuffled by the garden seed. Beside it is that school's **wild feature**: Mossy stone, Glowing flowers, Wild flowers, Old oak, Crystal outcrop or Misty pine.
+  - Features can't be moved or bought, and add 3–4 beauty each. Tap one to see what it is. A card names what was found, and the new soil is highlighted.
+  - The foraging patch moves out with the treeline on its own.
+  - It's deterministic from the garden seed and the purchase.
 - **Field Guide:** tabs for Mushrooms, Plants (the Plant & Fungi Catalogue) and Visitors. Unfound entries are silhouettes.
 - **Time:** the real local clock (`tuning.json` → `clock`). Everything runs on timestamps, so the garden catches up when the game reopens.
 
@@ -209,7 +217,7 @@ They pay a little more per tile-hour than the starters (about 1.5–1.8), which 
   - The Mossback Hedgehog, Prism Beetle, Foxfire Newt and Petal Stag are gone.
   - Their sprites are placeholders from `tools/gen_visitor_sprites.py`.
 - **Gift plants** (only from visitors, never in the Store): they grow 20–24h and sell for 13–16. Canopy Bells and Wispwillow are perennials.
-- **Room to grow** is bought with coins in the Store (150, 250, 400 … 3000), each tier pushing the treeline back 2 tiles on every side.
+- **Room to grow** is bought with coins in the Store: 100, 150, 200 … 850 coins for ten purchases, each clearing 3 rows on the side you choose.
 
 ## The Plant & Fungi Catalogue
 
@@ -232,7 +240,7 @@ This writes `Resources/Content/items.json` (127 entries; ids `<category>.<slug>`
   - Up to four items with counts (seed packets and amendments included).
   - **Reward:** `cosmetic`, `item`, `unlock` = `expansion`, or `coins`.
   - **Gating:** Field Guide entries, another request done first, a beauty tier, a garden day.
-  - Decor costs 15–80 coins. Room to grow costs 150, 250, 400, 600, 850, 1150, 1500, 1900, 2400 and 3000.
+  - Decor costs 15–80 coins. Room to grow costs 100, 150, 200, 260, 330, 410, 500, 600, 720 and 850.
 - **Cosmetics:** decor props: id, name, sprite, size, **kind** (path, fence, bed, planter, lantern, bench, ornament or feature), colours (`Name #hex`, the first is the art's own), text.
 - **How to use** and **Lists** (valid ids for the Check formulas).
 - `python3 tools/import_offerings_table.py` writes `requests.json` and `cosmetics.json`.

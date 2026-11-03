@@ -175,7 +175,15 @@ class App {
       const g = this.game;
       ui.toast(`The ${g.plantDef(e.plantID)?.name} did well beside the ${g.plantDef(e.with)?.name}. It's in your Field Guide.`, 'ui.icon.heart');
     }
-    else if (e.type === 'expansion') { this.view.highlight(e.tiles, 4, '170,255,150'); ui.toast(ui.story('messages.expansion')); }
+    else if (e.type === 'expansion') {
+      this.view.highlight(e.tiles, 4, '170,255,150');
+      const f = e.feature && this.game.featureDef(e.feature);
+      if (e.soil) {
+        this.view.highlight(e.soilTiles, 6, '255,236,140');
+        const s = e.soil.charAt(0).toUpperCase() + e.soil.slice(1);
+        ui.celebrate('Room to grow', `The ${e.side ? e.side + ' ' : ''}trees step back. On the new ground: a patch of ${s} soil${f ? `, and beside it, ${f.name.charAt(0).toLowerCase() + f.name.slice(1)}` : ''}.`, f ? this.sprites.element(f.sprite, null, 4, 'grow-in') : null);
+      } else ui.toast(ui.story('messages.expansion'));
+    }
   }
 
   /** Call after any change. `persist=false` for pure UI changes. */
@@ -252,6 +260,15 @@ class App {
     if (tile.hitKind === 'guest') {
       const r = this.attempt(() => g.befriendGuest(tile.hitKey, now));
       if (r) { ui.befriendCard(r); this.changed(); }
+      return true;
+    }
+    // A wild feature uncovered by Room to grow: what it is.
+    const wild = g.sceneryAt(tile);
+    if (wild && wild.feature && g.featureDef(wild.feature)) {
+      const f = g.featureDef(wild.feature);
+      ui.selectedTile = null;
+      ui.open('entry', { name: f.name, sprite: f.sprite, variant: null, text: f.text, extra: [ui.featureNote()] });
+      this.changed(false);
       return true;
     }
     const decor = g.decorAt(tile);
@@ -355,7 +372,16 @@ class App {
         : r.type === 'unlock' && r.id === 'expansion' ? 'more room: the treeline stepped back' : r.id;
     const sprite = r.type === 'cosmetic' ? g.decorDef(r.id)?.sprite : r.type === 'item' ? this.content.items[r.id]?.sprite : 'ui.icon.store';
     this.ui.toast(req.kind === 'shop' ? `${what.charAt(0).toUpperCase() + what.slice(1)}.` : `${req.name}: done! You got ${what}.`, sprite);
-    if (first && req.kind !== 'shop') this.ui.celebrate('Your first trade', this.ui.story('messages.firstDelivery'));
+    if (first && req.kind === 'commission') this.ui.celebrate('Your first trade', this.ui.story('messages.firstDelivery'));
+    this.changed();
+  }
+
+  /** Room to grow toward one side (the Store's Room to grow tab). */
+  expandToward(id, side) {
+    const g = this.game;
+    const r = this.attempt(() => g.deliver(id, g.now(), { side }));
+    if (!r) return;
+    this.ui.sheet = null; this.ui.close();
     this.changed();
   }
 

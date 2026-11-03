@@ -5,8 +5,9 @@
   "height": 56
  },
  "clearing": {
-  "startWidth": 7,
-  "startHeight": 14
+  "_about": "The starting clearing (tiles), centred in the forest. Small on purpose: the starter kit and the first few days of buying fill it, so Room to grow matters.",
+  "startWidth": 5,
+  "startHeight": 8
  },
  "start": {
   "_about": "A new garden opens on a little grotto around the old log: scenery along its edge (visual only), and the opening's seed tin (Content/opening.json) on a free tile within tin.near of the old log.",
@@ -15,7 +16,7 @@
    "near": 2
   },
   "scenery": {
-   "count": 10,
+   "count": 6,
    "edgeDepth": 1,
    "sprites": [
     "deco.mossrock.a",
@@ -384,8 +385,47 @@
   ]
  },
  "expansion": {
-  "_about": "Room to grow (Store): each tier pushes the treeline back ringTiles on each side.",
-  "ringTiles": 2
+  "_about": "Room to grow (Store): each purchase clears the trees on one side the player chooses (top, bottom, left or right), sideTiles rows deep. The new ground isn't empty: each purchase uncovers a patch of wildSoilTiles tiles of one school's soil along the old edge (a different school each time, in an order shuffled by the garden seed) and, beside it, that school's wild feature. Features stay where they grew (they can't be moved or bought) and add their beauty to the garden. The foraging patch moves out with the treeline on its own.",
+  "sideTiles": 3,
+  "wildSoilTiles": 4,
+  "features": {
+   "spore": {
+    "name": "Mossy stone",
+    "sprite": "deco.mossrock.a",
+    "beauty": 3,
+    "text": "A stone furred with moss. The ground around it stays damp and dark."
+   },
+   "glow": {
+    "name": "Glowing flowers",
+    "sprite": "deco.glowflower.a",
+    "beauty": 3,
+    "text": "Wild flowers that glow faintly after dark. The soil here shines a little too."
+   },
+   "bloom": {
+    "name": "Wild flowers",
+    "sprite": "deco.bigflower.a",
+    "beauty": 3,
+    "text": "A clump of flowers no one planted. Petals have fallen into the soil for years."
+   },
+   "verdure": {
+    "name": "Old oak",
+    "sprite": "deco.tree.a",
+    "beauty": 4,
+    "text": "An oak older than the clearing. Leaf mould lies thick beneath it."
+   },
+   "shimmer": {
+    "name": "Crystal outcrop",
+    "sprite": "deco.crystals.a",
+    "beauty": 3,
+    "text": "Crystals pushing up through the earth. The ground glitters around them."
+   },
+   "spirit": {
+    "name": "Misty pine",
+    "sprite": "deco.tree.b",
+    "beauty": 4,
+    "text": "A tall pine that keeps a little mist around its roots."
+   }
+  }
  },
  "offerings": {
   "_about": "The Old Log board and Store (Resources/Content/requests.json, cosmetics.json from design/Undergrowth_Offerings.xlsx). Recolouring a placed decor prop costs recolorCost (0 = free).",

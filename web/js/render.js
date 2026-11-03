@@ -88,16 +88,17 @@ export class ForestView {
   }
 
   /**
-   * Furthest zoom-out, in whole device pixels: the bounds fill the full screen width
-   * (and the play area's height), so you never see past the treeline border.
+   * Furthest zoom-out, in whole device pixels: the whole clearing (plus a thin treeline border) fits
+   * the play area both ways.
    */
   fitK() {
     if (!this.app.game) return Math.round(2 * this.dpr);
     const a = this.area(), b = this.bounds;
-    // Width: round down so the border on both sides stays in view (whole pixels can't hit it exactly).
+    // The whole clearing fits on screen both ways (it grows one side at a time, so it can be wide or
+    // tall); round down so whole pixels never crop its border. Any spare room shows more treeline.
     const kw = Math.floor(this.dpr * window.innerWidth / b.w);
-    const kh = Math.ceil(this.dpr * a.h / b.h - 0.01);
-    return Math.max(1, kw, kh);
+    const kh = Math.floor(this.dpr * a.h / b.h);
+    return Math.max(1, Math.min(kw, kh));
   }
 
   fit() {

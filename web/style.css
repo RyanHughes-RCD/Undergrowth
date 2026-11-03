@@ -284,3 +284,5 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .collection { display: flex; align-items: center; gap: 6px; font-size: var(--t-small); }
 .collection .progress { flex: 1; height: 6px; min-width: 30px; }
 .collection.done b { color: var(--gold); }
+.grow-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 260px; margin: 8px auto 0; align-items: center; }
+.grow-mid { display: flex; justify-content: center; }

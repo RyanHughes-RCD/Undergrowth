@@ -378,6 +378,22 @@ export class UI {
     ...st.items.map((x) => this.offerItemRow(x))];
   }
 
+  /** A Room to grow tier: its price, and one button per side that can still be cleared. */
+  growCard(st) {
+    const g = this.game, open = g.openSides(), r = st.req;
+    const label = { top: ['up', 'Top'], left: ['back', 'Left'], right: ['chevron', 'Right'], bottom: ['down', 'Bottom'] };
+    const side = (d) => h('button', { class: 'btn small ' + (st.ready && open.includes(d) ? 'green' : 'grey'), disabled: !st.ready || !open.includes(d),
+      title: open.includes(d) ? `Clear the ${d} trees` : 'The forest ends on that side', onclick: () => this.app.expandToward(r.id, d) }, label[d][1]);
+    return h('div', { class: 'card offer' + (st.locks.length ? ' locked' : '') + (st.ready ? ' ready' : '') },
+      h('div', { class: 'row space' }, h('b', {}, r.name)),
+      r.text ? h('p', { class: 'sub' }, r.text) : null,
+      st.locks.length ? h('p', { class: 'sub lock' }, ic('lock', 1), ` Opens with ${this.lockText(st.locks)}.`) : this.priceRows(st),
+      st.locks.length ? null : h('div', { class: 'grow-pad' },
+        h('span'), side('top'), h('span'),
+        side('left'), h('span', { class: 'grow-mid' }, ic('leaf', 2)), side('right'),
+        h('span'), side('bottom'), h('span')));
+  }
+
   /** The Old Log's badge: commissions you could deliver now (later). */
   storeBadge() { return 0; }
 
@@ -441,7 +457,8 @@ export class UI {
           n > 1 ? h('button', { class: 'btn small', onclick: () => a.sellItem(def.id, n) }, `All ${n}`) : null))]],
       ['grow', 'Room to grow', () => {
         const next = grow.find((st) => !st.done);
-        return [h('p', { class: 'sub' }, 'The treeline steps back a little each time.'), next ? this.offerCard(next, 'Clear it') : h('p', { class: 'sub' }, 'The whole forest is open.')];
+        return [h('p', { class: 'sub' }, `Choose a side: its trees step back ${(this.content.tuning.expansion || {}).sideTiles || 3} rows, and the new ground has something wild on it.`),
+          next ? this.growCard(next) : h('p', { class: 'sub' }, 'You have cleared all the room there is.')];
       }],
     ];
   }
@@ -757,6 +774,8 @@ export class UI {
     ov.onclick = (e) => { if (e.target === ov) close(); };
     ov.classList.add('show');
   }
+
+  featureNote() { return h('p', { class: 'sub center' }, 'It grew here on its own. It stays where it is, and makes the garden lovelier.'); }
 
   /** A short celebratory card. */
   celebrate(title, text, art = null, button = 'Lovely') {
