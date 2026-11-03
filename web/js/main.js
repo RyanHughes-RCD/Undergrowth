@@ -107,6 +107,10 @@ class App {
         const name = (pid) => { const pl = this.game.state.placements.find((x) => x.id === pid); const c = pl && this.game.creature(pl.creatureID); return c ? this.displayName(c) : 'Two creatures'; };
         const it = this.content.items[e.itemID];
         ui.toast(e.kind === 'seed' ? `${name(e.a)} and ${name(e.b)} planted a seed together.` : `${name(e.a)} and ${name(e.b)} dug up a ${it ? it.name : 'geode'}!`, it ? it.sprite : null);
+      } else if (e.type === 'relicDug') {
+        const def = this.content.items[e.relic.relicID];
+        this.view.dustAt(e.relic.tile);
+        ui.toast(`You dig up the ${def ? def.name : 'relic'}. It's back in your Bag, and the ground around it will settle.`, def && def.sprite);
       } else if (e.type === 'relicBuried') {
         const def = this.content.items[e.relic.relicID];
         this.view.relicReaction(e.relic.tile, e.relic.school);
@@ -313,6 +317,12 @@ class App {
       }
       return;
     }
+    if (ui.mode && ui.mode.type === 'dig') {
+      // Dig mode: tap where a relic is buried to bring it back up.
+      if (!g.relicAt(tile)) { this.ui.toast('No relic is buried there.'); return; }
+      this.digRelicAt(tile);
+      return;
+    }
     if (ui.mode && ui.mode.type === 'relic') {
       if (!g.isFree(tile) || !g.inClearing(tile)) { this.ui.toast(g.inClearing(tile) ? 'Something is already there.' : "That's outside the clearing."); return; }
       ui.mode = { ...ui.mode, tile };
@@ -380,8 +390,6 @@ class App {
       if (r) { ui.befriendCard(r.def, r.again); this.changed(); }
       return;
     }
-    const relic = g.relicAt(tile);
-    if (relic) { ui.selectedTile = null; ui.open('relic', relic.id); this.changed(false); return; }
     const buried = g.buriedSeedAt(tile);
     if (buried) { ui.selectedTile = null; ui.open('buriedSeed', buried.id); this.changed(false); return; }
     const decor = g.decorAt(tile);
@@ -501,6 +509,17 @@ class App {
     const def = this.content.items[itemID];
     if (def && !def.school) { this.ui.openOpening(); return; }
     this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'relic', itemID }; this.changed(false);
+  }
+
+  /** Dig mode: tap a tile to dig up the relic buried there (from the Bag's "Dig up a relic"). */
+  beginDig() { this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'dig' }; this.changed(false); }
+
+  digRelicAt(tile) {
+    const r = this.attempt(() => this.game.digRelic(tile, this.game.now()));
+    if (!r) return;
+    if (this.ui.mode && this.ui.mode.type === 'dig') this.ui.mode = null;
+    this.ui.selectedTile = null;
+    this.changed();
   }
 
   buryRelicHere() {

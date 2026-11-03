@@ -42,10 +42,10 @@
     "tickSeconds": 180,
     "attemptsPerTick": 3,
     "spawnChance": 0.25,
-    "maxTotal": 320,
+    "maxTotal": 640,
     "lifetimeSeconds": 172800, "wilting": {"_about": "Unpicked finds fade after this many hours by rarity (an item's own lifetimeHours wins), so the grove follows its terrain instead of clogging up. Starting finds never fade.", "common": 30, "uncommon": 60, "rare": 120, "veryRare": 168, "legendary": 168},
     "maxCatchUpTicks": 288,
-    "maxPerOpenTile": 0.16,
+    "maxPerOpenTile": 0.32,
     "minCap": 5,
     "scaling": {
       "minMultiplier": 0.25,
@@ -55,12 +55,12 @@
       "_about": "Where spawns land. weight = base x generalByEffectCount[effects on the tile] x (1 + min(maxIntensityBonus, perStatPoint x stat total)), capped at maxWeight. Effects = creatures reaching the tile + soil boosts and buried school seeds + special-effect areas + combos.",
       "enabled": true,
       "base": 1,
-      "generalByEffectCount": [1, 3, 5, 7],
+      "generalByEffectCount": [1, 8, 12, 16],
       "perStatPoint": 0.05,
       "maxIntensityBonus": 3,
-      "maxWeight": 24
+      "maxWeight": 64
     },
-    "blankTileSpawnChance": 0.35,
+    "blankTileSpawnChance": 0.1, "blankCapShare": 0.25,
     "terrainAffinity": {
       "_about": "What spawns on developed ground. Items with stat needs that are met get x byRarity, plus perExtraLevel for each intensity level the tile is above their need (averaged over their needs, up to extraLevelCap); beyond overshootGrace levels above their need they fade by overshootFadePerLevel per level, so rich ground favours the items made for it over low-need commons. Items with no needs fade by genericFadePerLevel per intensity level (down to genericMinFactor) on ground whose stats favour a different category.",
       "byRarity": { "common": 6, "uncommon": 12, "rare": 30, "veryRare": 80, "legendary": 250 },
@@ -226,6 +226,7 @@
       "veryRare":  {"strength": 56, "radius": 6.5, "rampHours": 3,   "spreadHours": 4},
       "legendary": {"strength": 75, "radius": 8,   "rampHours": 4,   "spreadHours": 6}
     },
+    "falloff": {"_about": "Relics' own strength drop-off: full strength out to innerRadiusFraction of their reach, then easing out (smoothstep), so a common relic covers its whole 3x3 at Moderate. Seeds keep the general falloff.", "curve": "smoothstep", "innerRadiusFraction": 0.35},
     "reactionSeconds": 8,
     "findDrop": {"chance": 0.006, "minStat": 26, "minAgeHours": 24, "tierWeights": {"common": 10, "uncommon": 3, "rare": 0.5}}
   },

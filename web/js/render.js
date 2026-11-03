@@ -298,11 +298,7 @@ export class ForestView {
     for (const { def, g: st } of g.presentGuests(now)) {
       objs.push({ sprite: def.sprite, ...at(st.present.tile), tile: st.present.tile, kind: 'guest', key: def.id, wander: true, phase: hash32(st.present.tile.x, st.present.tile.y, 17) % 1000 / 160 });
     }
-    // Buried relics: the stone set in the ground, its rune in the school's colour.
-    for (const r of s.relics || []) {
-      const def = this.app.content.items[r.relicID];
-      objs.push({ sprite: (def && def.worldSprite) || 'relic.unknown', ...at(r.tile), tile: r.tile, kind: 'relic', key: r.id, phase: hash32(r.tile.x, r.tile.y, 13) % 1000 / 250 });
-    }
+    // Buried relics leave nothing on the surface: only the ground they shape shows.
     // Buried school seeds: a mound with a sprout in the school's colour.
     for (const b of g.buriedSeeds()) {
       const def = this.app.content.items[b.seed];
