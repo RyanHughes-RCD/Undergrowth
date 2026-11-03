@@ -166,7 +166,7 @@ export class UI {
         ...this.plantNotes(p, now),
         this.app.devMode && this.plantInspector ? this.inspectPlant(p, now) : null,
         h('div', { class: 'row end gap' }, stage === 'ready' ? h('button', { class: 'btn green small', onclick: () => a.harvestAt(tile) }, 'Harvest')
-          : h('button', { class: 'btn grey small', onclick: () => { if (confirm(`Dig up the ${def.name}? It will be lost.`)) a.clearPlant(p.id); } }, 'Dig up')),
+          : h('button', { class: 'btn grey small', onclick: () => { this.ask(`Dig up the ${def.name}?`, 'It will be lost.', 'Dig it up', () => a.clearPlant(p.id)); } }, 'Dig up')),
       ];
     }
     const packets = Object.keys(g.state.inventory).filter((id) => this.content.items[id]?.category === 'packet' && g.canPlant(this.content.items[id].plant, tile).ok);
@@ -647,7 +647,7 @@ export class UI {
       ...this.timeTools(),
       h('p', { class: 'sub' }, 'Time tools here change your real garden. Giving things is in developer mode.'),
       h('div', { class: 'section' }, 'Danger'),
-      b('Start a new garden', () => { if (confirm('Start a brand-new garden? This erases your progress.')) a.resetForest(); }, 'red'),
+      b('Start a new garden', () => { this.ask('Start a brand-new garden?', 'This erases your progress.', 'Start over', () => a.resetForest()); }, 'red'),
     ];
   }
 
@@ -711,15 +711,15 @@ export class UI {
         h('span', {}, ` · test garden (${g.state.dev?.createdFrom === 'copy' ? 'copied from your garden' : 'separate'}). Nothing here touches your real garden.`)),
       h('div', { class: 'row gap wrap' },
         b('Back to my garden', () => a.exitDevMode(), 'green'),
-        b('New blank test garden', () => { if (confirm('Replace the test garden with a blank one?')) a.resetDevForest('blank'); }),
-        b('Copy my garden in', () => { if (confirm('Replace the test garden with a copy of your real garden?')) a.resetDevForest('copy'); })),
+        b('New blank test garden', () => { this.ask('Replace the test garden?', 'It becomes a blank one.', 'Replace', () => a.resetDevForest('blank')); }),
+        b('Copy my garden in', () => { this.ask('Replace the test garden?', 'It becomes a copy of your real garden.', 'Replace', () => a.resetDevForest('copy')); })),
       ...this.devSections().flatMap(([title, nodes]) => [h('div', { class: 'section' }, title), ...nodes]),
       h('div', { class: 'section' }, 'Saved setups'),
       h('div', { class: 'row gap wrap' }, h('div', { class: 'field grow' }, setupName), b('Save setup', () => { a.saveDevSetup(setupName.value.trim()); this.renderSheet(); }, 'green')),
       Object.keys(setups).length ? Object.entries(setups).sort((x, y) => y[1].savedAt - x[1].savedAt).map(([name, st]) => h('div', { class: 'row gap setup-row' },
         h('span', { class: 'grow' }, name, h('span', { class: 'sub' }, ' · ' + new Date(st.savedAt).toLocaleString())),
         b('Load', () => a.loadDevSetup(name)),
-        b('Delete', () => { if (confirm(`Delete setup “${name}”?`)) { a.deleteDevSetup(name); this.renderSheet(); } }, 'grey'))) : h('p', { class: 'sub' }, 'No saved setups yet.'),
+        b('Delete', () => { this.ask(`Delete setup “${name}”?`, '', 'Delete', () => { a.deleteDevSetup(name); this.renderSheet(); }); }, 'grey'))) : h('p', { class: 'sub' }, 'No saved setups yet.'),
       ...this.timeTools(),
     ];
   }
@@ -742,6 +742,21 @@ export class UI {
     ov.classList.add('show');
   }
   nextCard() { const next = (this.cardQueue || []).shift(); if (next) this.showCard(next); }
+
+  /**
+   * An in-game confirmation card (instead of the browser's confirm(), which embedded views such as
+   * home-screen apps and artifact frames may refuse). Runs `onYes` only if the player confirms.
+   */
+  ask(title, text, yes, onYes) {
+    const ov = document.getElementById('overlay');
+    const close = () => { ov.classList.remove('show'); ov.replaceChildren(); ov.onclick = null; this.nextCard(); };
+    ov.replaceChildren(h('div', { class: 'reveal-card pop' }, h('h2', {}, title), text ? h('p', { class: 'sub' }, text) : null,
+      h('div', { class: 'row gap' },
+        h('button', { class: 'btn grey', onclick: close }, 'Cancel'),
+        h('button', { class: 'btn red', onclick: () => { close(); onYes(); } }, yes))));
+    ov.onclick = (e) => { if (e.target === ov) close(); };
+    ov.classList.add('show');
+  }
 
   /** A short celebratory card. */
   celebrate(title, text, art = null, button = 'Lovely') {
