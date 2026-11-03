@@ -389,7 +389,7 @@ export class TileRuleEngine {
     }
     let tint = null;
     if (total > 0.001) {
-      const amount = Math.round(Math.min(0.6, total) * 20) / 20;
+      const amount = Math.round(Math.min(0.6, total) * 50) / 50;   // fine steps so even Low ground tints a little
       if (amount > 0) tint = [Math.round(r / total), Math.round(gg / total), Math.round(b / total), amount];
     }
     return { ground, overlays, decorations, tint };
@@ -522,6 +522,8 @@ export class Game {
     }
     s.revealed = s.revealed || {};
     s.milestones = s.milestones || {};
+    // Landmarks taken out of the game (landmarks.json) leave the map; their guide discovery stays.
+    if (s.landmarks) s.landmarks = s.landmarks.filter((l) => this.landmarkDef(l.id));
     s.tutorial = s.tutorial || { step: 'done' };
     s.landmarks = s.landmarks || [];
     s.counters = s.counters || {};
@@ -1095,10 +1097,15 @@ export class Game {
   }
 
   /** Combo tiles on this tile (tuning.combos: pool, moss, meadow …), from its raw stats. */
+  /** Mixed ground (combos: pool, moss, meadow) only while tuning.combos.enabled isn't false. */
+  get combosOn() { return (this.t.combos || {}).enabled !== false; }
+  /** Named pair and triple terrains only while tuning.terrains.enabled isn't false. */
+  get terrainsOn() { return (this.t.terrains || {}).enabled !== false; }
   combosAt(stats) {
     const out = [];
+    if (!this.combosOn) return out;
     for (const id in this.t.combos || {}) {
-      if (id.startsWith('_')) continue;
+      if (id.startsWith('_') || !this.t.combos[id] || typeof this.t.combos[id] !== 'object') continue;
       if (groupMatches(this.t.combos[id].requires || {}, stats)) out.push(id);
     }
     return out;
@@ -1109,7 +1116,7 @@ export class Game {
   get terrainDefs() {
     if (this._terrainDefs && this._terrainDefs.src === this.t.terrains) return this._terrainDefs.list;
     const src = this.t.terrains || {};
-    const list = Object.entries(src).filter(([id, d]) => !id.startsWith('_') && d && typeof d === 'object' && d.requires)
+    const list = src.enabled === false ? [] : Object.entries(src).filter(([id, d]) => !id.startsWith('_') && d && typeof d === 'object' && d.requires)
       .map(([id, d]) => ({ id, ...d, home: new Set(d.home || []), keys: Object.keys(d.requires) }));
     this._terrainDefs = { src: this.t.terrains, list };
     return list;
@@ -1530,7 +1537,7 @@ export class Game {
 
   // ---- visitors (Content/visitors.json, tuning.visitors): forest animals drawn by the grotto's ground
   get guestCfg() { return this.t.visitors || {}; }
-  guestDefs() { return this.content.visitorList || []; }
+  guestDefs() { return (this.content.visitorList || []).filter((v) => !v.likes.terrain || this.terrainsOn); }
   guestDef(id) { return this.guestDefs().find((v) => v.id === id) || null; }
   guest(id) {
     const g = this.state.guests[id] = this.state.guests[id] || { interest: 0, known: [], befriended: false, present: null, presDay: -1, presCount: 0 };
@@ -1825,7 +1832,7 @@ export class Game {
     this.discoverTerrain(now);
     if (this.inTutorial) this.tutorialTick(now);
 
-    if (!s.milestones.blend) {
+    if (!s.milestones.blend && (this.terrainsOn || this.combosOn)) {   // the blend card celebrates mixed ground: off while it is
       const tiles = this.blendedTiles(now);
       if (tiles.length) { s.milestones.blend = now; this.events.push({ type: 'blend', tiles }); }
     }
@@ -3272,7 +3279,7 @@ export class Game {
       // The landmark takes a tile in the patch that nothing permanent is on (spawns and seeds make way).
       const spots = [{ x, y }];
       for (let dy = -h; dy <= h; dy++) for (let dx = -h; dx <= h; dx++) if (dx || dy) spots.push({ x: x + dx, y: y + dy });
-      const tile = spots.find((t) => !this.landmarkAt(t) && !this.creatureAt(t) && !this.nestAt(t) && !this.decorAt(t) && !this.sceneryAt(t));
+      const tile = spots.find((t) => !this.landmarkAt(t) && !this.creatureAt(t) && !this.nestAt(t) && !this.decorAt(t) && !this.sceneryAt(t) && !this.relicAt(t) && !this.buriedSeedAt(t));
       if (tile) return { tile, centre: { x, y }, size: n };
     }
     return null;
@@ -3617,7 +3624,8 @@ export class Game {
 
   /** `count` of every item in the content (mushrooms, plants, seeds, geodes, gems, materials). */
   devGrantItems(count = 5) {
-    const list = Object.values(this.content.items);
+    // Not the opening's unchosen relic, and no eggs while the egg system is off.
+    const list = Object.values(this.content.items).filter((it) => it.id !== 'relic.unknown' && (this.eggsOn || it.category !== 'egg'));
     this.grant(list.map((it) => ({ item: it.id, count })));
     return list.length;
   }

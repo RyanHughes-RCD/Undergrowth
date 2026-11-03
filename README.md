@@ -303,7 +303,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
 - **Verdure is mass, speed and hiding:**
   - Seeds grow faster on lush tiles (`seedGrowthPerPoint`), and plants there drop extra seeds (`extraSeedPerPoint`).
   - At Verdure ≥ 30 (`hideThreshold`), surface spawns are hidden in tall grass with an occasional rustle. The first tap reveals them; the next collects.
-- **Combo tiles** (`combos` in `tuning.json`) are the core of the game:
+- **Combo tiles** (`combos` in `tuning.json`; **off for now**, `combos.enabled: false`):
   - **Shallow pool (Spore + Spirit):** the ground pools with water, a small ecosystem of its own.
     - **Shape:** pool tiles are autotiled. A lone tile is a rounded puddle, and neighbouring tiles join seamlessly with rounded inside corners.
     - **Shoreline:** thin and broken, made of soil, mud and dark wet grass. It's stable because it comes from a world-pixel hash.
@@ -314,6 +314,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
     - Only Spore-loving items spawn on water.
   - **Mossy bank (Shimmer + Spore + Verdure):** moss grows over the ground and the crystal spikes, and bugs gather (beetles by day, fireflies at night): each connected patch of moss gets one per `tilesPerBug` (8) tiles, rounded and at least one, so 1–2 per 12 tiles.
   - **Wild meadow (Bloom + Verdure):** a tangle of flowers in long grass. Plants are favoured ×3 in spawn rolls. Each meadow tile gets an extra plant-only chance per tick (normal rate × min(2.5, (Bloom + Verdure) × 0.06), `combos.meadow.plantGrowth`). Mystery Seeds grow ×2.5 faster there.
+- **Ground tiles and tint:** every school has its own grass (`tile.<school>.<level><a|b>`, from `school_ground` in `tools/gen_terrain.py`): the ordinary grass with its greens shifted toward the school's hue (Spore dark damp moss, Glow teal, Bloom golden, Verdure vivid green, Shimmer lilac-grey, Spirit blue-violet) plus a few motif specks, at four levels: Low, Moderate, Medium and High. A tile shows the ground of its dominant school (a share of at least `terrain.dominantShare`) at the level its intensity has reached (`ground-<school>-<level>` rules). On top, a light tint in the school's colour (`tint-<school>` rules, `strength` 0.3) colours just the grass, a little more as intensity rises, so the ground shifts smoothly between levels and where schools meet. It's drawn under the overlays, so flowers, crystals and the rest keep their own colours.
 - **Tile art:** `Resources/Content/tileRules.json`. A rule with `"staged": true` and `"stat"` expands into the 9 stages (`ov.<stat>.s1a`… / `deco.spikes.<n><v>`). Combo layers use `combo_<id>`. The art is made by `tools/gen_terrain.py`; the water is drawn by the renderer.
 - **Plants:** every plant has its own grown sprite and its own bud stage (`plant.bud.<id>`). A Mystery Seed shows planted, then sprout, then that plant's bud, then the plant itself.
 - **Spawn placement:** item data `spawn.placement` is `surface`, `buried` or `auto` (the default). In the spreadsheet, an optional "Placement" column overrides it per item.
@@ -344,7 +345,7 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
   - Creature traits show what the creature gives at full strength on its own tile.
   - Everywhere else intensity is a small inline meter too: Field Guide requirements, terrain pages ("needs" and "has" for your selected tile), spawn bonuses, creature traits, and gem uses. A half-filled pip means a requirement sits partway through that level (20 = two full pips and a half), so the true threshold is never overstated. Amounts below the floor read "a touch of Shimmer".
 - **Raw values are developer-only:** the spawn inspector (raw value plus label), stat overlay and spawn heatmap live in developer mode, and switch off when you leave it.
-- **Field Guide → Terrain:** Forest floor, Shimmering ground, Fae-touched ground, Mossy ground, Glowing ground, Flowering ground, Lush grass, Shallow pool, Mossy bank, Wild meadow, Treeline (`Resources/Content/terrain.json`).
+- **Field Guide → Terrain:** Forest floor, the six base terrains (Shimmering ground, Fae-touched ground, Mossy ground, Glowing ground, Flowering ground, Lush grass) and the Treeline (`Resources/Content/terrain.json`). Mixed terrain (pools, banks, meadows, named pairs and triples) is hidden while it's switched off.
   - **Discovery:** a terrain is discovered the first time it appears in your clearing (a stat reaching Low, or a combo forming). It's saved with the other guide discoveries (`terrain:<id>`), and older saves discover whatever is already in their clearing.
   - **Illustrations:** built from the game's own sprites: rising stages across six tiles, a joined pond for pools, bushes for the treeline.
   - **Each page:** what makes the terrain appear (as intensities), what can spawn there, the spawn bonuses (named as bonuses, at named intensities), other properties, and the selected tile's current intensity against what's needed. All of it is computed from `tuning.json`.
@@ -543,13 +544,22 @@ The six tile stats are six garden schools. In version 5 three of them were renam
 - **Save version 5** (`migrateSchools` in `web/js/core.js`, run before anything else when a forest loads, real and developer saves alike): creature and placement contributions, soil boosts, `ambientDamp` → `ambientSpore`, guide discoveries (`terrain:<id>`, `landmark:<id>`), formed landmarks, soil packs in the Bag (each becomes the matching school seed, and that seed counts as found), shop purchase counts and any pending Spirit Well result are remapped. The old → new ids are in `SCHOOL_RENAMES`.
 - **iOS:** `StatKey` constants in `Packages/UndergrowthCore` are renamed (`.spore`, `.shimmer`, `.spirit`) so the shared Resources load. iOS saves are not migrated.
 
+## Six base terrains only, no creatures (for now)
+
+The game is narrowed down while the core loop settles. Everything below is switched off with flags; the data, art and code stay.
+
+- **Mixed terrain is off:** no named pair or triple terrains (`terrains.enabled: false`) and no combo tiles: Shallow pool, Mossy bank, Wild meadow (`combos.enabled: false`). Only the six base terrains show, in the world and in the Field Guide. The "land is blending" card is off too. Finds that need two schools can still turn up where two relics' ground overlaps; there's just no mixed terrain drawn for it.
+- **Earned landmarks** each belong to one school now, and Singing Crystals is gone (see Earned landmarks).
+- **The two rare visitors** that need a named terrain (Foxfire Newt, Petal Stag) sit out; the six one-per-school visitors stay.
+- **Creatures are gone from play:** besides placing, creature finds, eggs and wanderers (already off), the traders at the Old Log no longer show a creature, and developer mode hides its creature and egg tools ("Unlock everything" skips creatures). Older saves keep their creatures in the save, hidden.
+
 ## Relics (web)
 
 Relics are the only way to change the land for good. A buried relic is a permanent source of its school's stat; school seeds only change it for a while, and more weakly.
 
 - **Data:** `Resources/Content/relics.json` (kept by hand): 30 relics, one per school and tier (`relic.<school>.<tier>`), each with a name, an inscription, a Bag sprite (`relic.<school>.<tier>`) and the stone shown where it's buried (`relic.world.<school>`). Numbers: `tuning.json` → `relics`.
 - **Burying:** in the Bag a relic has **Bury**. Tap an open tile; a card shows its inscription and "Once it is in the ground, it stays." Occupied tiles, landmarks and the treeline are refused. Buried relics can't be dug up.
-- **Effect:** built like a placed creature and fed through the same code (`relicSources` in `effectivePlacements`): its strength at its own tile with the creature falloff, ramping up over `rampHours`, and influence that starts close around it and reaches its full radius over `spreadHours`. It never fades. Relics count as effects for where spawns land, form terrain through the normal rules (different schools overlapping make the pair terrains and triples), and are listed in the spawn inspector.
+- **Effect:** built like a placed creature and fed through the same code (`relicSources` in `effectivePlacements`): its strength at its own tile with the creature falloff, ramping up over `rampHours`, and influence that starts close around it and reaches its full radius over `spreadHours`. It never fades. Relics count as effects for where spawns land, form their school's terrain through the normal rules, and are listed in the spawn inspector. (Overlapping schools used to make the pair terrains and triples; mixed terrain is off for now.)
 
   | Tier | Strength | Radius | Ramp | Spread | Full footprint (Low+ / Moderate+ tiles) |
   |---|---|---|---|---|---|
@@ -596,8 +606,8 @@ Small forest animals come to the grotto, mostly while the player is away. They l
   | Fern Rabbit | Verdure, Moderate | | dawn |
   | Prism Beetle | Shimmer, Moderate | Pebble Cap | day |
   | Mist Fox | Spirit, Moderate | | dawn |
-  | Foxfire Newt (rare) | Foxfire Fen | | night, in rain |
-  | Petal Stag (rare) | Moonlit Garden | | night |
+  | Foxfire Newt (rare, off while mixed terrain is off) | Foxfire Fen | | night, in rain |
+  | Petal Stag (rare, off while mixed terrain is off) | Moonlit Garden | | night |
 
 - **Interest** (saved per visitor in `state.guests`): checked every `checkMinutes` (30) of game time, offline catch-up included (up to `maxCatchUpDays`, 7). Each check's random choices are seeded from the forest, the visitor and the check's time, so it's deterministic. Interest rises by `interest.gain` (1.5, ×`rainMult` in rain for rain lovers) while the grotto meets its preferences (at least `minTiles` (2) tiles of its ground, plus its find growing there if it has one), and falls by `interest.decay` (1) when it doesn't. It drives four stages (`stages`):
   1. **Signs** (10): during its time window, tracks appear on tiles of its ground (`tracks.chance` per check, at most `maxPerVisitor`, fading over `tracks.hours`, 24). They're little footprints drawn on the ground, visual only.
@@ -615,7 +625,7 @@ One seed per school: Spore, Glow, Bloom, Verdure, Shimmer and Spirit Seeds (`see
 - **Bury:** in the Bag a school seed has a **Bury** button. Tap an open tile, as with Nest and Plant. Occupied tiles, landmarks and the treeline are refused, and at most `maxBuried` (6) seeds can be in the ground at once.
 - **What it does:** on its own, with no creature, it adds its school's stat around its tile with the creature falloff: `strength` (12) at its tile over `radius` (1.5). That's a Low patch of about 5 tiles, about what two neighbouring commons make. It ramps in over `rampHours` (3), holds until `durationHours` (72) after burying, then fades over `fadeHours` (6) and is gone.
 - **Soil-boost machinery:** a buried seed is saved in `state.soilBoosts` (with `seed`, `school`, `rampMs`, `fullUntil`, `fadeMs`), so it counts as an effect for where spawns land, forms terrain and appears in the spawn inspector (with its falloff, level, phase and time left). Its tile stays occupied while it's there.
-- **On the map:** a small mound with a sprout in the school's colour (`seed.buried.<school>`). Tap it for the school, its phase (rooting, growing, fading), time left and its Field Guide text.
+- **On the map:** a small, soft heap of earth (no outline, so it sits quietly in the grass) with a sprout (`seed.buried.<school>`) that grows into a bud (`seed.bud.<school>`) as the seed reaches full strength, then opens into a flower in its school's colour (`seed.bloom.<school>`; pale petals for Verdure, so they show on green ground). It stays in flower as it fades. Tap it for the school, its phase (rooting, growing, fading), time left and its Field Guide text.
 - **Sources:**
   - The Old Log shop, at the old soil-pack prices (`shop-seed-<school>`).
   - Picking a find whose main need (its highest stat minimum) is a school drops that school's seed with `dropChance` (4%).
@@ -627,29 +637,30 @@ One seed per school: Spore, Glow, Bloom, Verdure, Shimmer and Spirit Seeds (`see
 
 ## Earned landmarks (web)
 
-Landmarks aren't placed on the map; they're earned. When two stats reach the needed level on **every tile of a 3×3 patch**, a landmark forms on that patch. It then stays for good, even after the creatures that made it leave.
+Landmarks aren't placed on the map; they're earned. Each belongs to one school: when that school reaches Moderate+ (26) on **every tile of a 3×3 patch**, the landmark forms there and stays for good. That takes a rare relic, or two uncommon ones close together; a single uncommon relic isn't quite enough. (They used to need two schools at 16 each; that changed when mixed terrain was switched off. Singing Crystals was removed, and an older save that had one simply loses it from the map.)
 - Definitions live in `Resources/Content/landmarks.json` (`earned.requires`, `earned.size`, `earned.max`, `aura`, `effect`, `purpose`).
 - Each forms once, with a celebration and a highlight of its patch.
 - Before it has formed, the Field Guide's Landmarks tab shows it as a silhouette with how it forms.
 - Tap a landmark to see what it does and, for producers, when the next thing comes.
 
-| Landmark | Forms from (16+ each) | Aura | Purpose |
+| Landmark | School (26+ over 3×3) | Aura | Purpose |
 |---|---|---|---|
-| Crystal Grotto | Shimmer + Spirit | Shimmer 8, Spirit 8 (radius 2) | A geode rolls out every 8h: Pebble, Mossy, Rootbound or (rarely) Deep. One waits at a time. |
-| Fruit Tree | Bloom + Verdure | Bloom 8, Verdure 8 (radius 2) | Bears **Forest Fruit** every 6h, a new trade good (shop: 1 fruit = 3 seeds, 2 fruit + 3 Sorrel = a Fine Sproutling egg; a fruit-loving visitor). |
-| Moonwell | Spore + Glow | Glow 8 (radius 2) | Eggs hatched in nests within 3 tiles are 5× as likely to be Glimmers. |
-| Singing Crystals | Shimmer + Glow | Glow 6 (radius 1) | Creatures placed within 3 tiles reach one tile farther. |
-| Fairy Ring | Spore + Verdure | Spore 6, Verdure 6 (radius 1) | One more visitor at the Old Log each day. |
-| Spring | Spore + Shimmer | Spore 20 (radius 1) | A permanent water source: its Spore feeds the ambient water, which spreads and pools even with no creatures nearby. |
-| Nest Hollow | Spirit + Verdure | Verdure 6 (radius 1) | One more nest for eggs. |
+| Crystal Grotto | Shimmer | Shimmer 8 (radius 2) | A geode rolls out every 8h: Pebble, Mossy, Rootbound or (rarely) Deep. One waits at a time. |
+| Fruit Tree | Bloom | Bloom 8 (radius 2) | Bears **Forest Fruit** every 6h, a trade good for the Store and traders. |
+| Moonwell | Glow | Glow 8 (radius 2) | Eggs hatched nearby are likelier to be Glimmers (dormant while eggs are off). |
+| Fairy Ring | Spirit | Spirit 6 (radius 1) | One more trader at the Old Log each day. |
+| Spring | Spore | Spore 20 (radius 1) | A permanent water source: its Spore feeds the ambient layer, which spreads and settles in low ground. |
+| Nest Hollow | Verdure | Verdure 6 (radius 1) | One more nest for eggs (dormant while eggs are off). |
 
 - Auras work like permanent soil boosts (they count as an effect for where spawns land).
-- Forming one takes a cluster of creatures: for example, four of each stat's commons packed around a tile, or fewer uncommons. In tests, 8 commons in a ring formed each one.
+- A landmark never takes a tile with a relic or a buried seed on it.
 - Celebration cards now queue, so a landmark's card isn't lost behind another one.
 
 ## Named terrains (web)
 
 > Creature family balance: sproutlings (found only when a planted Mystery Seed finishes growing) have 3× the find chance of the other families (common 12%, uncommon 9%, rare 4.5%, very rare 1.5%, legendary 0.3%), since a forest yields far fewer harvests than mushroom picks or cracked geodes.
+
+> **Off for now** (`terrains.enabled: false`): only the six base terrains show. The data and art below stay, ready to switch back on.
 
 Where two stats meet on a tile, the ground becomes a named terrain with its own art, Field Guide page and spawns (`tuning.terrains`, `Resources/Content/terrain.json`).
 

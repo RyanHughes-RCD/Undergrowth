@@ -210,16 +210,47 @@ def school_seeds():
             c.set(9, 6, 5); c.set(11, 8, 5)            # a glint
         sprite(f"seed.school.{school}", ["#7a5232", "#b07a48", col, light], seed, tags=("seed",))
 
-        def marker(c, f):
-            c.ellipse(8, 13, 6, 2.6, 2)                # the mound of fresh earth
-            c.ellipse(7, 12.4, 3.6, 1.4, 3)
-            c.set(4, 14, 4); c.set(11, 14, 4)
-            c.rect(8, 7, 8, 11, 6)                     # sprout stem
-            c.set(7, 7, 5); c.set(6, 6, 5); c.set(9, 6, 5); c.set(10, 5, 5)   # two leaves
-            c.set(6, 5, 7 if f == 0 else 5); c.set(10, 4, 5 if f == 0 else 7)
-        sprite(f"seed.buried.{school}", ["#5a3c22", "#8a6038", "#3e2a18", col, "#3f7a2e", light], marker,
-               frames=2, durations=[1.4, 1.4], tags=("seed", "marker"))
+        # Where one is buried: a small, soft mound (no outline, so it sits quietly in the grass) with a
+        # sprout that grows into a bud and then a flower in the school's colour as the seed takes root.
+        petal = "#eaf8c8" if school == "verdure" else col          # pale petals where the ground is green
+        soil = ["transparent", "#5a4630", "#6e583a", "#3a2e1e", "#3f7a2e", "#5fa040", petal, light if school != "verdure" else "#ffe070"]
 
+        def mound(c):                                    # a low, soft heap: two rows, no dark rim
+            c.rect(6, 14, 10, 14, 2)
+            c.rect(5, 15, 11, 15, 1)
+
+        def sprout(c, f):
+            mound(c)
+            c.rect(8, 11, 8, 13, 4)
+            c.set(7, 11, 5); c.set(9, 10, 5)
+            if f: c.set(9, 10, 4); c.set(10, 10, 5)
+
+        def bud(c, f):
+            mound(c)
+            c.rect(8, 9, 8, 13, 4)
+            c.set(7, 12, 5); c.set(9, 11, 5)
+            c.ellipse(8, 8, 1.2, 1.5, 6); c.set(8, 7, 7)
+            if f: c.set(9, 8, 6)
+
+        def bloom(c, f):
+            mound(c)
+            c.rect(8, 8, 8, 13, 4)
+            c.set(7, 12, 5); c.set(6, 11, 5); c.set(9, 11, 5)
+            cx = 8 + (1 if f else 0)
+            for (dx, dy) in ((0, -2), (-2, 0), (2, 0), (0, 2), (-1, -1), (1, -1), (-1, 1), (1, 1)):
+                c.set(cx + dx, 6 + dy, 6)
+            c.set(cx, 6, 7)
+
+        def plain(sid, draw, frames=2, durations=(1.6, 1.6)):
+            out = []
+            for fr in range(frames):
+                c = Canvas(16, 16)
+                draw(c, fr)
+                out.append(c)
+            write(sid, (16, 16), out, palette=soil, anchor=(8, 15), tags=["seed", "marker"], durations=list(durations))
+        plain(f"seed.buried.{school}", sprout)
+        plain(f"seed.bud.{school}", bud)
+        plain(f"seed.bloom.{school}", bloom)
 
 def relics():
     """Relics (Resources/Content/relics.json): Bag icons relic.<school>.<tier> (one shape per tier, in

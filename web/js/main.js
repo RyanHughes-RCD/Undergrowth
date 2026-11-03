@@ -476,7 +476,7 @@ class App {
   rerollVisitor(requestID) {
     const g = this.game;
     const next = this.attempt(() => g.rerollVisitor(requestID, g.now()));
-    if (next) { { const nm = this.content.creatures[next.wandererID]?.name || 'new trader'; this.ui.toast(`${/^[aeiou]/i.test(nm) ? 'An' : 'A'} ${nm} wanders over instead.`); } this.changed(); }
+    if (next) { { const nm = this.game.creaturesOn ? this.content.creatures[next.wandererID]?.name : null; this.ui.toast(nm ? `${/^[aeiou]/i.test(nm) ? 'An' : 'A'} ${nm} wanders over instead.` : 'Another trader wanders over instead.'); } this.changed(); }
   }
 
     compostItem(itemID) {

@@ -306,7 +306,12 @@ export class ForestView {
     // Buried school seeds: a mound with a sprout in the school's colour.
     for (const b of g.buriedSeeds()) {
       const def = this.app.content.items[b.seed];
-      objs.push({ sprite: (def && def.marker) || 'seed.stage.planted', ...at(b.tile), tile: b.tile, kind: 'buriedSeed', key: b.id, phase: hash32(b.tile.x, b.tile.y, 11) % 1000 / 250 });
+      // A sprout while it roots, a bud at full strength, and a flower in its school's colour once it has
+      // held a while; it stays in flower as it fades.
+      const lv = g.boostLevel(b, now), ph = g.seedPhase(b, now).phase;
+      const stage = lv < 0.5 ? 'buried' : ph === 'growing' && now - b.appliedAt < (b.rampMs || 0) * 2 ? 'bud' : lv < 1 && ph === 'rooting' ? 'bud' : 'bloom';
+      const sprite = def && def.school ? `seed.${stage}.${def.school}` : null;
+      objs.push({ sprite: sprite || (def && def.marker) || 'seed.stage.planted', ...at(b.tile), tile: b.tile, kind: 'buriedSeed', key: b.id, phase: hash32(b.tile.x, b.tile.y, 11) % 1000 / 250 });
     }
     // Decor props from the Old Log (purely visual), in their chosen colour.
     for (const d of (s.decor && s.decor.placed) || []) {
@@ -399,6 +404,11 @@ export class ForestView {
         }
         this.blit(v.ground, null, c.x, c.y, t + phase);
         ctx.globalAlpha = 1;
+        // Terrain tint (tileRules "tint"): colours just the grass, a little more as intensity rises.
+        if (v.tint && !v.overlay) {
+          ctx.fillStyle = `rgba(${v.tint[0]},${v.tint[1]},${v.tint[2]},${v.tint[3]})`;
+          ctx.fillRect(x * TS, y * TS, TS, TS);
+        }
         for (const o of v.overlays) {
           ctx.globalAlpha = fadeIn(v.since && v.since[o.sprite]);
           // Pulsing layers (tileRules "pulse"): opacity breathes slowly, rolling across tiles as a wave.
@@ -406,7 +416,7 @@ export class ForestView {
           this.blit(o.sprite, null, c.x, c.y, t + phase, o.flip);
         }
         ctx.globalAlpha = 1;
-        const tint = v.overlay || v.tint;
+        const tint = v.overlay;                 // developer stat overlay: on top of everything
         if (tint) {
           ctx.fillStyle = `rgba(${tint[0]},${tint[1]},${tint[2]},${tint[3]})`;
           ctx.fillRect(x * TS, y * TS, TS, TS);

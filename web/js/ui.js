@@ -277,7 +277,7 @@ export class UI {
     const phaseText = ph.phase === 'rooting' ? `Rooting: reaches full strength in ${duration(ph.left / 1000)}.`
       : ph.phase === 'growing' ? `Growing: starts to fade in ${duration(ph.left / 1000)}.` : `Fading: gone in ${duration(ph.left / 1000)}.`;
     return [def.name || 'School seed', [
-      h('div', { class: 'hero' }, this.sprites.element(def.marker || def.sprite, null, 6, '', true)),
+      h('div', { class: 'hero' }, this.sprites.element(def.school ? 'seed.bloom.' + def.school : (def.marker || def.sprite), null, 6, '', true)),
       h('p', { class: 'center' }, h('b', {}, `${cap(b.school)} school`)),
       h('div', { class: 'progress' }, h('span', { style: `width:${level * 100}%` })),
       h('p', { class: 'sub center' }, phaseText, ` ${duration(ph.ends / 1000)} left in all.`),
@@ -706,11 +706,11 @@ export class UI {
         const req = g.requestDef(o.requestID);
         if (!req) return null;
         const st = g.requestStatus(req, now);
-        const w = this.content.creatures[o.wandererID];
+        const w = g.creaturesOn ? this.content.creatures[o.wandererID] : null;   // no creature art while creatures are off
         const art = w ? this.app.artForType(w, false) : null;
         return h('div', { class: 'card offer visitor' + (st.ready ? ' ready' : '') + (st.done ? ' locked' : '') },
           h('div', { class: 'row gap' }, art ? h('div', { class: 'thumb small' }, this.sprites.element(art.sprite, art.variant, 2, '', true)) : null,
-            h('div', { class: 'grow' }, h('b', {}, req.name), h('div', { class: 'sub' }, `${/^[aeiou]/i.test(w ? w.name : 'w') ? 'An' : 'A'} ${w ? w.name : 'wanderer'} stops by. ${req.text || ''}`))),
+            h('div', { class: 'grow' }, h('b', {}, req.name), h('div', { class: 'sub' }, `${w ? `${/^[aeiou]/i.test(w.name) ? 'An' : 'A'} ${w.name}` : 'A trader'} stops by. ${req.text || ''}`))),
           h('div', { class: 'sub reward row gap' }, 'Pays: ', this.rewardText(req.reward)),
           st.done ? h('p', { class: 'sub' }, 'Traded. Thank you!') : [
             ...st.items.map((x) => this.offerItemRow(x)),
@@ -814,7 +814,10 @@ export class UI {
   guideEntries(tab) {
     const content = this.content;
     if (tab === TERRAIN_TAB) {
-      return (content.terrain || []).map((t) => ({ key: 'terrain:' + t.id, name: t.name, terrain: t }));
+      // Only the terrains that can appear: mixed ground (combos, named pairs and triples) is off for now.
+      const g = this.game;
+      return (content.terrain || []).filter((t) => (t.kind !== 'terrain' || g.terrainsOn) && (t.kind !== 'combo' || g.combosOn))
+        .map((t) => ({ key: 'terrain:' + t.id, name: t.name, terrain: t }));
     }
     if (tab === VISITOR_TAB) {
       return (content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, variant: null, visitor: v }));
@@ -1386,23 +1389,25 @@ export class UI {
 
       h('div', { class: 'section' }, 'Unlock'),
       h('div', { class: 'row gap wrap' },
-        b('Unlock everything', () => a.dev((gm, t) => { gm.finishTutorial(); gm.devUnlockCreatures(t, { glimmers: true }); gm.devGrantItems(5); gm.devFillGuide(); gm.devOpenForest(t); },
-          'Unlocked: all creatures + glimmers, 5 of every item, the whole Field Guide, the whole forest.'), 'orange'),
-        b('All creatures', () => a.dev((gm, t) => gm.devUnlockCreatures(t), (n) => `+${n} creatures resting.`)),
-        b('+ glimmers', () => a.dev((gm, t) => gm.devUnlockCreatures(t, { glimmers: true }), (n) => `+${n} creatures resting.`)),
+        b('Unlock everything', () => a.dev((gm, t) => { gm.finishTutorial(); if (gm.creaturesOn) gm.devUnlockCreatures(t, { glimmers: true }); gm.devGrantItems(5); gm.devFillGuide(); gm.devOpenForest(t); },
+          g.creaturesOn ? 'Unlocked: all creatures + glimmers, 5 of every item, the whole Field Guide, the whole forest.' : 'Unlocked: 5 of every item, the whole Field Guide, the whole forest.'), 'orange'),
+        // Creature tools only while creatures are in the game (tuning.creaturePlacement.enabled).
+        g.creaturesOn ? b('All creatures', () => a.dev((gm, t) => gm.devUnlockCreatures(t), (n) => `+${n} creatures resting.`)) : null,
+        g.creaturesOn ? b('+ glimmers', () => a.dev((gm, t) => gm.devUnlockCreatures(t, { glimmers: true }), (n) => `+${n} creatures resting.`)) : null,
         b('5 of every item', () => a.dev((gm) => gm.devGrantItems(5), (n) => `+5 of ${n} items.`)),
         b('Fill Field Guide', () => a.dev((gm) => gm.devFillGuide(), 'Field Guide complete.')),
         b('Whole forest open', () => a.dev((gm, t) => gm.devOpenForest(t), 'The clearing now covers the whole forest.')),
         g.inTutorial ? b('Finish tutorial', () => a.dev((gm) => gm.finishTutorial(), 'Tutorial finished.')) : null),
 
       h('div', { class: 'section' }, 'Try combinations'),
-      h('p', { class: 'sub' }, 'Pick a species, then tap tiles to place new ones. There\'s no limit.'),
-      h('div', { class: 'row gap wrap' }, place,
-        h('label', { class: 'check' }, full, ' full strength'), h('label', { class: 'check' }, glim, ' glimmer'),
-        b('Place on tiles', () => { this.mode = { type: 'devPlace', typeID: place.value, full: full.checked, glimmer: glim.checked }; this.selectedTile = null; done(); a.changed(false); }, 'orange')),
+      g.creaturesOn ? [h('p', { class: 'sub' }, 'Pick a species, then tap tiles to place new ones. There\'s no limit.'),
+        h('div', { class: 'row gap wrap' }, place,
+          h('label', { class: 'check' }, full, ' full strength'), h('label', { class: 'check' }, glim, ' glimmer'),
+          b('Place on tiles', () => { this.mode = { type: 'devPlace', typeID: place.value, full: full.checked, glimmer: glim.checked }; this.selectedTile = null; done(); a.changed(false); }, 'orange'))]
+        : h('p', { class: 'sub' }, 'Bury relics and school seeds from the Bag (Give → Relics, School seeds) to shape the land.'),
       h('div', { class: 'row gap wrap' },
-        b('Remove all creatures', () => a.dev((gm, t) => gm.devClearPlacements(t), 'All creatures brought home (instantly, no fade).')),
-        b('Max strength now', () => a.dev((gm, t) => { for (const p of gm.activePlacements) p.startLevel = 1; gm.statCache = gm.statField(t); }, 'All placed creatures at full strength.')),
+        g.creaturesOn ? b('Remove all creatures', () => a.dev((gm, t) => gm.devClearPlacements(t), 'All creatures brought home (instantly, no fade).')) : null,
+        g.creaturesOn ? b('Max strength now', () => a.dev((gm, t) => { for (const p of gm.activePlacements) p.startLevel = 1; gm.statCache = gm.statField(t); }, 'All placed creatures at full strength.')) : null,
         b('Clear wild spawns', () => a.dev((gm) => gm.devClearSpawns(), 'Wild spawns cleared.')),
         b('Run 20 spawn ticks', () => a.dev((gm, t) => gm.devSpawnTicks(t, 20), (n) => `${n} new spawns.`))),
 
@@ -1426,11 +1431,11 @@ export class UI {
         b('Reveal the well', () => a.dev((gm, t) => gm.discoverSpiritWell(t, null), 'The Spirit Well is in the clearing.')),
         b('New demand now', () => a.dev((gm, t) => { gm.state.wish.demand = null; gm.wishDemand(t); }, 'The well wants something new.')),
         b('Clear buffs', () => a.dev((gm) => { gm.state.buffs = []; }, 'Buffs cleared.'))),
-      h('div', { class: 'section' }, 'Eggs'),
-      h('div', { class: 'row gap wrap' },
-        b('One of every egg', () => a.dev((gm) => gm.devGiveEggs(1), (n) => `+${n} eggs.`)),
-        b('Hatch nests now', () => a.dev((gm, t) => gm.devHatchNow(t), (n) => `${n} nest(s) ready to hatch.`)),
-        b('+2 nests', () => a.dev((gm) => { gm.state.unlocks.nests += 2; }, 'Two more nests.'))),
+      g.eggsOn ? [h('div', { class: 'section' }, 'Eggs'),
+        h('div', { class: 'row gap wrap' },
+          b('One of every egg', () => a.dev((gm) => gm.devGiveEggs(1), (n) => `+${n} eggs.`)),
+          b('Hatch nests now', () => a.dev((gm, t) => gm.devHatchNow(t), (n) => `${n} nest(s) ready to hatch.`)),
+          b('+2 nests', () => a.dev((gm) => { gm.state.unlocks.nests += 2; }, 'Two more nests.')))] : null,
 
       h('div', { class: 'section' }, 'Opening and relics'),
       h('p', { class: 'sub' }, 'Choose the opening relic\'s school without the questions (needs the opening relic on the map). Any relic: Give → Relics below.'),
@@ -1447,9 +1452,9 @@ export class UI {
         b('Present now', () => { a.dev((gm, t) => gm.devGuestPresent(guestSel.value, t), 'It has come to the grotto.'); this.sheet = null; this.close(); })),
 
       h('div', { class: 'section' }, 'Give'),
-      h('div', { class: 'row gap wrap' }, give,
+      g.creaturesOn ? h('div', { class: 'row gap wrap' }, give,
         b('Give', () => a.debugGiveCreature(give.value, false)),
-        b('Give glimmer', () => a.debugGiveCreature(give.value, true))),
+        b('Give glimmer', () => a.debugGiveCreature(give.value, true))) : null,
       h('div', { class: 'row gap wrap' }, itemSel,
         b('+1', () => a.debugGive(itemSel.value, 1)), b('+5', () => a.debugGive(itemSel.value, 5))),
 
