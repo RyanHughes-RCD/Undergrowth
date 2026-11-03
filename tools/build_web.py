@@ -3,7 +3,7 @@
 
 Copies web/ and bundles the shared game data from Resources/ (tuning, content
 files, every sprite and palette) into dist/content.json, so the browser loads
-one file. The iOS app reads the same Resources/ folder directly.
+one file.
 
     python3 tools/build_web.py            # build
     python3 -m http.server -d dist 8000   # then open http://localhost:8000
@@ -12,6 +12,8 @@ import json
 import os
 import shutil
 
+# Resources/Content files bundled for the browser (each becomes bundle[<name>]).
+CONTENT_FILES = ("items", "nameParts", "landmarks", "story", "opening", "visitors", "relics", "requests", "cosmetics", "plants", "amendments")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RES = os.path.join(ROOT, "Resources")
 OUT = os.path.join(ROOT, "dist")
@@ -39,17 +41,7 @@ def main():
     content = os.path.join(RES, "Content")
     bundle = {
         "tuning": load(os.path.join(RES, "tuning.json")),
-        "creatures": load(os.path.join(content, "creatures.json")),
-        "items": load(os.path.join(content, "items.json")),
-        "loot": load(os.path.join(content, "loot.json")),
-        "tileRules": load(os.path.join(content, "tileRules.json")),
-        "nameParts": load(os.path.join(content, "nameParts.json")),
-        "landmarks": load(os.path.join(content, "landmarks.json")),
-        "story": load(os.path.join(content, "story.json")),
-        "tasks": load(os.path.join(content, "tasks.json")),
-        "terrain": load(os.path.join(content, "terrain.json")),
-        # Offerings (tools/import_offerings_table.py); optional so older checkouts still build.
-        **{k: load(os.path.join(content, k + ".json")) for k in ("requests", "cosmetics", "eggs", "schoolSeeds", "relics", "opening", "visitors") if os.path.exists(os.path.join(content, k + ".json"))},
+        **{k: load(os.path.join(content, k + ".json")) for k in CONTENT_FILES},
         "sprites": sprites,
         "palettes": palettes,
     }

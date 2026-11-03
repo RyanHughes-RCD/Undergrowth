@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Top-down 16x16 ground tiles, stat overlays and the shrub treeline (run via gen_placeholders.py).
-
-Same sprite ids as before (tile.*, ov.*), so tileRules.json doesn't change. Ground tiles
-and overlays are 16x16 squares anchored at their centre; shrubs are anchored at their base.
+"""Top-down 16x16 ground tiles (grass = plain soil, the treeline floor), the shrub treeline and the
+Old Log (run via gen_placeholders.py). Ground tiles are 16x16 squares anchored at their centre; shrubs
+are anchored at their base.
 """
 import json
 import os
@@ -68,153 +67,7 @@ def make_ground():
                 c.px[y][x] = 2 if r < .15 else 3 if r < .3 else 4 if r < .34 else 1
         write(sid, (T, T), [c], palette=edge_pal, anchor=(8, 8), tags=["tile"])
 
-    def cave(c, rng, f):
-        blob(c, 7.5, 7.5, 5.5, 5, P["cave_l"])
-        blob(c, 7.5, 8, 4.3, 3.8, P["cave_m"])
-        blob(c, 7.5, 8.5, 3, 2.6, P["cave"])
-        blob(c, 7.5, 9, 1.6, 1.3, P["cave_d"])
-        for x in range(4, 12):
-            c.set(x, 2 if 5 < x < 10 else 3, P["rock_l"])
-    tile("tile.cave.a", "rock", [("rock_l", .1), ("rock_d", .12)], extra=cave)
 
-    def crystal(c, rng, f):
-        for _ in range(4):
-            x, y = rng.randint(2, 13), rng.randint(3, 13)
-            col = rng.choice(("cr_cyan", "cr_violet"))
-            c.set(x, y, P["cr_dcyan"]); c.set(x, y - 1, P[col]); c.set(x, y - 2, P["cr_white"])
-    tile("tile.crystal.a", "rock", [("rock_l", .08), ("rock_d", .1)], extra=crystal)
-
-    def pool(c, rng, f):
-        blob(c, 7.5, 7.5, 6.5, 5.5, P["water"], edge=P["mud_d"])
-        blob(c, 7.5, 8, 3.5, 2.5, P["water_d"])
-        for i in range(4):
-            c.set(4 + i + f * 2, 5, P["water_l"])
-        c.set(10 - f, 10, P["water_hi"])
-    tile("tile.pool.a", "mud", [("mud_d", .2), ("moss", .06)], extra=pool, frames=2, durations=[0.8, 0.8])
-
-    def glowmoss(c, rng, f):
-        for _ in range(6):
-            x, y = rng.randint(0, 15), rng.randint(0, 15)
-            c.set(x, y, P["gm_hi"] if (f + x) % 2 == 0 else P["gm_glow"])
-    tile("tile.glowmoss.a", "gm", [("gm_m", .25), ("moss_d", .1)], extra=glowmoss, frames=2, durations=[0.9, 0.9])
-
-    def bloom(c, rng, f):
-        for _ in range(9):
-            x, y = rng.randint(1, 14), rng.randint(1, 14)
-            c.set(x, y, P[rng.choice(("pink", "white", "yellow", "violet"))])
-    tile("tile.bloom.a", "lush", [("lush_d", .12), ("lush_l", .2)], extra=bloom)
-
-    def mossrock(c, rng, f):
-        for _ in range(2):
-            cx, cy = rng.randint(3, 12), rng.randint(3, 12)
-            blob(c, cx, cy, 3, 2, P["moss_l"])
-    tile("tile.mossrock.a", "rock", [("rock_l", .1), ("rock_d", .1)], extra=mossrock)
-    tile("tile.moss.a", "moss", [("moss_d", .18), ("moss_l", .2), ("moss_ll", .05)])
-
-
-# ------------------------------------------------------------------ overlays
-# Transparent 16x16 layers, one family per stat, three strengths each; they stack.
-
-def overlay(sid, draw, frames=1, durations=None):
-    out = []
-    for f in range(frames):
-        c = Canvas(T, T)
-        draw(c, rng_for(sid), f)
-        out.append(c)
-    write(sid, (T, T), out, palette_ref="pal.ground", anchor=(8, 8), tags=["overlay"], durations=durations)
-
-
-def pt(rng, m=1):
-    return rng.randint(m, T - 1 - m), rng.randint(m, T - 1 - m)
-
-
-def ov_flowers(level):
-    def d(c, rng, f):
-        for i in range((2, 4, 7)[level - 1]):
-            x, y = pt(rng, 1)
-            petal = P[rng.choice(("pink", "white", "yellow", "violet", "pink"))]
-            for dx, dy in ((1, 0), (-1, 0), (0, -1), (0, 1)):
-                c.set(x + dx, y + dy, petal)
-            c.set(x, y, P["yellow"] if petal != P["yellow"] else P["white"])
-    return d
-
-
-def ov_lush(level):
-    def d(c, rng, f):
-        if level == 3:
-            for _ in range(2):
-                x, y = pt(rng, 3)
-                blob(c, x, y, 3, 2, P["lush"])
-        for _ in range((3, 7, 12)[level - 1]):
-            x, y = pt(rng, 1)
-            c.set(x - 1, y, P["lush_d"]); c.set(x, y, P["lush_l"]); c.set(x, y - 1, P["lush_l"])
-            c.set(x + 1, y, P["lush"]); c.set(x + 1, y - 1, P["lush_ll"])
-    return d
-
-
-def ov_dirt(level):
-    def d(c, rng, f):
-        for rx, ry in {1: [(1.8, 1.4)], 2: [(2.8, 2.2), (1.6, 1.3)], 3: [(5, 4), (3, 2.5)]}[level]:
-            x, y = pt(rng, 3)
-            blob(c, x, y, rx, ry, P["dirt"], edge=P["dirt_d"])
-            for _ in range(int(rx * 2)):
-                c.set(x + rng.randint(-1, 1), y + rng.randint(-1, 1), P[rng.choice(("dirt_l", "dirt_d"))])
-    return d
-
-
-def ov_stones(level):
-    def d(c, rng, f):
-        for _ in range(level - 1):
-            x, y = pt(rng, 4)
-            blob(c, x, y, 2 + level, 1.5 + level * .5, P["rock"], edge=P["rock_d"])
-            c.ellipse(x - .5, y - .5, 1.5 + level * .6, 1, P["rock_l"])
-        for _ in range((2, 4, 6)[level - 1]):
-            x, y = pt(rng, 1)
-            c.set(x, y, P["rock"]); c.set(x + 1, y, P["rock_d"]); c.set(x, y - 1, P["rock_ll"])
-    return d
-
-
-def ov_mycelium(level):
-    def strand(c, rng, x, y, dx, dy, steps, col, branch):
-        for _ in range(steps):
-            c.set(x, y, col)
-            if rng.random() < 0.5:
-                x += dx
-            else:
-                y += dy
-            if rng.random() < 0.25:
-                dx, dy = (dx if rng.random() < .5 else -dx), (dy if rng.random() < .5 else -dy)
-            if branch and rng.random() < 0.25:
-                strand(c, rng, x, y, -dx, dy, rng.randint(1, 3), P["myc_d"], False)
-        c.set(x, y, P["myc_hi"])
-
-    def d(c, rng, f):
-        for _ in range((1, 2, 3)[level - 1]):
-            x, y = pt(rng, 2)
-            strand(c, rng, x, y, rng.choice((-1, 1)), rng.choice((-1, 1)), 6 + level * 3, P["myc"], True)
-    return d
-
-
-def ov_glow(level):
-    def d(c, rng, f):
-        for i in range((1, 3, 5)[level - 1]):
-            x, y = pt(rng, 1)
-            bright = (i + f) % 2 == 0
-            c.set(x, y, P["gm_hi"] if bright else P["gm_glow"])
-            if level == 3 and bright:
-                for dx, dy in ((1, 0), (-1, 0), (0, -1), (0, 1)):
-                    c.set(x + dx, y + dy, P["gm_glow"])
-    return d
-
-
-def make_overlays():
-    fams = {"flowers": (ov_flowers, 1), "lush": (ov_lush, 1), "dirt": (ov_dirt, 1),
-            "stones": (ov_stones, 1), "mycelium": (ov_mycelium, 1), "glow": (ov_glow, 2)}
-    for name, (fn, frames) in fams.items():
-        for level in (1, 2, 3):
-            for v in "ab":
-                overlay("ov.%s.%d%s" % (name, level, v), fn(level), frames=frames,
-                        durations=[0.9, 0.9] if frames > 1 else None)
 
 
 # ------------------------------------------------------------------ shrub treeline
@@ -284,6 +137,5 @@ def main():
         json.dump({"id": "pal.ground", "colors": GROUND_PALETTE}, fh, indent=1)
         fh.write("\n")
     make_ground()
-    make_overlays()
     make_shrubs()
     make_landmarks()

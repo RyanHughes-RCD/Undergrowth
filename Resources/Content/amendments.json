@@ -1,0 +1,9 @@
+[
+  {"id": "amend.spore", "school": "spore", "name": "Spore compost", "text": "Dark, crumbly compost that smells of rain. Makes a tile Spore soil."},
+  {"id": "amend.glow", "school": "glow", "name": "Glow dust", "text": "A pinch of faintly shining dust. Makes a tile Glow soil."},
+  {"id": "amend.bloom", "school": "bloom", "name": "Bloom mulch", "text": "Soft mulch full of old petals. Makes a tile Bloom soil."},
+  {"id": "amend.verdure", "school": "verdure", "name": "Verdure leaf mould", "text": "Rich, green leaf mould. Makes a tile Verdure soil."},
+  {"id": "amend.shimmer", "school": "shimmer", "name": "Shimmer crystal dust", "text": "Fine crystal grit that glitters in the earth. Makes a tile Shimmer soil."},
+  {"id": "amend.spirit", "school": "spirit", "name": "Spirit mist", "text": "Cool mist in a jar; it sinks into the ground. Makes a tile Spirit soil."},
+  {"id": "amend.plain", "school": null, "name": "Garden loam", "text": "Plain, honest soil. Turns a tile back to plain ground."}
+]

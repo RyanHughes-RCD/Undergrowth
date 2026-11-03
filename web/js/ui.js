@@ -1,8 +1,7 @@
-// DOM user interface: HUD, sheets (Creatures, Bag, Field Guide), geode cracking, reveals.
-import { CORE_STATS, RARITIES, RARITY_NAMES, rarityIndex, intensityOf, requirementOf, decorVariant, itemHint } from './core.js';
-import { paintWaterTile } from './render.js';
+// DOM user interface: HUD, sheets (Bag, Store, Old Log, Field Guide, developer tools), cards and toasts.
+import { SCHOOLS, RARITY_NAMES, rarityIndex, decorVariant, schoolName } from './core.js';
 
-const g0 = (ui) => ui.game;
+const HOUR = 3600 * 1000;
 
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
@@ -17,10 +16,11 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
-export const STAT_COLORS = { spore: '#4a7dff', glow: '#4fe3f0', bloom: '#ff79b8', verdure: '#4fcf4f', shimmer: '#b7a4e0', spirit: '#7a7ad0' };
+export const SCHOOL_COLORS = { spore: '#c8a07a', glow: '#4fe3f0', bloom: '#ff79b8', verdure: '#4fcf4f', shimmer: '#b7a4e0', spirit: '#8a8ae0' };
 export const RARITY_COLORS = { common: '#a0a0a0', uncommon: '#5fd35a', rare: '#5a9cff', veryRare: '#c58cff', legendary: '#ffc84a' };
 const rarityName = (r) => RARITY_NAMES[r] || r;
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const SIL = { silhouette: [78, 84, 92] };
 
 export function duration(seconds) {
   const s = Math.max(0, Math.floor(seconds));
@@ -30,13 +30,6 @@ export function duration(seconds) {
   return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
 }
 
-const CATEGORY_TITLES = { egg: 'Eggs', relic: 'Relics', schoolSeed: 'School seeds', seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
-const LANDMARK_TAB = 'landmarks';
-const TERRAIN_TAB = 'terrain';
-const VISITOR_TAB = 'visitors';
-const FAMILY_TABS = [['fungling', 'Funglings'], ['sproutling', 'Sproutlings'], ['geodeCritter', 'Geode Critters'], ['wanderer', 'Wanderers']];
-const catTitle = (c) => CATEGORY_TITLES[c] || cap(c);
-
 /** Pixel-art icon from the sprite registry ("ui.icon.<name>"); scale = CSS px per art px. */
 let SPRITES = null;
 export const ic = (name, scale = 2, cls = '') => SPRITES.element('ui.icon.' + name, null, scale, 'icon ' + cls);
@@ -44,13 +37,11 @@ export const ic = (name, scale = 2, cls = '') => SPRITES.element('ui.icon.' + na
 export class UI {
   constructor(app) {
     this.app = app;
-    this.mode = null;            // { type: 'place', creatureID } | { type: 'plant', itemID }
+    this.mode = null;            // { type: 'decor' | 'decorMove' | ..., ... }
     this.selectedTile = null;
-    this.selectedCreatureID = null;
-    this.statOverlay = false;
-    this.sheet = null;           // { type, arg }
-    this.guideTab = 'fungling';
-    this.storeTab = 'decor';
+    this.sheet = null;           // { type, arg, stack }
+    this.guideTab = null;
+    this.storeTab = null;
     this.root = document.getElementById('ui');
     SPRITES = app.sprites;
     this.toastTimer = null;
@@ -60,55 +51,6 @@ export class UI {
   get content() { return this.app.content; }
   get sprites() { return this.app.sprites; }
 
-  // -------------------------------------------------------------- HUD
-
-  render(withSheet = true) {
-    const g = this.game;
-    const now = g.now();
-    const d = new Date(now);
-    const clock = [ic(g.isNight(now) ? 'moon' : 'sun', 1), ` ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
-      g.isRaining(now) ? ic('rain', 1) : null, g.state.nextGlimmer ? ic('glimmer', 1) : null];
-    const top = h('div', { class: 'hud-top' }, h('div', { class: 'hud-row' },
-      h('button', { class: 'name-btn', onclick: () => this.open('rename') },
-        h('div', { class: 'forest-name' }, g.forestName),
-        h('div', { class: 'hint' }, ...clock, ' · tap to rename')),
-      this.content.tuning.debugTools ? h('div', { class: 'dev' },
-        h('button', { class: 'speed-btn' + (this.app.speed > 1 ? ' on' : ''), title: 'Time speed', onclick: () => this.app.cycleSpeed() },
-          h('b', {}, ic('fast', 1), `${this.app.speed}×`),
-          g.state.debugTimeOffset > 0 ? h('span', {}, `+${duration(g.state.debugTimeOffset / 1000)}`) : null),
-        h('button', { class: 'round-btn' + (this.app.devMode ? ' dev-on' : ''), title: this.app.devMode ? 'Developer mode' : 'Debug', onclick: () => this.open('debug') },
-          ic('bug', 2), this.app.devMode ? h('span', { class: 'dev-tag' }, 'DEV') : null)) : null,
-    ), this.buffChips(now), this.coachCard());
-
-    const bottom = h('div', { class: 'hud-bottom' });
-    if (this.mode) bottom.append(this.modeBanner());
-    if (this.mode && this.mode.type === 'nest' && this.mode.tile) bottom.append(this.nestPreviewCard(this.mode.eggID, this.mode.tile, true));
-    if (this.mode && this.mode.type === 'relic' && this.mode.tile) bottom.append(this.relicConfirmCard(this.mode.itemID, this.mode.tile));
-    if (this.selectedTile) bottom.append(this.tileCard(this.selectedTile));
-    const invCount = Object.values(g.state.inventory).reduce((a, b) => a + b, 0);
-    bottom.append(h('div', { class: 'nav' },
-      g.creaturesOn ? this.navButton('creatures', 'Creatures', g.state.creatures.length, () => this.open('creatures')) : null,
-      this.navButton('bag', 'Bag', invCount, () => this.open('bag')),
-      (this.content.requests || []).length ? this.navButton('store', 'Store', this.storeReadyCount(now), () => this.open('store')) : null,
-      this.navButton('guide', 'Guide', 0, () => this.open('guide')),
-      g.inTutorial ? null : this.navButton('tasks', 'Tasks', g.activeTasks().filter((t) => t.done).length, () => this.open('tasks')),
-    ));
-    this.root.replaceChildren(top, bottom);
-    if (this.sheet && withSheet) this.renderSheet();
-  }
-
-  /** Active temporary buffs (from the Spirit Well): icon, name and time left; tap for what it does. */
-  buffChips(now) {
-    const g = this.game, list = g.activeBuffs(now);
-    if (!list.length) return null;
-    return h('div', { class: 'buffs' }, list.map((b) => {
-      const d = g.buffDef(b.id) || { name: b.id };
-      const left = duration((b.expiresAt - now) / 1000);
-      return h('button', { class: 'buff-chip', title: d.text, onclick: () => this.toast(`${d.name}: ${d.text}. ${left} left.`, d.sprite) },
-        d.sprite ? this.sprites.element(d.sprite, null, 1) : null, h('span', {}, `${d.name} · ${left}`));
-    }));
-  }
-
   /** Story/hint text from Content/story.json with {placeholders} filled in. */
   story(path, vars = {}) {
     let v = this.content.story;
@@ -116,185 +58,152 @@ export class UI {
     return typeof v === 'string' ? v.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? vars[k] : '')) : '';
   }
 
-  /** The tutorial's guidance card: one step per core loop, with an action button where needed. */
-  coachCard() {
-    const g = this.game;
-    if (!g.inTutorial) return null;
-    const step = g.tutorialStep;
-    const tut = g.state.tutorial;
-    const cr = tut.creatureID ? g.creature(tut.creatureID) : null;
-    const vars = { creature: cr ? this.app.displayName(cr) : 'creature' };
-    const text = this.story(`tutorial.${step}.text`, vars);
-    if (!text) return null;
-    const btnLabel = this.story(`tutorial.${step}.button`, vars);
-    const a = this.app;
-    let action = null;
-    if (step === 'plant' && !this.mode) action = () => a.beginPlanting('seed.mystery-seed');
-    if (step === 'crack') action = () => this.openCrack('geode.pebble-geode');
-    if (step === 'place' && !this.mode) action = () => a.beginPlacing(tut.creatureID);
-    if (step === 'wrap') action = () => { g.finishTutorial(); a.changed(); };
-    let progress = null;
-    if (step === 'watch' && tut.placementID) {
-      const p = g.state.placements.find((x) => x.id === tut.placementID);
-      const lv = p ? g.level(p, g.now()) : 0;
-      progress = h('div', { class: 'progress' }, h('span', { style: `width:${Math.round(lv * 100)}%` }));
-    }
-    return h('div', { class: 'coach pop' },
-      h('div', { class: 'coach-title' }, this.story(`tutorial.${step}.title`, vars)),
-      h('div', { class: 'coach-text' }, text),
-      progress,
-      action && btnLabel ? h('button', { class: 'btn green small', onclick: action }, btnLabel) : null);
+  // -------------------------------------------------------------- HUD
+
+  render(withSheet = true) {
+    const g = this.game, now = g.now();
+    const d = new Date(now);
+    const clock = [ic(g.isNight(now) ? 'moon' : 'sun', 1), ` ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`];
+    const top = h('div', { class: 'hud-top' }, h('div', { class: 'hud-row' },
+      h('button', { class: 'name-btn', onclick: () => this.open('rename') },
+        h('div', { class: 'forest-name' }, g.forestName),
+        h('div', { class: 'hint' }, ...clock, ...this.hudExtras(now))),
+      this.content.tuning.debugTools ? h('div', { class: 'dev' },
+        h('button', { class: 'speed-btn' + (this.app.speed > 1 ? ' on' : ''), title: 'Time speed', onclick: () => this.app.cycleSpeed() },
+          h('b', {}, ic('fast', 1), `${this.app.speed}×`),
+          g.state.debugTimeOffset > 0 ? h('span', {}, `+${duration(g.state.debugTimeOffset / 1000)}`) : null),
+        h('button', { class: 'round-btn' + (this.app.devMode ? ' dev-on' : ''), title: this.app.devMode ? 'Developer mode' : 'Debug', onclick: () => this.open('debug') },
+          ic('bug', 2), this.app.devMode ? h('span', { class: 'dev-tag' }, 'DEV') : null)) : null,
+    ));
+    const bottom = h('div', { class: 'hud-bottom' });
+    if (this.mode) bottom.append(this.modeBanner());
+    if (this.selectedTile) bottom.append(this.tileCard(this.selectedTile));
+    const invCount = Object.values(g.state.inventory).reduce((a, b) => a + b, 0);
+    bottom.append(h('div', { class: 'nav' },
+      this.navButton('bag', 'Bag', invCount, () => this.open('bag')),
+      this.navButton('store', 'Store', this.storeBadge(now), () => this.open('store')),
+      this.navButton('guide', 'Guide', 0, () => this.open('guide'))));
+    this.root.replaceChildren(top, bottom);
+    if (this.sheet && withSheet) this.renderSheet();
+  }
+
+  /** Extra bits under the garden name: coins and the beauty meter (a named tier and leaf pips, never a number). */
+  hudExtras(now) { return [' · ', ic('coin', 1), ` ${this.game.state.coins}`, ' · ', this.beautyMeter(now)]; }
+  beautyMeter(now) {
+    const t = this.game.beautyTier(now), n = this.game.beautyTiers.length - 1;
+    const pips = [];
+    for (let i = 1; i <= n; i++) pips.push(h('i', { class: 'pip leaf' + (i <= t.index ? ' on' : i === t.index + 1 && t.frac >= 0.5 ? ' part' : '') }));
+    return h('span', { class: 'beauty', title: 'How lovely the garden is' }, h('span', { class: 'pips mini' }, pips), ` ${t.name}`);
+  }
+
+  /** "about 3 hours", "less than an hour", "by tomorrow" for a time ahead (never exact for players). */
+  roughly(ms) {
+    const hrs = ms / HOUR;
+    if (hrs <= 0) return 'now';
+    if (hrs < 1) return 'within the hour';
+    if (hrs < 1.5) return 'in about an hour';
+    if (hrs < 20) return `in about ${Math.round(hrs)} hours`;
+    return hrs < 36 ? 'in about a day' : `in about ${Math.round(hrs / 24)} days`;
+  }
+  /** "A Marigold", "An Ink Cap". */
+  aName(name) { return `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name}`; }
+  /** Exact timer for the developer plant inspector. */
+  timer(ms) { return duration(Math.max(0, ms) / 1000); }
+  plantName(p, now = this.game.now()) { if (this.game.isHidden(p, now)) return `${schoolName(p.blind)} seedling`; const v = p.variety && this.game.varietyDef ? this.game.varietyDef(p.variety) : null; return v ? v.name : (this.game.plantDef(p.plantID)?.name || 'Plant'); }
+  stageName(stage) { return { seed: 'Just planted', sprout: 'Sprouting', bud: 'In bud', bloom: 'Blooming', ready: 'Ready to harvest' }[stage] || stage; }
+  growHoursText(plantID) {
+    const c = this.game.plantCfg(plantID);
+    return `${c.growHours}h on its own soil${c.regrowHours ? `, regrows in ${c.regrowHours}h` : ''}`;
   }
 
   navButton(icon, label, badge, onclick) {
-    return h('button', { class: 'nav-btn', onclick },
-      ic(icon, 2), h('span', {}, label),
-      badge > 0 ? h('span', { class: 'badge' }, badge) : null);
+    return h('button', { class: 'nav-btn', onclick }, ic(icon, 2), h('span', {}, label), badge > 0 ? h('span', { class: 'badge' }, badge) : null);
   }
 
   modeBanner() {
-    const g = this.game;
-    let text;
-    if (this.mode.type === 'devPlace') {
-      text = `Dev: tap tiles to place ${this.content.creatures[this.mode.typeID]?.name || 'creatures'}`;
-      return h('div', { class: 'banner dev' }, h('span', {}, text),
-        h('button', { class: 'btn small grey', onclick: () => { this.mode = null; this.app.changed(false); } }, 'Done'));
-    }
-    if (this.mode.type === 'place') {
-      const c = g.creature(this.mode.creatureID);
-      text = `Tap an empty tile to place ${c ? this.app.displayName(c) : 'creature'}`;
-    } else if (this.mode.type === 'dig') {
-      text = 'Tap where a relic is buried to dig it up';
-    } else if (this.mode.type === 'relic') {
-      text = this.mode.tile ? 'Tap another tile, or bury it here' : `Tap an open tile to bury the ${this.content.items[this.mode.itemID]?.name || 'relic'}`;
-    } else if (this.mode.type === 'nest') {
-      text = this.mode.tile ? 'Tap another tile to compare, or nest it here' : `Tap an open tile to see what the ${this.content.items[this.mode.eggID]?.name || 'egg'} could hatch into there`;
-    } else if (this.mode.type === 'decor') {
-      text = `Tap an open tile to place the ${this.game.decorDef(this.mode.decorID)?.name || 'decoration'}`;
-    } else if (this.mode.type === 'decorMove') {
-      text = 'Tap an open tile to move it there';
-    } else if (this.mode.type === 'trowel') {
-      const c = g.creature(this.mode.creatureID);
-      text = `Tap an open tile to move ${c ? this.app.displayName(c) : 'it'} with the trowel`;
-    } else if (this.mode.type === 'use' && this.content.items[this.mode.itemID]?.use?.type === 'bury') {
-      text = `Tap an open tile to bury the ${this.content.items[this.mode.itemID].name} (${g.state.inventory[this.mode.itemID] || 0} left)`;
-    } else if (this.mode.type === 'use') {
-      const def = this.content.items[this.mode.itemID];
-      text = `Tap a tile: ${def?.use?.verb || 'Use'} ${def?.name || ''} (${g.state.inventory[this.mode.itemID] || 0} left)`;
-    } else {
-      text = `Tap an empty tile to plant (${g.state.inventory[this.mode.itemID] || 0} left)`;
-    }
-    return h('div', { class: 'banner' }, h('span', {}, text),
-      h('button', { class: 'btn small grey', onclick: () => { this.mode = null; this.app.changed(false); } }, 'Cancel'));
+    const m = this.mode;
+    const g = this.game, left = (id) => g.state.inventory[id] || 0;
+    const text = {
+      decor: () => `Tap an open tile to place the ${g.decorDef(m.decorID)?.name || 'decoration'}`,
+      decorMove: () => 'Tap an open tile to move it there',
+      plant: () => `Tap a lit tile to plant ${this.content.items[m.itemID]?.name || 'seeds'} (${left(m.itemID)} left)`,
+      amend: () => `Tap a tile to spread ${this.content.items[m.itemID]?.name || 'it'} (${left(m.itemID)} left)`,
+    }[m.type];
+    return h('div', { class: 'banner' }, h('span', {}, text ? text() : this.modeText(m)),
+      h('button', { class: 'btn small grey', onclick: () => { this.mode = null; this.app.changed(false); } }, m.done ? 'Done' : 'Cancel'));
   }
+  /** Banner text for modes added by later systems. */
+  modeText() { return 'Tap a tile'; }
 
+  /** The card for a tapped empty tile: its soil and what can be done there. */
   tileCard(tile) {
-    const g = this.game, now = g.now();
-    const stats = g.tileStats(tile, now);
-    const terrains = this.terrainsOnTile(tile, stats);
-    const active = CORE_STATS.filter((k) => (stats[k] || 0) > 0);
     return h('div', { class: 'card' },
-      h('div', { class: 'row space' }, h('b', {}, terrains.length ? terrains.map((t) => t.name).join(' · ') : 'Blank ground'),
+      h('div', { class: 'row space' }, h('b', {}, this.tileTitle(tile)),
         h('button', { class: 'x', onclick: () => { this.selectedTile = null; this.app.changed(false); } }, ic('close', 1))),
-      active.length ? h('div', { class: 'stat-grid' }, active.map((k) => this.intensityRow(k, stats[k])))
-        : h('p', { class: 'sub' }, g.creaturesOn ? 'No intensity here yet. Creatures nearby will change this ground.' : 'No intensity here yet. A relic or seed buried nearby will change this ground.'),
-      // A buried relic leaves nothing on the surface; its tile card says so, and it can be dug up from here.
-      ...(() => { const r = g.relicAt(tile); if (!r) return []; const def = this.content.items[r.relicID] || {};
-        return [h('div', { class: 'row space relic-row' }, h('span', { class: 'sub' }, `${def.name || 'A relic'} is buried here.`),
-          h('span', { class: 'row gap' }, h('button', { class: 'btn small grey', onclick: () => this.open('relic', r.id) }, 'About'),
-            h('button', { class: 'btn small', onclick: () => this.app.digRelicAt(tile) }, 'Dig up')))]; })(),
-      ...g.activeBoosts(now).filter((b) => b.tile.x === tile.x && b.tile.y === tile.y).map((b) => b.seed
-        ? h('div', { class: 'sub boost' }, `${(this.content.items[b.seed] || {}).name || 'A school seed'} is buried here · ${g.seedPhase(b, now).phase} · ${duration(g.seedPhase(b, now).ends / 1000)} left`)
-        : h('div', { class: 'sub boost' }, ic('gem', 1), this.joinNodes(Object.entries(b.stats).map(([k, v]) => this.amountText(k, v)), ', '),
-          b.expiresAt ? ` · ${duration((b.expiresAt - now) / 1000)} left` : ' · permanent')));
+      this.tileBody(tile));
   }
-
-  /** A stat's intensity as a meter: name and pips (filled = reached, hollow = not; not colour alone). */
-  intensityRow(stat, value) {
-    const it = intensityOf(value, this.content.tuning);
-    const n = ((this.content.tuning.intensity || {}).bands || []).length || 9;
-    return h('div', { class: 'stat meter' },
-      h('span', { class: 'stat-name' }, cap(stat)),
-      h('span', { class: 'pips', title: it.label, 'aria-label': `${cap(stat)}: ${it.label}` }, Array.from({ length: n }, (_, i) =>
-        h('i', { class: 'pip' + (i < it.level ? ' on' : ''), style: i < it.level ? `background:${STAT_COLORS[stat] || '#fff'}` : '' }))));
+  tileTitle(tile) {
+    const g = this.game;
+    if (!g.inClearing(tile)) return 'The treeline';
+    const p = g.plantAt(tile);
+    if (p) return this.plantName(p);
+    const soil = g.soilAt(tile);
+    return soil ? `${schoolName(soil)} soil` : 'Plain soil';
   }
-
-  /**
-   * A small inline meter. For a level (value) the reached pips are filled. For a requirement
-   * (opts.min), pips below its band are filled and its own band's pip is half-filled when the true
-   * threshold sits partway through that band, so the meter never overstates or understates it.
-   */
-  miniMeter(stat, value, opts = {}) {
-    const T = this.content.tuning;
-    const n = ((T.intensity || {}).bands || []).length || 9;
-    let full, part = false, label;
-    if (opts.min != null) { const r = requirementOf(opts.min, T); full = r.exact ? r.level : r.level - 1; part = !r.exact; label = `${cap(stat)} at least ${r.text}`; }
-    else { const it = intensityOf(value, T); full = it.level; label = `${cap(stat)}: ${it.label}`; }
-    const col = STAT_COLORS[stat] || '#fff';
-    return h('span', { class: 'pips mini', title: label, 'aria-label': label }, Array.from({ length: n }, (_, i) =>
-      h('i', { class: 'pip' + (i < full ? ' on' : part && i === full ? ' part' : ''), style: i < full ? `background:${col}` : part && i === full ? `--c:${col}` : '' })));
+  tileBody(tile) {
+    const g = this.game, now = g.now(), a = this.app;
+    if (!g.inClearing(tile)) return h('p', { class: 'sub' }, 'Dense shrubs. Room to grow (in the Store) opens more of the clearing.');
+    const p = g.plantAt(tile);
+    const soil = g.soilAt(tile);
+    if (p) {
+      const stage = g.stageOf(p, now), def = g.plantDef(p.plantID), hidden = g.isHidden(p, now);
+      const slow = !soil;
+      return [
+        h('div', { class: 'row gap' }, h('div', { class: 'thumb small' }, this.sprites.element(this.app.view.plantSprite(p, now), this.app.view.plantVariant(p), 2)),
+          h('div', { class: 'grow' }, h('b', {}, this.stageName(stage)),
+            h('div', { class: 'sub' }, stage === 'ready' ? 'Tap it to harvest.' : hidden ? `It buds ${this.roughly(g.stageAt(p, g.gcfg.stages.bud ?? 0.45) - now)}.` : `Ready ${this.roughly(g.readyAt(p) - now)}.`))),
+        hidden ? h('p', { class: 'sub' }, `What will it be? You'll know when it buds.`) : null,
+        slow ? h('p', { class: 'sub' }, `Growing slowly on plain soil. ${hidden ? 'It' : def.name} likes ${schoolName(def.school)} soil.`) : null,
+        ...(hidden ? [] : this.plantNotes(p, now)),
+        this.app.devMode && this.plantInspector ? this.inspectPlant(p, now) : null,
+        h('div', { class: 'row end gap' }, stage === 'ready' ? h('button', { class: 'btn green small', onclick: () => a.harvestAt(tile) }, 'Harvest')
+          : h('button', { class: 'btn grey small', onclick: () => { this.ask(`Dig up the ${hidden ? 'seedling' : def.name}?`, 'It will be lost.', 'Dig it up', () => a.clearPlant(p.id)); } }, 'Dig up')),
+      ];
+    }
+    const packets = Object.keys(g.state.inventory).filter((id) => this.content.items[id]?.category === 'packet' && g.canPlantPacket(id, tile).ok);
+    const amends = Object.keys(g.state.inventory).filter((id) => this.content.items[id]?.category === 'amendment' && (this.content.items[id].amend || null) !== soil);
+    const blocked = !g.isFree(tile) && !g.hostsPlant(tile);
+    return [
+      h('p', { class: 'sub' }, soil ? `${schoolName(soil)} plants grow well here. Other plants won't take.` : 'Anything grows here, but slowly. Plants grow best in their own soil.'),
+      blocked ? null : packets.length ? h('div', { class: 'row gap wrap' }, packets.map((id) => h('button', { class: 'btn green small', title: this.content.items[id].name, onclick: () => a.plantAt(id, tile) },
+        this.sprites.element(this.content.items[id].sprite, null, 1), ' ', this.content.items[id].name.replace(/ seeds$/, ''))))
+        : h('p', { class: 'sub' }, 'No seeds in your Bag that grow in this soil.'),
+      blocked || !amends.length ? null : h('div', { class: 'row gap wrap' }, h('span', { class: 'sub' }, 'Change the soil: '), amends.map((id) => h('button', { class: 'btn small', title: this.content.items[id].name, onclick: () => a.amendAt(id, tile) },
+        this.sprites.element(this.content.items[id].sprite, null, 1)))),
+    ];
   }
-
-  /** What a creature or gem adds: "Shimmer ▮▯▯…" (below the influence floor: "a touch of Shimmer"). */
-  amountText(stat, value) {
-    return intensityOf(value, this.content.tuning).level ? [cap(stat), ' ', this.miniMeter(stat, value)] : `a touch of ${cap(stat)}`;
+  /** Extra lines on a growing plant's card: its companions (named once discovered) and a relic close by. */
+  plantNotes(p) {
+    const g = this.game, out = [];
+    for (const c of g.activeCompanions(p)) {
+      const known = g.discovered.has(g.companionKey(p.plantID, c.index));
+      const partner = g.plantDef(c.rule.with)?.name || 'its neighbour';
+      out.push(h('p', { class: 'sub companion' }, ic('heart', 1), known ? ` ${c.rule.effect === 'speed' ? 'Growing faster' : 'Will give more'} beside the ${partner}.` : ' It seems happy here.'));
+    }
+    if (g.ornamentFactor(p) > 1) out.push(h('p', { class: 'sub companion' }, ic('sparkle', 1), ' A relic nearby hums to it.'));
+    return out;
   }
-
-  /** A requirement as name + meter ("Spore ▮▮◧▯…" means at least that much). */
-  requirementText(stat, min) {
-    return h('span', { class: 'req' }, cap(stat), ' ', this.miniMeter(stat, 0, { min }));
-  }
-
-  /** Join nodes with a separator (for inline lists of meters). */
-  joinNodes(list, sep) { return list.flatMap((x, i) => (i ? [sep, x] : [x])); }
-
-  /** Gem/material use, with meters instead of raw amounts. */
-  useText(use) {
-    if (!use) return null;
-    if (use.type === 'bury') return this.buryText(use.school);
-    if (use.type === 'relic') return null;
-    if (use.type !== 'soilBoost' || !use.stats) return use.text;
-    const all = Object.keys(use.stats).length === CORE_STATS.length;
-    const amount = all ? ['every stat ', this.miniMeter('shimmer', Object.values(use.stats)[0])] : this.joinNodes(Object.entries(use.stats).map(([k, v]) => this.amountText(k, v)), ' and ');
-    const r = use.radius || 0;
-    const where = r ? `a tile and the ${(2 * r + 1) ** 2 - 1} around it` : 'a tile';
-    return [`${use.verb}: adds `, amount, ` to ${where} ${use.permanent ? 'for good' : use.hours ? `for ${use.hours}h` : ''}`.trimEnd() + '.'];
-  }
-
-  /** What burying a school seed does: "Bury: grows Shimmer ▮▯… around a tile, rooting over 3h, for about 3 days." */
-  buryText(school) {
-    const cfg = this.content.tuning.schoolSeeds || {}, g = this.game;
-    const wide = g ? g.upgradeTier('wideSpread') * ((g.upgradeDef('wideSpread') || {}).radiusPerTier ?? 1) : 0;
-    return ['Bury: grows ', this.amountText(school, cfg.strength ?? 12), ` around a tile${wide ? ' (Wide Spread: a little farther)' : ''}, rooting over ${cfg.rampHours ?? 3}h and lasting about ${Math.round((cfg.durationHours ?? 72) / 24)} days before it fades.`];
-  }
-
-  /** A buried school seed: its school, how far along it is, and what it does. */
-  buriedSeedBody(id) {
-    const g = this.game, now = g.now();
-    const b = g.state.soilBoosts.find((x) => x.id === id && x.seed);
-    if (!b) return ['School seed', h('p', { class: 'sub' }, 'The seed has faded back into the ground.')];
-    const def = this.content.items[b.seed] || {};
-    const ph = g.seedPhase(b, now);
-    const level = g.boostLevel(b, now);
-    const phaseText = ph.phase === 'rooting' ? `Rooting: reaches full strength in ${duration(ph.left / 1000)}.`
-      : ph.phase === 'growing' ? `Growing: starts to fade in ${duration(ph.left / 1000)}.` : `Fading: gone in ${duration(ph.left / 1000)}.`;
-    return [def.name || 'School seed', [
-      h('div', { class: 'hero' }, this.sprites.element(def.school ? 'seed.bloom.' + def.school : (def.marker || def.sprite), null, 6, '', true)),
-      h('p', { class: 'center' }, h('b', {}, `${cap(b.school)} school`)),
-      h('div', { class: 'progress' }, h('span', { style: `width:${level * 100}%` })),
-      h('p', { class: 'sub center' }, phaseText, ` ${duration(ph.ends / 1000)} left in all.`),
-      h('div', { class: 'stat-grid' }, this.intensityRow(b.school, b.stats[b.school] * level)),
-      def.guideText ? h('p', { class: 'sub' }, def.guideText) : null,
-      h('p', { class: 'sub' }, `It gives ${cap(b.school)} to its own tile and, more softly, the tiles around it, so ${cap(b.school)} ground and its finds can start here with no creature nearby.`),
-    ]];
-  }
-
-  /** Developer-only: a raw stat value (with its intensity label). */
-  statBar(stat, value, label = null) {
-    return h('div', { class: 'stat' },
-      h('span', { class: 'stat-name' }, cap(stat)),
-      h('span', { class: 'bar' }, h('span', { style: `width:${Math.min(100, value)}%;background:${STAT_COLORS[stat] || '#fff'}` })),
-      h('span', { class: 'stat-val' }, label ? `${value.toFixed(1)} ${label}` : Math.round(value)));
+  /** Developer plant inspector: exact timers and rates. */
+  inspectPlant(p, now) {
+    const g = this.game;
+    const row = (k, v) => h('div', { class: 'inspect-kv' }, h('span', {}, k), h('b', {}, v));
+    return h('div', { class: 'dev-note' },
+      row('Plant', `${g.plantDef(p.plantID)?.name}${p.blind ? ` (from ${p.from} ${p.blind} seeds)` : ''}`),
+      row('Progress', `${(g.progress(p, now) * 100).toFixed(1)}% (${g.stageOf(p, now)}, ${p.cycle})`),
+      row('Rate', `×${p.rate.toFixed(3)}`),
+      row('Ready in', g.isReady(p, now) ? 'ready' : this.timer(g.readyAt(p) - now)),
+      ...['sprout', 'bud', 'bloom'].map((st) => row(`${st} at`, g.stageAt(p, g.gcfg.stages[st]) <= now ? 'passed' : this.timer(g.stageAt(p, g.gcfg.stages[st]) - now))),
+      row('Planted', new Date(p.plantedAt).toLocaleString()), row('Harvests', String(p.harvests)));
   }
 
   toast(text, sprite) {
@@ -312,8 +221,6 @@ export class UI {
     this.toastShownAt = performance.now();
     const el = document.getElementById('toast');
     el.replaceChildren(sprite ? this.sprites.element(sprite, null, 2) : '', h('span', {}, text));
-    // During the tutorial the coach card owns the top of the screen, so toasts sit low.
-    el.classList.toggle('low', !!(this.game && this.game.inTutorial));
     el.classList.add('show');
     clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => {
@@ -322,18 +229,16 @@ export class UI {
     }, 2800);
   }
 
+  joinNodes(list, sep) { return list.flatMap((x, i) => (i ? [sep, x] : [x])); }
+
   // -------------------------------------------------------------- sheets
 
   open(type, arg) {
-    // Opened from a list sheet (the Guide, Creatures, the Old Log), a detail sheet gets a Back button
-    // that returns to that list as it was: same tab (kept on the UI) and scroll position.
+    // Opened from a list sheet, a detail sheet gets a Back button that returns to it as it was.
     const prev = this.sheet;
-    const fromList = prev && prev.type !== type && ['guide', 'creatures', 'burrow', 'offerings'].includes(prev.type);
+    const fromList = prev && prev.type !== type && ['guide', 'offerings', 'store', 'bag'].includes(prev.type);
     let stack = null;
-    if (fromList) {
-      const scroll = document.querySelector('#sheet .sheet-body')?.scrollTop || 0;
-      stack = { type: prev.type, arg: prev.arg, stack: prev.stack || null, scroll };
-    }
+    if (fromList) stack = { type: prev.type, arg: prev.arg, stack: prev.stack || null, scroll: document.querySelector('#sheet .sheet-body')?.scrollTop || 0 };
     this.sheet = { type, arg, stack };
     this.renderSheet();
   }
@@ -346,38 +251,32 @@ export class UI {
       return;
     }
     this.sheet = null;
-    if (this.selectedCreatureID && !this.mode) this.selectedCreatureID = null;
     const el = document.getElementById('sheet');
     el.classList.remove('show');
     el.replaceChildren();
     this.app.changed(false);
   }
 
+  /** Sheet builders by type: each returns [title, body]. Later systems add their own. */
+  sheetBuilders(arg) {
+    return {
+      bag: () => ['Bag', this.bagBody()],
+      guide: () => this.guideBody(),
+      rename: () => ['Rename garden', this.renameBody()],
+      debug: () => [this.app.devMode ? 'Developer mode' : 'Debug', this.debugBody()],
+      entry: () => [arg.name, this.entryBody(arg)],
+      offerings: () => ['The Old Log', this.oldLogBody()],
+      store: () => ['Store', this.storeBody()],
+      decor: () => this.decorBody(arg),
+      visitor: () => this.visitorBody(arg),
+    };
+  }
+
   renderSheet(restoreScroll = null) {
     const el = document.getElementById('sheet');
     if (!this.sheet) { el.classList.remove('show'); return; }
     const { type, arg } = this.sheet;
-    const build = {
-      creatures: () => ['Creatures', this.creaturesBody()],
-      burrow: () => ['Creatures', this.creaturesBody()],
-      creature: () => this.creatureBody(arg),
-      bag: () => ['Bag', this.bagBody()],
-      guide: () => this.guideBody(),
-      rename: () => ['Rename forest', this.renameBody()],
-      debug: () => [this.app.devMode ? 'Developer mode' : 'Debug', this.debugBody()],
-      tasks: () => ['Tasks', this.tasksBody()],
-      inspect: () => [`Spawns · tile ${arg.x}, ${arg.y}`, this.inspectBody(arg)],
-      entry: () => [arg.name, this.entryBody(arg)],
-      terrain: () => [(this.terrainDef(arg) || {}).name || 'Terrain', this.terrainBody(arg)],
-      offerings: () => ['The Old Log', this.offeringsBody()],
-      store: () => ['Store', this.storeBody()],
-      decor: () => this.decorBody(arg),
-      nest: () => this.nestBody(arg),
-      buriedSeed: () => this.buriedSeedBody(arg),
-      relic: () => this.relicBody(arg),
-      visitor: () => this.visitorBody(arg),
-      landmark: () => this.landmarkBody(arg),
-    }[type];
+    const build = this.sheetBuilders(arg)[type];
     if (!build) return;
     const [title, body] = build();
     const scrollTop = el.querySelector('.sheet-body')?.scrollTop || 0;
@@ -392,339 +291,203 @@ export class UI {
     el.onclick = (e) => { if (e.target === el) { this.sheet = null; this.close(); } };
   }
 
-  traitSummary(c) {
-    const parts = Object.entries(c.contributions).sort((a, b) => b[1] - a[1]).map(([k, v]) => this.amountText(k, v));
-    return this.joinNodes([...parts, `Radius ${c.radius.toFixed(1)}`], ' · ');
-  }
+  // -------------------------------------------------------------- Bag
 
-  creatureRow(c) {
-    const g = this.game;
-    const art = this.app.art(c);
-    const p = g.activePlacement(c.id);
-    return h('button', { class: 'list-row', onclick: () => this.open('creature', c.id) },
-      h('div', { class: 'thumb' }, this.sprites.element(art.sprite, art.variant, 3)),
-      h('div', { class: 'grow' },
-        h('div', {}, h('b', {}, this.app.displayName(c)), c.isGlimmer ? h('span', { class: 'glimmer' }, ' ', ic('glimmer', 1), 'Glimmer') : null),
-        h('div', { class: 'sub' }, this.speciesLine(c)),
-        h('div', { class: 'sub' }, this.traitSummary(c)),
-        p ? h('div', { class: 'sub' }, `Influence ${Math.round(g.level(p, g.now()) * 100)}%`) : null),
-      h('span', { class: 'chev' }, ic('chevron', 2)));
-  }
-
-  speciesLine(c) {
-    const def = this.content.creatures[c.typeID];
-    if (!def) return '';
-    const name = c.nickname ? `${def.name} · ` : '';
-    return `${name}${def.familyName || def.family} · ${rarityName(def.rarity)}`;
-  }
-
-  /** The Creatures tab: who's out in the forest (no limit) and who's resting. */
-  creaturesBody() {
-    const g = this.game;
-    const placed = g.placedCreatures, resting = g.burrow;
-    return [
-      placed.length ? h('div', { class: 'section' }, `Out in the forest (${placed.length})`) : null,
-      ...placed.map((c) => this.creatureRow(c)),
-      h('div', { class: 'section' }, 'Resting'),
-      resting.length ? resting.map((c) => this.creatureRow(c))
-        : h('p', { class: 'sub' }, g.state.creatures.length ? 'Everyone is out in the forest.'
-          : 'No creatures yet. Pick mushrooms (Funglings hide inside), plant seeds (Sproutlings grow from them) and crack geodes (Geode Critters sleep inside).'),
-    ];
-  }
-
-  creatureBody(id) {
-    const g = this.game, c = g.creature(id);
-    if (!c) return ['Creature', h('p', {}, 'This creature has wandered off.')];
-    const def = this.content.creatures[c.typeID];
-    const art = this.app.art(c);
-    const p = g.activePlacement(c.id);
-    const now = g.now();
-    const name = h('input', { type: 'text', value: c.nickname || '', placeholder: def ? def.name : 'Name', maxlength: 24 });
-    name.addEventListener('change', () => { g.rename(c.id, name.value); this.app.changed(); });
-    let status;
-    if (p) {
-      const lv = g.level(p, now);
-      status = [
-        h('div', { class: 'sub' }, `In the forest at ${p.tile.x}, ${p.tile.y}`),
-        h('div', { class: 'progress' }, h('span', { style: `width:${lv * 100}%` })),
-        h('div', { class: 'sub' }, lv < 1 ? `Influence ${Math.round(lv * 100)}% · full strength in about ${duration((1 - lv) * (p.rampSeconds || this.content.tuning.rampSecondsToFull))}` : 'At full strength.'),
-        h('div', { class: 'row gap' },
-          h('button', { class: 'btn', onclick: () => { this.app.view.centerOn(p.tile); this.selectedCreatureID = c.id; this.sheet = null; this.close(); } }, 'Show in forest'),
-          g.state.unlocks.trowel ? h('button', { class: 'btn green', onclick: () => this.app.beginTrowel(c.id) }, 'Move (trowel)') : null,
-          h('button', { class: 'btn red', onclick: () => { this.app.recall(c.id); this.sheet = null; this.close(); } }, 'Bring home')),
-        g.state.unlocks.trowel ? h('div', { class: 'sub' }, 'The trowel moves it without losing any of its influence.') : null,
-      ];
-    } else {
-      status = [
-        h('div', { class: 'sub' }, 'Resting.'),
-        h('button', { class: 'btn green', onclick: () => { this.app.beginPlacing(c.id); } }, ic('leaf', 1), 'Place in forest'),
-      ];
-    }
-    const origin = c.origin === 'starter' ? 'Was here from the start' : c.origin === 'wanderer' ? 'Wandered in on its own'
-      : this.content.items[c.origin] ? `From a ${this.content.items[c.origin].name}` : cap(c.origin || '');
-    return [this.app.displayName(c), [
-      h('div', { class: 'hero' }, this.sprites.element(art.sprite, art.variant, 7)),
-      h('p', { class: 'sub center' }, this.speciesLine(c)),
-      c.isGlimmer ? h('p', { class: 'glimmer' }, ic('glimmer', 1), `A glimmer! +50% bonuses and +${(this.content.tuning.creatureRoll || {}).glimmerRadiusBonus ?? 1} radius.`) : null,
-      def && def.special ? h('div', { class: 'card special' }, h('b', {}, ic('sparkle', 1), 'Special: '), def.special,
-        def.notYet ? h('div', { class: 'sub' }, `Not in the game yet: ${def.notYet}`) : null) : null,
-      h('label', { class: 'field' }, 'Name', name),
-      h('div', { class: 'section' }, 'Traits'),
-      h('p', { class: 'sub' }, 'At full strength, on its own tile:'),
-      h('div', { class: 'stat-grid' }, Object.entries(c.contributions).sort((a, b) => b[1] - a[1]).map(([k, v]) => this.intensityRow(k, v))),
-      h('div', { class: 'sub' }, `Influence radius ${c.radius.toFixed(1)} tiles · ramps up over ${def?.rampHours ?? '?'}h`),
-      origin ? h('div', { class: 'sub' }, `Found: ${origin}`) : null,
-      h('div', { class: 'section' }, 'Status'),
-      ...status,
-    ]];
+  /** Bag sections, in order. */
+  bagSections() { return ['packet', 'amendment', 'plant', 'mushroom']; }
+  bagSectionTitle(cat) { return { packet: 'Seed packets', amendment: 'Soil', plant: 'Plants and flowers', mushroom: 'Mushrooms' }[cat] || cap(cat); }
+  /** Buttons for one Bag row: plant seeds, spread soil, sell produce. */
+  bagActions(def, n) {
+    const a = this.app, g = this.game;
+    if (def.category === 'packet') return [h('button', { class: 'btn green small', onclick: () => a.beginPlanting(def.id) }, 'Plant')];
+    if (def.category === 'amendment') return [h('button', { class: 'btn small', onclick: () => a.beginAmend(def.id) }, 'Use')];
+    const price = g.sellPrice(def.id);
+    return price ? [h('button', { class: 'btn small', title: `Sell one for ${price} coins`, onclick: () => a.sellItem(def.id, 1) }, ic('coin', 1), ` ${price}`)] : [];
   }
 
   bagBody() {
     const g = this.game;
-    const owned = Object.entries(g.state.inventory).filter(([, n]) => n > 0)
-      .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def && (g.eggsOn || e.def.category !== 'egg') && !g.itemOff(e.def));   // eggs are kept, hidden, while the egg system is off
+    const owned = Object.entries(g.state.inventory).filter(([, n]) => n > 0).map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def);
     const decor = Object.entries(g.state.decor.owned).filter(([, n]) => n > 0).map(([id, n]) => ({ def: g.decorDef(id), n })).filter((e) => e.def);
-    const compostOn = (this.content.tuning.offerings || {}).compostEnabled !== false;
-    const head = compostOn ? [h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
-      h('span', { class: 'sub' }, 'Spare finds turn into compost.'))] : [];
-    // Relics in the ground leave no mark, so digging one up starts here (or from a tile's card).
-    const buried = (g.state.relics || []).length;
-    if (buried) head.push(h('div', { class: 'row space dig-row' }, h('span', { class: 'sub' }, `${buried} relic${buried === 1 ? '' : 's'} in the ground`),
-      h('button', { class: 'btn small', onclick: () => this.app.beginDig() }, 'Dig up a relic')));
+    const out = [];
+    const order = this.bagSections();
+    const cats = [...new Set(owned.map((e) => e.def.category))].sort((a, b) => ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
+    for (const cat of cats) {
+      out.push(h('div', { class: 'section' }, this.bagSectionTitle(cat)));
+      for (const { def, n } of owned.filter((e) => e.def.category === cat).sort((a, b) => rarityIndex(b.def.rarity) - rarityIndex(a.def.rarity) || a.def.name.localeCompare(b.def.name))) {
+        out.push(h('div', { class: 'list-row' },
+          h('div', { class: 'thumb' }, this.sprites.element(def.sprite, def.variant || null, 3)),
+          h('div', { class: 'grow' }, h('b', {}, def.name), this.bagLine(def)),
+          h('b', {}, `×${n}`), ...this.bagActions(def, n)));
+      }
+    }
     if (decor.length) {
-      head.push(h('div', { class: 'section' }, 'Decor'), ...decor.map(({ def, n }) => h('div', { class: 'list-row' },
+      out.push(h('div', { class: 'section' }, 'Decor'), ...decor.map(({ def, n }) => h('div', { class: 'list-row' },
         h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)),
         h('div', { class: 'grow' }, h('b', {}, def.name), def.text ? h('div', { class: 'sub' }, def.text) : null),
         h('b', {}, `×${n}`),
         h('button', { class: 'btn green small', onclick: () => this.app.beginDecor(def.id) }, 'Place'))));
     }
-    if (!owned.length) return [...head, h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms and flowers in the forest to collect them.')];
-    const order = ['relic', 'egg', 'seed', 'schoolSeed', 'geode', 'material', 'gem', 'plant', 'mushroom'];
-    const cats = [...new Set(owned.map((e) => e.def.category))].sort((a, b) =>
-      ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
-    return [...head, ...cats.map((cat) => [
-      h('div', { class: 'section' }, catTitle(cat)),
-      cat === 'egg' ? h('p', { class: 'sub' }, `Nests in use: ${g.state.nests.length} of ${g.nestSlots}. What hatches depends on the ground you nest an egg on.`) : null,
-      ...owned.filter((e) => e.def.category === cat)
-        .sort((a, b) => rarityIndex(b.def.rarity) - rarityIndex(a.def.rarity) || a.def.name.localeCompare(b.def.name))
-        .map(({ def, n }) => h('div', { class: 'list-row' },
-          h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)),
-          h('div', { class: 'grow' }, h('b', {}, def.name),
-            h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, rarityName(def.rarity)),
-            def.use ? h('div', { class: 'sub' }, this.useText(def.use)) : null,
-            def.tradeOnly ? h('div', { class: 'sub' }, 'Worth keeping: the Store trades for it.') : null),
-          h('b', {}, `×${n}`),
-          def.onGrow ? h('button', { class: 'btn green small', onclick: () => this.app.beginPlanting(def.id) }, 'Plant') : null,
-          def.egg && g.eggsOn ? h('button', { class: 'btn green small', disabled: g.state.nests.length >= g.nestSlots, onclick: () => this.app.beginNest(def.id) }, 'Nest') : null,
-          def.onCrack ? h('div', { class: 'crack-btns' },
-            h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack'),
-            n > 1 ? h('button', { class: 'btn orange small', title: `Crack ${Math.min(n, this.batchMax)} at once`, onclick: () => { this.sheet = null; this.close(); this.openBatchCrack(def.id, Math.min(n, this.batchMax)); } }, `×${Math.min(n, this.batchMax)}`) : null) : null,
-          def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'bury' || def.use.type === 'relic' ? 'Bury' : def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : 'Crush') : 'Use') : null,
-          compostOn && g.compostValue(def.id) ? h('button', { class: 'btn grey small', title: `Compost one for ${g.compostValue(def.id)}`, onclick: () => this.app.compostItem(def.id) }, `+${g.compostValue(def.id)}`) : null)),
-    ])];
+    if (!out.length) return [h('p', { class: 'sub' }, 'Your bag is empty.')];
+    return out;
+  }
+  /** The line under an item's name in the Bag. */
+  bagLine(def) {
+    if (def.category === 'packet' && def.blind) return h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[def.school]}` }, `${schoolName(def.school)} soil`), ` · ${def.text.replace(/^\w+ seeds\.? ?/, '')}`);
+    if (def.category === 'packet') return h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[def.school]}` }, `${schoolName(def.school)} soil`), ` · ${this.growHoursText(def.plant)}`);
+    if (def.category === 'amendment') return h('div', { class: 'sub' }, def.text);
+    return def.rarity ? h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, rarityName(def.rarity)) : null;
   }
 
-  // -------------------------------------------------------------- offerings (the Old Log board)
+  // -------------------------------------------------------------- the Old Log and the Store
 
-  /** An item in a request: its art (a silhouette until it's in the Field Guide), name or hint, and have/need. */
+  /** An item in a request: its art (a silhouette until it's in the Field Guide), name, and have/need. */
   offerItemRow(x) {
     const def = this.content.items[x.item];
     const known = this.game.discovered.has('item:' + x.item);
-    const art = def ? this.sprites.element(def.sprite, known ? null : { silhouette: [40, 52, 36] }, 2) : '';
-    const need = def && def.spawn && def.spawn.requires && Object.keys(def.spawn.requires).length
-      ? this.joinNodes(Object.entries(def.spawn.requires).map(([k, v]) => this.requirementText(k, v.min)), ' ') : (def && def.spawn ? 'Grows anywhere.' : null);
     return h('div', { class: 'offer-item' + (x.owned >= x.count ? ' met' : '') },
-      h('div', { class: 'thumb small' }, art),
-      h('div', { class: 'grow' }, h('b', {}, known ? def.name : '???'),
-        h('div', { class: 'sub' }, known ? need : (def ? itemHint(def, this.content.story) : x.item))),
+      h('div', { class: 'thumb small' }, def ? this.sprites.element(def.sprite, known ? null : { silhouette: [40, 52, 36] }, 2) : ''),
+      h('div', { class: 'grow' }, h('b', {}, known && def ? def.name : '???'), def && def.school ? h('div', { class: 'sub' }, `${schoolName(def.school)} soil`) : null),
       h('b', { class: 'count' }, `${Math.min(x.owned, x.count)}/${x.count}`));
   }
 
   rewardText(r) {
     const g = this.game;
+    if (r.type === 'coins') return [ic('coin', 1), ` ${r.count} coins`];
     if (r.type === 'cosmetic') return [this.sprites.element(g.decorDef(r.id)?.sprite || 'ui.icon.board', null, 2), ` ${g.decorDef(r.id)?.name || r.id}`];
-    if (r.type === 'compost') return `${r.count} compost`;
-    if (r.type === 'egg' || r.type === 'item') { const d = this.content.items[r.id]; return d ? [this.sprites.element(d.sprite, null, 2), ` ${d.name}${(r.count || 1) > 1 ? ' ×' + r.count : ''}`] : r.id; }
-    if (r.type === 'upgrade') { const u = g.upgradeDef(r.id) || {}; return [u.sprite ? this.sprites.element(u.sprite, null, 2) : '', ` ${u.text || u.name || r.id}`]; }
-    const u = { trowel: "The gardener's trowel: move creatures without losing influence", slot: 'Another creature slot', nest: 'Another nest', expansion: 'The treeline steps back' };
-    return u[r.id] || r.id;
+    if (r.type === 'item') { const d = this.content.items[r.id]; return d ? [this.sprites.element(d.sprite, null, 2), ` ${d.name}${(r.count || 1) > 1 ? ' ×' + r.count : ''}`] : r.id; }
+    if (r.type === 'unlock' && r.id === 'expansion') return 'The treeline steps back';
+    return r.id || r.type;
   }
 
-  offerCard(st) {
-    const r = st.req, a = this.app;
-    const lockText = st.locks.map((l) => (l.type === 'guide' ? `${l.need} Field Guide entries (${l.have} so far)` : l.type === 'request' ? `after “${l.name}”` : `forest day ${l.need}`)).join(', ');
+  lockText(locks) {
+    return locks.map((l) => (l.type === 'guide' ? `${l.need} Field Guide entries (${l.have} so far)` : l.type === 'request' ? `“${l.name}” first`
+      : l.type === 'full' ? 'nothing: the whole forest is open' : l.type === 'day' ? `garden day ${l.need}`
+        : l.type === 'beauty' ? `a ${l.name.toLowerCase()} garden` : (l.text || ''))).join(', ');
+  }
+
+  offerCard(st, label = 'Deliver') {
+    const r = st.req;
     return h('div', { class: 'card offer' + (st.locks.length ? ' locked' : '') + (st.ready ? ' ready' : '') },
       h('div', { class: 'row space' }, h('b', {}, r.name), h('span', { class: 'sub reward' }, this.rewardText(r.reward))),
       r.text ? h('p', { class: 'sub' }, r.text) : null,
-      st.locks.length ? h('p', { class: 'sub lock' }, ic('lock', 1), ` Opens with ${lockText}.`) : st.items.map((x) => this.offerItemRow(x)),
+      st.locks.length ? h('p', { class: 'sub lock' }, ic('lock', 1), ` Opens with ${this.lockText(st.locks)}.`) : this.priceRows(st),
       st.locks.length ? null : h('div', { class: 'row end' },
-        h('button', { class: 'btn ' + (st.ready ? 'green' : 'grey'), disabled: !st.ready, onclick: () => a.deliverRequest(r.id) }, 'Deliver')));
+        h('button', { class: 'btn ' + (st.ready ? 'green' : 'grey'), disabled: !st.ready, onclick: () => this.app.deliverRequest(r.id) }, label)));
+  }
+  priceRows(st) {
+    return [st.coins ? h('div', { class: 'offer-item' + (this.game.state.coins >= st.coins ? ' met' : '') }, h('div', { class: 'thumb small' }, ic('coin', 2)),
+      h('div', { class: 'grow' }, h('b', {}, `${st.coins} coins`)), h('b', { class: 'count' }, `${Math.min(this.game.state.coins, st.coins)}/${st.coins}`)) : null,
+    ...st.items.map((x) => this.offerItemRow(x))];
   }
 
-  /** A shop listing or upgrade tier: what you give (have/need) and what you get, in one compact card. */
-  shopCard(st, label = 'Trade') {
-    const r = st.req, a = this.app;
-    return h('div', { class: 'card offer shop' + (st.ready ? ' ready' : '') + (st.locks.length ? ' locked' : '') },
-      h('div', { class: 'row space' }, h('b', {}, r.name), h('span', { class: 'sub reward' }, this.rewardText(r.reward))),
-      st.locks.length ? h('p', { class: 'sub lock' }, ic('lock', 1), ' Opens with ', st.locks.map((l) => (l.type === 'guide' ? `${l.need} Field Guide entries (${l.have} so far)` : l.type === 'request' ? `“${l.name}” first` : l.type === 'full' ? 'nothing: the whole forest is open' : `forest day ${l.need}`)).join(', '), '.')
-        : h('div', { class: 'price' }, st.items.map((x) => {
-          const d = this.content.items[x.item], known = g0(this).discovered.has('item:' + x.item);
-          return h('span', { class: 'price-item' + (x.owned >= x.count ? ' met' : ''), title: known && d ? d.name : (d ? itemHint(d, this.content.story) : x.item) },
-            d ? this.sprites.element(d.sprite, known ? null : { silhouette: [40, 52, 36] }, 2) : '', h('b', {}, `${Math.min(x.owned, x.count)}/${x.count}`));
-        }), h('span', { class: 'grow' }),
-        h('button', { class: 'btn small ' + (st.ready ? 'green' : 'grey'), disabled: !st.ready, onclick: () => a.deliverRequest(r.id) }, label)));
+  /** A Room to grow tier: its price, and one button per side that can still be cleared. */
+  growCard(st) {
+    const g = this.game, open = g.openSides(), r = st.req;
+    const label = { top: ['up', 'Top'], left: ['back', 'Left'], right: ['chevron', 'Right'], bottom: ['down', 'Bottom'] };
+    const side = (d) => h('button', { class: 'btn small ' + (st.ready && open.includes(d) ? 'green' : 'grey'), disabled: !st.ready || !open.includes(d),
+      title: open.includes(d) ? `Clear the ${d} trees` : 'The forest ends on that side', onclick: () => this.app.expandToward(r.id, d) }, label[d][1]);
+    return h('div', { class: 'card offer' + (st.locks.length ? ' locked' : '') + (st.ready ? ' ready' : '') },
+      h('div', { class: 'row space' }, h('b', {}, r.name)),
+      r.text ? h('p', { class: 'sub' }, r.text) : null,
+      st.locks.length ? h('p', { class: 'sub lock' }, ic('lock', 1), ` Opens with ${this.lockText(st.locks)}.`) : this.priceRows(st),
+      st.locks.length ? null : h('div', { class: 'grow-pad' },
+        h('span'), side('top'), h('span'),
+        side('left'), h('span', { class: 'grow-mid' }, ic('leaf', 2)), side('right'),
+        h('span'), side('bottom'), h('span')));
   }
 
-  /** Upgrade lines: each upgrade's next tier (or that it's maxed), with the tier reached so far. */
-  upgradeSection(board) {
-    const g = this.game;
-    const ups = board.filter((s) => s.req.kind === 'upgrade');
-    const lines = [...new Set(ups.map((s) => s.req.reward.id))];
-    if (!lines.length) return [];
-    return [h('div', { class: 'section' }, 'Upgrades'), ...lines.map((id) => {
-      const u = g.upgradeDef(id) || { name: id };
-      const tier = g.upgradeTier(id);
-      const next = ups.find((s) => s.req.reward.id === id && !s.done);
-      const roman = ['', 'I', 'II', 'III', 'IV', 'V'];
-      if (!next) return h('div', { class: 'card offer shop locked' }, h('div', { class: 'row space' }, h('b', {}, `${u.name} ${roman[tier] || tier}`), h('span', { class: 'sub' }, 'Complete')));
-      const card = this.shopCard(next, 'Upgrade');
-      if (tier) card.prepend(h('div', { class: 'sub' }, `You have ${u.name} ${roman[tier] || tier}.`));
-      return card;
-    })];
+  /** The Old Log's badge: commissions you could deliver now (later). */
+  storeBadge() { return 0; }
+
+  /** One row in the Store: art, name, a line, and a Buy button with its price. */
+  buyRow(sprite, name, line, price, onBuy, locks = [], variant = null) {
+    const can = !locks.length && this.game.state.coins >= price;
+    return h('div', { class: 'list-row' + (locks.length ? ' locked' : '') },
+      h('div', { class: 'thumb' }, this.sprites.element(sprite, locks.length ? SIL : variant, 3)),
+      h('div', { class: 'grow' }, h('b', {}, locks.length ? '???' : name), locks.length ? h('div', { class: 'sub lock' }, ic('lock', 1), ` Opens with ${this.lockText(locks)}.`) : line),
+      locks.length ? null : h('button', { class: 'btn small ' + (can ? 'green' : 'grey'), disabled: !can, onclick: onBuy }, ic('coin', 1), ` ${price}`));
   }
 
-  /** The Old Log: where traders stop by (requests of kind "visitor"). Buying things is in the Store tab. */
-  offeringsBody() {
-    const visitors = this.visitorSection();
+  /** The Old Log: notes and requests from neighbours, and the way into the Store. */
+  oldLogBody() {
     return [
       h('p', { class: 'sub center' }, this.story('messages.offeringsIntro')),
-      h('div', { class: 'row space compost-row' }, h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Old Log', sprite: 'landmark.old-log', variant: null, text: this.content.story?.guide?.landmarks?.['landmark.old-log'] }) }, 'About the log'),
+      h('div', { class: 'row space' },
+        h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Old Log', sprite: 'landmark.old-log', variant: null, text: this.story('guide.landmarks.landmark.old-log') || this.content.story?.guide?.landmarks?.['landmark.old-log'] }) }, 'About the log'),
         h('button', { class: 'btn small green', onclick: () => this.open('store') }, ic('store', 1), ' Open the Store')),
-      ...visitors,
-      visitors.length ? null : h('p', { class: 'sub center' }, 'No traders at the log right now. Traders stop by each day.'),
+      ...this.oldLogSections(),
     ];
   }
-
-  /**
-   * Store tabs: which listing goes where. Decor is anything that gives a decoration; Eggs is anything
-   * that gives an egg; Upgrades are upgrade lines, Room to grow and unlocks (trowel, nests); Trades is
-   * the rest (supplies, seeds and other consumables).
-   */
-  storeTabOf(st) {
-    const r = st.req, rw = r.reward || {};
-    if (rw.type === 'cosmetic') return 'decor';
-    if (rw.type === 'egg' || ((rw.type === 'item') && (this.content.items[rw.id]?.category === 'egg' || /^egg\./.test(rw.id || '')))) return 'eggs';
-    if (r.kind === 'upgrade' || rw.type === 'upgrade' || rw.type === 'unlock') return 'upgrades';
-    return 'trades';
-  }
-
-  /** One-off listings (decor, special eggs, upgrades, unlocks) you could get right now, per Store tab. Repeatable trades aren't counted. */
-  storeReady(now = this.game.now()) {
-    const out = { decor: 0, trades: 0, eggs: 0, upgrades: 0 };
-    const board = this.game.requestBoard(now);
-    for (const st of board) {
-      if (st.done || st.locks.length || !st.ready || st.req.kind === 'shop') continue;
-      // Only the next tier of an upgrade line counts.
-      if (st.req.kind === 'upgrade' && board.find((x) => x.req.kind === 'upgrade' && x.req.reward.id === st.req.reward.id && !x.done) !== st) continue;
-      out[this.storeTabOf(st)]++;
-    }
-    return out;
-  }
-
-  storeReadyCount(now) {
-    const r = this.storeReady(now);
-    return r.decor + r.trades + r.eggs + r.upgrades;
-  }
-
-  /** The Store: everything you can trade your finds for, in tabs (Decor, Trades, Eggs, Upgrades). */
-  storeBody() {
-    const g = this.game, now = g.now();
-    const tabs = [['decor', 'Decor'], ['trades', 'Trades'], ...(g.eggsOn ? [['eggs', 'Eggs']] : []), ['upgrades', 'Upgrades']];   // no Eggs tab while eggs are off
-    if (!tabs.some(([id]) => id === this.storeTab)) this.storeTab = 'decor';
-    const ready = this.storeReady(now);
-    const all = g.requestBoard(now);
-    const mine = all.filter((st) => this.storeTabOf(st) === this.storeTab);
-    const repeat = mine.filter((st) => st.req.kind === 'shop');
-    const once = mine.filter((st) => st.req.kind !== 'shop' && st.req.kind !== 'upgrade');
-    const open = once.filter((st) => !st.done && !st.locks.length);
-    const locked = once.filter((st) => !st.done && st.locks.length);
-    const done = once.filter((st) => st.done);
-    const repeatCards = () => [...repeat.filter((st) => !st.locks.length), ...repeat.filter((st) => st.locks.length)].map((st) => this.shopCard(st));
-    const onceCards = (emptyText) => [
-      open.length ? open.map((st) => this.offerCard(st)) : (emptyText ? h('p', { class: 'sub' }, emptyText) : null),
+  /** Today's orders and the commissions: requests for things you grow, paying coins (and opening Store items). */
+  oldLogSections() {
+    const g = this.game, b = g.oldLogBoard(g.now());
+    const open = b.commissions.filter((st) => !st.done && !st.locks.length);
+    const locked = b.commissions.filter((st) => !st.done && st.locks.length);
+    const done = b.commissions.filter((st) => st.done);
+    return [
+      h('div', { class: 'section' }, "Today's orders"),
+      b.orders.length ? b.orders.map((st) => this.offerCard(st, st.done ? 'Done' : 'Send')) : h('p', { class: 'sub' }, 'No orders yet. Neighbours order things you have grown before; new orders come each day.'),
+      h('div', { class: 'section' }, 'Commissions'),
+      open.length ? open.map((st) => this.offerCard(st, 'Deliver')) : h('p', { class: 'sub' }, 'No open commissions right now.'),
       locked.length ? [h('div', { class: 'section' }, 'Coming later'), ...locked.map((st) => this.offerCard(st))] : null,
-      done.length ? [h('div', { class: 'section' }, `${this.storeTab === 'decor' ? 'Owned' : 'Done'} (${done.length})`), h('p', { class: 'sub' }, done.map((st) => st.req.name).join(' · '))] : null,
+      done.length ? [h('div', { class: 'section' }, `Done (${done.length})`), h('p', { class: 'sub' }, done.map((st) => st.req.name).join(' · '))] : null,
     ];
-    let body;
-    if (this.storeTab === 'decor') {
-      const compostOn = (this.content.tuning.offerings || {}).compostEnabled !== false;
-      const heap = compostOn ? (this.content.cosmetics || []).filter((c) => c.compost != null) : [];
-      body = [
-        h('p', { class: 'sub' }, 'Things to set out in your forest. Each one is made once; find it in your Bag under Decor.'),
-        compostOn ? h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`)) : null,
-        ...onceCards('Nothing to make right now. More opens as your Field Guide grows.'),
-        heap.length ? [h('div', { class: 'section' }, 'Compost heap'), h('p', { class: 'sub' }, this.story('messages.compostIntro')),
-          ...heap.map((c) => h('div', { class: 'list-row' },
-            h('div', { class: 'thumb' }, this.sprites.element(c.sprite, null, 3)),
-            h('div', { class: 'grow' }, h('b', {}, c.name), c.text ? h('div', { class: 'sub' }, c.text) : null),
-            h('button', { class: 'btn small ' + (g.state.compost >= c.compost ? 'green' : 'grey'), disabled: g.state.compost < c.compost, onclick: () => this.app.buyDecor(c.id) }, `${c.compost} compost`)))] : null,
-      ];
-    } else if (this.storeTab === 'trades') {
-      body = [
-        h('p', { class: 'sub' }, 'Trade your finds for relics, school seeds and other things to use. Most can be bought again whenever you like; relics from requests come once.'),
-        ...repeatCards(), ...onceCards(null),
-        !mine.length ? h('p', { class: 'sub' }, 'Nothing to trade for yet.') : null,
-      ];
-    } else if (this.storeTab === 'eggs') {
-      body = [
-        h('p', { class: 'sub' }, 'Eggs to nest and hatch. The plain ones can be bought again; the special ones only once.'),
-        ...repeatCards(),
-        once.length ? [h('div', { class: 'section' }, 'Special eggs'), ...onceCards('No special eggs right now. More opens as your Field Guide grows.')] : null,
-        !mine.length ? h('p', { class: 'sub' }, 'No eggs for trade yet.') : null,
-      ];
-    } else {
-      const lines = this.upgradeSection(mine);
-      body = [
-        h('p', { class: 'sub' }, 'Lasting improvements: each tier is bought once.'),
-        ...lines.slice(1),
-        once.length ? [h('div', { class: 'section' }, 'Unlocks'), ...onceCards(null)] : null,
-        !mine.length ? h('p', { class: 'sub' }, 'No upgrades yet.') : null,
-      ];
-    }
+  }
+
+  /** Store tabs: [id, label, body()]. */
+  storeTabs() {
+    const g = this.game, now = g.now(), a = this.app;
+    const board = g.requestBoard(now, ['shop', 'upgrade']);
+    const decor = board.filter((st) => st.req.reward.type === 'cosmetic');
+    const grow = board.filter((st) => st.req.reward.type === 'unlock' && st.req.reward.id === 'expansion');
+    const sellable = Object.entries(g.state.inventory).filter(([id, n]) => n > 0 && g.sellPrice(id)).map(([id, n]) => ({ def: this.content.items[id], n, price: g.sellPrice(id) }));
+    return [
+      ['seeds', 'Seeds', () => {
+        const rows = g.storePackets();
+        return [h('p', { class: 'sub' }, "Every packet is a surprise: you won't know what it is until it buds. Better seeds have better odds of something rare, but nothing is certain."),
+          ...SCHOOLS.map((school) => h('div', { class: 'list-row seed-row' },
+            h('div', { class: 'thumb' }, this.sprites.element(`packet.${school}.common`, null, 3)),
+            h('div', { class: 'grow' }, h('b', { style: `color:${SCHOOL_COLORS[school]}` }, `${schoolName(school)} seeds`),
+              h('div', { class: 'seed-tiers' }, rows.filter((x) => x.school === school).map((x) => x.locks.length
+                ? h('button', { class: 'btn small grey', disabled: true, title: `Opens with ${this.lockText(x.locks)}` }, ic('lock', 1), ` ${cap(x.tier)}`)
+                : h('button', { class: 'btn small ' + (g.state.coins >= x.price ? 'green' : 'grey'), disabled: g.state.coins < x.price, onclick: () => a.buyPacket(x.id) },
+                  this.sprites.element(`packet.${school}.${x.tier}`, null, 1), ` ${cap(x.tier)} `, ic('coin', 1), ` ${x.price}`))))))];
+      }],
+      ['soil', 'Soil', () => [h('p', { class: 'sub' }, "Soil that changes a tile for good is hard to come by: the Store has a little each day. Room to grow sometimes uncovers some too."),
+        ...g.soilStock(now).map((x) => { const am = this.content.items[x.id];
+          return x.soldOut ? h('div', { class: 'list-row locked' }, h('div', { class: 'thumb' }, this.sprites.element(am.sprite, null, 3)), h('div', { class: 'grow' }, h('b', {}, am.name), h('div', { class: 'sub' }, 'Sold out until tomorrow.')))
+            : this.buyRow(am.sprite, am.name, h('div', { class: 'sub' }, am.text), x.price, () => a.buyAmendment(x.id)); }),
+        h('p', { class: 'sub' }, 'New soil comes in every morning.')]],
+      ['decor', 'Decor', () => [h('p', { class: 'sub' }, 'Things to set out in your garden. Find them in your Bag under Decor.'),
+        ...decor.map((st) => { const d = g.decorDef(st.req.reward.id) || {}; return this.buyRow(d.sprite || 'ui.icon.board', d.name || st.req.name, h('div', { class: 'sub' }, d.text || st.req.text || ''), st.coins, () => a.deliverRequest(st.req.id), st.locks); })]],
+      ['sell', 'Sell', () => [h('p', { class: 'sub' }, 'The Store buys what you grow and find.'),
+        sellable.length ? h('div', { class: 'row end' }, h('button', { class: 'btn green small', onclick: () => a.sellAll() }, `Sell everything (${sellable.reduce((t, x) => t + x.n * x.price, 0)} coins)`)) : h('p', { class: 'sub' }, 'Nothing to sell yet. Harvest your plants, then come back.'),
+        ...sellable.map(({ def, n, price }) => h('div', { class: 'list-row' },
+          h('div', { class: 'thumb' }, this.sprites.element(def.sprite, def.variant || null, 3)),
+          h('div', { class: 'grow' }, h('b', {}, def.name), h('div', { class: 'sub' }, [ic('coin', 1), ` ${price} each`])),
+          h('b', {}, `×${n}`),
+          h('button', { class: 'btn small', onclick: () => a.sellItem(def.id, 1) }, 'Sell 1'),
+          n > 1 ? h('button', { class: 'btn small', onclick: () => a.sellItem(def.id, n) }, `All ${n}`) : null))]],
+      ['grow', 'Room to grow', () => {
+        const next = grow.find((st) => !st.done);
+        return [h('p', { class: 'sub' }, `Choose a side: its trees step back ${(this.content.tuning.expansion || {}).sideTiles || 3} rows, and the new ground has something wild on it.`),
+          next ? this.growCard(next) : h('p', { class: 'sub' }, 'You have cleared all the room there is.')];
+      }],
+    ];
+  }
+
+  storeBody() {
+    const tabs = this.storeTabs();
+    if (!tabs.some(([id]) => id === this.storeTab)) this.storeTab = tabs[0][0];
+    const [, , body] = tabs.find(([id]) => id === this.storeTab);
     return [
       h('div', { class: 'tabs store-tabs' }, tabs.map(([id, label]) => h('button', {
-        class: 'tab' + (id === this.storeTab ? ' on' : ''), onclick: () => { this.storeTab = id; this.renderSheet(); },
-      }, label, ready[id] ? h('span', { class: 'tab-count' }, ready[id]) : null))),
-      ...body,
+        class: 'tab' + (id === this.storeTab ? ' on' : ''), onclick: () => { this.storeTab = id; this.renderSheet(); } }, label))),
+      ...this.storeHeader(), ...body(),
     ];
   }
-
-  /** Today's traders (requests of kind "visitor"): wanderers asking for items. New ones each day; can be swapped for compost. */
-  visitorSection() {
-    const g = this.game, now = g.now(), a = this.app;
-    const v = g.visitorsToday(now);
-    if (!v.offers.length) return [];
-    const cfg = this.content.tuning.traders || {};
-    const left = (cfg.maxRerolls ?? 3) - v.rerolls;
-    const cost = cfg.rerollCost ?? 0;
-    return [h('div', { class: 'section' }, 'Traders today'), h('p', { class: 'sub' }, 'Traders stop by the log. New traders come each day.'),
-      ...v.offers.map((o) => {
-        const req = g.requestDef(o.requestID);
-        if (!req) return null;
-        const st = g.requestStatus(req, now);
-        const w = g.creaturesOn ? this.content.creatures[o.wandererID] : null;   // no creature art while creatures are off
-        const art = w ? this.app.artForType(w, false) : null;
-        return h('div', { class: 'card offer visitor' + (st.ready ? ' ready' : '') + (st.done ? ' locked' : '') },
-          h('div', { class: 'row gap' }, art ? h('div', { class: 'thumb small' }, this.sprites.element(art.sprite, art.variant, 2, '', true)) : null,
-            h('div', { class: 'grow' }, h('b', {}, req.name), h('div', { class: 'sub' }, `${w ? `${/^[aeiou]/i.test(w.name) ? 'An' : 'A'} ${w.name}` : 'A trader'} stops by. ${req.text || ''}`))),
-          h('div', { class: 'sub reward row gap' }, 'Pays: ', this.rewardText(req.reward)),
-          st.done ? h('p', { class: 'sub' }, 'Traded. Thank you!') : [
-            ...st.items.map((x) => this.offerItemRow(x)),
-            h('div', { class: 'row end gap' },
-              (this.content.tuning.offerings || {}).compostEnabled === false ? null : h('button', { class: 'btn grey small', disabled: left <= 0 || g.state.compost < cost, title: `${left} left today`, onclick: () => a.rerollVisitor(req.id) }, `Someone else (${cost} compost)`),
-              h('button', { class: 'btn ' + (st.ready ? 'green' : 'grey'), disabled: !st.ready, onclick: () => a.deliverRequest(req.id) }, 'Trade'))]);
-      })];
-  }
+  storeHeader() { return [h('div', { class: 'row space coins-row' }, h('b', {}, ic('coin', 2), ` ${this.game.state.coins} coins`))]; }
 
   /** A placed decoration: move it, recolour it, or put it back in the Bag. */
   decorBody(placedID) {
@@ -733,617 +496,175 @@ export class UI {
     if (!d) return ['Decoration', h('p', { class: 'sub' }, 'Gone.')];
     const def = g.decorDef(d.decorID) || { name: d.decorID, sprite: 'ui.icon.board' };
     const cols = def.colors || [];
-    const cost = (this.content.tuning.offerings || {}).compostEnabled === false ? 0 : ((this.content.tuning.offerings || {}).recolorCost ?? 0);
     return [def.name, [
       h('div', { class: 'hero' }, this.sprites.element(def.sprite, decorVariant(def, d.color), 6)),
       def.text ? h('p', { class: 'sub center' }, def.text) : null,
+      ...this.decorExtra(def, d),
       cols.length > 1 ? h('p', { class: 'sub center' }, `Colour: ${cols[d.color || 0].name}`) : null,
       h('div', { class: 'row gap wrap center' },
         h('button', { class: 'btn green', onclick: () => a.beginDecorMove(d.id) }, 'Move'),
-        cols.length > 1 ? h('button', { class: 'btn', disabled: g.state.compost < cost, onclick: () => a.recolorDecor(d.id) }, cost ? `Recolour (${cost} compost)` : 'Recolour') : null,
+        cols.length > 1 ? h('button', { class: 'btn', onclick: () => a.recolorDecor(d.id) }, 'Recolour') : null,
         h('button', { class: 'btn grey', onclick: () => a.removeDecor(d.id) }, 'Put away')),
     ]];
   }
-
-  /** Silhouettes (names once found) of what an egg could hatch into on a tile, with rough odds. */
-  hatchOdds(eggID, tile, startedAt = null) {
-    const g = this.game, now = g.now();
-    const list = g.hatchPreview(eggID, tile, now, startedAt ?? now);
-    const pct = (p) => (p >= 0.995 ? '100%' : p < 0.01 ? '<1%' : `${Math.round(p * 100)}%`);
-    return h('div', { class: 'hatch-odds' }, list.slice(0, 8).map((x) => {
-      const known = g.discovered.has('creature:' + x.def.id);
-      const art = this.app.artForType(x.def, false);
-      return h('div', { class: 'odds-cell', title: known ? x.def.name : 'Not met yet' },
-        this.sprites.element(art.sprite, known ? art.variant : { silhouette: [40, 52, 36] }, 2),
-        h('span', { class: 'sub' }, known ? x.def.name : '???'), h('b', {}, pct(x.p)));
-    }), list.length > 8 ? h('span', { class: 'sub' }, `+${list.length - 8} more`) : null);
+  /** What a decor piece does, in words, and (for a raised bed) its planting buttons. */
+  decorExtra(def, d) {
+    const g = this.game, k = g.decorKind(def), out = [];
+    const does = def.kind === 'ornament' ? `${schoolName(def.school)} plants growing around it grow faster.`
+      : k.holdsPlant ? 'Plant something in it: it gives a little more at harvest.'
+        : k.glow ? 'It glows softly at dusk and through the night.' : k.ground ? 'A path to walk between the beds.' : null;
+    if (does) out.push(h('p', { class: 'sub center' }, does));
+    if (k.holdsPlant && !g.plantAt(d.tile)) out.push(this.tileBody(d.tile));
+    return out;
   }
 
-  /** Confirm card for burying a relic: its inscription, and that it stays for good. */
-  relicConfirmCard(itemID, tile) {
-    const def = this.content.items[itemID] || {};
-    return h('div', { class: 'card relic-card' },
-      h('div', { class: 'row gap' }, h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)), h('b', {}, def.name || 'Relic')),
-      def.inscription ? h('p', { class: 'inscription' }, def.inscription) : null,
-      h('p', { class: 'sub' }, 'It stays in the ground until you dig it up.'),
-      h('div', { class: 'row end gap' }, h('button', { class: 'btn green', onclick: () => this.app.buryRelicHere() }, 'Bury it here')));
-  }
+  // -------------------------------------------------------------- Field Guide
 
-  /** A buried relic: what it is, its school and inscription. */
-  relicBody(id) {
-    const g = this.game, now = g.now();
-    const r = (g.state.relics || []).find((x) => x.id === id);
-    if (!r) return ['Relic', h('p', { class: 'sub' }, 'Nothing here.')];
-    const def = this.content.items[r.relicID] || {};
-    const days = Math.floor((now - r.buriedAt) / 86400000);
-    return [def.name || 'Relic', [
-      h('div', { class: 'hero' }, this.sprites.element(def.sprite || 'relic.unknown', null, 6, '', true)),
-      h('p', { class: 'center' }, h('b', {}, `${cap(r.school)} school`), ` · ${rarityName(r.tier)}`),
-      def.inscription ? h('p', { class: 'inscription center' }, def.inscription) : null,
-      h('p', { class: 'sub center' }, days < 1 ? 'Buried today. Its ground is still spreading.' : `Buried ${days} day${days === 1 ? '' : 's'} ago.`),
-    ]];
-  }
-
-  nestPreviewCard(eggID, tile, confirm) {
-    const g = this.game, now = g.now();
-    const stats = g.tileStats(tile, now);
-    const terrains = this.terrainsOnTile(tile, stats);
-    return h('div', { class: 'card' },
-      h('div', { class: 'row space' }, h('b', {}, `Nest here: ${terrains.length ? terrains.map((t) => t.name).join(' · ') : 'blank ground'}`)),
-      h('p', { class: 'sub' }, 'If it hatched on this ground now:'),
-      this.hatchOdds(eggID, tile),
-      confirm ? h('div', { class: 'row end gap' }, h('button', { class: 'btn green', onclick: () => this.app.nestHere() }, 'Nest it here')) : null);
-  }
-
-  nestBody(nestID) {
-    const g = this.game, now = g.now(), a = this.app;
-    const n = g.state.nests.find((x) => x.id === nestID);
-    if (!n) return ['Nest', h('p', { class: 'sub' }, 'Empty.')];
-    const egg = this.content.items[n.eggID];
-    const p = g.nestProgress(n, now);
-    const shard = Object.values(this.content.items).find((i) => i.use && i.use.type === 'nextGlimmer');
-    const hasShard = shard && g.state.inventory[shard.id] > 0;
-    return [egg ? egg.name : 'Nest', [
-      h('div', { class: 'hero' }, this.sprites.element(egg ? egg.sprite : 'egg.nest', null, 6, '', true)),
-      h('div', { class: 'progress' }, h('span', { style: `width:${p * 100}%` })),
-      h('p', { class: 'sub center' }, p >= 1 ? 'Ready to hatch!' : `Hatches in about ${duration((1 - p) * n.hatchSeconds)}.`),
-      n.glimmer ? h('p', { class: 'sub center glimmer' }, ic('glimmer', 1), ' A Moonfall Shard rests in this nest: it will hatch a Glimmer.') : null,
-      h('div', { class: 'section' }, p >= 1 ? 'It could hatch into' : 'If it hatched now, it could be'),
-      h('p', { class: 'sub' }, 'The species comes from this ground when it hatches, so the creatures around it still matter.'),
-      this.hatchOdds(n.eggID, n.tile, n.startedAt),
-      h('div', { class: 'row gap wrap center' },
-        p >= 1 ? h('button', { class: 'btn green', onclick: () => a.hatchNest(n.id) }, 'Hatch') : null,
-        !n.glimmer && hasShard ? h('button', { class: 'btn', onclick: () => a.shardNest(n.id) }, ic('glimmer', 1), ' Use a Moonfall Shard') : null),
-    ]];
-  }
-
-  guideEntries(tab) {
-    const content = this.content;
-    if (tab === TERRAIN_TAB) {
-      // Only the terrains that can appear: mixed ground (combos, named pairs and triples) is off for now.
-      const g = this.game;
-      return (content.terrain || []).filter((t) => (t.kind !== 'terrain' || g.terrainsOn) && (t.kind !== 'combo' || g.combosOn))
-        .map((t) => ({ key: 'terrain:' + t.id, name: t.name, terrain: t }));
-    }
-    if (tab === VISITOR_TAB) {
-      return (content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, variant: null, visitor: v }));
-    }
-    if (tab === LANDMARK_TAB) {
-      return (content.landmarks || []).filter((l) => l.inGuide !== false).map((l) => ({
-        key: 'landmark:' + l.id.replace(/^landmark\./, ''), name: l.name, sprite: l.sprite, variant: null,
-        text: content.story?.guide?.landmarks?.[l.id] || null,
-        howFound: l.earned ? this.landmarkHowFound(l) : null,
-        special: l.purpose || null,
-        // Earned landmarks can be read as a silhouette with how they form, before they're found.
-        teaser: l.earned ? this.landmarkHowFound(l) : l.discovery ? 'Somewhere past the first trees, something old is waiting for the forest to grow.' : null,
-      }));
-    }
-    const fam = FAMILY_TABS.find(([id]) => id === tab);
-    if (fam) {
-      return content.creatureList.filter((def) => def.family === tab).flatMap((def) => [false, true].map((glimmer) => {
-        const art = this.app.artForType(def, glimmer);
-        return {
-          key: `creature:${def.id}${glimmer ? ':glimmer' : ''}`, name: glimmer ? `Glimmer ${def.name}` : def.name, ...art,
-          rarity: glimmer ? null : def.rarity, glimmer, howFound: def.howFound, special: def.special,
-          creatureStats: this.speciesStats(def, glimmer),
-          text: def.requires && Object.keys(def.requires).length
-            ? ['Needs a tile with ', this.joinNodes(Object.entries(def.requires).map(([k, v]) => this.requirementText(k, v.min)), ', ')] : null,
-        };
-      }));
-    }
-    return content.itemList.filter((i) => i.inGuide !== false && i.category === tab && !this.game.itemOff(i))
+  /** Field Guide tabs: [id, label, entries()]. Later systems add theirs. */
+  guideTabs() {
+    const items = (cat) => this.content.itemList.filter((i) => i.inGuide !== false && i.category === cat)
       .map((i, idx) => ({ i, idx })).sort((a, b) => rarityIndex(a.i.rarity) - rarityIndex(b.i.rarity) || a.idx - b.idx)
-      .map(({ i }) => ({
-        key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: null, rarity: i.rarity, text: i.guideText,
-        howFound: i.howFound || (i.spawn && i.spawn.seedOnly ? ['Grows from Mystery Seeds', (i.spawn.requires && Object.keys(i.spawn.requires).length
-          ? [', best where ', this.joinNodes(Object.entries(i.spawn.requires).map(([k, v]) => this.requirementText(k, v.min)), ', ')] : ' anywhere.')] : null) || (i.spawn ? ['Grows wild', (i.spawn.requires && Object.keys(i.spawn.requires).length
-          ? [' where ', this.joinNodes(Object.entries(i.spawn.requires).map(([k, v]) => this.requirementText(k, v.min)), ', ')] : ' anywhere.')] : null),
-        special: i.use ? this.useText(i.use) : null,
-        teaser: content.story?.guide?.teasers?.[i.id] || null,
-      }));
+      .map(({ i }) => ({ key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: i.variant || null, rarity: i.rarity, text: i.guideText, school: i.school }));
+    const g = this.game;
+    const garden = () => this.content.plantList.map((p) => {
+      const item = this.content.items[p.item], c = g.plantCfg(p.id);
+      const from = p.source === 'gift' ? 'Only a friend of the forest can bring its seeds.' : `It comes up from ${schoolName(p.school)} seeds${p.tier === 'common' ? '' : `, ${p.tier === 'rare' ? 'rarely' : 'now and then'}`}.`;
+      return { key: 'plant:' + p.id, name: p.name, sprite: item.sprite, school: p.school, text: item.guideText, rarity: p.tier,
+        hint: `${schoolName(p.school)} soil. ${from}`,
+        extra: [h('p', { class: 'sub center' }, `${p.kind === 'fungus' ? 'A fungus' : p.kind === 'leafy' ? 'A leafy plant' : 'A flower'}${p.perennial ? ' that grows back after harvest' : ''}. ${this.growHoursText(p.id)}. Sells for ${c.sell} coins. ${from}`),
+          ...this.plantGuideExtra(p)] };
+    });
+    return [
+      ['garden', 'Garden', garden],
+      ['varieties', 'Colours', () => Object.values(this.content.varieties).map((v) => {
+        const it = this.content.items[v.produce];
+        return { key: 'item:' + v.produce, name: v.name, sprite: it.sprite, variant: v.variant, school: it.school, text: it.guideText,
+          hint: `A rare colour of ${g.plantDef(v.plantID)?.name}. Some say it comes from good neighbours.` };
+      })],
+      ['mushroom', 'Mushrooms', () => items('mushroom')],
+      ['plant', 'Plants', () => items('plant')],
+      ['visitors', 'Visitors', () => (this.content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, visitor: v }))],
+    ];
   }
 
   guideBody() {
-    const content = this.content;
-    const order = ['mushroom', 'plant', 'geode', 'gem', 'material'];
-    const cats = [...new Set(content.itemList.filter((i) => i.inGuide !== false && !this.game.itemOff(i)).map((i) => i.category))]
-      .sort((a, b) => ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
-    const famTabs = this.game.creaturesOn ? FAMILY_TABS.filter(([id]) => content.creatureList.some((c) => c.family === id)).map(([id]) => id) : [];
-    if (this.guideTab === 'creatures') this.guideTab = famTabs[0];
-    const tabs = [LANDMARK_TAB, TERRAIN_TAB, ...((content.visitorList || []).length ? [VISITOR_TAB] : []), ...famTabs, ...cats];
-    const all = tabs.flatMap((t) => this.guideEntries(t));
+    const tabs = this.guideTabs();
+    if (!tabs.some(([id]) => id === this.guideTab)) this.guideTab = tabs[0][0];
+    const all = tabs.flatMap(([, , entries]) => entries());
     const found = all.filter((e) => this.game.discovered.has(e.key)).length;
-    const sil = { silhouette: [78, 84, 92] };
+    const entries = tabs.find(([id]) => id === this.guideTab)[2]();
     return [`Field Guide · ${found}/${all.length}`, [
-      h('div', { class: 'tabs' }, tabs.map((t) => h('button', {
-        class: 'tab' + (t === this.guideTab ? ' on' : ''), onclick: () => { this.guideTab = t; this.renderSheet(); },
-      }, t === LANDMARK_TAB ? 'Landmarks' : t === TERRAIN_TAB ? 'Terrain' : t === VISITOR_TAB ? 'Visitors' : (FAMILY_TABS.find(([id]) => id === t) || [null, catTitle(t)])[1]))),
-      this.guideTab === TERRAIN_TAB ? this.terrainGrid() : this.guideTab === VISITOR_TAB ? this.visitorGrid() : h('div', { class: 'guide-grid' }, this.guideEntries(this.guideTab).map((e) => {
+      h('div', { class: 'tabs' }, tabs.map(([id, label]) => h('button', { class: 'tab' + (id === this.guideTab ? ' on' : ''), onclick: () => { this.guideTab = id; this.renderSheet(); } }, label))),
+      ...this.guideHeader(this.guideTab, entries),
+      h('div', { class: 'guide-grid' }, entries.map((e) => {
         const known = this.game.discovered.has(e.key);
-        // Undiscovered entries with a teaser (the Heartwood Sapling) can still be opened as a silhouette.
-        const teaser = !known && e.teaser;
         return h('button', {
-          class: 'guide-cell' + (known ? '' : ' unknown') + (e.glimmer ? ' glim' : '') + (teaser ? ' teaser' : ''),
-          onclick: () => { if (known) this.open('entry', e); else if (teaser) this.open('entry', { name: '???', sprite: e.sprite, variant: sil, text: e.teaser }); },
-        },
-          this.sprites.element(e.sprite, known ? e.variant : sil, 4),
-          h('span', {}, known ? e.name : '???', teaser ? ic('sparkle', 1) : null),
-          known && e.creatureStats ? this.guideStats(e.creatureStats) : null,
-          e.rarity ? h('i', { class: 'dot', style: `background:${RARITY_COLORS[e.rarity]}` }) : e.glimmer ? ic('glimmer', 1) : null);
+          class: 'guide-cell' + (known ? '' : ' unknown') + (e.hint && !known ? ' teaser' : ''),
+          onclick: () => { if (e.visitor) this.open('visitor', e.visitor.id); else if (known) this.open('entry', e); else if (e.hint) this.open('entry', { name: '???', sprite: e.sprite, variant: SIL, text: e.hint }); },
+        }, this.sprites.element(e.sprite, known ? e.variant : SIL, 4),
+          h('span', {}, known ? e.name : '???', !known && e.hint ? ic('sparkle', 1) : null),
+          e.rarity ? h('i', { class: 'dot', style: `background:${RARITY_COLORS[e.rarity]}` }) : null);
       })),
     ]];
   }
-
-  /** A species' best bonuses and radius (Glimmers: +50% and a wider radius), for the Field Guide. */
-  speciesStats(def, glimmer) {
-    const R = this.content.tuning.creatureRoll || {};
-    const mult = glimmer ? (R.glimmerBonusMult ?? 1.5) : 1;
-    const bonuses = Object.entries(def.bonuses || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, v * mult]);
-    return { bonuses, radius: (def.radius || 0) + (glimmer ? (R.glimmerRadiusBonus ?? 1) : 0) };
+  /** The Garden tab opens with each school's collection: plants grown of its set, and its reward. */
+  guideHeader(tab) {
+    if (tab !== 'garden') return [];
+    const g = this.game;
+    return [h('div', { class: 'collections' }, SCHOOLS.map((school) => {
+      const st = g.collectionStatus(school);
+      const relic = this.content.relicList.find((r) => r.school === school);
+      return h('div', { class: 'collection' + (st.claimed ? ' done' : '') },
+        relic ? this.sprites.element(relic.sprite, st.claimed ? null : SIL, 2) : null,
+        h('span', { style: `color:${SCHOOL_COLORS[school]}` }, schoolName(school)),
+        h('span', { class: 'progress' }, h('span', { style: `width:${Math.round(st.have / Math.max(1, st.total) * 100)}%` })),
+        h('b', {}, `${st.have}/${st.total}`));
+    })), h('p', { class: 'sub' }, "Grow and harvest every plant of a school to complete its set. Something old is waiting for whoever does.")];
+  }
+  /** More on a garden plant's Field Guide page: its companions (unknown ones stay hidden until found). */
+  plantGuideExtra(p) {
+    const g = this.game;
+    const rules = (p.companions || []).map((rule, i) => {
+      const known = g.discovered.has(g.companionKey(p.id, i));
+      const partner = g.plantDef(rule.with);
+      return h('li', {}, known ? `Beside the ${partner ? partner.name : rule.with}: ${rule.effect === 'speed' ? 'grows faster' : 'gives more'}.` : 'A neighbour it likes: not found yet.');
+    });
+    return rules.length ? [h('div', { class: 'section' }, 'Good neighbours'), h('ul', { class: 'clues' }, rules)] : [];
   }
 
-  /** Compact stats for a Guide cell: a meter per stat, then the radius. */
-  guideStats(st) {
-    return h('div', { class: 'guide-stats' },
-      st.bonuses.map(([k, v]) => h('div', { class: 'gs-row' }, h('b', { style: `color:${STAT_COLORS[k] || '#fff'}` }, cap(k)), this.miniMeter(k, v))),
-      h('div', { class: 'gs-row' }, h('b', {}, 'Radius'), h('span', {}, `${st.radius}`)));
+  entryBody(e) {
+    return [
+      h('div', { class: 'hero' }, this.sprites.element(e.sprite, e.variant, 9)),
+      e.rarity ? h('p', { class: 'rarity', style: `color:${RARITY_COLORS[e.rarity]}` }, rarityName(e.rarity).toUpperCase()) : null,
+      e.school ? h('p', { class: 'sub center', style: `color:${SCHOOL_COLORS[e.school]}` }, `${schoolName(e.school)}`) : null,
+      e.text ? h('p', { class: 'sub center' }, e.text) : null,
+      ...(e.extra || []),
+    ];
   }
 
-  /** Field Guide → Visitors: befriended ones in full; the rest as silhouettes, with the clues found so far. */
-  visitorGrid() {
-    const g = this.game, sil = { silhouette: [78, 84, 92] };
-    return h('div', { class: 'guide-grid' }, this.guideEntries(VISITOR_TAB).map((e) => {
-      const st = g.guest(e.visitor.id), known = !!st.befriended;
-      return h('button', { class: 'guide-cell' + (known ? '' : ' unknown') + (st.known.length && !known ? ' teaser' : ''), onclick: () => this.open('visitor', e.visitor.id) },
-        this.sprites.element(e.sprite, known ? null : sil, 4),
-        h('span', {}, known ? e.name : '???', !known && st.known.length ? ic('sparkle', 1) : null));
-    }));
-  }
-
-  /** A visitor's page: its art and name once befriended, and every clue the player has found. No numbers. */
+  /** A visitor's page: its art and name once befriended, and every clue found so far. No numbers. */
   visitorBody(id) {
-    const g = this.game, def = g.guestDef(id), st = g.guest(id);
+    const def = (this.content.visitorList || []).find((v) => v.id === id);
     if (!def) return ['Visitor', h('p', { class: 'sub' }, 'Unknown.')];
     const S = this.content.story?.visitors || {};
-    const known = !!st.befriended;
-    const clues = g.guestPrefKeys(def).filter((k) => st.known.includes(k)).map((k) => h('li', {}, def.clues[k] || ''));
+    const known = this.game.discovered.has('visitor:' + id.replace(/^visitor\./, ''));
+    const clues = this.visitorClues(def);
     return [known ? def.name : '???', [
       h('div', { class: 'hero' }, this.sprites.element(def.sprite, known ? null : { silhouette: [40, 44, 52] }, 6, '', true)),
       h('p', { class: 'center' }, h('b', {}, known ? def.name : (S.unknownName || 'Someone small'))),
       known && def.text ? h('p', { class: 'sub center' }, def.text) : null,
       h('div', { class: 'section' }, 'Signs'),
-      clues.length ? h('ul', { class: 'clues' }, clues) : h('p', { class: 'sub' }, S.noClues || 'No signs of it yet.'),
+      clues.length ? h('ul', { class: 'clues' }, clues.map((c) => h('li', {}, c))) : h('p', { class: 'sub' }, S.noClues || 'No signs of it yet.'),
     ]];
   }
+  visitorClues(def) { const g = this.game.guest(def.id); return this.game.guestPrefKeys(def).filter((k) => g.known.includes(k)).map((k) => def.clues[k]).filter(Boolean); }
 
-  /** The gentle moment of befriending a visitor. */
-  befriendCard(def, again) {
+  /** The gentle moment of befriending a visitor, and the seeds it leaves. */
+  befriendCard(r) {
     const S = this.content.story?.visitors || {};
-    const ov = document.getElementById('overlay');
-    const done = () => { ov.classList.remove('show'); ov.replaceChildren(); this.nextCard(); };
-    ov.replaceChildren(h('div', { class: 'reveal-card pop' },
-      h('div', { class: 'rays-wrap' }, this.burst('#ffe8a0'), this.sprites.element(def.sprite, null, 7, 'grow-in', true)),
-      h('h2', {}, def.name), h('p', { class: 'sub' }, again ? (S.befriendAgain || 'It knows you now.') : (S.befriend || '')),
-      again ? null : h('p', { class: 'sub' }, def.text || ''),
+    const gift = (r.results || []).map((x) => { const d = this.content.items[x.item]; return d ? h('div', { class: 'reward-item' }, this.sprites.element(d.sprite, d.variant || null, 2), ` ${x.count} × ${d.name}`) : null; });
+    this.showCard((done) => h('div', { class: 'reveal-card pop' },
+      h('div', { class: 'rays-wrap' }, this.burst('#ffe8a0'), this.sprites.element(r.def.sprite, null, 7, 'grow-in', true)),
+      h('h2', {}, r.def.name), h('p', { class: 'sub' }, r.again ? (S.befriendAgain || 'It knows you now.') : (S.befriend || '')),
+      r.again ? null : h('p', { class: 'sub' }, r.def.text || ''),
+      gift.length ? [h('p', { class: 'sub' }, 'It leaves you a gift:'), h('div', { class: 'gifts' }, gift)] : null,
       h('button', { class: 'btn green', onclick: done }, 'Lovely')));
-    ov.onclick = (e) => { if (e.target === ov) done(); };
-    ov.classList.add('show');
   }
 
-  entryBody(e) {
-    const st = e.creatureStats;
-    const R = this.content.tuning.creatureRoll || {};
-    return [
-      h('div', { class: 'hero' }, this.sprites.element(e.sprite, e.variant, 9)),
-      e.rarity ? h('p', { class: 'rarity', style: `color:${RARITY_COLORS[e.rarity]}` }, rarityName(e.rarity).toUpperCase()) : null,
-      st ? [h('div', { class: 'section' }, 'What it gives the ground'),
-        h('div', { class: 'stat-grid' }, st.bonuses.map(([k, v]) => this.intensityRow(k, v))),
-        h('p', { class: 'sub' }, `Radius ${st.radius} tiles. Each one you find rolls ${Math.round(((R.bonusRange || [0.6])[0]) * 100)}–100% of these bonuses` + (e.glimmer ? '.' : `; Glimmers get +${Math.round(((R.glimmerBonusMult ?? 1.5) - 1) * 100)}% and +${R.glimmerRadiusBonus ?? 1} radius.`))] : null,
-      e.howFound ? h('p', { class: 'sub center' }, e.howFound) : null,
-      e.text ? h('p', { class: 'sub center' }, e.text) : null,
-      e.special ? h('p', { class: 'center' }, ic('sparkle', 1), ' ' + e.special) : null,
-    ];
+  collectionCard(e) {
+    const relic = this.content.relicList.find((r) => r.id === e.relic);
+    this.celebrate(`The ${schoolName(e.school)} set is complete`, h('div', {},
+      relic ? h('p', { class: 'inscription' }, relic.inscription) : null,
+      h('p', { class: 'sub' }, `${relic ? `The ${relic.name} is in your Bag, under Decor. Set it among ${schoolName(e.school)} plants and they grow faster. ` : ''}And ${e.coins} coins.`)),
+      relic ? this.sprites.element(relic.sprite, null, 5, 'grow-in') : null);
   }
 
-  /** How an earned landmark forms: "Forms where Shimmer ▮▮… and Spirit ▮▮… cover a 3×3 patch." */
-  landmarkHowFound(def) {
-    const e = def.earned || {};
-    const n = e.size || 3;
-    return ['Forms where ', this.joinNodes(Object.entries(e.requires || {}).map(([k, v]) => this.requirementText(k, v.min)), ' and '), ` cover a whole ${n}×${n} patch of ground. Once formed, it stays.`];
-  }
-
-  /** A landmark in the forest: what it is, what it does, and when it next gives something. */
-  landmarkBody(id) {
-    const g = this.game, now = g.now();
-    const l = g.state.landmarks.find((x) => x.id === id);
-    const def = g.landmarkDef(id) || { name: 'Landmark' };
-    const lines = [];
-    if (def.purpose) lines.push(h('p', { class: 'center' }, ic('sparkle', 1), ' ' + def.purpose));
-    if (def.aura) lines.push(h('p', { class: 'sub center' }, 'Around it: ', this.joinNodes(Object.entries(def.aura.stats).map(([k, v]) => this.amountText(k, v)), ', '),
-      def.aura.radius ? ` within ${def.aura.radius} tile${def.aura.radius > 1 ? 's' : ''}.` : ' on its tile.'));
-    if (def.effect && def.effect.type === 'produce' && l) {
-      const waiting = g.state.spawns.some((sp) => sp.fromLandmark === l.id);
-      const left = (l.lastProduced || l.formedAt || now) + (def.effect.everyHours || 8) * 3600e3 - now;
-      lines.push(h('p', { class: 'sub center' }, waiting ? 'Something is waiting beside it.' : `Next in about ${duration(Math.max(0, left) / 1000)}.`));
-    }
-    const story = this.content.story?.guide?.landmarks?.[id];
-    return [def.name, [h('div', { class: 'hero' }, this.sprites.element(def.sprite, null, 5, '', true)), story ? h('p', { class: 'sub center' }, story) : null, ...lines]];
-  }
-
-  // -------------------------------------------------------------- terrain (Field Guide)
-
-  terrainDef(id) { return (this.content.terrain || []).find((t) => t.id === id) || null; }
-
-  /** Terrain types on a tile right now: its combos, then its active stats (strongest first). */
-  terrainsOnTile(tile, stats) {
-    const list = this.content.terrain || [];
-    if (!this.game.inClearing(tile)) return list.filter((t) => t.kind === 'treeline');
-    const combos = this.game.combosAt(stats);
-    const ter = this.game.terrainAt(stats);
-    const out = list.filter((t) => (t.kind === 'terrain' && ter && t.terrain === ter.id) || (t.kind === 'combo' && combos.includes(t.combo)));
-    const stat = list.filter((t) => t.kind === 'stat' && (stats[t.stat] || 0) > 0).sort((a, b) => (stats[b.stat] || 0) - (stats[a.stat] || 0));
-    return [...out, ...stat].slice(0, 3);
-  }
-
-  /**
-   * A terrain illustration from the real game sprites: cols x rows tiles of ground, with the
-   * terrain's overlay/decoration at rising intensity stages, or a joined pond for water. Crisp, no
-   * smoothing.
-   */
-  terrainArt(def, cols, rows, scale) {
-    const TS = 16, art = def.art || {};
-    const head = art.deco ? 8 : 0;
-    const c = document.createElement('canvas');
-    c.width = cols * TS; c.height = rows * TS + head;
-    const g = c.getContext('2d');
-    g.imageSmoothingEnabled = false;
-    const frame = (id) => this.sprites.frames(id, null)[0];
-    const n = cols * rows;
-    const stages = n === 1 ? [6] : Array.from({ length: n }, (_, i) => Math.max(1, Math.round(2 + i * 7 / Math.max(1, n - 1))));
-    const pool = cols === 1 ? [[1]] : [[1, 1, 0], [1, 1, 1]];
-    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
-      const ground = (art.ground || ['tile.grass.a', 'tile.grass.b', 'tile.grass.c'])[(x + y * 2) % (art.ground || [1, 2, 3]).length];
-      g.drawImage(frame(ground).canvas, x * TS, y * TS + head);
-    }
-    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
-      const i = y * cols + x, st = stages[i];
-      if (art.water) {
-        const at = (dx, dy) => ((pool[y + dy] || [])[x + dx] ? 1 : 0);
-        if (at(0, 0)) g.drawImage(paintWaterTile(at, x + 40, y + 40, this.content.tuning.visuals.water || {}), x * TS, y * TS + head);
-      }
-      if (art.overlay) g.drawImage(frame(art.overlay.replace('{n}', st).replace('{ab}', (x + y) % 2 ? 'b' : 'a')).canvas, x * TS, y * TS + head);
-      if (art.glow) g.drawImage(frame(art.glow.replace('{ab}', (x + y) % 2 ? 'b' : 'a')).canvas, x * TS, y * TS + head);
-      if (art.deco) {
-        const id = art.deco.replace('{n}', Math.max(st, def.kind === 'treeline' ? 1 : st));
-        const f = frame(id), a = this.sprites.anchor(id);
-        g.drawImage(f.canvas, x * TS + 8 - a.x, y * TS + head + 14 - a.y);
-      }
-    }
-    c.style.width = c.width * scale + 'px';
-    c.style.height = c.height * scale + 'px';
-    c.className = 'px terrain-art';
-    return c;
-  }
-
-  terrainGrid() {
-    const dev = this.app.devMode;
-    return h('div', { class: 'guide-grid' }, this.guideEntries(TERRAIN_TAB).map((e) => {
-      const known = this.game.discovered.has(e.key);
-      const view = known || dev;                     // developer mode can read every entry (not saved as found)
-      const art = this.terrainArt(e.terrain, 1, 1, 4);
-      if (!known) art.style.filter = 'brightness(0.25) saturate(0)';
-      return h('button', { class: 'guide-cell' + (known ? '' : ' unknown'), onclick: () => { if (view) this.open('terrain', e.terrain.id); } },
-        art, h('span', {}, known ? e.name : dev ? `${e.name} (dev)` : '???'));
-    }));
-  }
-
-  /** Category bonus a stat gives (spawns.categoryScaling), at a given raw level, clamped like the game. */
-  categoryMultAt(cat, stat, value) {
-    const cs = this.content.tuning.spawns.categoryScaling || {};
-    const pct = (cs[cat] || {})[stat];
-    if (!pct) return null;
-    return Math.min(cs.maxMultiplier ?? 6, Math.max(cs.minMultiplier ?? 0.25, 1 + (pct / 100) * value));
-  }
-
-  terrainBody(id) {
-    const def = this.terrainDef(id);
-    if (!def) return [h('p', {}, 'Unknown terrain.')];
-    const T = this.content.tuning, g = this.game, now = g.now();
-    const band = (i) => ((T.intensity || {}).bands || [])[i] || { min: 6, label: 'Low' };
-    const lines = { appears: [], spawns: [], other: [] };
-    const known = (it) => g.discovered.has('item:' + it.id);
-    const itemList = (items) => {
-      const names = items.filter(known).map((i) => i.name);
-      const hidden = items.length - names.length;
-      return names.join(', ') + (hidden ? `${names.length ? ', ' : ''}${hidden} not yet found` : '');
-    };
-    const lw = T.spawns.locationWeighting || {}, table = lw.generalByEffectCount || [1, 1.5, 2, 2.5];
-    const general = `Ground with active effects draws spawns of every kind: ×${table[1]} with one effect, ×${table[2]} with two, ×${table[3]} with three or more, and more as intensity rises (up to ×${lw.maxWeight} in all). It's a bonus, not a guarantee.`;
-    const catName = { mushroom: 'Mushrooms', plant: 'Plants', geode: 'Geodes' };
-    if (def.kind === 'base') {
-      lines.appears.push('Every tile until a stat reaches Low intensity.');
-      lines.spawns.push(`Can appear: ${itemList(this.content.spawnableItems.filter((i) => !i.spawn.requires || !Object.keys(i.spawn.requires).length))}.`);
-      lines.spawns.push(g.geodesOn ? 'Mushrooms, plants and geodes are equally likely to be the kind that turns up.' : 'Mushrooms and plants are equally likely to be the kind that turns up.');
-    } else if (def.kind === 'stat') {
-      const k = def.stat;
-      lines.appears.push([this.requirementText(k, band(0).min), ' or more. It grows through every level of the meter.']);
-      const needs = this.content.spawnableItems.filter((i) => i.spawn.requires && i.spawn.requires[k]);
-      if (needs.length) lines.spawns.push(`Wild finds that need ${cap(k)}: ${itemList(needs)}. Each appears once its own need is met (see its Field Guide entry).`);
-      for (const cat of ['mushroom', 'plant', 'geode'].filter((c) => c !== 'geode' || g.geodesOn)) {
-        const lo = this.categoryMultAt(cat, k, band(0).min), mid = this.categoryMultAt(cat, k, band(3).min);
-        if (lo) lines.spawns.push([`${catName[cat]} become likelier to be the kind chosen here: about ×${lo.toFixed(1)} at `, this.miniMeter(k, band(0).min), `, ×${mid.toFixed(1)} at `, this.miniMeter(k, band(3).min), `, up to ×${(T.spawns.categoryScaling || {}).maxMultiplier ?? 6}.`]);
-      }
-      lines.spawns.push(general);
-      const tr = T.terrain || {};
-      if (k === 'shimmer') {
-        if (g.creaturesOn) lines.other.push(`After its creature leaves, Shimmer fades ${Math.round(1 / ((tr.statDecayRate || {}).shimmer || 1))}× more slowly than other stats.`);
-        if (g.geodesOn) lines.other.push('Where Shimmer is the strongest stat, geodes lie exposed among the crystals: tap to collect.');
-      }
-      if (k === 'spirit') {
-        lines.other.push(g.geodesOn ? 'Where Spirit is the strongest stat, geodes are veiled. Things whose main need is Spirit are always veiled: they show as a stirring mound, tap to uncover.'
-          : 'Things whose main need is Spirit are veiled: they show as a stirring mound, tap to uncover.');
-        lines.other.push('Spirit lowers the ground, so mist and water drift here and collect.');
-      }
-      if (k === 'spore') {
-        const mg = (tr.spore || {}).mushroomGrowth || {};
-        lines.spawns.push(['Spore grows mushrooms faster: from ', this.requirementText('spore', mg.minSpore ?? 6), `, each tile gets extra mushroom chances, up to ×${1 + (mg.maxBonus ?? 2)} its usual rate.`]);
-        lines.other.push('Spore slowly drifts to drier neighbours and runs downhill; high Shimmer blocks it.');
-      }
-      if (k === 'glow') {
-        const gc = tr.glowCycle || {};
-        lines.other.push(`Glow counts ×${gc.dayFactor ?? 0.4} by day and ×${gc.nightFactor ?? 1.6} at night toward spawns. On fae-touched (Spirit) ground it counts in full even by day.`);
-      }
-      if (k === 'bloom') {
-        const bc = tr.bloomCycle || {};
-        lines.other.push(`Bloom opens from ${bc.openHour ?? 6}:00, peaks at ${bc.peakHour ?? 12}:00 and closes by ${bc.closeHour ?? 19}:00; its effect on spawns follows the same rhythm.`);
-        lines.other.push('Strong Bloom brings a wider mix of plants, and draws wanderers.');
-      }
-      if (k === 'verdure') {
-        const v = tr.verdure || {};
-        lines.other.push(['From ', this.requirementText('verdure', v.hideThreshold ?? 30), ', things on the surface hide in tall grass until you tap the tile.']);
-        lines.other.push('Seeds grow faster here, and plants picked here drop extra seeds more often.');
-      }
-    } else if (def.kind === 'combo') {
-      const cb = g.combo(def.combo);
-      for (const [k, b] of Object.entries(cb.requires || {})) lines.appears.push([this.requirementText(k, b.min), ' or more']);
-      lines.appears.push('All of these on the same tile.');
-      if (def.combo === 'pool') {
-        lines.spawns.push(`Only things that need Spore can spawn on water: ${itemList(this.content.spawnableItems.filter((i) => i.spawn.requires && i.spawn.requires.spore))}.`);
-        lines.spawns.push(`Water Reed grows only in pools, and is ×${cb.clusterBonus ?? 2.5} likelier beside another reed.`);
-        const lp = cb.lilyPads || {};
-        lines.other.push(`Pools that join into a pond of ${lp.minTiles ?? 6} or more tiles may grow lily pads (more in bigger ponds).`);
-        lines.other.push('Creatures splash as they wade through.');
-      }
-      if (def.combo === 'moss') lines.other.push('Bugs gather over moss: beetles by day, fireflies at night. They are part of the scenery.');
-      if (def.combo === 'meadow') {
-        const pg = cb.plantGrowth || {};
-        lines.spawns.push(`Plants are ×${cb.plantCategoryMult ?? 3} likelier to be the kind chosen here.`);
-        lines.spawns.push(`Each meadow tile also grows extra plants, up to ×${1 + (pg.maxBonus ?? 2.5)} its usual rate.`);
-        lines.other.push(`Mystery Seeds planted here grow ×${cb.flowerGrowthMult ?? 2.5} faster.`);
-      }
-      lines.spawns.push(general);
-    } else if (def.kind === 'terrain') {
-      const td = g.terrainDef(def.terrain) || { requires: {}, home: new Set(), rule: {} };
-      const n = Object.keys(td.requires).length;
-      for (const [k, b] of Object.entries(td.requires)) lines.appears.push([this.requirementText(k, b.min), ' or more']);
-      lines.appears.push(`All of these on the same tile. Where several terrains could form, the one with ${n > 2 ? 'three' : 'more'} stats wins, then the strongest.`);
-      const home = this.content.spawnableItems.filter((i) => td.home.has(i.id));
-      const hm = (T.terrains || {}).homeMult ?? 1;
-      if (home.length) lines.spawns.push(`Home finds, ×${hm} likelier here once their own needs are met: ${itemList(home)}.`);
-      lines.spawns.push(`Rarer finds are favoured most on ground that suits them (rare ×${(T.spawns.terrainAffinity || {}).byRarity?.rare ?? 1} compared with common ×${(T.spawns.terrainAffinity || {}).byRarity?.common ?? 1}).`);
-      const r = td.rule || {};
-      if (r.night) lines.spawns.push(`At night its home finds are ×${r.night} likelier again.`);
-      if (r.day) lines.spawns.push(`By day its home finds are ×${r.day} likelier again.`);
-      if (r.rain) lines.spawns.push(`In the rain its home finds are ×${r.rain} likelier again.`);
-      for (const [c, m] of Object.entries(r.category || {})) lines.spawns.push(`${catName[c] || c} are ×${m} likelier to be the kind chosen here.`);
-      if (r.location) lines.other.push(`Spawns land here ×${r.location} as often as on other ground with the same effects.`);
-      lines.other.push('Counts as one more effect when choosing where spawns land.');
-      lines.spawns.push(general);
-    } else if (def.kind === 'treeline') {
-      lines.appears.push('Everywhere outside your clearing.');
-      lines.spawns.push('Nothing spawns in the treeline, and creature influence stops at its edge.');
-      const e = T.expansion || {};
-      lines.other.push(e.automatic ? `The clearing pushes it back by ${e.ringTiles ?? 2} tiles on each side as the land develops.`
-        : `Buy "Room to grow" in the Store (Upgrades) to push it back by ${e.ringTiles ?? 2} tiles on each side.`);
-    }
-    // Compare with the tile you have selected (required vs current), without raw values.
-    let compare = null;
-    const sel = this.selectedTile;
-    const relevant = def.kind === 'stat' ? { [def.stat]: { min: band(0).min } } : def.kind === 'combo' ? (g.combo(def.combo).requires || {}) : def.kind === 'terrain' ? ((g.terrainDef(def.terrain) || {}).requires || {}) : null;
-    if (relevant) {
-      if (sel) {
-        const st = g.tileStats(sel, now);
-        compare = [h('div', { class: 'section' }, 'Your selected tile'),
-          ...Object.entries(relevant).map(([k, b]) => {
-            const okNow = (st[k] || 0) >= b.min;
-            return h('div', { class: 'req-row' }, h('span', { class: 'grow' }, cap(k)),
-              h('span', { class: 'req-col' }, h('span', { class: 'sub' }, 'needs'), this.miniMeter(k, 0, { min: b.min })),
-              h('span', { class: 'req-col' }, h('span', { class: 'sub' }, 'has'), this.miniMeter(k, st[k] || 0)),
-              h('span', { class: 'req-mark ' + (okNow ? 'ok' : 'no') }, okNow ? 'met' : 'not yet'));
-          })];
-      } else compare = [h('p', { class: 'sub' }, 'Tip: select a tile in the forest, then open this page to compare it with what this terrain needs.')];
-    }
-    const section = (title, arr) => (arr.length ? [h('div', { class: 'section' }, title), ...arr.map((t) => h('p', { class: 'guide-line' }, t))] : []);
-    return [
-      h('div', { class: 'hero terrain-hero' }, this.terrainArt(def, 3, 2, 4)),
-      !g.discovered.has('terrain:' + id) && this.app.devMode ? h('p', { class: 'dev-note' }, 'Developer view: not discovered in this forest yet.') : null,
-      h('p', { class: 'sub center' }, def.text),
-      ...section('Appears when', lines.appears),
-      ...section('Spawns', lines.spawns),
-      ...section('Other properties', lines.other),
-      ...(compare || []),
-    ];
-  }
-
-  tasksBody() {
-    const g = this.game;
-    const tasks = g.activeTasks();
-    if (!tasks.length) return h('p', { class: 'sub' }, 'All tasks done. Your forest is on its way!');
-    return [
-      h('p', { class: 'sub' }, 'Little goals to get your forest going. New ones appear as you finish these.'),
-      ...tasks.map((t) => h('div', { class: 'list-row task' + (t.done ? ' done' : '') },
-        h('div', { class: 'grow' },
-          h('b', {}, t.text),
-          h('div', { class: 'progress' }, h('span', { style: `width:${Math.round(t.progress / t.target * 100)}%` })),
-          h('div', { class: 'sub reward' }, `${t.progress}/${t.target} · Reward: `,
-            ...(t.reward || []).map((r) => {
-              const def = this.content.items[r.item];
-              return h('span', { class: 'reward-item' }, def ? this.sprites.element(def.sprite, null, 1) : '', `${r.count || 1}× ${def ? def.name : r.item}`);
-            }))),
-        t.done ? h('button', { class: 'btn green small', onclick: () => this.app.claimTask(t.id) }, 'Claim') : null)),
-    ];
-  }
-
-  /** Debug: the spawn maths for one tile, right now. */
-  inspectBody(tile) {
-    const g = this.game, now = g.now();
-    const stats = g.tileStats(tile, now);
-    const details = g.spawnDetails(tile, now);
-    const catRows = Object.fromEntries(g.categoryDetails(details, stats, now).map((r) => [r.category, r]));
-    const fmt = (n) => (n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2));
-    const table = (list, catShare) => {
-      const total = list.reduce((a, d) => a + d.weight, 0) || 1;
-      return list.sort((a, b) => b.weight - a.weight).map((d) => h('div', { class: 'inspect-row' },
-        this.sprites.element(d.item.sprite, null, 1),
-        h('span', { class: 'grow' }, d.item.name, h('span', { class: 'sub', style: `color:${RARITY_COLORS[d.item.rarity]}` }, ' ' + rarityName(d.item.rarity)),
-          (() => { const v = g.spawnView({ itemID: d.item.id, tile, placement: g.resolvePlacement(d.item, stats) }, now, stats); return v === 'surface' ? null : h('span', { class: 'tag' }, v); })()),
-        h('span', { class: 'num' }, fmt(d.base)),
-        h('span', { class: 'num' + (d.clamped ? ' clamped' : '') }, '×' + d.mult.toFixed(2) + (d.clamped ? '*' : '') + (d.fx !== 1 ? ` ×${d.fx}` : '') + (d.affinity && d.affinity !== 1 ? ` t×${d.affinity.toFixed(2)}` : '') + (d.home && d.home !== 1 ? ` h×${+d.home.toFixed(2)}` : '')),
-        h('span', { class: 'num' }, fmt(d.weight)),
-        h('b', { class: 'num' }, (d.weight / total * 100).toFixed(1) + '%')));
-    };
-    const cats = ['mushroom', 'plant', 'geode'].filter((c) => c !== 'geode' || g.geodesOn);
-    const seed = g.seedDetails(tile, now);
-    const raw = g.tileStats(tile, now, { raw: true });
-    return [
-      h('p', { class: 'sub' }, 'Developer view: raw values (players see intensity only). Below the influence floor a stat counts as 0.'),
-      h('div', { class: 'stat-grid' }, CORE_STATS.map((k) => this.statBar(k, raw[k] || 0, intensityOf(stats[k] || 0, this.content.tuning).label))),
-      h('p', { class: 'sub' }, `${g.isNight(now) ? 'Night' : 'Day'}${g.isRaining(now) ? ', raining' : ''} · ` +
-        (g.inClearing(tile) ? (g.isFree(tile) ? 'open tile' : 'tile is occupied (nothing spawns here now)') : 'outside the clearing')),
-      (() => {
-        // Each stat's identity on this tile: elevation, seeped Spore, Glow/Bloom time factors, placement.
-        const e = g.elevationOf(stats), sh = g.shares(stats);
-        const amb = g.ambientAt(tile.x, tile.y);
-        const gf = g.glowFactor(now, stats), bf = g.bloomFactor(now);
-        const hideAt = (this.content.tuning.terrain?.verdure || {}).hideThreshold ?? 30;
-        const surface = (stats.verdure || 0) >= hideAt ? 'hidden in tall grass (tap to reveal)' : 'on the surface';
-        const geode = sh.dominant === 'spirit' ? 'veiled' : sh.dominant === 'shimmer' ? 'exposed among crystals' : 'half-sunk in a mound';
-        const row = (k, v) => h('div', { class: 'inspect-kv' }, h('span', { class: 'sub' }, k), h('b', {}, v));
-        return h('div', { class: 'inspect-terrain' },
-          row('Elevation', `${e >= 0 ? '+' : ''}${e.toFixed(2)} ${e > 0.15 ? '(raised)' : e < -0.15 ? '(sunken)' : '(level)'}`),
-          row('Dominant stat', sh.dominant ? `${cap(sh.dominant)} (${Math.round(sh[sh.dominant] * 100)}%)` : 'none'),
-          row('Combo', (() => { const cs = g.combosAt(stats); return cs.length ? cs.map((id) => g.combo(id).name || id).join(', ') : 'none'; })()),
-          row('Intensity stages', CORE_STATS.map((k) => {
-            const th = this.content.tuning.visuals.intensityStages || [];
-            const v = k === 'glow' ? (stats.glow || 0) * g.glowFactor(now, stats, 'visual') : k === 'bloom' ? (stats.bloom || 0) * g.bloomFactor(now) : (stats[k] || 0);
-            const n = th.filter((x) => v >= x).length;
-            return n ? `${cap(k)} ${n}` : null;
-          }).filter(Boolean).join(' · ') || 'none'),
-          row('Ambient Spore', `${amb.toFixed(1)} (seeped / pooled)`),
-          row('Glow factor', `×${gf.toFixed(2)} ${g.isNight(now) ? '(night)' : (stats.spirit || 0) > 0 ? '(day, fae-touched tiles glow more)' : '(day)'}`),
-          row('Bloom cycle', `×${bf.toFixed(2)}`),
-          row('Spawns here', `${surface}; geodes ${geode}; Spirit items veiled`),
-          ...g.guestDefs().map((d) => { const st = g.guest(d.id); return row(`Visitor: ${d.name}`, `interest ${st.interest.toFixed(1)} · ${g.guestStage(d.id, now)}${st.befriended ? ' · befriended' : ''} · clues ${st.known.length}/${g.guestPrefKeys(d).length} · ${g.guestTiles(d, g.field(now)).length} tiles suit it${st.present ? ` · present until ${new Date(st.present.until).toLocaleTimeString()}` : ''}`); }),
-          ...g.relicSources(now).map((p) => [p, g.stats.falloff(Math.hypot(p.tile.x - tile.x, p.tile.y - tile.y), p.radius, p.falloff)]).filter(([, w]) => w > 0).map(([p, w]) => {
-            const r = g.state.relics.find((x) => x.id === p.id), lv = g.stats.level(p, now), k = Object.keys(p.contributions)[0];
-            return row(`Relic: ${(this.content.items[r.relicID] || {}).name || r.relicID} (${r.tile.x}, ${r.tile.y})`,
-              `+${(p.contributions[k] * w * lv).toFixed(1)} ${cap(k)} (falloff ×${w.toFixed(2)}, level ×${lv.toFixed(2)}, reach ${p.radius.toFixed(1)} of ${g.relicTier(r.tier).radius})`);
-          }),
-          ...g.buriedSeeds().map((b) => [b, g.boostWeight(b, tile)]).filter(([, w]) => w > 0).map(([b, w]) => {
-            const ph = g.seedPhase(b, now), lv = g.boostLevel(b, now);
-            return row(`Buried ${cap(b.school)} Seed (${b.tile.x}, ${b.tile.y})`,
-              `+${(b.stats[b.school] * w * lv).toFixed(1)} ${cap(b.school)} (falloff ×${w.toFixed(2)}, level ×${lv.toFixed(2)}, ${ph.phase}, ${duration(ph.ends / 1000)} left)`);
-          }));
-      })(),
-      (() => {
-        // Where-to-spawn weight for this tile (effect-aware), and its share of all spawn locations.
-        const loc = g.spawnLocations(now);
-        const me = loc.tiles.find((x) => x.tile.x === tile.x && x.tile.y === tile.y);
-        if (!me) return null;
-        const lw = this.content.tuning.spawns.locationWeighting || {};
-        const table = lw.generalByEffectCount || [1, 1.5, 2, 2.5];
-        const eff = Math.round(me.effects);
-        return h('p', { class: 'sub' }, h('b', {}, `Location weight ${me.weight.toFixed(2)}`),
-          ` = ${lw.base ?? 1} × ${table[Math.min(table.length - 1, eff)]} (${eff} effect${eff === 1 ? '' : 's'}) × ${(1 + Math.min(lw.maxIntensityBonus ?? 99, (lw.perStatPoint || 0) * me.intensity)).toFixed(2)} (${me.intensity.toFixed(0)} stat pts)` +
-          ` · ${(me.weight / loc.total * 100).toFixed(2)}% of spawn picks (a blank tile: ${((lw.base ?? 1) / loc.total * 100).toFixed(2)}%)`);
-      })(),
-      h('div', { class: 'inspect-head' }, h('span', { class: 'grow' }, 'Item'), h('span', { class: 'num' }, 'Base'),
-        h('span', { class: 'num' }, 'Mult'), h('span', { class: 'num' }, 'Weight'), h('span', { class: 'num' }, 'Chance')),
-      ...cats.map((cat) => {
-        const list = details.filter((d) => d.item.category === cat);
-        return [
-          h('div', { class: 'section' }, `${catTitle(cat)} · ${catRows[cat] ? (catRows[cat].share * 100).toFixed(0) + '% of rolls (×' + catRows[cat].mult.toFixed(2) + ')' : 'none qualify'}`),
-          list.length ? table(list) : h('p', { class: 'sub' }, 'Nothing qualifies here.'),
-        ];
-      }),
-      h('div', { class: 'section' }, 'A Mystery Seed planted here now could grow into'),
-      seed.length ? table(seed) : h('p', { class: 'sub' }, 'No plant qualifies.'),
-      h('p', { class: 'sub' }, '* multiplier clamped to the configured range. Chance is within the category; the category itself is picked first by spawns.categoryWeights × its stat multiplier (spawns.categoryScaling).'),
-    ];
-  }
+  // -------------------------------------------------------------- rename, debug, developer mode
 
   renameBody() {
     const g = this.game;
     const input = h('input', { type: 'text', value: g.state.customName || '', placeholder: g.generatedName, maxlength: 40 });
     return [
-      h('label', { class: 'field' }, 'Forest name', input),
+      h('label', { class: 'field' }, 'Garden name', input),
       h('div', { class: 'row gap' },
         h('button', { class: 'btn green', onclick: () => { this.app.renameForest(input.value); this.sheet = null; this.close(); } }, 'Save'),
         h('button', { class: 'btn grey', onclick: () => { this.app.renameForest(null); this.sheet = null; this.close(); } }, 'Use its own name')),
-      h('p', { class: 'sub' }, `Left unnamed, the forest names itself after its strongest qualities (right now: “${g.generatedName}”), and the name changes as the land does.`),
+      h('p', { class: 'sub' }, `Left unnamed, the garden names itself after its soils (right now: “${g.generatedName}”).`),
     ];
   }
 
-  /** Time + view tools shared by the normal debug menu and developer mode. */
-  timeAndViewTools() {
+  timeTools() {
     const a = this.app;
     const b = (label, fn, cls = '') => h('button', { class: 'btn ' + cls, onclick: fn }, label);
     return [
       h('div', { class: 'section' }, 'Time speed'),
       h('div', { class: 'row gap wrap' }, a.speeds.map((v) => b(`${v}×`, () => { a.setSpeed(v); this.renderSheet(); }, v === a.speed ? 'green' : 'grey'))),
-      h('p', { class: 'sub' }, '60× = a minute per second · 3600× = an hour per second. Creatures take 12–48 forest-hours to reach full strength.'),
+      h('p', { class: 'sub' }, '60× = a minute per second · 3600× = an hour per second.'),
       h('div', { class: 'section' }, 'Skip ahead'),
       h('div', { class: 'row gap wrap' }, b('+1 hour', () => a.debugSkip(1)), b('+6 hours', () => a.debugSkip(6)), b('+1 day', () => a.debugSkip(24))),
-      h('div', { class: 'section' }, 'Sunlight'),
-      h('div', { class: 'row gap wrap' },
-        b('New', () => { a.canopyClassic = false; this.renderSheet(); }, a.canopyClassic ? 'grey' : 'green'),
-        b('Classic', () => { a.canopyClassic = true; this.renderSheet(); }, a.canopyClassic ? 'green' : 'grey')),
-      h('p', { class: 'sub' }, 'Compare the sunlight through the trees with the earlier, softer look. Only for this visit.'),
-      // Raw values (inspector, overlay, heatmap) are developer-only.
-      ...(a.devMode ? this.devViewTools() : []),
-    ];
-  }
-
-  devViewTools() {
-    const a = this.app;
-    const b = (label, fn, cls = '') => h('button', { class: 'btn ' + cls, onclick: fn }, label);
-    return [
-      h('div', { class: 'section' }, 'View (raw values)'),
-      h('div', { class: 'row gap wrap' },
-        b(this.statOverlay ? 'Hide stat overlay' : 'Show stat overlay', () => { this.statOverlay = !this.statOverlay; a.changed(false); this.renderSheet(); }),
-        b(this.spawnHeatmap ? 'Spawn heatmap: ON' : 'Spawn heatmap: off', () => { this.spawnHeatmap = !this.spawnHeatmap; a.changed(false); this.renderSheet(); }, this.spawnHeatmap ? 'orange' : ''),
-        b(this.spawnInspector ? 'Spawn inspector: ON' : 'Spawn inspector: off', () => { this.spawnInspector = !this.spawnInspector; a.changed(false); this.renderSheet(); }, this.spawnInspector ? 'orange' : '')),
-      h('p', { class: 'sub' }, 'Spawn heatmap: tints each open tile by how likely wild spawns are to land there (brighter = likelier). Spawn inspector: tap a tile for its stats, its location weight, and every item that can spawn there with its odds.'),
+      h('div', { class: 'section' }, 'Come back after…'),
+      h('p', { class: 'sub' }, 'As if you closed the game and came back later: real time away (the morning card counts it).'),
+      h('div', { class: 'row gap wrap' }, [2, 10, 24].map((n) => b(`${n} hours`, () => { this.sheet = null; this.close(); a.debugReturn(n); }))),
     ];
   }
 
@@ -1353,123 +674,91 @@ export class UI {
     const b = (label, fn, cls = '') => h('button', { class: 'btn ' + cls, onclick: fn }, label);
     return [
       h('div', { class: 'section' }, 'Developer mode'),
-      h('p', { class: 'sub' }, 'Test everything in a separate test forest: unlock all creatures, items, slots and the whole map, and try any combination. Your real forest is saved first and is never changed while developer mode is on.'),
-      h('div', { class: 'row gap wrap' },
-        b('Enter developer mode', () => a.enterDevMode('resume'), 'orange'),
-        b('…with a copy of my forest', () => a.enterDevMode('copy'))),
-      ...this.timeAndViewTools(),
-      h('p', { class: 'sub' }, 'Time tools here change your real forest. Item and creature gifts are in developer mode.'),
-      h('div', { class: 'section' }, 'Tutorial'),
-      h('div', { class: 'row gap wrap' },
-        b('Replay tutorial (new forest)', () => { if (confirm('Start a fresh forest and replay the tutorial?')) a.resetForest(); }),
-        this.game.inTutorial ? b('Skip tutorial', () => { this.game.finishTutorial(); this.sheet = null; this.close(); a.changed(); }) : null),
+      h('p', { class: 'sub' }, 'Test anything in a separate test garden. Your real garden is saved first and never changed while developer mode is on.'),
+      h('div', { class: 'row gap wrap' }, b('Enter developer mode', () => a.enterDevMode('resume'), 'orange'), b('…with a copy of my garden', () => a.enterDevMode('copy'))),
+      ...this.timeTools(),
+      h('p', { class: 'sub' }, 'Time tools here change your real garden. Giving things is in developer mode.'),
       h('div', { class: 'section' }, 'Danger'),
-      b('Reset forest', () => { if (confirm('Start a brand-new forest? This erases your progress.')) a.resetForest(); }, 'red'),
+      b('Start a new garden', () => { this.ask('Start a brand-new garden?', 'This erases your progress.', 'Start over', () => a.resetForest()); }, 'red'),
     ];
   }
 
-  /** Developer mode: unlocks and combination tools for the separate test forest. */
+  /** Developer-mode sections: [title, [nodes]]. Later systems add theirs. */
+  devSections() {
+    const a = this.app, g = this.game;
+    const b = (label, fn, cls = '') => h('button', { class: 'btn ' + cls, onclick: fn }, label);
+    const cats = [...new Set(this.content.itemList.map((i) => i.category))];
+    const itemSel = h('select', { class: 'select' }, cats.map((cat) => h('optgroup', { label: cap(cat) }, this.content.itemList.filter((i) => i.category === cat).map((i) => h('option', { value: i.id }, i.name)))));
+    const decorSel = h('select', { class: 'select' }, (this.content.cosmetics || []).map((c) => h('option', { value: c.id }, c.name)));
+    const packetSel = h('select', { class: 'select' }, [
+      h('optgroup', { label: 'Blind packets' }, this.content.itemList.filter((i) => i.blind).map((i) => h('option', { value: i.id }, i.name))),
+      h('optgroup', { label: 'Named packets (any plant)' }, this.content.plantList.map((p) => h('option', { value: 'packet.' + p.id }, `${p.name} seeds`)))]);
+    const amendSel = h('select', { class: 'select' }, (this.content.amendmentList || []).map((x) => h('option', { value: x.id }, x.name)));
+    return [
+      ['Garden', [
+        h('div', { class: 'row gap wrap' },
+          b('Grow all plants now', () => a.dev((gm, t) => gm.devGrowAll(t), (n) => `${n} plant(s) ready.`), 'orange'),
+          b('+100 coins', () => a.dev((gm) => gm.devGiveCoins(100), '+100 coins.')),
+          b('+1000 coins', () => a.dev((gm) => gm.devGiveCoins(1000), '+1000 coins.')),
+          b('Relic ornaments', () => a.dev((gm) => gm.devGiveOrnaments(), (n) => `+${n} relic ornaments (Bag, Decor).`)),
+          b(this.plantInspector ? 'Plant timers: ON' : 'Plant timers: off', () => { this.plantInspector = !this.plantInspector; this.renderSheet(); a.changed(false); }, this.plantInspector ? 'orange' : '')),
+        h('p', { class: 'sub' }, 'Plant timers: tap a plant to see its exact progress, rate and stage times.'),
+        h('div', { class: 'row gap wrap' }, h('span', { class: 'sub' }, `Beauty: score ${g.beautyScore(g.now())}, best tier ${g.beautyBest}. Unlock tier:`),
+          ...g.beautyTiers.map((t, i) => b(String(i), () => a.dev((gm) => gm.devSetBeautyBest(i), `Best beauty tier: ${t.name}.`)))),
+        h('div', { class: 'row gap wrap' }, packetSel, b('+1', () => a.debugGive(packetSel.value, 1)), b('+5', () => a.debugGive(packetSel.value, 5)),
+          b('5 of every packet', () => a.dev((gm) => gm.devGivePackets(5), (n) => `+5 of ${n} packets.`))),
+        h('div', { class: 'row gap wrap' }, amendSel, b('+1', () => a.debugGive(amendSel.value, 1)), b('+5', () => a.debugGive(amendSel.value, 5)),
+          b('5 of every soil', () => a.dev((gm) => gm.devGiveAmendments(5), (n) => `+5 of ${n} amendments.`)))]],
+      ['Visitors', [
+        h('p', { class: 'sub' }, 'Set a visitor\'s interest, leave its tracks by the plants it likes, or bring it into the garden now.'),
+        (() => {
+          const sel = h('select', { class: 'select' }, this.content.visitorList.map((v) => h('option', { value: v.id }, `${v.name} (${v.likes.plants.join(', ')}, ${v.likes.time})`)));
+          return h('div', { class: 'row gap wrap' }, sel,
+            ...[['signs', 'Signs'], ['clues', 'Clues'], ['ready', 'Ready'], ['none', 'Reset']].map(([st, label]) => b(label, () => a.dev((gm) => gm.devGuestStage(sel.value, st), `${label}.`))),
+            b('Tracks now', () => a.dev((gm, t) => gm.devTracks(sel.value, t), 'Tracks laid.')),
+            b('Present now', () => { this.sheet = null; this.close(); a.dev((gm, t) => gm.devGuestPresent(sel.value, t), 'It has come to the garden.'); }));
+        })(),
+        h('div', { class: 'row gap wrap' }, b('2 of every colour variety', () => a.dev((gm) => gm.devGiveVarieties(2), (n) => `+2 of ${n} variety packets.`)))]],
+      ['Unlock', [h('div', { class: 'row gap wrap' },
+        b('Fill Field Guide', () => a.dev((gm) => gm.devFillGuide(), 'Field Guide complete.')),
+        b('Whole forest open', () => a.dev((gm, t) => gm.devOpenForest(t), 'The clearing now covers the whole forest.')))]],
+      ['Give', [
+        h('div', { class: 'row gap wrap' }, itemSel, b('+1', () => a.debugGive(itemSel.value, 1)), b('+5', () => a.debugGive(itemSel.value, 5))),
+        h('div', { class: 'row gap wrap' }, decorSel, b('+1 decor', () => a.dev((gm) => { gm.state.decor.owned[decorSel.value] = (gm.state.decor.owned[decorSel.value] || 0) + 1; }, 'Decor added.')),
+          b('One of every decor', () => a.dev((gm) => gm.devGrantDecor(), (n) => `+${n} decor.`)))]],
+      ['Store and Old Log', [h('div', { class: 'row gap wrap' },
+        b('Complete open listings', () => a.dev((gm, t) => gm.devCompleteRequests(t), (n) => `${n} done.`)),
+        b('Reset listings', () => a.dev((gm) => gm.devResetRequests(), 'Listings reset (rewards kept).')))]],
+      ['Opening', [h('p', { class: 'sub' }, g.state.tin ? 'Open the seed tin as a school, skipping the questions.' : 'The tin has been opened.'),
+        g.state.tin ? h('div', { class: 'row gap wrap' }, SCHOOLS.map((k) => b(cap(k), () => { this.sheet = null; this.close(); this.openOpening(k); }))) : null]],
+      ['Foraging patch', [h('div', { class: 'row gap wrap' }, b('Grow finds now', () => a.dev((gm, t) => gm.devForageNow(t), (n) => `${n} new find(s) by the treeline.`)))]],
+    ];
+  }
+
   devBody() {
     const a = this.app, g = this.game;
     const b = (label, fn, cls = '') => h('button', { class: 'btn ' + cls, onclick: fn }, label);
-    const done = () => { this.sheet = null; this.close(); };
-    const speciesSelect = () => h('select', { class: 'select' }, FAMILY_TABS.map(([fid, fname]) =>
-      h('optgroup', { label: fname }, this.content.creatureList.filter((c) => c.family === fid)
-        .map((c) => h('option', { value: c.id }, `${c.name} (${rarityName(c.rarity)}, r${c.radius})`)))));
-    const place = speciesSelect();
-    const full = h('input', { type: 'checkbox', checked: true });
-    const glim = h('input', { type: 'checkbox' });
-    const give = speciesSelect();
-    const guestSel = h('select', { class: 'select' }, (this.content.visitorList || []).map((v) => h('option', { value: v.id }, v.name)));
-    const itemSel = h('select', { class: 'select' }, ['relic', 'mushroom', 'plant', 'seed', 'schoolSeed', 'geode', 'gem', 'material'].filter((cat) => this.game.geodesOn || (cat !== 'geode' && cat !== 'gem')).map((cat) =>
-      h('optgroup', { label: catTitle(cat) }, Object.values(this.content.items).filter((i) => i.category === cat)
-        .map((i) => h('option', { value: i.id }, i.name)))));
     const setupName = h('input', { type: 'text', placeholder: 'Setup name', maxlength: 30 });
     const setups = a.devSetups();
     return [
       h('div', { class: 'dev-note' }, h('b', {}, 'Developer mode is on'),
-        h('span', {}, ` · test forest (${g.state.dev?.createdFrom === 'copy' ? 'copied from your forest' : 'separate'}). Nothing here touches your real forest.`)),
+        h('span', {}, ` · test garden (${g.state.dev?.createdFrom === 'copy' ? 'copied from your garden' : 'separate'}). Nothing here touches your real garden.`)),
       h('div', { class: 'row gap wrap' },
-        b('Back to my forest', () => a.exitDevMode(), 'green'),
-        b('New blank test forest', () => { if (confirm('Replace the test forest with a blank one?')) a.resetDevForest('blank'); }),
-        b('Copy my forest in', () => { if (confirm('Replace the test forest with a copy of your real forest?')) a.resetDevForest('copy'); })),
-
-      h('div', { class: 'section' }, 'Unlock'),
-      h('div', { class: 'row gap wrap' },
-        b('Unlock everything', () => a.dev((gm, t) => { gm.finishTutorial(); if (gm.creaturesOn) gm.devUnlockCreatures(t, { glimmers: true }); gm.devGrantItems(5); gm.devFillGuide(); gm.devOpenForest(t); },
-          g.creaturesOn ? 'Unlocked: all creatures + glimmers, 5 of every item, the whole Field Guide, the whole forest.' : 'Unlocked: 5 of every item, the whole Field Guide, the whole forest.'), 'orange'),
-        // Creature tools only while creatures are in the game (tuning.creaturePlacement.enabled).
-        g.creaturesOn ? b('All creatures', () => a.dev((gm, t) => gm.devUnlockCreatures(t), (n) => `+${n} creatures resting.`)) : null,
-        g.creaturesOn ? b('+ glimmers', () => a.dev((gm, t) => gm.devUnlockCreatures(t, { glimmers: true }), (n) => `+${n} creatures resting.`)) : null,
-        b('5 of every item', () => a.dev((gm) => gm.devGrantItems(5), (n) => `+5 of ${n} items.`)),
-        b('Fill Field Guide', () => a.dev((gm) => gm.devFillGuide(), 'Field Guide complete.')),
-        b('Whole forest open', () => a.dev((gm, t) => gm.devOpenForest(t), 'The clearing now covers the whole forest.')),
-        g.inTutorial ? b('Finish tutorial', () => a.dev((gm) => gm.finishTutorial(), 'Tutorial finished.')) : null),
-
-      h('div', { class: 'section' }, 'Try combinations'),
-      g.creaturesOn ? [h('p', { class: 'sub' }, 'Pick a species, then tap tiles to place new ones. There\'s no limit.'),
-        h('div', { class: 'row gap wrap' }, place,
-          h('label', { class: 'check' }, full, ' full strength'), h('label', { class: 'check' }, glim, ' glimmer'),
-          b('Place on tiles', () => { this.mode = { type: 'devPlace', typeID: place.value, full: full.checked, glimmer: glim.checked }; this.selectedTile = null; done(); a.changed(false); }, 'orange'))]
-        : h('p', { class: 'sub' }, 'Bury relics and school seeds from the Bag (Give → Relics, School seeds) to shape the land.'),
-      h('div', { class: 'row gap wrap' },
-        g.creaturesOn ? b('Remove all creatures', () => a.dev((gm, t) => gm.devClearPlacements(t), 'All creatures brought home (instantly, no fade).')) : null,
-        g.creaturesOn ? b('Max strength now', () => a.dev((gm, t) => { for (const p of gm.activePlacements) p.startLevel = 1; gm.statCache = gm.statField(t); }, 'All placed creatures at full strength.')) : null,
-        b('Clear wild spawns', () => a.dev((gm) => gm.devClearSpawns(), 'Wild spawns cleared.')),
-        b('Run 20 spawn ticks', () => a.dev((gm, t) => gm.devSpawnTicks(t, 20), (n) => `${n} new spawns.`))),
-
+        b('Back to my garden', () => a.exitDevMode(), 'green'),
+        b('New blank test garden', () => { this.ask('Replace the test garden?', 'It becomes a blank one.', 'Replace', () => a.resetDevForest('blank')); }),
+        b('Copy my garden in', () => { this.ask('Replace the test garden?', 'It becomes a copy of your real garden.', 'Replace', () => a.resetDevForest('copy')); })),
+      ...this.devSections().flatMap(([title, nodes]) => [h('div', { class: 'section' }, title), ...nodes]),
       h('div', { class: 'section' }, 'Saved setups'),
       h('div', { class: 'row gap wrap' }, h('div', { class: 'field grow' }, setupName), b('Save setup', () => { a.saveDevSetup(setupName.value.trim()); this.renderSheet(); }, 'green')),
       Object.keys(setups).length ? Object.entries(setups).sort((x, y) => y[1].savedAt - x[1].savedAt).map(([name, st]) => h('div', { class: 'row gap setup-row' },
         h('span', { class: 'grow' }, name, h('span', { class: 'sub' }, ' · ' + new Date(st.savedAt).toLocaleString())),
-        b('Load', () => { a.loadDevSetup(name); }),
-        b('Delete', () => { if (confirm(`Delete setup “${name}”?`)) { a.deleteDevSetup(name); this.renderSheet(); } }, 'grey'))) : h('p', { class: 'sub' }, 'No saved setups yet. Save the current test forest to come back to it.'),
-
-      h('div', { class: 'section' }, 'Offerings'),
-      h('div', { class: 'row gap wrap' },
-        b('+50 compost', () => a.dev((gm) => { gm.state.compost += 50; }, '+50 compost.')),
-        b('Complete open requests', () => a.dev((gm, t) => gm.devCompleteRequests(t), (n) => `${n} request(s) completed.`)),
-        b('Complete all requests', () => a.dev((gm, t) => gm.devCompleteRequests(t, true), (n) => `${n} request(s) completed.`)),
-        b('Reset requests', () => a.dev((gm) => gm.devResetRequests(), 'Requests reset (rewards kept).')),
-        b('New traders', () => a.dev((gm, t) => gm.devNewVisitors(t), (n) => `${n} new trader(s).`)),
-        b('One of every decor', () => a.dev((gm) => gm.devGrantDecor(), (n) => `+${n} decor.`))),
-      h('div', { class: 'section' }, 'Spirit Well'),
-      h('div', { class: 'row gap wrap' },
-        b('Reveal the well', () => a.dev((gm, t) => gm.discoverSpiritWell(t, null), 'The Spirit Well is in the clearing.')),
-        b('New demand now', () => a.dev((gm, t) => { gm.state.wish.demand = null; gm.wishDemand(t); }, 'The well wants something new.')),
-        b('Clear buffs', () => a.dev((gm) => { gm.state.buffs = []; }, 'Buffs cleared.'))),
-      g.eggsOn ? [h('div', { class: 'section' }, 'Eggs'),
-        h('div', { class: 'row gap wrap' },
-          b('One of every egg', () => a.dev((gm) => gm.devGiveEggs(1), (n) => `+${n} eggs.`)),
-          b('Hatch nests now', () => a.dev((gm, t) => gm.devHatchNow(t), (n) => `${n} nest(s) ready to hatch.`)),
-          b('+2 nests', () => a.dev((gm) => { gm.state.unlocks.nests += 2; }, 'Two more nests.')))] : null,
-
-      h('div', { class: 'section' }, 'Opening and relics'),
-      h('p', { class: 'sub' }, 'Choose the opening relic\'s school without the questions (needs the opening relic on the map). Any relic: Give → Relics below.'),
-      h('div', { class: 'row gap wrap' }, CORE_STATS.map((k) => b(cap(k), () => {
-        if (!this.game.openingSpawn) { this.toast('The opening relic has already been taken.'); return; }
-        this.sheet = null; this.close(); this.openOpening(k);
-      }))),
-      h('div', { class: 'section' }, 'Return harvest'),
-      h('div', { class: 'row gap wrap' }, [2, 8, 24].map((n) => b(`Return after ${n}h`, () => { this.sheet = null; this.close(); a.debugReturn(n); }))),
-      h('div', { class: 'section' }, 'Visitors'),
-      h('p', { class: 'sub' }, 'Set a visitor\'s interest stage, or bring it into the grotto now. Its interest shows in the spawn inspector.'),
-      h('div', { class: 'row gap wrap' }, guestSel,
-        ...[['signs', 'Signs'], ['clues', 'Clues'], ['ready', 'Ready'], ['none', 'Reset']].map(([st, label]) => b(label, () => a.dev((gm, t) => gm.devGuestStage(guestSel.value, st, t), `${label}.`))),
-        b('Present now', () => { a.dev((gm, t) => gm.devGuestPresent(guestSel.value, t), 'It has come to the grotto.'); this.sheet = null; this.close(); })),
-
-      h('div', { class: 'section' }, 'Give'),
-      g.creaturesOn ? h('div', { class: 'row gap wrap' }, give,
-        b('Give', () => a.debugGiveCreature(give.value, false)),
-        b('Give glimmer', () => a.debugGiveCreature(give.value, true))) : null,
-      h('div', { class: 'row gap wrap' }, itemSel,
-        b('+1', () => a.debugGive(itemSel.value, 1)), b('+5', () => a.debugGive(itemSel.value, 5))),
-
-      ...this.timeAndViewTools(),
+        b('Load', () => a.loadDevSetup(name)),
+        b('Delete', () => { this.ask(`Delete setup “${name}”?`, '', 'Delete', () => { a.deleteDevSetup(name); this.renderSheet(); }); }, 'grey'))) : h('p', { class: 'sub' }, 'No saved setups yet.'),
+      ...this.timeTools(),
     ];
   }
 
-  // -------------------------------------------------------------- reveals
+  // -------------------------------------------------------------- cards
 
   /** Stepped pixel rays behind a reveal, tinted via a palette swap (data sprite "ui.burst"). */
   burst(color, scale = 5) {
@@ -1477,269 +766,118 @@ export class UI {
     return this.sprites.element('ui.burst', variant, scale, 'burst', true);
   }
 
-  /** A short celebratory card (blend moment). */
-  celebrate(title, text) {
+  /** Shows a card in the overlay, or queues it behind the one that's up. */
+  showCard(build) {
     const ov = document.getElementById('overlay');
-    // Another card is up: this one waits its turn (a few at most).
-    if (ov.classList.contains('show')) { (this.cardQueue = this.cardQueue || []).splice(3); this.cardQueue.push([title, text]); return; }
-    const done = () => { ov.classList.remove('show'); ov.replaceChildren(); this.nextCard(); };
-    ov.replaceChildren(h('div', { class: 'reveal-card pop' },
-      h('div', { class: 'rays-wrap small' }, this.burst(null, 2.5), h('span', { class: 'row' }, ic('leaf', 4), ic('sparkle', 4))),
-      h('h2', {}, title), h('p', { class: 'sub' }, text),
-      h('button', { class: 'btn green', onclick: done }, 'Lovely')));
+    if (ov.classList.contains('show')) { (this.cardQueue = this.cardQueue || []).splice(4); this.cardQueue.push(build); return; }
+    const done = () => { ov.classList.remove('show'); ov.replaceChildren(); ov.onclick = null; this.nextCard(); };
+    ov.replaceChildren(build(done));
     ov.onclick = (e) => { if (e.target === ov) done(); };
     ov.classList.add('show');
   }
+  nextCard() { const next = (this.cardQueue || []).shift(); if (next) this.showCard(next); }
 
   /**
-   * The opening (Content/opening.json): the relic's card and inscription, a few quiet questions, then the
-   * reveal. Closing before the reveal changes nothing; the relic waits where it was. At the reveal it takes
-   * its school and goes into the Bag; burying it is up to the player.
+   * An in-game confirmation card (instead of the browser's confirm(), which embedded views such as
+   * home-screen apps and artifact frames may refuse). Runs `onYes` only if the player confirms.
+   */
+  ask(title, text, yes, onYes) {
+    const ov = document.getElementById('overlay');
+    const close = () => { ov.classList.remove('show'); ov.replaceChildren(); ov.onclick = null; this.nextCard(); };
+    ov.replaceChildren(h('div', { class: 'reveal-card pop' }, h('h2', {}, title), text ? h('p', { class: 'sub' }, text) : null,
+      h('div', { class: 'row gap' },
+        h('button', { class: 'btn grey', onclick: close }, 'Cancel'),
+        h('button', { class: 'btn red', onclick: () => { close(); onYes(); } }, yes))));
+    ov.onclick = (e) => { if (e.target === ov) close(); };
+    ov.classList.add('show');
+  }
+
+  featureNote() { return h('p', { class: 'sub center' }, 'It grew here on its own. It stays where it is, and makes the garden lovelier.'); }
+
+  /** A short celebratory card. */
+  celebrate(title, text, art = null, button = 'Lovely') {
+    this.showCard((done) => h('div', { class: 'reveal-card pop' },
+      h('div', { class: 'rays-wrap small' }, this.burst(null, 2.5), art || h('span', { class: 'row' }, ic('leaf', 4), ic('sparkle', 4))),
+      h('h2', {}, title), typeof text === 'string' ? h('p', { class: 'sub' }, text) : text,
+      h('button', { class: 'btn green', onclick: done }, button)));
+  }
+
+  /**
+   * The opening (Content/opening.json): the seed tin's card and the words on its lid, a few quiet
+   * questions, then what's inside. Closing before the end changes nothing; the tin waits.
    */
   openOpening(forceSchool = null) {
     const o = this.content.opening, g = this.game;
-    if (!o || !g.openingSpawn) return;
+    if (!o || !g.state.tin) return;
     const ov = document.getElementById('overlay');
     const answers = [];
     const close = () => { ov.classList.remove('show'); ov.replaceChildren(); ov.onclick = null; this.nextCard(); };
     const show = (...kids) => { ov.replaceChildren(h('div', { class: 'reveal-card pop opening' }, ...kids)); ov.classList.add('show'); };
+    const tin = this.content.tuning.start?.tin?.sprite || 'relic.unknown';
     const reveal = () => {
-      const school = forceSchool || g.openingSchool(answers);
-      g.claimOpeningRelic(school, g.now(), forceSchool ? null : answers);
-      const def = this.content.items['relic.' + school + '.common'];
+      const r = this.app.openTin(answers, forceSchool);
+      if (!r) { close(); return; }
       ov.onclick = null;
-      show(h('div', { class: 'rays-wrap' }, this.burst(STAT_COLORS[school]), this.sprites.element(def.sprite, null, 8, 'grow-in', true)),
-        h('h2', {}, def.name), h('p', { class: 'inscription' }, (o.reveal || {})[school] || ''),
-        h('button', { class: 'btn green', onclick: () => { close(); this.app.changed(); } }, o.card.keep || 'Keep it'));
+      show(h('div', { class: 'rays-wrap' }, this.burst(SCHOOL_COLORS[r.school]), this.sprites.element(tin, null, 8, 'grow-in', true)),
+        h('p', { class: 'inscription' }, (o.reveal || {})[r.school] || ''),
+        ...this.openingGifts(r),
+        h('button', { class: 'btn green', onclick: () => { close(); this.app.changed(); } }, o.card.keep || 'Thank you'));
     };
     const ask = (i) => {
       const q = o.questions[i];
       if (!q) { reveal(); return; }
-      show(this.sprites.element('relic.unknown', null, 5, '', true), h('h2', {}, q.text),
-        h('div', { class: 'answers' }, q.answers.map((a, k) => h('button', { class: 'btn answer', onclick: () => { answers.push(k); ask(i + 1); } }, a.text))));
+      show(this.sprites.element(tin, null, 5, '', true), h('h2', {}, q.text),
+        h('div', { class: 'answers' }, q.answers.map((ans, k) => h('button', { class: 'btn answer', onclick: () => { answers.push(k); ask(i + 1); } }, ans.text))));
     };
     ov.onclick = (e) => { if (e.target === ov) close(); };
     if (forceSchool) { reveal(); return; }
-    show(this.sprites.element('relic.unknown', null, 8, 'grow-in', true), h('h2', {}, o.card.title),
+    show(this.sprites.element(tin, null, 8, 'grow-in', true), h('h2', {}, o.card.title),
       h('p', { class: 'sub' }, o.card.intro), h('p', { class: 'inscription' }, o.card.inscription),
-      h('button', { class: 'btn green', onclick: () => ask(0) }, o.card.begin || 'Hold it'));
+      h('button', { class: 'btn green', onclick: () => ask(0) }, o.card.begin || 'Open it'));
+  }
+  /** What the tin held, shown on its last card. */
+  openingGifts(r) {
+    const list = (r.results || []).map((x) => { const d = this.content.items[x.item]; return d ? h('div', { class: 'reward-item' }, this.sprites.element(d.sprite, d.variant || null, 2), ` ${x.count} × ${d.name}`) : null; });
+    return list.length ? [h('div', { class: 'gifts' }, list)] : [h('p', { class: 'sub' }, this.story('messages.openingDone'))];
   }
 
-  /** Shows the next waiting celebration card, if any. */
-  nextCard() {
-    const next = (this.cardQueue || []).shift();
-    if (next) this.celebrate(...next);
-  }
-
-  showReveal(creature, isNew, source) {
-    const ov = document.getElementById('overlay');
-    // Several finds at once (Collect All): show them one after another.
-    if (ov.classList.contains('show') && ov.querySelector('.reveal-card')) { (this.revealQueue = this.revealQueue || []).push([creature, isNew, source]); return; }
-    const art = this.app.art(creature);
-    const done = () => {
-      ov.classList.remove('show'); ov.replaceChildren();
-      const next = (this.revealQueue || []).shift();
-      if (next) this.showReveal(...next); else this.nextCard();
-    };
-    ov.replaceChildren(h('div', { class: 'reveal-card pop' },
-      h('h2', { class: creature.isGlimmer ? 'glimmer' : '' }, creature.isGlimmer ? [ic('glimmer', 2), `A glimmer ${this.app.displayName(creature)}!`, ic('glimmer', 2)] : `You found a ${this.app.displayName(creature)}!`),
-      h('p', { class: 'sub' }, `It came from ${source}.`),
-      h('div', { class: 'rays-wrap' }, this.burst(creature.isGlimmer ? null : '#ffffff'), this.sprites.element(art.sprite, art.variant, 8, 'grow-in', true)),
-      h('p', { class: 'sub' }, this.traitSummary(creature)),
-      isNew ? h('p', { class: 'new' }, 'New Field Guide entry!') : null,
-      h('button', { class: 'btn green', onclick: done }, 'Lovely')));
-    ov.onclick = (e) => { if (e.target === ov) done(); };
-    ov.classList.add('show');
-  }
-
-  get batchMax() { return ((this.content.tuning.geodes || {}).batchMax) ?? 5; }
-
-  /**
-   * Batch cracking: up to five geodes. Rewards are granted first (exactly once), then shown on one
-   * screen sized for five: a 3 + 2 grid of result cards that crack open in quick succession. Tap
-   * anywhere to skip to the end; Continue is always there.
-   */
-  openBatchCrack(itemID, count) {
-    const app = this.app;
-    const ov = document.getElementById('overlay');
-    const def = this.content.items[itemID];
-    const results = app.crackMany(itemID, count);
-    if (!results.length) return;
-    const openID = def.openSprite && this.sprites.has(def.openSprite) ? def.openSprite : def.sprite;
-    const timers = [];
-    const cards = results.map((res, i) => {
-      const body = h('div', { class: 'batch-body' });
-      const rock = h('div', { class: 'batch-rock' }, this.sprites.element(def.sprite, null, 4));
-      let best = -1;
-      const lines = res.rewards.map((r) => {
-        if (r.creature) {
-          best = Math.max(best, 5);
-          const art = app.art(r.creature);
-          const cdef = this.content.creatures[r.creature.typeID];
-          return h('div', { class: 'batch-line creature' + (r.creature.isGlimmer ? ' glimmer' : '') },
-            this.sprites.element(art.sprite, art.variant, 3, '', true),
-            h('div', {}, h('b', {}, app.displayName(r.creature)),
-              h('span', { class: 'sub', style: `color:${RARITY_COLORS[cdef?.rarity] || '#fff'}` }, r.creature.isGlimmer ? 'Glimmer!' : rarityName(cdef?.rarity || 'common')),
-              r.isNew ? h('span', { class: 'new' }, 'New!') : null));
-        }
-        const it = this.content.items[r.item];
-        best = Math.max(best, rarityIndex(it?.rarity || 'common'));
-        return h('div', { class: 'batch-line' },
-          this.sprites.element(it?.sprite || '__missing', null, 3),
-          h('div', {}, h('b', {}, `${it ? it.name : r.item}`, r.count > 1 ? ` ×${r.count}` : ''),
-            h('span', { class: 'sub', style: `color:${RARITY_COLORS[it?.rarity] || '#fff'}` }, rarityName(it?.rarity || 'common')),
-            r.isNew ? h('span', { class: 'new' }, 'New!') : null));
-      });
-      const special = best >= 2;                       // rare or better, or a creature: highlighted
-      const card = h('div', { class: 'batch-card' + (special ? ' special' : '') + (best >= 5 ? ' has-creature' : '') },
-        h('div', { class: 'batch-num' }, `#${i + 1}`), rock, body);
-      const reveal = () => {
-        if (card.classList.contains('open')) return;
-        card.classList.add('open');
-        rock.replaceChildren(this.sprites.element(openID, null, 4));
-        body.replaceChildren(...(lines.length ? lines : [h('div', { class: 'sub' }, 'Just dust.')]));
-      };
-      card._reveal = reveal;
-      timers.push(setTimeout(() => { card.classList.add('shake'); }, 120 + i * 260));
-      timers.push(setTimeout(reveal, 380 + i * 260));
-      return card;
+  /** The morning check: what's ready, what's still growing, and the night's surprise, if any. */
+  morningCard(m, away) {
+    const g = this.game, now = g.now();
+    const phase = g.dayPhase(now);
+    const title = { dawn: 'Good morning', day: 'Welcome back', dusk: 'Good evening', night: 'A quiet night' }[phase];
+    const rows = m.ready.map((r) => {
+      const def = this.game.plantDef(r.plantID), item = this.content.items[def.item];
+      const v = r.variety && g.varietyDef ? g.varietyDef(r.variety) : null;
+      return h('div', { class: 'reward-item' }, this.sprites.element(item.sprite, v ? v.variant : null, 2), ` ${v ? v.name : def.name}${r.count > 1 ? ` ×${r.count}` : ''}, ready to harvest`);
     });
-    const revealAll = () => { timers.forEach(clearTimeout); cards.forEach((c) => c._reveal()); };
-    const left = app.game.state.inventory[itemID] || 0;
-    const close = () => { revealAll(); ov.classList.remove('show'); ov.replaceChildren(); app.changed(false); };
-    const panel = h('div', { class: 'batch-panel', onclick: (e) => { if (!e.target.closest('button')) revealAll(); } },
-      h('h2', { class: 'center' }, `${results.length} × ${def.name}`),
-      h('div', { class: 'batch-grid n' + results.length }, cards),
-      h('p', { class: 'sub center' }, 'Tap to show everything at once. Creatures go to your Creatures tab.'),
-      h('div', { class: 'batch-footer' },
-        left > 1 ? h('button', { class: 'btn orange', onclick: () => { revealAll(); this.openBatchCrack(itemID, Math.min(left, this.batchMax)); } }, `Crack ${Math.min(left, this.batchMax)} more`) : null,
-        left === 1 ? h('button', { class: 'btn orange', onclick: () => { revealAll(); this.openCrack(itemID); } }, 'Crack the last one') : null,
-        h('button', { class: 'btn green', onclick: close }, 'Continue')));
-    ov.replaceChildren(h('div', { class: 'batch-wrap' }, panel));
-    ov.classList.add('show');
+    const body = h('div', { class: 'morning' },
+      rows.length ? h('div', { class: 'gifts' }, rows) : h('p', { class: 'sub' }, g.state.plants.length ? 'Nothing is ready yet.' : 'The garden is waiting for seeds.'),
+      m.growing ? h('p', { class: 'sub' }, `${m.growing} still growing. The next is ready ${this.roughly(m.next - now)}.`) : null,
+      m.surprise ? this.surpriseLine(m.surprise) : null);
+    this.celebrate(title, body, null, rows.length ? 'Lovely' : 'OK');
+  }
+  surpriseLine(s) {
+    const g = this.game;
+    if (s.type === 'selfSeed') return h('p', { class: 'surprise' }, ic('sparkle', 1), ` ${this.aName(g.plantDef(s.plantID)?.name || 'seedling')} has seeded itself nearby.`);
+    if (s.type === 'gift') {
+      const d = g.guestDef(s.visitor), it = this.content.items[s.item];
+      return h('p', { class: 'surprise' }, ic('heart', 1), ` The ${d ? d.name : 'visitor'} left you ${it ? it.name : 'seeds'}.`);
+    }
+    if (s.type === 'rareColour') return h('p', { class: 'surprise' }, ic('sparkle', 1), ` One of your ${g.plantDef(s.plantID)?.name}s has come up ${g.varietyDef(s.variety)?.name.split(' ')[0].toLowerCase()}.`);
+    return null;
   }
 
-  openCrack(itemID) {
-    const app = this.app;
-    const ov = document.getElementById('overlay');
-    const def = this.content.items[itemID];
-    let hits = 0;
-    const needed = 3 + Math.floor(Math.random() * 3);
-    // Pixel crack stages: a data sprite whose frames are the stages (two patterns per geode type).
-    const crackSets = (def.crackSprites || []).filter((id) => this.sprites.has(id));
-    const crackSprite = crackSets.length ? crackSets[Math.floor(Math.random() * crackSets.length)] : null;
-    const crackFrames = crackSprite ? this.sprites.frames(crackSprite) : [];
-    const stoneColour = (() => { const pal = this.sprites.palette(this.sprites.sprite(def.sprite)); const c = pal[4] || pal[2]; return `rgb(${c[0]},${c[1]},${c[2]})`; })();
-    const rockWrap = h('div', { class: 'rock-wrap' });
-    const hint = h('p', { class: 'hint-big' }, 'Tap the rock to crack it open');
-    const stage = h('div', { class: 'crack-stage' }, rockWrap);
-    const footer = h('div', { class: 'crack-footer' });
-    const cfg = this.content.tuning.tutorial || {};
-    let family = null;
-    const needsChoice = cfg.creatureFamily === 'choose' && app.game.hasGuaranteedGeode(itemID);
+  /** A new beauty tier: a gentle card, and what it put in the Store. */
+  beautyCard(e) {
+    const list = e.opens.length ? h('p', { class: 'sub' }, `New in the Store: ${e.opens.join(', ')}.`) : null;
+    this.celebrate(`The garden feels ${e.name.toLowerCase()}`, h('div', {}, h('p', { class: 'sub' }, 'More kinds of plants, flowers in bloom and things to sit by make it lovelier still.'), list));
+  }
 
-    const drawRock = () => {
-      const rock = this.sprites.element(def.sprite, null, 12, '', true);
-      const layers = [rock];
-      const stage = Math.min(crackFrames.length, Math.ceil(hits * crackFrames.length / needed));
-      if (stage > 0) {
-        const f = crackFrames[stage - 1];
-        const c = document.createElement('canvas');
-        c.width = f.w; c.height = f.h;
-        c.getContext('2d').drawImage(f.canvas, 0, 0);
-        c.style.width = f.w * 12 + 'px'; c.style.height = f.h * 12 + 'px';
-        c.className = 'px crack-layer';
-        layers.push(c);
-      }
-      rockWrap.replaceChildren(...layers);
-    };
-    drawRock();
-
-    const chips = () => {
-      for (let i = 0; i < 4; i++) {
-        const c = h('i', { class: 'chip', style: `background:${stoneColour}` });
-        c.style.setProperty('--dx', `${Math.random() * 280 - 140}px`);
-        c.style.setProperty('--dy', `${Math.random() * 180 - 140}px`);
-        stage.append(c);
-        setTimeout(() => c.remove(), 500);
-      }
-    };
-
-    const burst = () => {
-      const results = app.crack(itemID, { family });
-      const flash = h('div', { class: 'flash' });
-      ov.append(flash);
-      setTimeout(() => flash.remove(), 700);
-      if (navigator.vibrate) navigator.vibrate([20, 40, 60]);
-      // The opened geode (hollow lined with crystals) splits into two halves.
-      const openID = def.openSprite && this.sprites.has(def.openSprite) ? def.openSprite : def.sprite;
-      const left = this.sprites.element(openID, null, 12, 'half left');
-      const right = this.sprites.element(openID, null, 12, 'half right');
-      const r = results[0];
-      let revealEl, text;
-      if (!r) {
-        revealEl = h('span');
-        text = h('p', { class: 'hint-big' }, 'Just dust this time.');
-      } else if (r.creature) {
-        const art = app.art(r.creature);
-        revealEl = h('div', { class: 'rays-wrap' }, this.burst(null), this.sprites.element(art.sprite, art.variant, 10, 'grow-in', true));
-        text = h('div', { class: 'center' },
-          h('h2', { class: 'glimmer' }, r.creature.isGlimmer ? [ic('glimmer', 2), `A glimmer ${app.displayName(r.creature)} was inside!`, ic('glimmer', 2)] : `A ${app.displayName(r.creature)} was curled up inside!`),
-          h('p', { class: 'sub' }, this.traitSummary(r.creature)),
-          h('p', { class: 'sub' }, "It's resting in your Creatures tab."),
-          r.isNew ? h('p', { class: 'new' }, 'New Field Guide entry!') : null);
-      } else {
-        const gem = this.content.items[r.item];
-        const color = RARITY_COLORS[gem?.rarity] || '#fff';
-        revealEl = h('div', { class: 'rays-wrap' }, this.burst(color), this.sprites.element(gem?.sprite || '__missing', null, 10, 'grow-in', true));
-        text = h('div', { class: 'center' },
-          h('h2', {}, gem ? gem.name : r.item),
-          gem ? h('p', { class: 'rarity', style: `color:${color}` }, rarityName(gem.rarity).toUpperCase()) : null,
-          gem && gem.use ? h('p', { class: 'sub' }, this.useText(gem.use)) : null,
-          r.isNew ? h('p', { class: 'new' }, 'New Field Guide entry!') : null);
-      }
-      rockWrap.replaceChildren(left, right, revealEl);
-      requestAnimationFrame(() => rockWrap.classList.add('split'));
-      hint.replaceWith(text);
-      const left2 = app.game.state.inventory[itemID] || 0;
-      footer.replaceChildren(...[
-        left2 > 0 ? h('button', { class: 'btn orange', onclick: () => this.openCrack(itemID) }, `Crack another (${left2})`) : null,
-        left2 > 1 ? h('button', { class: 'btn orange', onclick: () => this.openBatchCrack(itemID, Math.min(left2, this.batchMax)) }, `Crack ${Math.min(left2, this.batchMax)} at once`) : null,
-        h('button', { class: 'btn grey', onclick: () => { ov.classList.remove('show'); ov.replaceChildren(); } }, 'Done'),
-      ].filter(Boolean));
-    };
-
-    rockWrap.onclick = () => {
-      if (needsChoice && !family) return;
-      if (hits >= needed) return;
-      hits++;
-      rockWrap.classList.remove('shake');
-      void rockWrap.offsetWidth;
-      rockWrap.classList.add('shake');
-      if (navigator.vibrate) navigator.vibrate(15);
-      chips();
-      if (hits >= needed) { rockWrap.onclick = null; setTimeout(burst, 120); } else { drawRock(); hint.textContent = 'Keep tapping…'; }
-    };
-
-    footer.replaceChildren(h('button', { class: 'btn grey', onclick: () => { ov.classList.remove('show'); ov.replaceChildren(); } }, 'Not now'));
-    if (needsChoice) {
-      // Test option: the player picks which family hatches from the tutorial geode.
-      hint.textContent = this.story('tutorial.crack.choose');
-      const families = cfg.families || ['fungling', 'sproutling', 'geodeCritter'];
-      const pick = h('div', { class: 'family-pick' }, families.map((fam) => {
-        const sample = this.content.creatureList.find((c) => c.family === fam && c.rarity === 'common');
-        return h('button', { class: 'btn grey family', onclick: () => {
-          family = fam;
-          pick.remove();
-          hint.textContent = 'Tap the rock to crack it open';
-        } }, sample ? this.sprites.element(sample.sprite, null, 3) : '', h('span', {}, sample?.familyName || fam));
-      }));
-      hint.after(pick);
-    }
-    ov.replaceChildren(h('div', { class: 'crack-screen' }, stage, hint, footer));
-    ov.onclick = null;
-    ov.classList.add('show');
+  /** After an older save was archived: a fresh garden, with the Field Guide kept. */
+  freshGardenCard(e) {
+    this.celebrate('A fresh garden', h('div', {},
+      h('p', { class: 'sub' }, 'The forest has changed a great deal since you were last here. Your old forest is kept safe, and a fresh garden is waiting around the old log.'),
+      e.kept ? h('p', { class: 'sub' }, `Your Field Guide remembers everything you found (${e.kept} entries).`) : null), null, 'Begin');
   }
 }
-
-export { RARITIES };

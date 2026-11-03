@@ -1,409 +1,707 @@
 {
-  "grid": {
-    "width": 40,
-    "height": 56
+ "_about": "Every tuning number for the web game.",
+ "grid": {
+  "width": 40,
+  "height": 56
+ },
+ "clearing": {
+  "_about": "The starting clearing (tiles), centred in the forest. Small on purpose: the starter kit and the first few days of buying fill it, so Room to grow matters.",
+  "startWidth": 5,
+  "startHeight": 8
+ },
+ "start": {
+  "_about": "A new garden opens on a little grotto around the old log: scenery along its edge (visual only), and the opening's seed tin (Content/opening.json) on a free tile within tin.near of the old log.",
+  "tin": {
+   "sprite": "garden.tin",
+   "near": 2
   },
-  "placementSlots": 3,
-  "starterCreatures": [],
-  "statCap": 100,
-  "rampSecondsToFull": 43200,
-  "influenceSpreadHours": 6,
-  "influenceSpreadMinRadius": 0.5,
-  "_influenceSpread": "A placed creature's influence starts close around it (influenceSpreadMinRadius) and spreads to its full radius over influenceSpreadHours; its strength ramps separately (each species' rampHours).",
-  "decaySecondsToZero": 43200,
-  "falloff": {
-    "curve": "smoothstep",
-    "innerRadiusFraction": 0.0,
-    "radiusPadding": 1
-  },
-  "glimmerChance": 0.01,
-  "geodes": { "_about": "enabled false: geodes are out of the game for now: none spawn, geodes on the map leave on load, and geodes, gems and geode-only materials are hidden from the Bag, Field Guide, Store and Spirit Well (kept in saves). The data stays.", "enabled": false, "batchMax": 5 },
-  "interactions": {
-    "_about": "Creatures whose influence reaches overlap can interact. Cosmetic moments are visual only (renderer). Reward moments are rolled per spawn tick per eligible pair: pairChancePerTick, then rewardChance x rarity bonus, capped at maxRewardsPerDay; each pair then waits pairCooldownMinutes.",
-    "pairChancePerTick": 0.02,
-    "pairCooldownMinutes": 180,
-    "rewardChance": 0.04,
-    "maxRewardsPerDay": 3,
-    "rewardWeights": { "seed": 0.6, "geode": 0.4 },
-    "rarityRewardBonus": { "common": 1, "uncommon": 1.1, "rare": 1.25, "veryRare": 1.4, "legendary": 1.6 },
-    "cosmetic": { "everySeconds": [5, 12], "pairCooldownSeconds": [35, 80], "weights": { "heart": 3, "hop": 2, "chase": 2, "visit": 2, "face": 1 } }
-  },
-  "creatureRoll": {
-    "_about": "balanceVersion: bump after rebalancing (design/creature_balance.json); owned creatures are re-rolled to the new species values on load, keeping name, glimmer and placement.",
-    "balanceVersion": 3,
-    "bonusRange": [
-      0.8,
-      1.0
-    ],
-    "glimmerBonusMult": 1.5,
-    "glimmerRadiusBonus": 2
-  },
-  "spawns": {
-    "tickSeconds": 180,
-    "attemptsPerTick": 3,
-    "spawnChance": 0.25,
-    "maxTotal": 640,
-    "lifetimeSeconds": 172800, "wilting": {"_about": "Unpicked finds fade after this many hours by rarity (an item's own lifetimeHours wins), so the grove follows its terrain instead of clogging up. Starting finds never fade.", "common": 30, "uncommon": 60, "rare": 120, "veryRare": 168, "legendary": 168},
-    "maxCatchUpTicks": 288,
-    "maxPerOpenTile": 0.32,
-    "minCap": 5,
-    "scaling": {
-      "minMultiplier": 0.25,
-      "maxMultiplier": 4
-    },
-    "locationWeighting": {
-      "_about": "Where spawns land. weight = base x generalByEffectCount[effects on the tile] x (1 + min(maxIntensityBonus, perStatPoint x stat total)), capped at maxWeight. Effects = creatures reaching the tile + soil boosts and buried school seeds + special-effect areas + combos.",
-      "enabled": true,
-      "base": 1,
-      "generalByEffectCount": [1, 8, 12, 16],
-      "perStatPoint": 0.05,
-      "maxIntensityBonus": 3,
-      "maxWeight": 64
-    },
-    "blankTileSpawnChance": 0.1, "blankCapShare": 0.25,
-    "terrainAffinity": {
-      "_about": "What spawns on developed ground. Items with stat needs that are met get x byRarity, plus perExtraLevel for each intensity level the tile is above their need (averaged over their needs, up to extraLevelCap); beyond overshootGrace levels above their need they fade by overshootFadePerLevel per level, so rich ground favours the items made for it over low-need commons. Items with no needs fade by genericFadePerLevel per intensity level (down to genericMinFactor) on ground whose stats favour a different category.",
-      "byRarity": { "common": 6, "uncommon": 12, "rare": 30, "veryRare": 80, "legendary": 250 },
-      "perExtraLevel": 0.25,
-      "extraLevelCap": 2,
-      "overshootGrace": 2,
-      "overshootFadePerLevel": 0.25,
-      "genericFadePerLevel": 0.4,
-      "genericMinFactor": 0.08
-    },
-    "categoryScaling": {
-      "minMultiplier": 0.05,
-      "maxMultiplier": 6,
-      "mushroom": {"spore": 10, "glow": 6, "bloom": -12},
-      "plant": {"bloom": 10, "verdure": 8, "spore": -12},
-      "geode": {"shimmer": 10, "spirit": 10}
-    },
-    "categoryWeights": {
-      "mushroom": 1,
-      "plant": 1,
-      "geode": 1
-    }
-  },
-  "seeds": {
-    "growSeconds": [3600, 10800],
-    "_about": "Mystery Seeds only grow seed flowers (items with spawn.seedOnly, from the spawn spreadsheet). Up to softNeedsUpTo rarity they grow anywhere: unmet stat needs just weigh them by unmetFactor; met needs get the usual terrain pull. Rarer seed flowers need their terrain.",
-    "softNeedsUpTo": "uncommon",
-    "unmetFactor": 1
-  },
-  "gems": {
-    "_about": "soilBoost false: gems and geode materials are kept to trade at the Old Log, not crushed into tiles (their uses stay in the data for later).",
-    "soilBoost": false
-  },
-  "rarityWeights": {
-    "common": 60,
-    "uncommon": 25,
-    "rare": 10,
-    "veryRare": 3,
-    "legendary": 0.5
-  },
-  "pity": {
-    "fungling": 25,
-    "sproutling": 15,
-    "geodeCritter": 20,
-    "rareGem": 10,
-    "rareEgg": 6,
-    "hatchNewSpecies": 4
-  },
-  "visuals": {
-    "maxDecorationsPerTile": 3,
-    "intensityStages": [6, 16, 26, 36, 46, 56, 66, 76, 86],
-    "refreshSeconds": 5,
-    "edge": {
-      "ground": [
-        "tile.edge.a",
-        "tile.edge.b"
-      ],
-      "decorations": [
-        "deco.shrub.a",
-        "deco.shrub.b",
-        "deco.shrub.c",
-        "deco.shrub.d",
-        "deco.shrub.e",
-        "deco.shrub.f"
-      ],
-      "baseDensity": 1.0,
-      "densityPerTile": 0,
-      "maxDensity": 1.0
-    },
-    "debugSpeeds": [
-      1,
-      60,
-      600,
-      3600
-    ],
-    "viewBorderTiles": 0.5,
-    "elevation": { "enabled": false, "threshold": 0.15, "facePx": 7, "faceColor": "#5e5e68", "faceDark": "#3a3a44", "lipColor": "#c8c8d0", "pitPx": 6, "pitColor": "rgba(14,8,18,0.55)" },
-    "glowLight": { "enabled": true, "minGlow": 6, "alphaPerPoint": 0.0125, "maxAlpha": 0.5, "radius": 14, "color": "#7cf2ff" },
-    "petals": { "enabled": true, "minBloom": 12, "ratePerPoint": 0.0004, "max": 50, "lifeSeconds": 5, "windX": 8, "windY": 3, "colors": ["#ff9ccf", "#fff3c4", "#c58cff"] },
-    "canopy": {
-      "_about": "Tree shadows from design/shadow_overlay_v2.webp (processed by tools/gen_canopy.py into img/canopy.png: alpha = sunlight, texelsPerPx image px per art px, drawn smooth at up to maxRes buffer px per art px). Layer 1 at full strength, layer 2 offset/scaled/flipped and added at secondAlpha so the flecks never repeat on a grid, and a large soft region layer that lifts the shade in some areas (clearings).",
-      "enabled": true,
-      "image": "img/canopy.png",
-      "texelsPerPx": 2,
-      "edge": [0.1, 0.75],
-      "hot": [0.55, 1],
-      "lightBlend": "lighter",
-      "shafts": { "enabled": true, "angleDeg": 22, "spacing": 72, "width": 40, "keep": 0.6, "drift": 10, "driftSpeed": 0.05, "blend": "screen" },
-      "maxRes": 3,
-      "scale": 1,
-      "second": { "scale": 1.21, "offset": [233, 151], "flip": true, "alpha": 0 },
-      "region": { "image": "img/canopy-region.png", "scale": 5, "strength": 0, "offset": [211, 47] },
-      "swayPx": 3,
-      "swaySeconds": 23
-    },
-    "lighting": {
-      "_about": "Per state; values blend smoothly across clock.transitionMinutes around each boundary. shade/light = canopy shade and sunlight-patch strength (light is drawn with canopy.lightBlend); glow = warm glow on the brightest centres; shafts = strength of the diagonal light beams; classic = the earlier look's values (Debug: Sunlight classic). ambient multiplies the whole scene.",
-      "refreshSeconds": 5,
-      "fireflies": { "perTile": 0.07, "max": 60 },
-      "states": {
-        "dawn": { "shade": 0.44, "shadeColor": "#0e1a16", "light": 0.7, "lightColor": "#a2603e", "glow": 0.22, "glowColor": "#ffd8c0", "shafts": 0.2, "shaftColor": "#ffd0b0", "classic": { "shade": 0.36, "light": 0.32, "lightColor": "#ffd6b0" }, "ambient": "#e8ccd8", "ambientAlpha": 0.22, "fireflies": 0.15, "sparkle": "#ffe6d0", "sparkleEvery": 6 },
-        "day": { "shade": 0.55, "shadeColor": "#04120a", "light": 0.75, "lightColor": "#a2743a", "glow": 0.28, "glowColor": "#ffe8b8", "shafts": 0.2, "shaftColor": "#fff0c0", "classic": { "shade": 0.44, "light": 0.55, "lightColor": "#fff1c0" }, "ambient": "#ffffff", "ambientAlpha": 0, "fireflies": 0, "sparkle": "#fff8d8", "sparkleEvery": 4 },
-        "dusk": { "shade": 0.5, "shadeColor": "#140e1c", "light": 0.7, "lightColor": "#a24e1c", "glow": 0.2, "glowColor": "#ffc890", "shafts": 0.2, "shaftColor": "#ffb070", "classic": { "shade": 0.42, "light": 0.24, "lightColor": "#ffb070" }, "ambient": "#d8b4a8", "ambientAlpha": 0.26, "fireflies": 0.45, "sparkle": "#ffd0a0", "sparkleEvery": 6 },
-        "night": { "shade": 0.4, "shadeColor": "#02060e", "light": 0.55, "lightColor": "#3c4c74", "glow": 0.12, "glowColor": "#d8e6ff", "shafts": 0.06, "shaftColor": "#b8d0ff", "classic": { "shade": 0.34, "light": 0.2, "lightColor": "#b8d0ff" }, "ambient": "#56688f", "ambientAlpha": 0.46, "fireflies": 1, "sparkle": "#c8dcff", "sparkleEvery": 10 }
-      }
-    },
-    "overlayFadeSeconds": 0.6
-  },
-  "naming": {
-    "quietThreshold": 0.3,
-    "featureFraction": 0.45
-  },
-  "clock": {
-    "_about": "Real local time of day. One place for the four lighting states; night (nightStartHour to dawnStartHour) also drives night-only spawns and Glow.",
-    "dawnStartHour": 5,
-    "dayStartHour": 7,
-    "duskStartHour": 17,
-    "nightStartHour": 19,
-    "transitionMinutes": 50,
-    "rainChance": 0.25,
-    "weatherBlockHours": 2
-  },
-  "wanderers": {
-    "maxCatchUpDays": 7
-  },
-  "intensity": {
-    "_about": "One authoritative mapping from a tile's raw stat value to what players see. Below minInfluence a stat is inactive everywhere (no visuals, no spawn or effect influence). Raw values stay in the simulation and saves.",
-    "minInfluence": 6,
-    "bands": [
-      { "min": 6, "label": "Low" },
-      { "min": 16, "label": "Moderate" },
-      { "min": 26, "label": "Moderate+" },
-      { "min": 36, "label": "Medium" },
-      { "min": 46, "label": "Medium+" },
-      { "min": 56, "label": "High" },
-      { "min": 66, "label": "High+" },
-      { "min": 76, "label": "Very High" },
-      { "min": 86, "label": "Maximum" }
-    ]
-  },
-  "offerings": {
-    "_about": "The Old Log board (Resources/Content/requests.json, cosmetics.json from design/Undergrowth_Offerings.xlsx). Compost: spare items of these categories turn into points by rarity; compost only buys recolours, visitor rerolls and cheap decor.",
-    "compostCategories": ["mushroom", "plant", "geode", "gem", "seed"],
-    "compost": {"common": 1, "uncommon": 3, "rare": 8, "veryRare": 20, "legendary": 50},
-    "recolorCost": 4,
-    "compostEnabled": false
-  },
-  "creatureFinds": "egg",
-  "eggs": {
-    "enabled": false,
-    "_about": "enabled false: the egg system is off (no eggs from finds, the Well, the shop or requests; Nest is hidden; nests and eggs already owned are kept, hidden). creatureFinds 'egg': creature finds give eggs (Resources/Content/eggs.json); 'instant' gives the creature as before. Eggs hatch in nests (baseNests + Old Log nest unlocks) into a species of their family at or below their tier, chosen from the nest tile's stats at hatch time, weighted by find chance x sameTierBoost (the egg's tier) or tierBelowBoost (one below). The starter's guaranteed creature still comes straight away. Pity (tuning pity): rareEgg = rare+ foraged eggs downgraded in a row before one keeps its tier; hatchNewSpecies = hatches in a family with no new species before the next favours an undiscovered one the tile allows.",
-    "baseNests": 1,
-    "sameTierBoost": 8,
-    "tierBelowBoost": 2
-  },
-  "spiritWell": {"_about": "The Spirit Well (landmark found on the first forest expansion). Offerings of eligible items (categories map item categories to the well's three groups) have hidden values (values by rarity, itemValues overrides). The demanded group (one per local half-day: midnight-noon, noon-midnight, picked at random when the half-day starts and saved) counts x demandMult. Effective value V sets s = min(1, ln(1+V/valueScale) / ln(1+valueCap/valueScale)); tier weights blend from tierWeightsLow (s=0) to tierWeightsHigh (s=1). One primary reward from that tier's pool (entries above the player's Field Guide count, minGuide, are skipped; an empty tier falls to the one below), then up to bonus.max bonus rewards, each with chance baseChance + (maxChance-baseChance) x s, rolled at a lower tier (s x tierShift). Buffs: temporary multipliers on existing systems, refreshed by keeping the stronger one and extending (up to maxHours).", "categories": {"mushrooms": ["mushroom"], "plants": ["plant"], "gems": ["gem"]}, "values": {"common": 1, "uncommon": 3, "rare": 8, "veryRare": 20, "legendary": 50}, "itemValues": {"plant.clover": 0.6, "plant.sorrel": 0.6, "mushroom.brown-button-cap": 0.6}, "exclude": ["plant.heartwood-sapling", "mushroom.ancient-sporecrown"], "confirmRarities": ["rare", "veryRare", "legendary"], "demandMult": 1.6, "minValue": 5, "valueScale": 12, "valueCap": 400, "tiers": ["common", "uncommon", "rare", "epic", "legendary"], "tierWeightsLow": [70, 24, 5, 0.9, 0.1], "tierWeightsHigh": [8, 30, 36, 20, 6], "bonus": {"baseChance": 0.06, "maxChance": 0.4, "max": 2, "tierShift": 0.5}, "rewards": {"common": [{"type": "item", "item": "seed.mystery-seed", "count": [1, 2], "weight": 4}, {"type": "item", "item": "geode.pebble-geode", "count": [1, 1], "weight": 2}, {"type": "item", "item": "seed.spore", "count": [1, 1], "weight": 0.6}, {"type": "item", "item": "seed.glow", "count": [1, 1], "weight": 0.6}, {"type": "item", "item": "seed.bloom", "count": [1, 1], "weight": 0.6}, {"type": "item", "item": "seed.verdure", "count": [1, 1], "weight": 0.6}, {"type": "item", "item": "seed.shimmer", "count": [1, 1], "weight": 0.6}, {"type": "item", "item": "seed.spirit", "count": [1, 1], "weight": 0.6}, {"type": "item", "item": "gem.quartz", "count": [1, 1], "weight": 0.6}, {"type": "item", "item": "gem.flint", "count": [1, 1], "weight": 0.6}, {"type": "item", "item": "gem.mica-flake", "count": [1, 1], "weight": 0.6}, {"type": "item", "item": "gem.agate", "count": [1, 1], "weight": 0.6}, {"type": "item", "item": "gem.pyrite", "count": [1, 1], "weight": 0.6}], "uncommon": [{"type": "item", "item": "seed.mystery-seed", "count": [2, 3], "weight": 2}, {"type": "item", "item": "geode.mossy-geode", "count": [1, 1], "weight": 1.5}, {"type": "item", "item": "geode.rootbound-geode", "count": [1, 1], "weight": 1.5}, {"type": "egg", "tier": "common", "weight": 2}, {"type": "buff", "buff": "lively", "weight": 1}, {"type": "item", "item": "gem.jasper", "count": [1, 1], "weight": 0.4}, {"type": "item", "item": "gem.malachite", "count": [1, 1], "weight": 0.4}, {"type": "item", "item": "gem.emerald", "count": [1, 1], "weight": 0.4}, {"type": "item", "item": "gem.amethyst", "count": [1, 1], "weight": 0.4}, {"type": "item", "item": "gem.amber", "count": [1, 1], "weight": 0.4}, {"type": "item", "item": "gem.moonstone", "count": [1, 1], "weight": 0.4}], "rare": [{"type": "relic", "tier": "common", "weight": 0.6, "minGuide": 4}, {"type": "egg", "tier": "uncommon", "weight": 3, "minGuide": 6}, {"type": "item", "item": "geode.deep-geode", "count": [1, 1], "weight": 1.5, "minGuide": 10}, {"type": "item", "item": "material.forest-fruit", "count": [1, 2], "weight": 1}, {"type": "buff", "buff": "luckyFinds", "weight": 1}, {"type": "buff", "buff": "deepVeins", "weight": 1}, {"type": "buff", "buff": "quickSprouts", "weight": 1}, {"type": "buff", "buff": "warmBrood", "weight": 1}, {"type": "item", "item": "gem.garnet", "count": [1, 1], "weight": 0.5}, {"type": "item", "item": "gem.topaz", "count": [1, 1], "weight": 0.5}, {"type": "item", "item": "gem.fluorite", "count": [1, 1], "weight": 0.5}, {"type": "item", "item": "gem.sapphire", "count": [1, 1], "weight": 0.5}], "epic": [{"type": "relic", "tier": "uncommon", "weight": 0.8, "minGuide": 10}, {"type": "egg", "tier": "rare", "weight": 3, "minGuide": 15}, {"type": "item", "item": "geode.glimmering-geode", "count": [1, 1], "weight": 1.5, "minGuide": 20}, {"type": "buff", "buff": "lively", "mult": 1.6, "hours": 8, "weight": 1}, {"type": "buff", "buff": "luckyFinds", "mult": 2, "hours": 8, "weight": 1}, {"type": "item", "item": "gem.star-sapphire", "count": [1, 1], "weight": 0.5, "minGuide": 15}, {"type": "item", "item": "gem.opal", "count": [1, 1], "weight": 0.5, "minGuide": 15}, {"type": "item", "item": "gem.bioluminite", "count": [1, 1], "weight": 0.5, "minGuide": 15}, {"type": "item", "item": "gem.spore-crystal", "count": [1, 1], "weight": 0.5, "minGuide": 15}], "legendary": [{"type": "relic", "tier": "rare", "weight": 1.2, "minGuide": 15}, {"type": "egg", "tier": "veryRare", "weight": 2, "minGuide": 30}, {"type": "item", "item": "material.moonfall-shard", "count": [1, 1], "weight": 1.5}, {"type": "buff", "buff": "luckyFinds", "mult": 2.5, "hours": 12, "weight": 1}, {"type": "item", "item": "seed.mystery-seed", "count": [8, 10], "weight": 1}]}, "buffs": {"lively": {"name": "Lively grove", "text": "More things turn up in the forest", "mult": 1.3, "hours": 4, "maxHours": 12, "sprite": "ui.icon.leaf"}, "luckyFinds": {"name": "Lucky finds", "text": "Eggs turn up more often in mushrooms, seeds and geodes", "mult": 1.6, "hours": 4, "maxHours": 12, "sprite": "egg.fungling.uncommon"}, "deepVeins": {"name": "Deep veins", "text": "Geodes turn up more often", "mult": 1.6, "hours": 4, "maxHours": 12, "sprite": "item.geode.mossy-geode"}, "quickSprouts": {"name": "Quick sprouts", "text": "Seeds planted now grow faster", "mult": 1.4, "hours": 6, "maxHours": 12, "sprite": "seed.stage.sprout"}, "warmBrood": {"name": "Warm brood", "text": "Eggs nested now hatch sooner", "mult": 1.4, "hours": 6, "maxHours": 12, "sprite": "egg.nest"}}},
-  "relics": {
-    "_about": "Relics (Content/relics.json) are the only permanent way to change the land. A buried relic is a permanent source of its school's stat, built like a placed creature: strength at its tile with the creature falloff over radius, ramping to full over rampHours while its influence spreads from close around it to its full radius over spreadHours. Common: Low-to-Moderate out to about 2 tiles within the hour; higher tiers reach farther and stronger, so rare relics can make legendary triples and earned landmarks. reactionSeconds: how long the tile's answer plays after burying. Sources: shop listings and one-off Old Log requests (spreadsheet), the Spirit Well (spiritWell.rewards type 'relic'), and finds: picking a find on a tile whose strongest stat is at least findDrop.minStat, inside a relic's area buried at least findDrop.minAgeHours ago, drops a relic of that relic's school with findDrop.chance, its tier by findDrop.tierWeights.",
-    "tiers": {
-      "common":    {"strength": 22, "radius": 2.5, "rampHours": 0.5, "spreadHours": 1},
-      "uncommon":  {"strength": 30, "radius": 3.5, "rampHours": 1,   "spreadHours": 2},
-      "rare":      {"strength": 42, "radius": 5,   "rampHours": 2,   "spreadHours": 3},
-      "veryRare":  {"strength": 56, "radius": 6.5, "rampHours": 3,   "spreadHours": 4},
-      "legendary": {"strength": 75, "radius": 8,   "rampHours": 4,   "spreadHours": 6}
-    },
-    "falloff": {"_about": "Relics' own strength drop-off: full strength out to innerRadiusFraction of their reach, then easing out (smoothstep), so a common relic covers its whole 3x3 at Moderate. Seeds keep the general falloff.", "curve": "smoothstep", "innerRadiusFraction": 0.35},
-    "reactionSeconds": 8,
-    "findDrop": {"chance": 0.006, "minStat": 26, "minAgeHours": 24, "tierWeights": {"common": 10, "uncommon": 3, "rare": 0.5}}
-  },
-  "creaturePlacement": {"_about": "false: creatures no longer shape the land. Placing, the Creatures tab, wanderers arriving and creature finds are off (the code stays). Older saves' placed creatures became relics (save version 6); resting creatures are kept, hidden.", "enabled": false},
-  "returnHarvest": {
-    "_about": "Growth while the player is away. When the game opens after at least minAwayMinutes of real time away (developer time speed doesn't count), it grows extra finds for the time away, capped at maxHours: perHour finds per hour, placed on developed ground (stat total at least minStatTotal) weighted by that total, so relic terrain gets most of it; bare ground only gets the normal light scatter. It may go past the normal spawn cap by overCap, and each find is chosen by the normal spawn rules (terrain affinity, home finds, rarity) at a time inside the away window. Seeded from the forest and the away window, so a reload never grants twice. firstReturn: the first return after the first relic is buried puts at least minFinds finds of its school on its ground, minUncommon of them uncommon or rarer. reveal: the camera pans to the best find for panSeconds (instant with reduced motion) and a card sums it up.",
-    "minAwayMinutes": 45,
-    "maxHours": 10,
-    "perHour": 2,
-    "minStatTotal": 6,
-    "overCap": 16,
-    "firstReturn": {"minFinds": 8, "minUncommon": 1},
-    "reveal": {"panSeconds": 1.2}
-  },
-  "schoolSeeds": {
-    "_about": "School seeds (Content/schoolSeeds.json): buried from the Bag on an open tile, a seed adds its school's stat around that tile with the creature falloff (strength at its own tile, radius like a creature's). It ramps in over rampHours, holds until durationHours after burying, then fades out over fadeHours. strength 12 / radius 1.5 makes a Low patch of about 5 tiles (about the patch two neighbouring commons make); Wide Spread adds radiusPerTier. No limit on how many can be buried (set maxBuried to bring one back). Each pick of a find whose main need is a school (its highest stat minimum) drops that school's seed with dropChance. Buried seeds count as soil boosts: they are effects for where spawns land, form terrain and show in the spawn inspector.",
-    "strength": 12,
-    "radius": 1.5,
-    "rampHours": 3,
-    "durationHours": 72,
-    "fadeHours": 6,
-    "dropChance": 0.04
-  },
-  "upgrades": {
-    "_about": "Bought at the Old Log (reward type 'upgrade', one tier per listing, chained in the Offerings spreadsheet). seedSpeed/hatchSpeed: timers run perTier faster per tier. keen*: that category's uncommon-and-rarer spawns (and, for plants, the flowers seeds grow into) weigh x(1 + perTierPerRarity x tier x rarity step). wideSpread: buried school seeds reach radiusPerTier tiles farther (0.5: six seeds still can never form a triple or an earned landmark).",
-    "seedSpeed": {"name": "Quick Roots", "text": "Seeds grow faster", "perTier": 0.25, "maxTier": 3, "sprite": "seed.stage.sprout"},
-    "hatchSpeed": {"name": "Warm Nest", "text": "Eggs hatch faster", "perTier": 0.25, "maxTier": 3, "sprite": "egg.nest"},
-    "keenMushroom": {"name": "Keen Eye: mushrooms", "text": "Rarer mushrooms", "category": "mushroom", "perTierPerRarity": 0.35, "maxTier": 3, "sprite": "item.mushroom.glowcap"},
-    "keenPlant": {"name": "Keen Eye: plants", "text": "Rarer plants and flowers", "category": "plant", "perTierPerRarity": 0.35, "maxTier": 3, "sprite": "item.plant.foxglove"},
-    "keenGeode": {"name": "Keen Eye: geodes", "text": "Rarer geodes", "category": "geode", "perTierPerRarity": 0.35, "maxTier": 3, "sprite": "item.geode.mossy-geode"},
-    "expansion": {"name": "Room to grow", "text": "The treeline steps back", "maxTier": 10, "sprite": "deco.shrub.a"},
-    "wideSpread": {"name": "Wide Spread", "text": "Buried school seeds reach a little farther", "radiusPerTier": 0.5, "maxTier": 1, "sprite": "seed.school.verdure"}
-  },
-  "visitors": {
-    "_about": "Visitors (Content/visitors.json): forest animals that come to the grotto, mostly while the player is away. Separate from the Old Log's traders. Every checkMinutes of game time (offline catch-up included, up to maxCatchUpDays) each visitor's interest rises by interest.gain while the grotto meets its preferences (its school at its min intensity on at least minTiles tiles, or its named terrain there; and its liked find growing unpicked on that ground, if it has one; x rainMult in rain if it likes rain), and falls by interest.decay when it doesn't. Stages: signs (tracks appear on its ground during its time window, chance tracks.chance per check, fading after tracks.hours), clues (tapping tracks reads a clue that names a preference the player doesn't know yet; a liked find gets nibbled), present (in its time window, and in rain if it likes rain, it comes with presence.chance per check for presence.minutes, at most presence.perDay a day). Tapping a present visitor befriends it; befriended ones come more often (befriended*) and leave a gift (a liked find or a school seed) with gift.chance. firstVisitor: on the first return after the first relic, the visitor of that relic's school gets this much interest and its tracks circle the relic, one clue ready.",
-    "checkMinutes": 30,
-    "maxCatchUpDays": 7,
-    "minTiles": 2,
-    "interest": {"gain": 1.5, "decay": 1, "rainMult": 2, "max": 100},
-    "stages": {"signs": 10, "clues": 20, "present": 60},
-    "tracks": {"chance": 0.35, "hours": 24, "maxPerVisitor": 3},
-    "presence": {"chance": 0.35, "minutes": [20, 40], "perDay": 1, "befriendedPerDay": 2, "befriendedChanceMult": 2},
-    "gift": {"chance": 0.5},
-    "firstVisitor": {"interest": 22, "tracks": 3}
-  },
-  "traders": {
-    "_about": "Traders: wanderers at the Old Log asking for items (requests of kind 'visitor' in the spreadsheet; they now pay in school seeds). perDay of them each local day, chosen from the ones whose gating is met; a visitor can be swapped for another for rerollCost compost, up to maxRerolls a day.",
-    "perDay": 2,
-    "rerollCost": 6,
-    "maxRerolls": 3
-  },
-  "creatureCap": {
-    "_about": "Off by default (no creature cap). When enabled, placed creatures are limited to the day-based slots (slotUnlocks) plus slots earned at the Old Log (unlock 'slot').",
-    "enabled": false
-  },
-  "terrains": { "enabled": false,
-    "_about": "enabled false: named pair and triple terrains are off for now (only the six base terrains show); the data below stays. Named terrains formed by stat pairs (Low intensity, 10+ each, so two neighbouring commons make one) and triples (30+ each, for the legendary ones). A tile shows one: the most specific match (more stats first), then the one with the highest total of its stats. Its home items get x homeMult; its rule adds: night / day / rain (home items x that at those times), category (that category likelier to be chosen there), location (spawns land there x that often). The tile also counts one extra effect for where spawns land.",
-    "homeMult": 3,
-    "foxfire-fen": {"name": "Foxfire Fen", "requires": {"spore": {"min": 10}, "glow": {"min": 10}}, "home": ["mushroom.foxfire-button", "mushroom.blue-stain-cap", "mushroom.glowcap", "mushroom.moonlight-morel"], "rule": {"night": 2}},
-    "rain-garden": {"name": "Rain Garden", "requires": {"spore": {"min": 10}, "bloom": {"min": 10}}, "home": ["plant.violet", "mushroom.bloom-bonnet", "plant.trillium", "plant.bluebell", "mushroom.coral-fungus", "plant.ghost-orchid"], "rule": {"rain": 3}},
-    "dewcrystal-dell": {"name": "Dewcrystal Dell", "requires": {"spore": {"min": 10}, "shimmer": {"min": 10}}, "home": ["mushroom.pebble-cap", "mushroom.shelf-fungus", "geode.mossy-geode"], "rule": {"category": {"mushroom": 2}}},
-    "fernbrake": {"name": "Fernbrake", "requires": {"spore": {"min": 10}, "verdure": {"min": 10}}, "home": ["plant.fern", "plant.moss-tuft", "mushroom.chanterelle", "mushroom.puffball", "mushroom.lions-mane", "plant.pitcher-plant"], "rule": {"location": 1.6}},
-    "crystal-glade": {"name": "Crystal Glade", "requires": {"glow": {"min": 10}, "shimmer": {"min": 10}}, "home": ["mushroom.crystal-cap", "geode.glimmering-geode", "mushroom.amethyst-deceiver"], "rule": {"category": {"geode": 2}}},
-    "lantern-hollow": {"name": "Lantern Hollow", "requires": {"glow": {"min": 10}, "spirit": {"min": 10}}, "home": ["mushroom.foxfire-button", "plant.hollow-root", "mushroom.ghost-fungus", "plant.deeproot-lantern"], "rule": {"night": 2}},
-    "moonlit-garden": {"name": "Moonlit Garden", "requires": {"glow": {"min": 10}, "bloom": {"min": 10}}, "home": ["plant.moonflower", "plant.glowbloom", "mushroom.starlight-bonnet"], "rule": {"night": 3}},
-    "wisp-thicket": {"name": "Wisp Thicket", "requires": {"glow": {"min": 10}, "verdure": {"min": 10}}, "home": ["mushroom.foxfire-button", "plant.sorrel", "plant.deeproot-lantern"], "rule": {"night": 2}},
-    "prism-garden": {"name": "Prism Garden", "requires": {"bloom": {"min": 10}, "shimmer": {"min": 10}}, "home": ["plant.moss-rose", "plant.stonecrop", "plant.crystal-thistle"], "rule": {"day": 2}},
-    "sunken-garden": {"name": "Sunken Garden", "requires": {"bloom": {"min": 10}, "spirit": {"min": 10}}, "home": ["plant.hollow-root", "plant.cave-lily"], "rule": {"category": {"plant": 2}}},
-    "dreaming-hollow": {"name": "Dreaming Hollow", "requires": {"shimmer": {"min": 10}, "spirit": {"min": 10}}, "home": ["mushroom.earthstar", "geode.deep-geode", "geode.pebble-geode"], "rule": {"category": {"geode": 3}}},
-    "overgrown-crystals": {"name": "Overgrown Crystals", "requires": {"shimmer": {"min": 10}, "verdure": {"min": 10}}, "home": ["plant.pebblewort", "geode.rootbound-geode"], "rule": {"location": 1.5}},
-    "root-tangle": {"name": "Root Tangle", "requires": {"spirit": {"min": 10}, "verdure": {"min": 10}}, "home": ["plant.hollow-root", "mushroom.turkey-tail", "plant.deeproot-lantern"], "rule": {"category": {"plant": 2}}},
-    "glowworm-grotto": {"name": "Glowworm Grotto", "requires": {"spore": {"min": 30}, "glow": {"min": 30}, "spirit": {"min": 30}}, "home": ["mushroom.ancient-sporecrown", "mushroom.cave-truffle", "mushroom.ghost-fungus", "mushroom.glowcap"], "rule": {"night": 2}},
-    "heartwood-grove": {"name": "Heartwood Grove", "requires": {"bloom": {"min": 30}, "verdure": {"min": 30}, "spirit": {"min": 30}}, "home": ["plant.heartwood-sapling", "plant.cave-lily", "plant.sunpetal", "plant.foxglove"], "rule": {"day": 2}},
-    "heartstone-vein": {"name": "Heartstone Vein", "requires": {"glow": {"min": 30}, "shimmer": {"min": 30}, "spirit": {"min": 30}}, "home": ["geode.ancient-heartstone", "geode.deep-geode", "geode.glimmering-geode", "mushroom.crystal-cap"], "rule": {"category": {"geode": 3}}},
-    "amethyst-seep": {"name": "Amethyst Seep", "requires": {"spore": {"min": 30}, "glow": {"min": 30}, "shimmer": {"min": 30}}, "home": ["mushroom.amethyst-deceiver", "mushroom.crystal-cap", "geode.mossy-geode", "mushroom.glowcap"], "rule": {"night": 2}}
-  },
-  "combos": { "enabled": false,
-    "_about": "enabled false: mixed ground (Shallow pool, Mossy bank, Wild meadow) is off for now; the data below stays. Combo tiles (the core of the game): a tile that meets every requirement becomes that combo. Uses the tile's raw stats.",
-    "pool": { "name": "Shallow pool", "requires": { "spore": { "min": 12 }, "spirit": { "min": 8 } }, "onlySporeItems": true,
-      "clusterBonus": 2.5,
-      "lilyPads": { "minTiles": 6, "chance": 0.75, "tilesPerExtraPad": 6, "maxPads": 5, "flowerChance": 0.3 },
-      "splash": { "everySeconds": 0.65, "max": 24 } },
-    "moss": { "name": "Mossy bank", "requires": { "shimmer": { "min": 6 }, "spore": { "min": 6 }, "verdure": { "min": 6 } }, "tilesPerBug": 8, "maxBugs": 40, "_bugs": "Each connected moss patch gets one bug per tilesPerBug tiles (rounded, at least one): 1-2 per 12 tiles." },
-    "meadow": { "name": "Wild meadow", "requires": { "bloom": { "min": 8 }, "verdure": { "min": 8 } }, "plantCategoryMult": 3, "plantGrowth": { "perPoint": 0.06, "maxBonus": 2.5 }, "flowerGrowthMult": 2.5 }
-  },
-  "terrain": {
-    "_about": "Each stat's identity. Elevation: Shimmer raises, Spirit lowers (-1..1). Shares = a stat's fraction of the tile's total.",
-    "elevation": { "shimmerPerPoint": 0.025, "spiritPerPoint": 0.025, "max": 1 },
-    "statDecayRate": { "shimmer": 0.25 },
-    "dominantShare": 0.35,
-    "ambientSpore": {
-      "enabled": true,
-      "spreadRate": 0.05,
-      "downhillBoost": 2.5,
-      "uphillPenalty": 0.8,
-      "gravityPerTick": 0.02,
-      "lowGroundRetention": 0.55,
-      "evaporation": 0.08,
-      "shimmerBlocksAt": 40,
-      "max": 22,
-      "minKeep": 0.05
-    },
-    "glowCycle": { "dayFactor": 0.4, "nightFactor": 1.6, "spiritForFullGlow": 40, "visualDay": 0.35, "visualNight": 1.5 },
-    "bloomCycle": { "openHour": 6, "peakHour": 12, "closeHour": 19, "minFactor": 0.15, "maxFactor": 1.3 },
-    "bloom": { "varietyPerPoint": 0.012, "minVarietyExponent": 0.35, "wandererBonusPerPoint": 0.03 },
-    "verdure": { "hideThreshold": 30, "seedGrowthPerPoint": 0.015, "extraSeedPerPoint": 0.008, "maxExtraSeedChance": 0.6 },
-    "spore": { "mushroomGrowth": { "_about": "Spore tiles grow mushrooms faster: extra mushroom chance per tile = normal per-tile rate x min(maxBonus, Spore x perPoint).", "minSpore": 6, "perPoint": 0.08, "maxBonus": 1 } }
-  },
-  "debugTools": true,
-  "clearing": {
-    "startWidth": 7,
-    "startHeight": 14
-  },
-  "start": {
-    "_about": "A new forest opens on a little grotto around the old log: scenery along its edge, and finds waiting (kept until picked). Plants with 'forced' always drop those items (seeds). relic: the opening's relic (Content/opening.json) waits on a free tile within relic.near of the old log; tapping it asks the questions that choose its school. guaranteedIn / eggFamily / firstEggHatchMinutes (the old guaranteed egg) only apply while creatures are on.",
-    "relic": {"item": "relic.unknown", "near": 2},
-    "spawns": [
-      {"item": "mushroom.brown-button-cap", "count": 2},
-      {"item": "mushroom.red-toadstool", "count": 1, "forced": [{"item": "seed.spore", "count": 1}]},
-      {"item": "plant.clover", "count": 1, "forced": [{"item": "seed.mystery-seed", "count": 1}]},
-      {"item": "plant.sorrel", "count": 1, "forced": [{"item": "seed.mystery-seed", "count": 1}, {"item": "seed.bloom", "count": 1}]},
-      {"item": "plant.clover", "count": 1},
-      {"item": "mushroom.brown-button-cap", "count": 1}
-    ],
-    "radius": 3,
-    "guaranteedIn": ["geode"],
-    "guaranteedCreatureRarity": "common",
-    "eggFamily": "random",
-    "firstEggHatchMinutes": 45,
-    "scenery": {"count": 10, "edgeDepth": 1, "sprites": ["deco.boulder.moss", "deco.mossrock.a", "deco.fern.a", "deco.fern.a", "deco.bush.a", "deco.lichen.a", "deco.roots.a"]}
-  },
-  "tutorial": {
-    "enabled": false,
-    "creatureFamily": "random",
-    "families": [
-      "fungling",
-      "sproutling",
-      "geodeCritter"
-    ],
-    "rampSeconds": 60,
-    "refreshSecondsWhileFast": 1
-  },
-  "slotUnlocks": {
-    "unlockDays": [
-      0,
-      1,
-      2
-    ]
-  },
-  "blend": {
-    "minEach": 6,
-    "highlightSeconds": 5
-  },
-  "expansion": {
-    "automatic": false,
-    "_automatic": "false: the clearing only grows when the player buys 'Room to grow' at the Old Log (unlock 'expansion', chained tiers in the Offerings spreadsheet). true brings back growth by the conditions below.",
-    "mode": "any",
-    "conditions": [
-      {
-        "type": "tilesAboveThreshold",
-        "fraction": 0.4,
-        "threshold": 10
-      },
-      {
-        "type": "slotsUnlocked",
-        "count": 3
-      }
-    ],
-    "minHoursBetween": 12,
-    "revealRampSeconds": 600,
-    "ringTiles": 2
-  },
-  "uncommonHint": {
-    "rarity": "uncommon"
-  },
-  "tasks": {
-    "visibleAtOnce": 3,
-    "startAfterTutorial": true
+  "scenery": {
+   "count": 6,
+   "edgeDepth": 1,
+   "sprites": [
+    "deco.mossrock.a",
+    "deco.mossrock.a",
+    "deco.fern.a",
+    "deco.fern.a",
+    "deco.bush.a",
+    "deco.lichen.a",
+    "deco.roots.a"
+   ]
   }
+ },
+ "garden": {
+  "_about": "The garden. Plants (Content/plants.json) grow through stages (seed, sprout, bud, bloom, ready) over growHours on their own school's soil, timed from timestamps so time away counts. soil: growth speed on the plant's own soil (preferred), on plain soil (plain); on another school's soil it can't be planted at all. stages: the share of growth at which sprout, bud and bloom begin; ready at 1. A perennial regrows from the bud stage in regrowHours after each harvest. Per plant (plants): growHours, regrowHours (perennials), yield (produce per harvest), seeds [packets always returned, chance of one more], sell (coins per produce). Seed packets and their odds: packets. amendments: the Store's daily soil stock. sellByRarity: the price of anything else in the Bag that can be sold (foraged finds). startCoins: coins in a new garden. starterSet: what the opening's tin holds: Common seeds of the chosen school and of the runner-up, and a few amendments of each. morning: after minAwayHours of real time away a card sums up what's ready; at most one surprise per local day, with surpriseChance, chosen by weight among the kinds possible right now.",
+  "startCoins": 20,
+  "soil": {
+   "preferred": 1,
+   "plain": 0.6
+  },
+  "stages": {
+   "sprout": 0.15,
+   "bud": 0.45,
+   "bloom": 0.75
+  },
+  "amendments": {
+   "_about": "Soil amendments are scarce: the Store stocks perDay school amendments each local day (one bag each, chosen from the garden seed and the day) at `price`; Garden loam (back to plain) is always there at plainPrice. Other sources: the opening's tin, and the soil patches Room to grow uncovers.",
+   "price": 20,
+   "plainPrice": 2,
+   "perDay": 2
+  },
+  "sellByRarity": {
+   "common": 2,
+   "uncommon": 4,
+   "rare": 8,
+   "veryRare": 15,
+   "legendary": 30
+  },
+  "starterSet": {
+   "primaryPackets": 4,
+   "secondPackets": 2,
+   "primaryAmendments": 2,
+   "secondAmendments": 1
+  },
+  "morning": {
+   "minAwayHours": 4,
+   "surpriseChance": 0.7,
+   "weights": {
+    "selfSeed": 3,
+    "gift": 4,
+    "rareColour": 2
+   },
+   "_kinds": "selfSeed: a seedling next to a blooming plant. gift: a befriended visitor leaves its gift seeds in the Bag. rareColour: a ready plant with a colour variety turns out to be that variety (its harvest gives the variety's produce and seeds)."
+  },
+  "plants": {
+   "ink-cap": {
+    "growHours": 6,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 3
+   },
+   "marigold": {
+    "growHours": 8,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 4
+   },
+   "wood-sorrel": {
+    "growHours": 10,
+    "regrowHours": 8,
+    "yield": 2,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 4
+   },
+   "foxfire-button": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 5
+   },
+   "jewelweed": {
+    "growHours": 14,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 6
+   },
+   "wisp-cap": {
+    "growHours": 16,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 7
+   },
+   "cornflower": {
+    "growHours": 20,
+    "yield": 4,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 7
+   },
+   "lantern-flower": {
+    "growHours": 24,
+    "regrowHours": 18,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 9
+   },
+   "velvet-shank": {
+    "growHours": 10,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 6
+   },
+   "lavender": {
+    "growHours": 16,
+    "regrowHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 8
+   },
+   "hosta": {
+    "growHours": 18,
+    "regrowHours": 14,
+    "yield": 2,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 11
+   },
+   "glassbell": {
+    "growHours": 14,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 8
+   },
+   "honey-mushroom": {
+    "growHours": 12,
+    "yield": 4,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 6
+   },
+   "mistbell": {
+    "growHours": 18,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 10
+   },
+   "spore-lantern": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.25
+    ],
+    "sell": 13
+   },
+   "moonpetal": {
+    "growHours": 22,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.25
+    ],
+    "sell": 14
+   },
+   "foxglove": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.25
+    ],
+    "sell": 13
+   },
+   "canopy-bells": {
+    "growHours": 22,
+    "regrowHours": 16,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 14
+   },
+   "prismbell": {
+    "growHours": 22,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.25
+    ],
+    "sell": 14
+   },
+   "wispwillow": {
+    "growHours": 24,
+    "regrowHours": 18,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 16
+   },
+   "morel": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.5
+    ],
+    "sell": 14
+   },
+   "glowcap": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.5
+    ],
+    "sell": 14
+   },
+   "anemone": {
+    "growHours": 18,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.5
+    ],
+    "sell": 13
+   },
+   "hellebore": {
+    "growHours": 22,
+    "regrowHours": 16,
+    "yield": 2,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 16
+   },
+   "prism-rose": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.5
+    ],
+    "sell": 14
+   },
+   "ancestors-lace": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.5
+    ],
+    "sell": 14
+   }
+  },
+  "companions": {
+   "_about": "Each plant has a few neighbour rules (Content/plants.json companions): when a named plant grows in one of its 8 neighbouring tiles (at any stage), a speed rule makes it grow speed times as fast and a yield rule adds `yield` produce to its harvest. Several speed rules don't stack beyond maxSpeed. A rule is discovered (and shown on the plant's Field Guide page) the first time it is active at a harvest.",
+   "speed": 1.25,
+   "yield": 1,
+   "maxSpeed": 1.5
+  },
+  "decor": {
+   "_about": "What decor does, by kind (Content/cosmetics.json kind; relic ornaments are kind ornament). beauty: added to the garden's beauty while placed. ground: drawn flat under everything (paths). holdsPlant: a plant can be planted on it (a raised bed), and gets `yield` extra produce. glow: lights up at dusk and night. Ornaments (Content/relics.json): plants of the relic's school within `radius` tiles (a 3x3) grow schoolSpeed times as fast.",
+   "kinds": {
+    "path": {
+     "beauty": 1,
+     "ground": true
+    },
+    "fence": {
+     "beauty": 1
+    },
+    "bed": {
+     "beauty": 2,
+     "holdsPlant": true,
+     "yield": 1,
+     "ground": true
+    },
+    "planter": {
+     "beauty": 3
+    },
+    "lantern": {
+     "beauty": 2,
+     "glow": true
+    },
+    "bench": {
+     "beauty": 2
+    },
+    "feature": {
+     "beauty": 3
+    },
+    "ornament": {
+     "beauty": 4,
+     "schoolSpeed": 1.2,
+     "radius": 1
+    }
+   }
+  },
+  "beauty": {
+   "_about": "Garden beauty, never shown as a number: variety x each distinct plant growing in the garden, blooming x each plant in bloom or ready, plus every placed decor's beauty (decor.kinds). It shows as a named tier with a leaf meter. The best tier ever reached opens Store items (plants' `beauty`, listings' 'Needs beauty tier') and never relocks.",
+   "variety": 3,
+   "blooming": 1,
+   "tiers": [
+    {
+     "name": "Bare",
+     "at": 0
+    },
+    {
+     "name": "Tended",
+     "at": 8
+    },
+    {
+     "name": "Pleasant",
+     "at": 20
+    },
+    {
+     "name": "Lovely",
+     "at": 36
+    },
+    {
+     "name": "Charming",
+     "at": 56
+    },
+    {
+     "name": "Enchanting",
+     "at": 80
+    }
+   ]
+  },
+  "varieties": {
+   "_about": "Colour varieties (plants.json varieties: a hue, and leaves to recolour the greens too). Cross-pollination: harvesting a plant while a plant of the same family (the same kind counts) blooms in one of its 8 neighbours gives, with `chance`, one seed packet of one of its varieties (one not yet found first). Kept hidden from the player. A variety grows like its plant and breeds true; its produce sells for sellMult times as much and has its own Field Guide entry.",
+   "chance": 0.12,
+   "sellMult": 2
+  },
+  "collections": {
+   "_about": "Field Guide collections: harvest every plant of a school (its seed plants and its gift plant) once to complete it; the reward is that school's relic ornament (Content/relics.json) and `coins`.",
+   "coins": 150
+  },
+  "orders": {
+   "_about": "Daily orders at the Old Log (requests of kind 'order'): perDay of them each local day, picked (deterministically, from the garden seed and the day) from the orders whose produce comes from plants the player has already harvested.",
+   "perDay": 2
+  },
+  "packets": {
+   "_about": "Seed packets are blind pulls: each school sells Common, Uncommon and Rare seeds. Planting one picks a plant from that school's seed plants (plants.json source 'seeds'): first a tier by the packet's `odds` (never a sure thing), then evenly among that school's plants of the tier (a tier with none steps down). The plant shows only as a seedling until it reaches its bud. Harvests return seeds of the plant's own school and tier (seeds per plant in plants), so rare plants give rare seeds. `price` in the Store; `beauty`: the beauty tier that puts that tier of seeds on the shelf. Gift plants and colour varieties keep their own named packets.",
+   "tiers": {
+    "common": {
+     "price": 5,
+     "beauty": 0,
+     "odds": {
+      "common": 80,
+      "uncommon": 17,
+      "rare": 3
+     }
+    },
+    "uncommon": {
+     "price": 12,
+     "beauty": 1,
+     "odds": {
+      "common": 40,
+      "uncommon": 48,
+      "rare": 12
+     }
+    },
+    "rare": {
+     "price": 28,
+     "beauty": 2,
+     "odds": {
+      "common": 15,
+      "uncommon": 45,
+      "rare": 40
+     }
+    }
+   }
+  }
+ },
+ "forage": {
+  "_about": "The foraging patch: a few plain finds turn up by chance on the clearing's outer ring, by the treeline. Every slotMinutes of game time (offline included, at most maxCatchUpSlots), each slot has `chance` of one find, up to `max` waiting at once. Which slot gets a find, the tile and the item are hashed from the garden seed and the slot, so it's deterministic. Tap to pick. Set enabled false to turn the patch off.",
+  "enabled": true,
+  "slotMinutes": 60,
+  "chance": 0.3,
+  "max": 3,
+  "maxCatchUpSlots": 48,
+  "items": [
+   "mushroom.brown-button-cap",
+   "plant.clover",
+   "plant.sorrel",
+   "plant.meadow-daisy"
+  ]
+ },
+ "expansion": {
+  "_about": "Room to grow (Store): each purchase clears the trees on one side the player chooses (top, bottom, left or right), sideTiles rows deep. The new ground isn't empty: each purchase uncovers a patch of wildSoilTiles tiles of one school's soil along the old edge (a different school each time, in an order shuffled by the garden seed) and, beside it, that school's wild feature. Features stay where they grew (they can't be moved or bought) and add their beauty to the garden. The foraging patch moves out with the treeline on its own.",
+  "sideTiles": 3,
+  "wildSoilTiles": 4,
+  "features": {
+   "spore": {
+    "name": "Mossy stone",
+    "sprite": "deco.mossrock.a",
+    "beauty": 3,
+    "text": "A stone furred with moss. The ground around it stays damp and dark."
+   },
+   "glow": {
+    "name": "Glowing flowers",
+    "sprite": "deco.glowflower.a",
+    "beauty": 3,
+    "text": "Wild flowers that glow faintly after dark. The soil here shines a little too."
+   },
+   "bloom": {
+    "name": "Wild flowers",
+    "sprite": "deco.bigflower.a",
+    "beauty": 3,
+    "text": "A clump of flowers no one planted. Petals have fallen into the soil for years."
+   },
+   "verdure": {
+    "name": "Old oak",
+    "sprite": "deco.tree.a",
+    "beauty": 4,
+    "text": "An oak older than the clearing. Leaf mould lies thick beneath it."
+   },
+   "shimmer": {
+    "name": "Crystal outcrop",
+    "sprite": "deco.crystals.a",
+    "beauty": 3,
+    "text": "Crystals pushing up through the earth. The ground glitters around them."
+   },
+   "spirit": {
+    "name": "Misty pine",
+    "sprite": "deco.tree.b",
+    "beauty": 4,
+    "text": "A tall pine that keeps a little mist around its roots."
+   }
+  }
+ },
+ "offerings": {
+  "_about": "The Old Log board and Store (Resources/Content/requests.json, cosmetics.json from design/Undergrowth_Offerings.xlsx). Recolouring a placed decor prop costs recolorCost (0 = free).",
+  "recolorCost": 0
+ },
+ "visitors": {
+  "_about": "Visitors (Content/visitors.json): forest animals drawn by particular plants blooming in the garden, in their time window. Every checkMinutes of game time (offline catch-up included, up to maxCatchUpDays) each visitor's interest rises by interest.gain while every plant it likes is blooming (in bloom or ready) somewhere in the garden, and falls by interest.decay when not. Stages: signs (in its time window, tracks appear beside the plants it likes, chance tracks.chance per check, fading after tracks.hours), clues (tapping tracks reads a clue naming one of its preferences the player doesn't know yet, recorded on its Field Guide page), present (in its window it comes with presence.chance per check, staying presence.minutes, at most presence.perDay a day). Tapping a present visitor befriends it: it leaves its gift seeds at once, comes more often (befriended*), and now and then leaves more on a morning (the morning card's gift surprise). Each check's random choices are seeded from the garden, the visitor and the check's time, so it's deterministic.",
+  "checkMinutes": 30,
+  "maxCatchUpDays": 7,
+  "interest": {
+   "gain": 1.5,
+   "decay": 0.5,
+   "max": 100
+  },
+  "stages": {
+   "signs": 10,
+   "clues": 20,
+   "present": 60
+  },
+  "tracks": {
+   "chance": 0.35,
+   "hours": 24,
+   "maxPerVisitor": 3
+  },
+  "presence": {
+   "chance": 0.35,
+   "minutes": [
+    60,
+    150
+   ],
+   "perDay": 1,
+   "befriendedPerDay": 2,
+   "befriendedChanceMult": 2
+  },
+  "gift": {
+   "count": 2
+  }
+ },
+ "naming": {
+  "_about": "A garden left unnamed takes its name from its most common soil (Content/nameParts.json).",
+  "minSoilTiles": 3
+ },
+ "clock": {
+  "_about": "Real local time of day: the four lighting states and the visitors' time windows (dawn, day, dusk, night).",
+  "dawnStartHour": 5,
+  "dayStartHour": 7,
+  "duskStartHour": 17,
+  "nightStartHour": 19,
+  "transitionMinutes": 50
+ },
+ "visuals": {
+  "refreshSeconds": 5,
+  "edge": {
+   "ground": [
+    "tile.edge.a",
+    "tile.edge.b"
+   ],
+   "decorations": [
+    "deco.shrub.a",
+    "deco.shrub.b",
+    "deco.shrub.c",
+    "deco.shrub.d",
+    "deco.shrub.e",
+    "deco.shrub.f"
+   ],
+   "baseDensity": 1.0,
+   "densityPerTile": 0,
+   "maxDensity": 1.0
+  },
+  "debugSpeeds": [
+   1,
+   60,
+   600,
+   3600
+  ],
+  "viewBorderTiles": 0.5,
+  "canopy": {
+   "_about": "Tree shadows from design/shadow_overlay_v2.webp (processed by tools/gen_canopy.py into img/canopy.png: alpha = sunlight, texelsPerPx image px per art px, drawn smooth at up to maxRes buffer px per art px). Layer 1 at full strength, layer 2 offset/scaled/flipped and added at secondAlpha so the flecks never repeat on a grid, and a large soft region layer that lifts the shade in some areas (clearings).",
+   "enabled": true,
+   "image": "img/canopy.png",
+   "texelsPerPx": 2,
+   "edge": [
+    0.1,
+    0.75
+   ],
+   "hot": [
+    0.55,
+    1
+   ],
+   "lightBlend": "lighter",
+   "shafts": {
+    "enabled": true,
+    "angleDeg": 22,
+    "spacing": 72,
+    "width": 40,
+    "keep": 0.6,
+    "drift": 10,
+    "driftSpeed": 0.05,
+    "blend": "screen"
+   },
+   "maxRes": 3,
+   "scale": 1,
+   "second": {
+    "scale": 1.21,
+    "offset": [
+     233,
+     151
+    ],
+    "flip": true,
+    "alpha": 0
+   },
+   "region": {
+    "image": "img/canopy-region.png",
+    "scale": 5,
+    "strength": 0,
+    "offset": [
+     211,
+     47
+    ]
+   },
+   "swayPx": 3,
+   "swaySeconds": 23
+  },
+  "lighting": {
+   "_about": "Per state; values blend smoothly across clock.transitionMinutes around each boundary. shade/light = canopy shade and sunlight-patch strength (light is drawn with canopy.lightBlend); glow = warm glow on the brightest centres; shafts = strength of the diagonal light beams; classic = the earlier look's values (Debug: Sunlight classic). ambient multiplies the whole scene.",
+   "refreshSeconds": 5,
+   "fireflies": {
+    "perTile": 0.07,
+    "max": 60
+   },
+   "states": {
+    "dawn": {
+     "shade": 0.44,
+     "shadeColor": "#0e1a16",
+     "light": 0.7,
+     "lightColor": "#a2603e",
+     "glow": 0.22,
+     "glowColor": "#ffd8c0",
+     "shafts": 0.2,
+     "shaftColor": "#ffd0b0",
+     "classic": {
+      "shade": 0.36,
+      "light": 0.32,
+      "lightColor": "#ffd6b0"
+     },
+     "ambient": "#e8ccd8",
+     "ambientAlpha": 0.22,
+     "fireflies": 0.15,
+     "sparkle": "#ffe6d0",
+     "sparkleEvery": 6
+    },
+    "day": {
+     "shade": 0.55,
+     "shadeColor": "#04120a",
+     "light": 0.75,
+     "lightColor": "#a2743a",
+     "glow": 0.28,
+     "glowColor": "#ffe8b8",
+     "shafts": 0.2,
+     "shaftColor": "#fff0c0",
+     "classic": {
+      "shade": 0.44,
+      "light": 0.55,
+      "lightColor": "#fff1c0"
+     },
+     "ambient": "#ffffff",
+     "ambientAlpha": 0,
+     "fireflies": 0,
+     "sparkle": "#fff8d8",
+     "sparkleEvery": 4
+    },
+    "dusk": {
+     "shade": 0.5,
+     "shadeColor": "#140e1c",
+     "light": 0.7,
+     "lightColor": "#a24e1c",
+     "glow": 0.2,
+     "glowColor": "#ffc890",
+     "shafts": 0.2,
+     "shaftColor": "#ffb070",
+     "classic": {
+      "shade": 0.42,
+      "light": 0.24,
+      "lightColor": "#ffb070"
+     },
+     "ambient": "#d8b4a8",
+     "ambientAlpha": 0.26,
+     "fireflies": 0.45,
+     "sparkle": "#ffd0a0",
+     "sparkleEvery": 6
+    },
+    "night": {
+     "shade": 0.4,
+     "shadeColor": "#02060e",
+     "light": 0.55,
+     "lightColor": "#3c4c74",
+     "glow": 0.12,
+     "glowColor": "#d8e6ff",
+     "shafts": 0.06,
+     "shaftColor": "#b8d0ff",
+     "classic": {
+      "shade": 0.34,
+      "light": 0.2,
+      "lightColor": "#b8d0ff"
+     },
+     "ambient": "#56688f",
+     "ambientAlpha": 0.46,
+     "fireflies": 1,
+     "sparkle": "#c8dcff",
+     "sparkleEvery": 10
+    }
+   }
+  },
+  "overlayFadeSeconds": 0.6
+ },
+ "debugTools": true
 }

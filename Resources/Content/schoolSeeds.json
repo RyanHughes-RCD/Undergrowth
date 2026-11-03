@@ -1,8 +1,0 @@
-[
-  {"id": "seed.spore", "name": "Spore Seed", "school": "spore", "sprite": "seed.school.spore", "marker": "seed.buried.spore", "text": "A soft, dusty seed that smells of rain. Buried, it breathes out moss and mist, and mushrooms come up around it."},
-  {"id": "seed.glow", "name": "Glow Seed", "school": "glow", "sprite": "seed.school.glow", "marker": "seed.buried.glow", "text": "A seed that glows faintly in your palm. Buried, it lights the ground around it with motes and glowing moss."},
-  {"id": "seed.bloom", "name": "Bloom Seed", "school": "bloom", "sprite": "seed.school.bloom", "marker": "seed.buried.bloom", "text": "A plump seed striped like a petal. Buried, it wakes the flowers in the grass around it."},
-  {"id": "seed.verdure", "name": "Verdure Seed", "school": "verdure", "sprite": "seed.school.verdure", "marker": "seed.buried.verdure", "text": "A green, eager seed. Buried, it thickens the grass and ferns around it."},
-  {"id": "seed.shimmer", "name": "Shimmer Seed", "school": "shimmer", "sprite": "seed.school.shimmer", "marker": "seed.buried.shimmer", "text": "A seed with a crystal sheen. Buried, little crystals push up through the grass around it."},
-  {"id": "seed.spirit", "name": "Spirit Seed", "school": "spirit", "sprite": "seed.school.spirit", "marker": "seed.buried.spirit", "text": "A pale seed that feels older than the forest. Buried, a quiet fae mist gathers around it, and old roots stir."}
-]
