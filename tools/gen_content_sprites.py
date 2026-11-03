@@ -61,8 +61,8 @@ def shiny(c):
 
 
 STAT_COLOURS = {
-    "damp": "#5a8ad8", "glow": "#7ce8f4", "bloom": "#ff8ab8",
-    "verdure": "#6cc24a", "stone": "#9a92a8", "depth": "#7a5aa0",
+    "spore": "#5a8ad8", "glow": "#7ce8f4", "bloom": "#ff8ab8",
+    "verdure": "#6cc24a", "shimmer": "#9a92a8", "spirit": "#7a5aa0",
 }
 
 
@@ -111,8 +111,11 @@ MUSHROOMS = {
     "amethyst-deceiver": ("dome", "#9a5ad8", "#c8a8e8", "#d4a8ff"),
     "ancient-sporecrown": ("crown", "#c8a040", "#efe2c8", "#9ff4ff"),
     "foxfire-button": ("dome", "#4a8a6a", "#e8f0dc", "#b8ff9a"),
+    "velvet-shank": ("flat", "#b8743a", "#5a3a22", "#e0a060"),
+    "ember-cap": ("dome", "#d86a2a", "#f0e0c8", "#ffc070"),
+    "veil-cap": ("bell", "#c8c8f0", "#e8e8ff", "#9a9ad0"),
 }
-GLOWING = {"foxfire-button", "glowcap", "crystal-cap", "moonlight-morel", "ghost-fungus", "starlight-bonnet", "ancient-sporecrown"}
+GLOWING = {"foxfire-button", "ember-cap", "glowcap", "crystal-cap", "moonlight-morel", "ghost-fungus", "starlight-bonnet", "ancient-sporecrown"}
 
 
 def draw_mushroom(shape, cap, stem, accent):
@@ -240,8 +243,12 @@ PLANTS = {
     "snowdrop": ("snowdrop", "#5fa04a", "#f4f8ff", "#9ad87a"),
     "columbine": ("columbine", "#4f8a2c", "#9a5ad8", "#f8e8a0"),
     "bleeding-heart": ("bleedingheart", "#5a9a3a", "#ff6aa8", "#ffffff"),
+    "meadow-daisy": ("flower", "#5fbf4a", "#f8f8f0", "#ffd84a"),
+    "honeybell": ("snowdrop", "#5fa04a", "#ffd870", "#ffb030"),
+    "feather-fern": ("fern", "#4f9440", None, None),
+    "glassbell": ("snowdrop", "#7a9a9a", "#d8ccf8", "#f4f0ff"),
 }
-PLANT_GLOW = {"glowbloom", "moonflower", "deeproot-lantern", "crystal-thistle"}
+PLANT_GLOW = {"glassbell", "glowbloom", "moonflower", "deeproot-lantern", "crystal-thistle"}
 
 
 def draw_plant(shape, leaf, petal, centre):

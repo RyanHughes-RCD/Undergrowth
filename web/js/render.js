@@ -7,6 +7,7 @@ import { TileRuleEngine, hash32, decorVariant } from './core.js';
 
 export const TS = 16;
 const FOOT = 5; // objects stand a little below the tile centre
+const reducedMotion = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } };
 export const centre = (x, y) => ({ x: x * TS + TS / 2, y: y * TS + TS / 2 });
 export const tileAt = (wx, wy) => ({ x: Math.floor(wx / TS), y: Math.floor(wy / TS) });
 /** How far a solid landmark's no-walk box reaches past its tiles (art px): its sprite overhangs a little. landmarks.json "solidPad" [side, top, bottom] overrides it. */
@@ -130,6 +131,12 @@ export class ForestView {
   }
 
   centerOn(tile) { const p = centre(tile.x, tile.y); this.cam = { x: p.x, y: p.y }; this.clamp(); }
+  /** A brief, eased camera move to a tile (instant with reduced motion). */
+  panTo(tile, seconds = 1.2) {
+    if (reducedMotion() || !(seconds > 0)) { this.centerOn(tile); return; }
+    const p = centre(tile.x, tile.y);
+    this.camAnim = { from: { ...this.cam }, to: { x: p.x, y: p.y }, start: performance.now(), ms: seconds * 1000 };
+  }
 
   /**
    * Keep the view inside the bounds: across the full screen width, and down the play area
@@ -256,10 +263,10 @@ export class ForestView {
       const def = this.app.content.items[sp.itemID];
       if (!def) continue;
       // How it shows depends on the tile: buried (loose soil), hidden in tall grass (a rustling clump),
-      // a geode exposed on rock (the bare stone), or on the surface (geodes half-sunk in a dirt mound).
+      // a geode exposed on rock (the bare crystal), or on the surface (geodes half-sunk in a dirt mound).
       const view = g.spawnView(sp, now, field.statsAt(sp.tile.x, sp.tile.y));
       const sprite = view === 'buried' ? 'spawn.buried.a' : view === 'hidden' ? 'spawn.rustle.a' : view === 'exposed' ? def.sprite : (def.worldSprite || def.sprite);
-      objs.push({ sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: view !== 'hidden' && view !== 'buried', rustle: view === 'hidden', dig: view === 'buried', view, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100,
+      objs.push({ sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: view !== 'hidden' && view !== 'buried' && !sp.opening, rustle: view === 'hidden', dig: view === 'buried', view, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100,
         flip: !!def.flipInWorld && (hash32(sp.tile.x, sp.tile.y, 3) & 1) === 1 });
     }
     // Landmarks: a wide one (the Old Log stump, two tiles) is drawn centred across its footprint, and
@@ -286,6 +293,20 @@ export class ForestView {
       objs.push({ sprite: 'egg.nest', ...pos, tile: n.tile, kind: 'nest', key: n.id + ':nest', phase: 0, still: true });
       if (egg) objs.push({ sprite: egg.sprite, x: pos.x, y: pos.y - 2, sortY: pos.y + 0.01, tile: n.tile, kind: 'nest', key: n.id, phase: hash32(n.tile.x, n.tile.y, 9) % 1000 / 250, dig: g.nestProgress(n, now) >= 1 });
       objs.push({ sprite: 'egg.nest.front', ...pos, sortY: pos.y + 0.02, tile: n.tile, kind: 'nest', key: n.id + ':front', phase: 0, still: true });
+    }
+    // Visitors in the grotto right now: shy, drifting near their favourite ground. Tap to befriend.
+    for (const { def, g: st } of g.presentGuests(now)) {
+      objs.push({ sprite: def.sprite, ...at(st.present.tile), tile: st.present.tile, kind: 'guest', key: def.id, wander: true, phase: hash32(st.present.tile.x, st.present.tile.y, 17) % 1000 / 160 });
+    }
+    // Buried relics: the stone set in the ground, its rune in the school's colour.
+    for (const r of s.relics || []) {
+      const def = this.app.content.items[r.relicID];
+      objs.push({ sprite: (def && def.worldSprite) || 'relic.unknown', ...at(r.tile), tile: r.tile, kind: 'relic', key: r.id, phase: hash32(r.tile.x, r.tile.y, 13) % 1000 / 250 });
+    }
+    // Buried school seeds: a mound with a sprout in the school's colour.
+    for (const b of g.buriedSeeds()) {
+      const def = this.app.content.items[b.seed];
+      objs.push({ sprite: (def && def.marker) || 'seed.stage.planted', ...at(b.tile), tile: b.tile, kind: 'buriedSeed', key: b.id, phase: hash32(b.tile.x, b.tile.y, 11) % 1000 / 250 });
     }
     // Decor props from the Old Log (purely visual), in their chosen colour.
     for (const d of (s.decor && s.decor.placed) || []) {
@@ -342,6 +363,12 @@ export class ForestView {
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     if (!this.engine) return;
     this.measure();
+    if (this.camAnim) {
+      const a = this.camAnim, k = Math.min(1, (performance.now() - a.start) / a.ms), e = k * k * (3 - 2 * k);
+      this.cam = { x: a.from.x + (a.to.x - a.from.x) * e, y: a.from.y + (a.to.y - a.from.y) * e };
+      this.clamp();
+      if (k >= 1) this.camAnim = null;
+    }
 
     const { scale, ox, oy } = this.transform();
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
@@ -447,6 +474,7 @@ export class ForestView {
     // Objects (sorted by their feet): map objects on screen + the shrub treeline.
     const now = performance.now();
     const pad = 32;
+    this.drawTracks(ctx);
     const drawn = this.objects.filter((o) => o.x >= view.minX - pad && o.x <= view.maxX + pad && o.y >= view.minY - pad && o.y <= view.maxY + pad * 2)
       .concat(edgeObjs);
     const sortY = (o) => (o.roam && this.roam.has(o.key) ? this.roam.get(o.key).y : o.sortY ?? o.y);
@@ -464,6 +492,12 @@ export class ForestView {
         const cyc = (t + o.phase) % 3.8;
         ft = cyc < 0.5 ? 0.3 : 0;
         if (cyc < 0.5) { y -= cyc < 0.25 ? 1 : 0; x += Math.round(Math.sin(t * 40) * 0.6); }
+      }
+      if (o.wander && !reducedMotion()) {
+        // A present visitor: drifts a little around its spot, pausing now and then.
+        const k = (t * 0.35 + o.phase) % (Math.PI * 2);
+        x += Math.round(Math.sin(k) * 5); y += Math.round(Math.sin(k * 2) * 1.5);
+        flip = Math.cos(k) < 0;
       }
       if (o.rustle) {
         // Hidden in tall grass: still most of the time, with a short rustle every few seconds.
@@ -499,6 +533,7 @@ export class ForestView {
     this.drawFireflies(ctx, view, t, L);
     this.drawPetals(ctx, view, t);
     this.drawDust(ctx);
+    this.drawRelicFx(ctx, t);
 
     // Tutorial pointer: a bouncing arrow and a soft ring on the thing to tap.
     const target = this.game.inTutorial ? this.game.tutorialTarget() : null;
@@ -774,7 +809,7 @@ export class ForestView {
   }
 
   /**
-   * Elevation (Stone up, Depth down; visuals.elevation): a raised tile casts a rock face onto the
+   * Elevation (Shimmer up, Spirit down; visuals.elevation): a raised tile casts a rock face onto the
    * tile below it and gets a lit lip where the ground in front of it is lower; a sunken tile gets a
    * shadowed back wall where the ground behind it is higher.
    */
@@ -815,7 +850,7 @@ export class ForestView {
     }
   }
 
-  /** Is this tile part of a pool (Damp + Depth combo)? */
+  /** Is this tile part of a pool (Spore + Spirit combo)? */
   poolAt(x, y) {
     const W = this.game.state.size.width;
     if (x < 0 || y < 0 || x >= W || y >= this.game.state.size.height || !this.game.inClearing({ x, y })) return false;
@@ -931,7 +966,7 @@ export class ForestView {
   }
 
   /**
-   * Where bugs sit over mossy banks (Stone + Damp + Verdure combo): each connected patch of moss gets
+   * Where bugs sit over mossy banks (Shimmer + Spore + Verdure combo): each connected patch of moss gets
    * one bug per tilesPerBug tiles (rounded, at least one), on tiles chosen by a stable hash.
    */
   bugTiles() {
@@ -1054,6 +1089,76 @@ export class ForestView {
       ctx.fillRect(Math.round(p.x), Math.round(p.y), Math.sin(t * 5 + p.ph) > 0 ? 2 : 1, 1);
     }
     ctx.globalAlpha = 1;
+  }
+
+  /**
+   * The tile's answer the moment a relic is buried (tuning.relics.reactionSeconds), in its school's way:
+   * Spore tiny caps, Glow a faint pulse, Bloom buds opening, Verdure blades rising, Shimmer a humming
+   * glint, Spirit a curl of mist. Reduced motion: a short, still version.
+   */
+  relicReaction(tile, school) {
+    const secs = ((this.app.content.tuning.relics || {}).reactionSeconds ?? 8) * (reducedMotion() ? 0.4 : 1);
+    (this.relicFx = this.relicFx || []).push({ x: tile.x * TS + TS / 2, y: tile.y * TS + TS / 2 + FOOT, school, start: performance.now(), ms: secs * 1000 });
+  }
+
+  drawRelicFx(ctx) {
+    const now = performance.now(), still = reducedMotion();
+    this.relicFx = (this.relicFx || []).filter((e) => now - e.start < e.ms);
+    const px = (x, y, c, a = 1, w = 1, h = 1) => { ctx.globalAlpha = a; ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
+    for (const e of this.relicFx) {
+      const age = (now - e.start) / 1000, k = Math.min(1, (now - e.start) / e.ms), fade = k > 0.8 ? (1 - k) / 0.2 : 1;
+      const grow = Math.min(1, age / 1.5), wob = still ? 0 : Math.sin(age * 6);
+      const spots = [[-5, 1], [4, 2], [-2, -3], [6, -2], [-7, -2]];
+      if (e.school === 'spore') {
+        spots.forEach(([dx, dy], i) => { const h = Math.round(grow * (2 + (i % 2))); if (h <= 0) return;
+          px(e.x + dx, e.y + dy - h, '#efe6d0', fade, 1, h); px(e.x + dx - 1, e.y + dy - h - 1, '#c8664a', fade, 3, 1); });
+        if (!still) for (let i = 0; i < 6; i++) px(e.x - 6 + ((i * 37 + age * 6) % 12), e.y - 4 - ((age * 4 + i * 3) % 10), '#e8e0c8', 0.5 * fade);
+      } else if (e.school === 'glow') {
+        const p = still ? 0.6 : 0.5 + 0.5 * Math.sin(age * 3);
+        ctx.globalAlpha = 0.35 * p * fade; ctx.fillStyle = '#7cf2ff';
+        ctx.beginPath(); ctx.ellipse(e.x, e.y - 2, 9 + 3 * p, 5 + 2 * p, 0, 0, Math.PI * 2); ctx.fill();
+        spots.forEach(([dx, dy], i) => px(e.x + dx, e.y + dy - 2 - (still ? 0 : (age * 2 + i) % 4), '#e8ffff', fade * p));
+      } else if (e.school === 'bloom') {
+        spots.forEach(([dx, dy], i) => { const o = Math.min(1, Math.max(0, grow * 1.4 - i * 0.12));
+          px(e.x + dx, e.y + dy, '#3f8a3a', fade); if (o > 0.3) { px(e.x + dx - 1, e.y + dy - 1, '#ff79b8', fade * o, 3, 1); px(e.x + dx, e.y + dy - 2, '#ff79b8', fade * o); px(e.x + dx, e.y + dy - 1, '#ffd84a', fade * o); } });
+      } else if (e.school === 'verdure') {
+        for (let i = 0; i < 9; i++) { const h = Math.round(grow * (3 + (i * 7) % 4)); const x = e.x - 8 + i * 2;
+          px(x + (wob > 0.5 && i % 2 ? 1 : 0), e.y + 2 - h, i % 2 ? '#6cc24a' : '#4f9440', fade, 1, h); }
+      } else if (e.school === 'shimmer') {
+        const p = still ? 1 : 0.5 + 0.5 * Math.sin(age * 9);
+        const r = 2 + Math.round(3 * p);
+        px(e.x - r, e.y - 4, '#f4f0ff', fade, r * 2 + 1, 1); px(e.x, e.y - 4 - r, '#f4f0ff', fade, 1, r * 2 + 1);
+        px(e.x - 1, e.y - 5, '#b7a4e0', fade, 3, 3);
+        if (!still) { ctx.globalAlpha = 0.4 * fade * (1 - (age % 1)); ctx.strokeStyle = '#b7a4e0'; ctx.beginPath(); ctx.ellipse(e.x, e.y - 2, 4 + (age % 1) * 10, 2 + (age % 1) * 5, 0, 0, Math.PI * 2); ctx.stroke(); }
+      } else if (e.school === 'spirit') {
+        for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2 + (still ? 0 : age * 1.2);
+          const rr = 3 + i * 0.5; px(e.x + Math.cos(a) * rr, e.y - 3 - i * 0.6 * grow + Math.sin(a) * rr * 0.4, i % 2 ? '#c8c8f4' : '#9a9ad0', 0.6 * fade); }
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * Visitor signs: little footprints on the tiles a visitor likes (fading over tuning.visitors.tracks.hours),
+   * and a tiny bite out of a find it nibbled. Visual only.
+   */
+  drawTracks(ctx) {
+    const g = this.game, now = g.now(), life = ((this.app.content.tuning.visitors || {}).tracks || {}).hours ?? 24;
+    for (const tr of g.state.guestTracks || []) {
+      const a = Math.max(0.15, 1 - (now - tr.at) / (life * 3600000)) * 0.85;
+      const bx = tr.tile.x * TS + 3, by = tr.tile.y * TS + 4, h = hash32(tr.tile.x, tr.tile.y, 23);
+      ctx.globalAlpha = a; ctx.fillStyle = '#2a1e18';
+      for (let i = 0; i < 4; i++) {                       // two pairs of small prints crossing the tile
+        const x = bx + i * 3 + ((h >> i) & 1), y = by + (i % 2 ? 5 : 2) + i * 2;
+        ctx.fillRect(x, y, 2, 1); ctx.fillRect(x, y - 1, 1, 1); ctx.fillRect(x + 1, y - 1, 1, 1);
+      }
+      ctx.fillStyle = '#e8dcc0'; ctx.globalAlpha = a * 0.5; ctx.fillRect(bx + 1, by + 1, 1, 1);
+    }
+    ctx.globalAlpha = 1;
+    for (const sp of g.state.spawns) if (sp.nibbled) {        // a bite mark on the find
+      const x = sp.tile.x * TS + TS / 2 + 3, y = sp.tile.y * TS + TS / 2 + FOOT - 10;
+      ctx.fillStyle = '#1b1420'; ctx.fillRect(x, y, 2, 1); ctx.fillRect(x + 1, y + 1, 1, 1);
+    }
   }
 
   /** A puff of soil where something was dug up. */
@@ -1419,8 +1524,8 @@ export class ForestView {
 
 function overlayColor(stats) {
   const colors = {
-    damp: [50, 100, 255], glow: [100, 255, 255], bloom: [255, 115, 190],
-    verdure: [80, 230, 80], stone: [165, 165, 180], depth: [115, 50, 155],
+    spore: [50, 100, 255], glow: [100, 255, 255], bloom: [255, 115, 190],
+    verdure: [80, 230, 80], shimmer: [183, 164, 224], spirit: [122, 122, 208],
   };
   let r = 0, g = 0, b = 0, total = 0, max = 0;
   for (const k in colors) {

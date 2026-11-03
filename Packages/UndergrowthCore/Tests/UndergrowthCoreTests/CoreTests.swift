@@ -42,9 +42,9 @@ final class ContentTests: XCTestCase {
         XCTAssertEqual(lantern.source?.items, ["mushroom.glowcap"])
         let morel = try XCTUnwrap(db.items["mushroom.moonlight-morel"]?.spawn)
         XCTAssertEqual(morel.time, "night")
-        XCTAssertEqual(morel.requires?[.damp]?.min, 70)
+        XCTAssertEqual(morel.requires?[.spore]?.min, 70)
         let quartz = try XCTUnwrap(db.items["gem.quartz"]?.use)
-        XCTAssertEqual(quartz.stats?[.stone], 5)
+        XCTAssertEqual(quartz.stats?[.shimmer], 5)
         XCTAssertEqual(quartz.hours, 24)
         let pebble = try XCTUnwrap(db.loot["loot.crack.pebble-geode"]?.rolls.first?.pick)
         XCTAssertEqual(pebble.reduce(0) { $0 + $1.weight }, 1, accuracy: 0.0001)
@@ -107,13 +107,13 @@ final class StatTests: XCTestCase {
         var rng = SeededRNG(seed: 1)
         for _ in 0..<50 {
             let c = roller.rollCreature(typeID: "spore-sage", origin: nil, now: t0, forceGlimmer: false, rng: &rng)
-            XCTAssertTrue((10.75...18.05).contains(c.contributions[.damp]!), "\(c.contributions)")
+            XCTAssertTrue((10.75...18.05).contains(c.contributions[.spore]!), "\(c.contributions)")
             XCTAssertEqual(c.radius, 6)
             XCTAssertEqual(c.rampHours, 24)
         }
         let g = roller.rollCreature(typeID: "spore-sage", origin: nil, now: t0, forceGlimmer: true, rng: &rng)
         XCTAssertEqual(g.radius, 8, "glimmer radius doubles too (+2)")
-        XCTAssertGreaterThanOrEqual(g.contributions[.damp]!, 18 * 0.6 * 1.5 - 0.05)
+        XCTAssertGreaterThanOrEqual(g.contributions[.spore]!, 18 * 0.6 * 1.5 - 0.05)
     }
 
     func testRampsOverSpeciesTimeAndFallsOff() throws {
@@ -135,16 +135,16 @@ final class StatTests: XCTestCase {
         XCTAssertEqual(g.tileStats(tile, at: full.addingTimeInterval(9 * 3600))[.glow]!, c.contributions[.glow]! / 2, accuracy: 0.01)
     }
 
-    func testRotHermitLowersStone() throws {
+    func testRotHermitLowersShimmer() throws {
         let g = Game.newForest(content: content, now: t0, seed: 2)
         g.removeSpawnsForTest()
         g.debugGrantCreature(typeID: "rot-hermit", glimmer: false, now: t0)
         g.debugGrant(itemID: "gem.jasper")
         let tile = GridPoint(5, 5)
         try g.use(itemID: "gem.jasper", on: tile, now: t0)
-        XCTAssertEqual(g.tileStats(tile, at: t0)[.stone], 8)
+        XCTAssertEqual(g.tileStats(tile, at: t0)[.shimmer], 8)
         try g.place(creatureID: g.state.creatures[0].id, at: tile, now: t0)
-        XCTAssertLessThan(g.tileStats(tile, at: t0.addingTimeInterval(23 * 3600))[.stone]!, 8)
+        XCTAssertLessThan(g.tileStats(tile, at: t0.addingTimeInterval(23 * 3600))[.shimmer]!, 8)
     }
 
     func testSoilBoostsExpireAndHeartstoneIsPermanent() throws {
@@ -155,8 +155,8 @@ final class StatTests: XCTestCase {
         try g.use(itemID: "material.heartstone-core", on: GridPoint(4, 4), now: t0)
         let later = t0.addingTimeInterval(30 * 3600)
         g.advance(to: later)
-        XCTAssertEqual(g.tileStats(GridPoint(3, 3), at: later)[.stone], 0)
-        XCTAssertEqual(g.tileStats(GridPoint(4, 4), at: later)[.depth], 10)
+        XCTAssertEqual(g.tileStats(GridPoint(3, 3), at: later)[.shimmer], 0)
+        XCTAssertEqual(g.tileStats(GridPoint(4, 4), at: later)[.spirit], 10)
         XCTAssertEqual(g.state.soilBoosts.count, 1)
     }
 
@@ -363,19 +363,19 @@ final class VisualsNamingSaveTests: XCTestCase {
         let p = GridPoint(1, 1)
         XCTAssertTrue(e.visual(for: [:], at: p).ground.hasPrefix("tile.grass"))
         XCTAssertTrue(e.visual(for: [:], at: p).overlays.isEmpty)
-        XCTAssertEqual(e.visual(for: [.stone: 40, .depth: 30], at: p).ground, "tile.cave.a")
-        XCTAssertEqual(e.visual(for: [.damp: 20, .stone: 20], at: p).ground, "tile.mossrock.a")
-        XCTAssertTrue(e.visual(for: [.damp: 20, .glow: 12], at: p).ground.hasPrefix("tile.grass"))
+        XCTAssertEqual(e.visual(for: [.shimmer: 40, .spirit: 30], at: p).ground, "tile.cave.a")
+        XCTAssertEqual(e.visual(for: [.spore: 20, .shimmer: 20], at: p).ground, "tile.mossrock.a")
+        XCTAssertTrue(e.visual(for: [.spore: 20, .glow: 12], at: p).ground.hasPrefix("tile.grass"))
     }
 
     func testOverlaysStackOnePerFamilyAtStrongestLevel() {
         let e = engine()
-        let mixed = e.visual(for: [.bloom: 12, .damp: 25, .depth: 4], at: GridPoint(3, 4)).overlays.map(\.sprite)
+        let mixed = e.visual(for: [.bloom: 12, .spore: 25, .spirit: 4], at: GridPoint(3, 4)).overlays.map(\.sprite)
         XCTAssertEqual(mixed.count, 3, "\(mixed)")
         XCTAssertTrue(mixed[0].hasPrefix("ov.dirt.1"))
         XCTAssertTrue(mixed[1].hasPrefix("ov.mycelium.3"))
         XCTAssertTrue(mixed[2].hasPrefix("ov.flowers.2"))
-        XCTAssertTrue(e.visual(for: [.stone: 80, .depth: 80], at: GridPoint(3, 4)).overlays.isEmpty)
+        XCTAssertTrue(e.visual(for: [.shimmer: 80, .spirit: 80], at: GridPoint(3, 4)).overlays.isEmpty)
     }
 
     func testEdgeIsAShrubTreeline() {
@@ -392,7 +392,7 @@ final class VisualsNamingSaveTests: XCTestCase {
     func testForestNames() {
         let namer = ForestNamer(parts: content.nameParts, tuning: content.tuning.naming)
         XCTAssertTrue(content.nameParts.quietNames.contains(namer.name(means: [:], seed: 1)))
-        let name = namer.name(means: [.damp: 3, .depth: 2, .glow: 1.5], seed: 7)
+        let name = namer.name(means: [.spore: 3, .spirit: 2, .glow: 1.5], seed: 7)
         XCTAssertTrue(name.contains(" of "), name)
     }
 

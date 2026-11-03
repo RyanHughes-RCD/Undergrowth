@@ -35,7 +35,7 @@ ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 LANDMARKS = {
     "landmark.old-log": {"source": "landmark_old_log.jpg", "width": 40, "anchorUp": 4},
     "landmark.spirit-well": {"source": "landmark_spirit_well.jpg", "width": 28, "anchorUp": 4},
-    "landmark.cave": {"source": "landmark_cave.jpg", "width": 40, "anchorUp": 4},
+    "landmark.crystal-grotto": {"source": "landmark_cave.jpg", "width": 40, "anchorUp": 4},
     # Flat landmarks are centred on their tile instead of standing on its foot line.
     "landmark.moonwell": {"source": "landmark_moonwell.jpg", "width": 38, "flat": True, "anim": "ripples"},
     # The ring's mushrooms are too small to shrink: each keeps its drawn size and only their places

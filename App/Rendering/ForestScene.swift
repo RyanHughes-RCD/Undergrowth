@@ -349,8 +349,8 @@ final class ForestScene: SKScene, UIGestureRecognizerDelegate {
     /// Debug overlay: color by stat mix, stronger where stats are higher.
     static func overlayColor(_ stats: StatValues) -> (UIColor, CGFloat) {
         let colors: [StatKey: (CGFloat, CGFloat, CGFloat)] = [
-            .damp: (0.2, 0.4, 1.0), .glow: (0.4, 1.0, 1.0), .bloom: (1.0, 0.45, 0.75),
-            .verdure: (0.3, 0.9, 0.3), .stone: (0.65, 0.65, 0.7), .depth: (0.45, 0.2, 0.6),
+            .spore: (0.2, 0.4, 1.0), .glow: (0.4, 1.0, 1.0), .bloom: (1.0, 0.45, 0.75),
+            .verdure: (0.3, 0.9, 0.3), .shimmer: (0.65, 0.65, 0.7), .spirit: (0.45, 0.2, 0.6),
         ]
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, total: CGFloat = 0, maxV: CGFloat = 0
         for (k, c) in colors {

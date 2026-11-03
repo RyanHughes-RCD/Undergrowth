@@ -1,0 +1,45 @@
+{
+  "_about": "The opening: a relic waits among the grotto's first finds (tuning.start.relic). Tapping it shows the card, then the questions; each answer adds weight to one or two schools, the highest total decides the relic's school (ties broken at random among the leaders), and it goes into the Bag as a common relic of that school. No answer names a school, a stat or a mechanic.",
+  "card": {
+    "title": "A strange relic",
+    "intro": "Something half-sunk in the moss by the old log, cool and faintly shimmering. Words are worn into it.",
+    "inscription": "Tell me what you love, and bury me where it should grow. The ground around me will remember, and become what its keeper wishes.",
+    "begin": "Hold it",
+    "keep": "Keep it"
+  },
+  "questions": [
+    {"text": "Where do you go to think?", "answers": [
+      {"text": "Somewhere green and damp, where the air smells of rain.", "weights": {"spore": 2, "verdure": 1}},
+      {"text": "Somewhere high, to watch the light change.", "weights": {"glow": 2, "shimmer": 1}},
+      {"text": "Wherever the flowers are.", "weights": {"bloom": 2, "shimmer": 1}},
+      {"text": "Somewhere very quiet, where no one would look.", "weights": {"spirit": 2, "spore": 1}}]},
+    {"text": "What do you hope to find when you wake?", "answers": [
+      {"text": "Sunlight across the floor.", "weights": {"bloom": 2, "verdure": 1}},
+      {"text": "Something glittering that wasn't there before.", "weights": {"shimmer": 2, "bloom": 1}},
+      {"text": "Everything a little more overgrown.", "weights": {"verdure": 2, "spore": 1}},
+      {"text": "The last of a dream, still close.", "weights": {"spirit": 2, "glow": 1}}]},
+    {"text": "What kind of quiet do you like best?", "answers": [
+      {"text": "The hush after rain.", "weights": {"spore": 2, "shimmer": 1}},
+      {"text": "Night, with one light still on.", "weights": {"glow": 2, "spirit": 1}},
+      {"text": "Wind moving through tall grass.", "weights": {"verdure": 2, "bloom": 1}},
+      {"text": "A cold, clear morning.", "weights": {"shimmer": 2, "verdure": 1}}]},
+    {"text": "What would you carry in your pocket?", "answers": [
+      {"text": "A smooth, bright pebble.", "weights": {"shimmer": 2, "glow": 1}},
+      {"text": "A pressed flower.", "weights": {"bloom": 2, "spore": 1}},
+      {"text": "A curl of old root.", "weights": {"spirit": 2, "verdure": 1}},
+      {"text": "Something that glows in the dark.", "weights": {"glow": 2, "shimmer": 1}}]},
+    {"text": "What should grow here while you're gone?", "answers": [
+      {"text": "Something soft, that keeps to the shade.", "weights": {"spore": 2, "spirit": 1}},
+      {"text": "Something wild, that won't stay where it's put.", "weights": {"verdure": 2, "spore": 1}},
+      {"text": "Something bright, for whoever comes next.", "weights": {"bloom": 2, "shimmer": 1}},
+      {"text": "Something no one quite believes in.", "weights": {"glow": 2, "spirit": 1}}]}
+  ],
+  "reveal": {
+    "spore": "The stone softens with moss, and tiny caps push out of its cracks.",
+    "glow": "A light wakes inside it, faint and steady, like a lantern far away.",
+    "bloom": "The stone warms and buds stir in its cracks.",
+    "verdure": "Green threads run across it, and a leaf unfurls from its side.",
+    "shimmer": "It clears like ice, and something inside it begins to hum.",
+    "spirit": "Mist curls out of it, cool and quiet, and it feels very old."
+  }
+}

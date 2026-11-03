@@ -1,6 +1,6 @@
 import Foundation
 
-/// Builds a forest name from its dominant stats, e.g. "Damp Hollow of Glowing Caps".
+/// Builds a forest name from its dominant stats, e.g. "Misty Hollow of Glowing Caps".
 public struct ForestNamer {
     public let parts: NameParts
     public let tuning: Tuning.NamingTuning

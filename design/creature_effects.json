@@ -9,7 +9,7 @@
     "effects": [{ "type": "spawnWeight", "category": "mushroom", "rarities": ["rare", "veryRare"], "mult": 1.5 }]
   },
   "Rot Hermit": {
-    "extraContributions": { "stone": -10 }
+    "extraContributions": { "shimmer": -10 }
   },
   "Crystal Cap Wanderer": {
     "effects": [{ "type": "bonusDrop", "items": ["mushroom.crystal-cap"], "chance": 0.25, "table": "loot.crack.pebble-geode" }]
@@ -37,7 +37,7 @@
     "notYet": "Hybrid plants"
   },
   "Root Delver": {
-    "effects": [{ "type": "requirementOffset", "category": "plant", "stat": "depth", "offset": -20 }]
+    "effects": [{ "type": "requirementOffset", "category": "plant", "stat": "spirit", "offset": -20 }]
   },
   "Grove Heart": {
     "effects": [{ "type": "rampSpeed", "mult": 2 }]
@@ -66,10 +66,10 @@
     "notYet": "The underground layer"
   },
   "Glowmoss Sprite": {
-    "effects": [{ "type": "statSubstitute", "items": ["mushroom.glowcap"], "from": "damp", "to": "verdure" }]
+    "effects": [{ "type": "statSubstitute", "items": ["mushroom.glowcap"], "from": "spore", "to": "verdure" }]
   },
   "Bog Wisp": {
-    "effects": [{ "type": "groundOverride", "sprite": "tile.pool.a", "when": { "damp": { "min": 25 } } }]
+    "effects": [{ "type": "groundOverride", "sprite": "tile.pool.a", "when": { "spore": { "min": 25 } } }]
   },
   "Crystal Bloom Fae": {
     "effects": [{ "type": "bonusDrop", "items": ["plant.moss-rose"], "chance": 0.25, "table": "loot.crack.pebble-geode" }]

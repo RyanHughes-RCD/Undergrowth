@@ -1,11 +1,11 @@
 {
   "stats": {
-    "damp":    { "adjectives": ["Damp", "Misty", "Dewy", "Drizzly"],      "places": ["Mire", "Fen", "Hollow", "Bog"],        "phrases": ["Soft Rain", "Still Puddles", "Morning Dew"] },
-    "glow":    { "adjectives": ["Glowing", "Gleaming", "Lantern", "Shimmering"], "places": ["Glade", "Grotto", "Glimmerwood"], "phrases": ["Glowing Caps", "Lantern Spores", "Faint Lights"] },
+    "spore":    { "adjectives": ["Mossy", "Misty", "Dewy", "Sporing"],      "places": ["Mire", "Fen", "Hollow", "Bog"],        "phrases": ["Soft Spores", "Still Puddles", "Morning Mist"] },
+    "glow":    { "adjectives": ["Glowing", "Gleaming", "Lantern", "Twinkling"], "places": ["Glade", "Grotto", "Glimmerwood"], "phrases": ["Glowing Caps", "Lantern Spores", "Faint Lights"] },
     "bloom":   { "adjectives": ["Blooming", "Petaled", "Flowering", "Honeyed"],  "places": ["Meadow", "Garden", "Bower"],        "phrases": ["Wildflowers", "Open Petals", "Sweet Pollen"] },
-    "verdure": { "adjectives": ["Verdant", "Leafy", "Mossy", "Green"],       "places": ["Thicket", "Grove", "Greenwood"],      "phrases": ["Curling Ferns", "Tall Grass", "Green Shade"] },
-    "stone":   { "adjectives": ["Stony", "Pebbled", "Craggy", "Rocky"],      "places": ["Tor", "Ridge", "Scree", "Cairn"],     "phrases": ["Old Stones", "Hidden Gems", "Mossy Rocks"] },
-    "depth":   { "adjectives": ["Deep", "Sunken", "Shadowed", "Hollow"],     "places": ["Hollow", "Dell", "Burrows", "Caverns"],"phrases": ["the Underroots", "Quiet Caves", "Deep Places"] }
+    "verdure": { "adjectives": ["Verdant", "Leafy", "Ferny", "Green"],       "places": ["Thicket", "Grove", "Greenwood"],      "phrases": ["Curling Ferns", "Tall Grass", "Green Shade"] },
+    "shimmer":   { "adjectives": ["Shimmering", "Crystal", "Glittering", "Prismed"], "places": ["Geode", "Spires", "Glimmer", "Prism"], "phrases": ["Singing Crystals", "Hidden Gems", "Quiet Prisms"] },
+    "spirit":   { "adjectives": ["Fae", "Hushed", "Dreaming", "Veiled"],     "places": ["Hollow", "Dell", "Rootwood", "Mistwood"],"phrases": ["the Old Roots", "Quiet Magic", "Fae Mist"] }
   },
   "quietNames": ["Quiet Clearing", "Sleepy Glade", "Still Copse", "Hushed Woods"],
   "defaultPlaces": ["Wood", "Copse", "Clearing"]

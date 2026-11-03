@@ -296,12 +296,12 @@ struct StatBar: View {
 
     static func color(_ k: StatKey) -> Color {
         switch k {
-        case .damp: return .blue
+        case .spore: return .blue
         case .glow: return .cyan
         case .bloom: return .pink
         case .verdure: return .green
-        case .stone: return .gray
-        case .depth: return .purple
+        case .shimmer: return .gray
+        case .spirit: return .purple
         default: return .white
         }
     }

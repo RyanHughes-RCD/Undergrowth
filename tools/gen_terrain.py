@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Terrain art for each stat's identity (run via gen_placeholders.py).
 
-Stone builds up (rocky ground, rocks, boulders, ledges, cliff tops; mossy when Verdure is there too),
-Depth digs down (bare dark soil, burrows, holes, cavern openings), Damp is wet (wet soil, bog,
-drips), Verdure is tall (tall grass, vines over rocks), Bloom closes at night (buds), plus the
+Shimmer builds up (crystal spires; the older ground tiles here are rocks, ledges and cliff tops, mossy
+when Verdure is there too), Spirit sinks low (fae-mist patches with roots and hollows; older tiles:
+burrows and cavern openings), Spore is misty and wet (wet moss, bog, drips), Verdure is tall (tall grass,
+vines), Bloom closes at night (buds), plus the
 markers for buried spawns (loose soil) and spawns hidden in tall grass (a rustling clump).
 Ground tiles and overlays use the shared ground palette; decorations carry their own palettes.
 """
-from gen_placeholders import Canvas, write, deco, P
+from gen_placeholders import Canvas, write, deco, P, GROUND_PALETTE
 from gen_topdown import tile, overlay, blob, rng_for, T
 
 OUTLINE = "#1b1420"
@@ -17,7 +18,7 @@ SOIL = ["transparent", "#24160e", "#3e2b2a", "#2e1f22", "#5a3c30", "#7a5232", "#
 
 
 def ground_tiles():
-    # Stone: rocky ground, then a raised cliff top (the renderer adds the cliff face below it).
+    # Shimmer (older ground tiles): rocky ground, then a raised cliff top (the renderer adds the cliff face below it).
     def rocky(c, rng, f):
         for _ in range(4):
             x, y = rng.randint(2, 13), rng.randint(2, 13)
@@ -32,14 +33,14 @@ def ground_tiles():
                 c.set(x, y, P["rock_d"]); x += rng.choice((0, 1)); y += 1
         c.rect(0, 0, T - 1, 0, P["rock_ll"])                # lit top-left edges
         c.rect(0, 0, 0, T - 1, P["rock_l"])
-        if mossy:                                            # Verdure softens Stone: moss over the top
+        if mossy:                                            # Verdure softens Shimmer: moss over the top
             for (x, y, r) in ((4, 4, 3.2), (11, 9, 2.6), (6, 12, 2)):
                 blob(c, x, y, r, r * .8, P["moss"], edge=P["moss_d"])
                 c.set(x - 1, y - 1, P["moss_ll"])
     tile("tile.cliff.a", "rock", [("rock_l", .12), ("rock_d", .1), ("rock_ll", .03)], extra=cliff)
     tile("tile.cliff.moss", "rock", [("rock_l", .1), ("rock_d", .1), ("moss", .05)], extra=lambda c, r, f: cliff(c, r, f, True))
 
-    # Depth: bare dark soil (looks fairly empty on top), then a cavern opening.
+    # Spirit (older ground tiles): bare dark soil (looks fairly empty on top), then a cavern opening.
     def bare(c, rng, f):
         for _ in range(2):
             x, y = rng.randint(1, 13), rng.randint(1, 13)
@@ -56,7 +57,7 @@ def ground_tiles():
             c.set(x, 13 if 5 < x < 10 else 12, P["loam_root"])
     tile("tile.cavern.a", "loam_d", [("loam", .15)], extra=cavern)
 
-    # Damp: darker wet soil with glints, and boggy low ground.
+    # Spore: darker wet soil with glints, and boggy low ground.
     def wet(c, rng, f):
         for _ in range(3):
             x, y = rng.randint(1, 14), rng.randint(1, 14)
@@ -75,7 +76,7 @@ def ground_tiles():
 
 
 def overlays():
-    # Verdure on Stone: vines creeping over rock.
+    # Verdure on Shimmer: vines creeping over rock.
     def vines(level):
         def d(c, rng, f):
             for _ in range(1 + level):
@@ -103,7 +104,7 @@ def overlays():
             overlay("ov.buds.%d%s" % (level, v), buds(level))
 
 
-def stone_decorations():
+def shimmer_decorations():
     def rock(c, f, w=4, h=3):
         c.ellipse(5, 6, w, h, 2, clip=lambda x, y: y <= 7)
         c.ellipse(4, 5, w * .55, h * .5, 3)
@@ -148,7 +149,7 @@ def stone_decorations():
     deco("deco.ledge.a", ROCK, ledge, size=(16, 13), outline=True)
 
 
-def depth_decorations():
+def spirit_decorations():
     def hole(c, f, rx, ry, cx, cy):
         c.ellipse(cx, cy + .6, rx + 1.4, ry + 1.2, 4)           # kicked-up dirt rim
         c.ellipse(cx - .6, cy, rx + .8, ry + .5, 5, clip=lambda x, y: y < cy)
@@ -158,7 +159,7 @@ def depth_decorations():
     deco("deco.hole.a", SOIL, lambda c, f: hole(c, f, 4, 2.4, 7.5, 5.5), size=(15, 10), anchor=(7, 8))
 
 
-def damp_decorations():
+def spore_decorations():
     pal = ["transparent", "#2a4e6e", "#7fb0d4", "#c8e6ff"]
 
     def drip(c, f):
@@ -227,21 +228,26 @@ def spawn_markers():
 def main():
     ground_tiles()
     overlays()
-    stone_decorations()
-    depth_decorations()
-    damp_decorations()
+    shimmer_decorations()
+    spirit_decorations()
+    spore_decorations()
     verdure_decorations()
     spawn_markers()
 
 
 # ------------------------------------------------------------------ 9 intensity stages per stat
 # Each stat adds to the base grass (never the whole tile); stage 1 is a hint, stage 9 is dramatic.
-# Overlays: ov.<stat>.s<n><a|b> (16x16, ground palette). Stone: deco.spikes.<n><a|b> (rises up).
+# Overlays: ov.<stat>.s<n><a|b> (16x16, ground palette). Shimmer: deco.spikes.<n><a|b> (crystals rising up).
 STAGES = range(1, 10)
-SPIKE = ["transparent", OUTLINE, "#8a8a96", "#b4b4c0", "#5e5e6a", "#dcdce6", "#44444e", "#9a9aa6"]
+# Shimmer's crystals: pale lilac and teal (2 mid, 3 lit, 4 shade, 5 highlight, 6 deep crack, 7 chips).
+SPIKE = ["transparent", OUTLINE, "#b7a4e0", "#dcd0f6", "#6fb3b8", "#f4f0ff", "#5a4a8a", "#9fd8d4"]
+# Spirit's overlays: the ground palette with its earthy tones swapped for misty blue-violet.
+SPIRIT_TONES = {"dirt": "#6a6aa8", "dirt_d": "#4a4a82", "dirt_l": "#9a9ad0", "loam_root": "#8a7ab8",
+                "loam_d": "#3a3a66", "cave_d": "#2a2448"}
+SPIRIT_PALETTE = [SPIRIT_TONES.get(name, col) for name, col in zip(sorted(P, key=P.get), GROUND_PALETTE)]
 
 
-def stone_spikes():
+def shimmer_spikes():
     for n in STAGES:
         for v in "ab":
             rng = rng_for("spikes%d%s" % (n, v))
@@ -278,7 +284,7 @@ def stone_spikes():
             deco("deco.spikes.%d%s" % (n, v), SPIKE, draw, size=(16, H), anchor=(8, H - 2), outline=n >= 3)
 
             def mossy(c, f, draw=draw, seed=n * 10 + ord(v)):
-                # Verdure softens Stone: the same spikes with moss over their bases and shoulders.
+                # Verdure softens Shimmer: the same crystals with moss over their bases and shoulders.
                 draw(c, f)
                 r2 = rng_for("mossy%d" % seed)
                 rock = [row[:] for row in c.px]                       # decide from the untouched spikes
@@ -297,7 +303,7 @@ def stone_spikes():
 
 
 def staged_overlays():
-    def dirt(n):
+    def spirit(n):
         def d(c, rng, f):
             if n == 1:
                 for _ in range(3):
@@ -324,7 +330,7 @@ def staged_overlays():
                 c.ellipse(x, y + .7, hr, hr * .6, P["cave_d"])
         return d
 
-    def damp(n):
+    def spore(n):
         def d(c, rng, f):
             glints = [2, 4, 3, 4, 4, 4, 5, 5, 6][n - 1]
             if n >= 3:
@@ -403,16 +409,22 @@ def staged_overlays():
                     c.set(x, y - 3, P["lush_ll"])
         return d
 
-    fams = {"dirt": dirt, "damp": damp, "glow": glow, "bloom": bloom, "verdure": verdure}
+    fams = {"spirit": spirit, "spore": spore, "glow": glow, "bloom": bloom, "verdure": verdure}
     for name, fn in fams.items():
         for n in STAGES:
             for v in "ab":
                 frames = 2 if name == "glow" else 1
-                overlay("ov.%s.s%d%s" % (name, n, v), fn(n), frames=frames, durations=[0.9, 0.9] if frames > 1 else None)
+                sid = "ov.%s.s%d%s" % (name, n, v)
+                if name == "spirit":       # same shapes as the old dirt patches, in fae-mist colours
+                    c = Canvas(T, T)
+                    fn(n)(c, rng_for(sid), 0)
+                    write(sid, (T, T), [c], palette=SPIRIT_PALETTE, anchor=(8, 8), tags=["overlay"])
+                    continue
+                overlay(sid, fn(n), frames=frames, durations=[0.9, 0.9] if frames > 1 else None)
 
 
 def combo_art():
-    # Stone + Damp + Verdure: patches of moss creeping over everything.
+    # Shimmer + Spore + Verdure: patches of moss creeping over everything.
     def moss(c, rng, f):
         for _ in range(4):
             x, y = pt(rng, 3)
@@ -530,16 +542,16 @@ def named_terrain_art():
 
     A = {
         "rain-garden": (1, lambda c, r, f: (puddles(c, r, 2), flowers(c, r, 4, ("pink", "violet", "white")), specks(c, r, 6, ("water_l",)))),
-        "dripstone-ledge": (1, lambda c, r, f: (rocks(c, r, 3, (1.8, 2.6)), specks(c, r, 8, ("water_l", "water_hi")), puddles(c, r, 1))),
+        "dewcrystal-dell": (1, lambda c, r, f: (rocks(c, r, 3, (1.8, 2.6)), specks(c, r, 8, ("water_l", "water_hi")), puddles(c, r, 1))),
         "fernbrake": (1, lambda c, r, f: (patches(c, r, 2, "mud_m", "mud_d", (1.6, 2.4)), fronds(c, r, 7, "lush_l", "lush_ll", "grass_dd"))),
-        "crystal-outcrop": (2, lambda c, r, f: (rocks(c, r, 2), crystals(c, r, 4, f=f))),
+        "crystal-glade": (2, lambda c, r, f: (rocks(c, r, 2), crystals(c, r, 4, f=f))),
         "lantern-hollow": (2, lambda c, r, f: (patches(c, r, 2, "cave_m", "cave_d"), roots(c, r, 2), twinkle(c, r, f, 6))),
         "moonlit-garden": (2, lambda c, r, f: (flowers(c, r, 5, ("white", "white", "violet"), "cr_white"), twinkle(c, r, f, 4, "gm_hi", "cr_white"))),
         "wisp-thicket": (2, lambda c, r, f: (fronds(c, r, 5, "lush_l", "lush_ll", "grass_dd"), wisps(c, r, f, 3))),
-        "rock-garden": (1, lambda c, r, f: (rocks(c, r, 4, (1, 1.8)), flowers(c, r, 4, ("pink", "yellow", "violet"), "white"))),
+        "prism-garden": (1, lambda c, r, f: (rocks(c, r, 4, (1, 1.8)), flowers(c, r, 4, ("pink", "yellow", "violet"), "white"))),
         "sunken-garden": (1, lambda c, r, f: (patches(c, r, 2, "loam", "loam_d"), flowers(c, r, 4, ("violet", "pink", "white")))),
-        "geode-bed": (1, lambda c, r, f: (patches(c, r, 3, "dirt", "dirt_d"), crystals(c, r, 3, ("cr_violet", "rock_d"), "cr_white"))),
-        "overgrown-rocks": (1, lambda c, r, f: (mossy_rocks(c, r, 3), fronds(c, r, 3, "moss_l", "moss_ll", "moss_d"))),
+        "dreaming-hollow": (1, lambda c, r, f: (patches(c, r, 3, "dirt", "dirt_d"), crystals(c, r, 3, ("cr_violet", "rock_d"), "cr_white"))),
+        "overgrown-crystals": (1, lambda c, r, f: (mossy_rocks(c, r, 3), fronds(c, r, 3, "moss_l", "moss_ll", "moss_d"))),
         "root-tangle": (1, lambda c, r, f: (patches(c, r, 2, "loam", "loam_d"), roots(c, r, 6))),
         "glowworm-grotto": (2, lambda c, r, f: (patches(c, r, 3, "cave_d", "cave"), twinkle(c, r, f, 12, "cr_cyan", "cr_white"))),
         "heartwood-grove": (2, lambda c, r, f: (roots(c, r, 4), fronds(c, r, 3), flowers(c, r, 3, ("pink", "white")), twinkle(c, r, f, 3, "yellow", "white"))),
@@ -619,7 +631,7 @@ _old_main = main
 
 def main():
     _old_main()
-    stone_spikes()
+    shimmer_spikes()
     staged_overlays()
     combo_art()
     named_terrain_art()

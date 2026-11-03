@@ -11,7 +11,7 @@ public struct CreatureDef: Codable, Identifiable, Hashable {
     public var stats: [StatKey]
     /// Maximum points added at the creature's own tile once fully ramped.
     public var bonuses: StatValues?
-    /// Fixed extra contributions (can be negative, e.g. Rot Hermit lowering Stone).
+    /// Fixed extra contributions (can be negative, e.g. Rot Hermit lowering Shimmer).
     public var extraContributions: StatValues?
     /// Influence radius in tiles.
     public var radius: Double?

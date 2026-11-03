@@ -39,7 +39,8 @@ class App {
     this.view = new ForestView(document.getElementById('forest'), this);
     this.view.sync();
     this.ui.render();
-    if (saved && report.spawned > 0 && report.ticks > 2) {
+    this.processEvents();                       // the morning reveal, if the forest grew while we were away
+    if (saved && !report.harvest && report.spawned > 0 && report.ticks > 2) {
       this.ui.toast(`While you were away, ${report.spawned} new thing${report.spawned === 1 ? '' : 's'} appeared.`);
     }
     if (this.replanted) this.ui.toast('The forest has been replanted for the new spawn table. Creatures now hide in mushrooms, seeds and geodes.');
@@ -70,7 +71,7 @@ class App {
       if (document.hidden) { this.save(); return; }
       const before = this.game.state.lastUpdated;
       const r = this.game.advance(this.game.now());
-      if (r.spawned > 0 && this.game.now() - before > 600000) {
+      if (!r.harvest && r.spawned > 0 && this.game.now() - before > 600000) {
         this.ui.toast(`While you were away, ${r.spawned} new thing${r.spawned === 1 ? '' : 's'} appeared.`);
       }
       this.changed();
@@ -106,6 +107,24 @@ class App {
         const name = (pid) => { const pl = this.game.state.placements.find((x) => x.id === pid); const c = pl && this.game.creature(pl.creatureID); return c ? this.displayName(c) : 'Two creatures'; };
         const it = this.content.items[e.itemID];
         ui.toast(e.kind === 'seed' ? `${name(e.a)} and ${name(e.b)} planted a seed together.` : `${name(e.a)} and ${name(e.b)} dug up a ${it ? it.name : 'geode'}!`, it ? it.sprite : null);
+      } else if (e.type === 'relicBuried') {
+        const def = this.content.items[e.relic.relicID];
+        this.view.relicReaction(e.relic.tile, e.relic.school);
+        // The first relic ends the first session quietly; later ones just say so.
+        ui.toast((this.game.state.relics || []).length <= 1 ? ui.story('messages.firstRelic') : `${def ? def.name : 'The relic'} is in the ground. The land around it will answer.`);
+      } else if (e.type === 'returnHarvest') {
+        // Morning reveal: a brief pan to the best find, then a small card. Collect All does the rest.
+        if (e.best) { this.view.panTo(e.best.tile, (cfg.returnHarvest?.reveal || {}).panSeconds ?? 1.2); this.view.highlight([e.best.tile], 4, '255,236,140'); }
+        const parts = [`${e.finds} find${e.finds === 1 ? '' : 's'}`];
+        if (e.uncommon) parts.push(`${e.uncommon} uncommon`);
+        if (e.newNearRelic) parts.push(ui.story('messages.harvestNewNearRelic'));
+        else if (e.somethingNew) parts.push(ui.story('messages.harvestNew'));
+        ui.celebrate(ui.story('messages.harvestTitle'), parts.join(', ') + '.');
+      } else if (e.type === 'nibbleClue') {
+        if (e.text) ui.toast(e.text);
+      } else if (e.type === 'visitorGift') {
+        const def = this.game.guestDef(e.id), it = this.content.items[e.item];
+        if (def && it) ui.toast(ui.story('visitors.gift', { name: def.name, item: it.name }), it.sprite);
       } else if (e.type === 'terrainDiscovered') {
         const t = (this.content.terrain || []).find((x) => x.id === e.id);
         if (t) ui.toast(`New terrain in your Field Guide: ${t.name}.`);
@@ -220,12 +239,12 @@ class App {
   }
 
   /**
-   * Collect All: picks up every find in the clearing at once, including ones buried (dug up) and
+   * Collect All: picks up every find in the clearing at once, including veiled ones (buried spawns) and
    * hidden in tall grass. Items are summed into one toast; creatures found are shown one after another.
    */
   collectAll() {
     const g = this.game, now = g.now();
-    const spawns = [...g.state.spawns];
+    const spawns = g.state.spawns.filter((sp) => !sp.opening);   // the opening's relic waits to be asked
     if (!spawns.length) return;
     const counts = new Map(), creatures = [];
     let n = 0;
@@ -239,7 +258,7 @@ class App {
       const name = this.content.items[sp.itemID]?.name || 'something';
       for (const r of results) {
         if (r.item) counts.set(r.item, (counts.get(r.item) || 0) + r.count);
-        else if (r.creature) creatures.push([r, view === 'buried' ? `a ${name}, dug up from the earth` : `a ${name}`]);
+        else if (r.creature) creatures.push([r, view === 'buried' ? `a ${name}, uncovered from the mist` : `a ${name}`]);
       }
     }
     const list = [...counts.entries()].sort((a, b) => b[1] - a[1]);
@@ -294,6 +313,12 @@ class App {
       }
       return;
     }
+    if (ui.mode && ui.mode.type === 'relic') {
+      if (!g.isFree(tile) || !g.inClearing(tile)) { this.ui.toast(g.inClearing(tile) ? 'Something is already there.' : "That's outside the clearing."); return; }
+      ui.mode = { ...ui.mode, tile };
+      this.changed(false);
+      return;
+    }
     if (ui.mode && ui.mode.type === 'nest') {
       // First tap: preview what would hatch there. "Nest it here" confirms.
       if (!g.isFree(tile) || !g.inClearing(tile)) { this.ui.toast(g.inClearing(tile) ? 'Something is already there.' : "That's outside the clearing."); return; }
@@ -340,7 +365,7 @@ class App {
     const landmark = g.landmarkAt(tile);
     if (landmark) {
       const def = (this.content.landmarks || []).find((l) => l.id === landmark.id);
-      // The Old Log is where wandering visitors stop by to trade (the Store has its own tab).
+      // The Old Log is where traders stop by (the Store has its own tab).
       if (landmark.id === 'landmark.old-log' && (this.content.requests || []).length) { ui.selectedTile = null; ui.open('offerings'); this.changed(false); return; }
       if (landmark.id === 'landmark.spirit-well') { ui.selectedTile = null; this.openWishing(); return; }
       if (def && def.earned) { ui.selectedTile = null; ui.open('landmark', def.id); this.changed(false); return; }
@@ -349,6 +374,16 @@ class App {
     }
     const nest = g.nestAt(tile);
     if (nest) { ui.selectedTile = null; ui.open('nest', nest.id); this.changed(false); return; }
+    // A present visitor: tapping it befriends it.
+    if (tile.hitKind === 'guest') {
+      const r = this.attempt(() => g.befriendGuest(tile.hitKey, now));
+      if (r) { ui.befriendCard(r.def, r.again); this.changed(); }
+      return;
+    }
+    const relic = g.relicAt(tile);
+    if (relic) { ui.selectedTile = null; ui.open('relic', relic.id); this.changed(false); return; }
+    const buried = g.buriedSeedAt(tile);
+    if (buried) { ui.selectedTile = null; ui.open('buriedSeed', buried.id); this.changed(false); return; }
     const decor = g.decorAt(tile);
     if (decor) { ui.selectedTile = null; ui.open('decor', decor.id); this.changed(false); return; }
     // Only tapping the creature itself opens it (it roams around its spot); its empty home tile doesn't.
@@ -367,6 +402,7 @@ class App {
       return;
     }
     const spawn = g.spawnAt(tile);
+    if (spawn && spawn.opening) { ui.selectedTile = null; ui.openOpening(); return; }
     if (spawn) {
       const name = this.content.items[spawn.itemID]?.name || 'something';
       const view = g.spawnView(spawn, now);
@@ -380,7 +416,7 @@ class App {
       const results = this.attempt(() => g.collect(spawn.id, now));
       if (results) {
         if (view === 'buried') this.view.dustAt(spawn.tile);
-        this.present(results, view === 'buried' ? `a ${name}, dug up from the earth` : `a ${name}`);
+        this.present(results, view === 'buried' ? `a ${name}, uncovered from the mist` : `a ${name}`);
         this.changed();
       }
       return;
@@ -396,6 +432,13 @@ class App {
       }
       const results = this.attempt(() => g.harvestSeed(seed.id, now));
       if (results) { this.present(results, 'a sprouting seed'); this.changed(); }
+      return;
+    }
+    // Tracks: reading them gives a clue (recorded in the visitor's Field Guide page).
+    const track = g.trackAt(tile);
+    if (track) {
+      const text = this.attempt(() => g.readTrack(track.id));
+      if (text) { ui.toast(text); this.changed(); }
       return;
     }
     ui.selectedCreatureID = null;
@@ -433,7 +476,7 @@ class App {
   rerollVisitor(requestID) {
     const g = this.game;
     const next = this.attempt(() => g.rerollVisitor(requestID, g.now()));
-    if (next) { { const nm = this.content.creatures[next.wandererID]?.name || 'new visitor'; this.ui.toast(`${/^[aeiou]/i.test(nm) ? 'An' : 'A'} ${nm} wanders over instead.`); } this.changed(); }
+    if (next) { { const nm = this.content.creatures[next.wandererID]?.name || 'new trader'; this.ui.toast(`${/^[aeiou]/i.test(nm) ? 'An' : 'A'} ${nm} wanders over instead.`); } this.changed(); }
   }
 
     compostItem(itemID) {
@@ -451,6 +494,22 @@ class App {
     this.ui.sheet = null; this.ui.close();
     if (!this.wish) this.wish = new WishScreen(this);
     this.wish.open();
+  }
+
+  /** Bury a relic: tap a tile, then confirm on the card (its inscription). */
+  beginRelic(itemID) {
+    const def = this.content.items[itemID];
+    if (def && !def.school) { this.ui.openOpening(); return; }
+    this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'relic', itemID }; this.changed(false);
+  }
+
+  buryRelicHere() {
+    const g = this.game, m = this.ui.mode;
+    if (!m || m.type !== 'relic' || !m.tile) return;
+    const r = this.attempt(() => g.buryRelic(m.itemID, m.tile, g.now()));
+    if (!r) return;
+    this.ui.mode = null;
+    this.changed();
   }
 
   beginNest(eggID) { this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'nest', eggID }; this.changed(false); }
@@ -502,7 +561,8 @@ class App {
 
   beginUsing(itemID) {
     const def = this.content.items[itemID];
-    if (def?.use?.type !== 'soilBoost') {
+    if (def?.use?.type === 'relic') { this.beginRelic(itemID); return; }
+    if (def?.use?.type !== 'soilBoost' && def?.use?.type !== 'bury') {
       const msg = this.attempt(() => this.game.use(itemID, null, this.game.now()));
       if (msg) { this.ui.toast(msg, def?.sprite); this.changed(); }
       return;
@@ -686,6 +746,16 @@ class App {
     this.view.lightAt = 0;
     const r = this.game.advance(this.game.now());
     this.ui.toast(`Skipped ${hours} hour${hours === 1 ? '' : 's'}. ${r.spawned} new spawn${r.spawned === 1 ? '' : 's'}.`);
+    this.changed();
+  }
+
+  /** Developer: as if the player closed the game for `hours` and came back now (counts as real time away). */
+  debugReturn(hours) {
+    const g = this.game;
+    g.debugSkip(hours * 3600);
+    g.state.lastRealSeen = (g.state.lastRealSeen ?? Date.now()) - hours * 3600 * 1000;
+    this.view.lightAt = 0;
+    g.advance(g.now());
     this.changed();
   }
 

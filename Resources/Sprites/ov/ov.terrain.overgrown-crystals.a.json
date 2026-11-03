@@ -1,0 +1,37 @@
+{
+ "id": "ov.terrain.overgrown-crystals.a",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "................",
+    "................",
+    "........mmmmm...",
+    ".......vmommmv..",
+    "mn.....vtttttv..",
+    ".m.....vltlulv..",
+    "omn..mmmvomnv...",
+    "..m.vommvm......",
+    ".omnttttomnmv...",
+    "...omnlvmommmv..",
+    ".....mvomntttv..",
+    "....omnvltlutv..",
+    "......m.vvvvv...",
+    ".....omn........",
+    "................",
+    "................"
+   ]
+  }
+ ],
+ "tags": [
+  "overlay"
+ ]
+}

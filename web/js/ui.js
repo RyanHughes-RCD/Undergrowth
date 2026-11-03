@@ -17,7 +17,7 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
-export const STAT_COLORS = { damp: '#4a7dff', glow: '#4fe3f0', bloom: '#ff79b8', verdure: '#4fcf4f', stone: '#a0a0b0', depth: '#9a5ad8' };
+export const STAT_COLORS = { spore: '#4a7dff', glow: '#4fe3f0', bloom: '#ff79b8', verdure: '#4fcf4f', shimmer: '#b7a4e0', spirit: '#7a7ad0' };
 export const RARITY_COLORS = { common: '#a0a0a0', uncommon: '#5fd35a', rare: '#5a9cff', veryRare: '#c58cff', legendary: '#ffc84a' };
 const rarityName = (r) => RARITY_NAMES[r] || r;
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -30,9 +30,10 @@ export function duration(seconds) {
   return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
 }
 
-const CATEGORY_TITLES = { egg: 'Eggs', supply: 'Soil packs', seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
+const CATEGORY_TITLES = { egg: 'Eggs', relic: 'Relics', schoolSeed: 'School seeds', seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
 const LANDMARK_TAB = 'landmarks';
 const TERRAIN_TAB = 'terrain';
+const VISITOR_TAB = 'visitors';
 const FAMILY_TABS = [['fungling', 'Funglings'], ['sproutling', 'Sproutlings'], ['geodeCritter', 'Geode Critters'], ['wanderer', 'Wanderers']];
 const catTitle = (c) => CATEGORY_TITLES[c] || cap(c);
 
@@ -82,15 +83,16 @@ export class UI {
     const bottom = h('div', { class: 'hud-bottom' });
     if (this.mode) bottom.append(this.modeBanner());
     if (this.mode && this.mode.type === 'nest' && this.mode.tile) bottom.append(this.nestPreviewCard(this.mode.eggID, this.mode.tile, true));
+    if (this.mode && this.mode.type === 'relic' && this.mode.tile) bottom.append(this.relicConfirmCard(this.mode.itemID, this.mode.tile));
     if (this.selectedTile) bottom.append(this.tileCard(this.selectedTile));
     const invCount = Object.values(g.state.inventory).reduce((a, b) => a + b, 0);
-    const finds = g.state.spawns.length;
+    const finds = g.state.spawns.filter((sp) => !sp.opening).length;
     if (finds >= 2 && !this.mode) {
       bottom.append(h('div', { class: 'collect-row' },
         h('button', { class: 'btn green collect-all', onclick: () => this.app.collectAll() }, ic('bag', 1), ` Collect all (${finds})`)));
     }
     bottom.append(h('div', { class: 'nav' },
-      this.navButton('creatures', 'Creatures', g.state.creatures.length, () => this.open('creatures')),
+      g.creaturesOn ? this.navButton('creatures', 'Creatures', g.state.creatures.length, () => this.open('creatures')) : null,
       this.navButton('bag', 'Bag', invCount, () => this.open('bag')),
       (this.content.requests || []).length ? this.navButton('store', 'Store', this.storeReadyCount(now), () => this.open('store')) : null,
       this.navButton('guide', 'Guide', 0, () => this.open('guide')),
@@ -166,6 +168,8 @@ export class UI {
     if (this.mode.type === 'place') {
       const c = g.creature(this.mode.creatureID);
       text = `Tap an empty tile to place ${c ? this.app.displayName(c) : 'creature'}`;
+    } else if (this.mode.type === 'relic') {
+      text = this.mode.tile ? 'Tap another tile, or bury it here' : `Tap an open tile to bury the ${this.content.items[this.mode.itemID]?.name || 'relic'}`;
     } else if (this.mode.type === 'nest') {
       text = this.mode.tile ? 'Tap another tile to compare, or nest it here' : `Tap an open tile to see what the ${this.content.items[this.mode.eggID]?.name || 'egg'} could hatch into there`;
     } else if (this.mode.type === 'decor') {
@@ -175,6 +179,8 @@ export class UI {
     } else if (this.mode.type === 'trowel') {
       const c = g.creature(this.mode.creatureID);
       text = `Tap an open tile to move ${c ? this.app.displayName(c) : 'it'} with the trowel`;
+    } else if (this.mode.type === 'use' && this.content.items[this.mode.itemID]?.use?.type === 'bury') {
+      text = `Tap an open tile to bury the ${this.content.items[this.mode.itemID].name} (${g.state.inventory[this.mode.itemID] || 0} left)`;
     } else if (this.mode.type === 'use') {
       const def = this.content.items[this.mode.itemID];
       text = `Tap a tile: ${def?.use?.verb || 'Use'} ${def?.name || ''} (${g.state.inventory[this.mode.itemID] || 0} left)`;
@@ -195,8 +201,9 @@ export class UI {
         h('button', { class: 'x', onclick: () => { this.selectedTile = null; this.app.changed(false); } }, ic('close', 1))),
       active.length ? h('div', { class: 'stat-grid' }, active.map((k) => this.intensityRow(k, stats[k])))
         : h('p', { class: 'sub' }, 'No intensity here yet. Creatures nearby will change this ground.'),
-      ...g.activeBoosts(now).filter((b) => b.tile.x === tile.x && b.tile.y === tile.y).map((b) =>
-        h('div', { class: 'sub boost' }, ic('gem', 1), this.joinNodes(Object.entries(b.stats).map(([k, v]) => this.amountText(k, v)), ', '),
+      ...g.activeBoosts(now).filter((b) => b.tile.x === tile.x && b.tile.y === tile.y).map((b) => b.seed
+        ? h('div', { class: 'sub boost' }, `${(this.content.items[b.seed] || {}).name || 'A school seed'} is buried here · ${g.seedPhase(b, now).phase} · ${duration(g.seedPhase(b, now).ends / 1000)} left`)
+        : h('div', { class: 'sub boost' }, ic('gem', 1), this.joinNodes(Object.entries(b.stats).map(([k, v]) => this.amountText(k, v)), ', '),
           b.expiresAt ? ` · ${duration((b.expiresAt - now) / 1000)} left` : ' · permanent')));
   }
 
@@ -226,12 +233,12 @@ export class UI {
       h('i', { class: 'pip' + (i < full ? ' on' : part && i === full ? ' part' : ''), style: i < full ? `background:${col}` : part && i === full ? `--c:${col}` : '' })));
   }
 
-  /** What a creature or gem adds: "Stone ▮▯▯…" (below the influence floor: "a touch of Stone"). */
+  /** What a creature or gem adds: "Shimmer ▮▯▯…" (below the influence floor: "a touch of Shimmer"). */
   amountText(stat, value) {
     return intensityOf(value, this.content.tuning).level ? [cap(stat), ' ', this.miniMeter(stat, value)] : `a touch of ${cap(stat)}`;
   }
 
-  /** A requirement as name + meter ("Damp ▮▮◧▯…" means at least that much). */
+  /** A requirement as name + meter ("Spore ▮▮◧▯…" means at least that much). */
   requirementText(stat, min) {
     return h('span', { class: 'req' }, cap(stat), ' ', this.miniMeter(stat, 0, { min }));
   }
@@ -242,13 +249,42 @@ export class UI {
   /** Gem/material use, with meters instead of raw amounts. */
   useText(use) {
     if (!use) return null;
+    if (use.type === 'bury') return this.buryText(use.school);
+    if (use.type === 'relic') return null;
     if (use.type !== 'soilBoost' || !use.stats) return use.text;
     const all = Object.keys(use.stats).length === CORE_STATS.length;
-    const amount = all ? ['every stat ', this.miniMeter('stone', Object.values(use.stats)[0])] : this.joinNodes(Object.entries(use.stats).map(([k, v]) => this.amountText(k, v)), ' and ');
-    const g = this.game;
-    const r = use.verb === 'Spread' && g ? (use.radius || 0) + g.upgradeTier('wideSpread') * ((g.upgradeDef('wideSpread') || {}).radiusPerTier ?? 1) : 0;
+    const amount = all ? ['every stat ', this.miniMeter('shimmer', Object.values(use.stats)[0])] : this.joinNodes(Object.entries(use.stats).map(([k, v]) => this.amountText(k, v)), ' and ');
+    const r = use.radius || 0;
     const where = r ? `a tile and the ${(2 * r + 1) ** 2 - 1} around it` : 'a tile';
     return [`${use.verb}: adds `, amount, ` to ${where} ${use.permanent ? 'for good' : use.hours ? `for ${use.hours}h` : ''}`.trimEnd() + '.'];
+  }
+
+  /** What burying a school seed does: "Bury: grows Shimmer ▮▯… around a tile, rooting over 3h, for about 3 days." */
+  buryText(school) {
+    const cfg = this.content.tuning.schoolSeeds || {}, g = this.game;
+    const wide = g ? g.upgradeTier('wideSpread') * ((g.upgradeDef('wideSpread') || {}).radiusPerTier ?? 1) : 0;
+    return ['Bury: grows ', this.amountText(school, cfg.strength ?? 12), ` around a tile${wide ? ' (Wide Spread: a little farther)' : ''}, rooting over ${cfg.rampHours ?? 3}h and lasting about ${Math.round((cfg.durationHours ?? 72) / 24)} days before it fades.`];
+  }
+
+  /** A buried school seed: its school, how far along it is, and what it does. */
+  buriedSeedBody(id) {
+    const g = this.game, now = g.now();
+    const b = g.state.soilBoosts.find((x) => x.id === id && x.seed);
+    if (!b) return ['School seed', h('p', { class: 'sub' }, 'The seed has faded back into the ground.')];
+    const def = this.content.items[b.seed] || {};
+    const ph = g.seedPhase(b, now);
+    const level = g.boostLevel(b, now);
+    const phaseText = ph.phase === 'rooting' ? `Rooting: reaches full strength in ${duration(ph.left / 1000)}.`
+      : ph.phase === 'growing' ? `Growing: starts to fade in ${duration(ph.left / 1000)}.` : `Fading: gone in ${duration(ph.left / 1000)}.`;
+    return [def.name || 'School seed', [
+      h('div', { class: 'hero' }, this.sprites.element(def.marker || def.sprite, null, 6, '', true)),
+      h('p', { class: 'center' }, h('b', {}, `${cap(b.school)} school`)),
+      h('div', { class: 'progress' }, h('span', { style: `width:${level * 100}%` })),
+      h('p', { class: 'sub center' }, phaseText, ` ${duration(ph.ends / 1000)} left in all.`),
+      h('div', { class: 'stat-grid' }, this.intensityRow(b.school, b.stats[b.school] * level)),
+      def.guideText ? h('p', { class: 'sub' }, def.guideText) : null,
+      h('p', { class: 'sub' }, `It gives ${cap(b.school)} to its own tile and, more softly, the tiles around it, so ${cap(b.school)} ground and its finds can start here with no creature nearby.`),
+    ]];
   }
 
   /** Developer-only: a raw stat value (with its intensity label). */
@@ -335,6 +371,9 @@ export class UI {
       store: () => ['Store', this.storeBody()],
       decor: () => this.decorBody(arg),
       nest: () => this.nestBody(arg),
+      buriedSeed: () => this.buriedSeedBody(arg),
+      relic: () => this.relicBody(arg),
+      visitor: () => this.visitorBody(arg),
       landmark: () => this.landmarkBody(arg),
     }[type];
     if (!build) return;
@@ -441,7 +480,7 @@ export class UI {
   bagBody() {
     const g = this.game;
     const owned = Object.entries(g.state.inventory).filter(([, n]) => n > 0)
-      .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def);
+      .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def && (g.eggsOn || e.def.category !== 'egg'));   // eggs are kept, hidden, while the egg system is off
     const decor = Object.entries(g.state.decor.owned).filter(([, n]) => n > 0).map(([id, n]) => ({ def: g.decorDef(id), n })).filter((e) => e.def);
     const compostOn = (this.content.tuning.offerings || {}).compostEnabled !== false;
     const head = compostOn ? [h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
@@ -454,7 +493,7 @@ export class UI {
         h('button', { class: 'btn green small', onclick: () => this.app.beginDecor(def.id) }, 'Place'))));
     }
     if (!owned.length) return [...head, h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms, plants and geodes in the forest to collect them.')];
-    const order = ['egg', 'seed', 'supply', 'geode', 'material', 'gem', 'plant', 'mushroom'];
+    const order = ['relic', 'egg', 'seed', 'schoolSeed', 'geode', 'material', 'gem', 'plant', 'mushroom'];
     const cats = [...new Set(owned.map((e) => e.def.category))].sort((a, b) =>
       ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
     return [...head, ...cats.map((cat) => [
@@ -470,11 +509,11 @@ export class UI {
             def.tradeOnly ? h('div', { class: 'sub' }, 'Worth keeping: the Store trades for it.') : null),
           h('b', {}, `×${n}`),
           def.onGrow ? h('button', { class: 'btn green small', onclick: () => this.app.beginPlanting(def.id) }, 'Plant') : null,
-          def.egg ? h('button', { class: 'btn green small', disabled: g.state.nests.length >= g.nestSlots, onclick: () => this.app.beginNest(def.id) }, 'Nest') : null,
+          def.egg && g.eggsOn ? h('button', { class: 'btn green small', disabled: g.state.nests.length >= g.nestSlots, onclick: () => this.app.beginNest(def.id) }, 'Nest') : null,
           def.onCrack ? h('div', { class: 'crack-btns' },
             h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack'),
             n > 1 ? h('button', { class: 'btn orange small', title: `Crack ${Math.min(n, this.batchMax)} at once`, onclick: () => { this.sheet = null; this.close(); this.openBatchCrack(def.id, Math.min(n, this.batchMax)); } }, `×${Math.min(n, this.batchMax)}`) : null) : null,
-          def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : def.use.verb === 'Spread' ? 'Spread' : 'Crush') : 'Use') : null,
+          def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'bury' || def.use.type === 'relic' ? 'Bury' : def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : 'Crush') : 'Use') : null,
           compostOn && g.compostValue(def.id) ? h('button', { class: 'btn grey small', title: `Compost one for ${g.compostValue(def.id)}`, onclick: () => this.app.compostItem(def.id) }, `+${g.compostValue(def.id)}`) : null)),
     ])];
   }
@@ -548,7 +587,7 @@ export class UI {
     })];
   }
 
-  /** The Old Log: where wandering visitors stop by to trade. Buying things is in the Store tab. */
+  /** The Old Log: where traders stop by (requests of kind "visitor"). Buying things is in the Store tab. */
   offeringsBody() {
     const visitors = this.visitorSection();
     return [
@@ -556,7 +595,7 @@ export class UI {
       h('div', { class: 'row space compost-row' }, h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Old Log', sprite: 'landmark.old-log', variant: null, text: this.content.story?.guide?.landmarks?.['landmark.old-log'] }) }, 'About the log'),
         h('button', { class: 'btn small green', onclick: () => this.open('store') }, ic('store', 1), ' Open the Store')),
       ...visitors,
-      visitors.length ? null : h('p', { class: 'sub center' }, 'No visitors at the log right now. Wanderers stop by each day.'),
+      visitors.length ? null : h('p', { class: 'sub center' }, 'No traders at the log right now. Traders stop by each day.'),
     ];
   }
 
@@ -594,7 +633,7 @@ export class UI {
   /** The Store: everything you can trade your finds for, in tabs (Decor, Trades, Eggs, Upgrades). */
   storeBody() {
     const g = this.game, now = g.now();
-    const tabs = [['decor', 'Decor'], ['trades', 'Trades'], ['eggs', 'Eggs'], ['upgrades', 'Upgrades']];
+    const tabs = [['decor', 'Decor'], ['trades', 'Trades'], ...(g.eggsOn ? [['eggs', 'Eggs']] : []), ['upgrades', 'Upgrades']];   // no Eggs tab while eggs are off
     if (!tabs.some(([id]) => id === this.storeTab)) this.storeTab = 'decor';
     const ready = this.storeReady(now);
     const all = g.requestBoard(now);
@@ -626,7 +665,7 @@ export class UI {
       ];
     } else if (this.storeTab === 'trades') {
       body = [
-        h('p', { class: 'sub' }, 'Trade your finds for seeds, soil and other things to use. These can be bought again whenever you like.'),
+        h('p', { class: 'sub' }, 'Trade your finds for relics, school seeds and other things to use. Most can be bought again whenever you like; relics from requests come once.'),
         ...repeatCards(), ...onceCards(null),
         !mine.length ? h('p', { class: 'sub' }, 'Nothing to trade for yet.') : null,
       ];
@@ -654,15 +693,15 @@ export class UI {
     ];
   }
 
-  /** Today's visitors: wanderers asking for items, paying in eggs. New ones each day; can be swapped for compost. */
+  /** Today's traders (requests of kind "visitor"): wanderers asking for items. New ones each day; can be swapped for compost. */
   visitorSection() {
     const g = this.game, now = g.now(), a = this.app;
     const v = g.visitorsToday(now);
     if (!v.offers.length) return [];
-    const cfg = this.content.tuning.visitors || {};
+    const cfg = this.content.tuning.traders || {};
     const left = (cfg.maxRerolls ?? 3) - v.rerolls;
     const cost = cfg.rerollCost ?? 0;
-    return [h('div', { class: 'section' }, 'Visitors today'), h('p', { class: 'sub' }, 'Wanderers stop by the log to trade. New visitors come each day.'),
+    return [h('div', { class: 'section' }, 'Traders today'), h('p', { class: 'sub' }, 'Traders stop by the log. New traders come each day.'),
       ...v.offers.map((o) => {
         const req = g.requestDef(o.requestID);
         if (!req) return null;
@@ -714,6 +753,31 @@ export class UI {
     }), list.length > 8 ? h('span', { class: 'sub' }, `+${list.length - 8} more`) : null);
   }
 
+  /** Confirm card for burying a relic: its inscription, and that it stays for good. */
+  relicConfirmCard(itemID, tile) {
+    const def = this.content.items[itemID] || {};
+    return h('div', { class: 'card relic-card' },
+      h('div', { class: 'row gap' }, h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)), h('b', {}, def.name || 'Relic')),
+      def.inscription ? h('p', { class: 'inscription' }, def.inscription) : null,
+      h('p', { class: 'sub' }, 'Once it is in the ground, it stays.'),
+      h('div', { class: 'row end gap' }, h('button', { class: 'btn green', onclick: () => this.app.buryRelicHere() }, 'Bury it here')));
+  }
+
+  /** A buried relic: what it is, its school and inscription. */
+  relicBody(id) {
+    const g = this.game, now = g.now();
+    const r = (g.state.relics || []).find((x) => x.id === id);
+    if (!r) return ['Relic', h('p', { class: 'sub' }, 'Nothing here.')];
+    const def = this.content.items[r.relicID] || {};
+    const days = Math.floor((now - r.buriedAt) / 86400000);
+    return [def.name || 'Relic', [
+      h('div', { class: 'hero' }, this.sprites.element(def.sprite || 'relic.unknown', null, 6, '', true)),
+      h('p', { class: 'center' }, h('b', {}, `${cap(r.school)} school`), ` · ${rarityName(r.tier)}`),
+      def.inscription ? h('p', { class: 'inscription center' }, def.inscription) : null,
+      h('p', { class: 'sub center' }, days < 1 ? 'Buried today. Its ground is still spreading.' : `Buried ${days} day${days === 1 ? '' : 's'} ago.`),
+    ]];
+  }
+
   nestPreviewCard(eggID, tile, confirm) {
     const g = this.game, now = g.now();
     const stats = g.tileStats(tile, now);
@@ -751,6 +815,9 @@ export class UI {
     const content = this.content;
     if (tab === TERRAIN_TAB) {
       return (content.terrain || []).map((t) => ({ key: 'terrain:' + t.id, name: t.name, terrain: t }));
+    }
+    if (tab === VISITOR_TAB) {
+      return (content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, variant: null, visitor: v }));
     }
     if (tab === LANDMARK_TAB) {
       return (content.landmarks || []).filter((l) => l.inGuide !== false).map((l) => ({
@@ -792,17 +859,17 @@ export class UI {
     const order = ['mushroom', 'plant', 'geode', 'gem', 'material'];
     const cats = [...new Set(content.itemList.filter((i) => i.inGuide !== false).map((i) => i.category))]
       .sort((a, b) => ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
-    const famTabs = FAMILY_TABS.filter(([id]) => content.creatureList.some((c) => c.family === id)).map(([id]) => id);
+    const famTabs = this.game.creaturesOn ? FAMILY_TABS.filter(([id]) => content.creatureList.some((c) => c.family === id)).map(([id]) => id) : [];
     if (this.guideTab === 'creatures') this.guideTab = famTabs[0];
-    const tabs = [LANDMARK_TAB, TERRAIN_TAB, ...famTabs, ...cats];
+    const tabs = [LANDMARK_TAB, TERRAIN_TAB, ...((content.visitorList || []).length ? [VISITOR_TAB] : []), ...famTabs, ...cats];
     const all = tabs.flatMap((t) => this.guideEntries(t));
     const found = all.filter((e) => this.game.discovered.has(e.key)).length;
     const sil = { silhouette: [78, 84, 92] };
     return [`Field Guide · ${found}/${all.length}`, [
       h('div', { class: 'tabs' }, tabs.map((t) => h('button', {
         class: 'tab' + (t === this.guideTab ? ' on' : ''), onclick: () => { this.guideTab = t; this.renderSheet(); },
-      }, t === LANDMARK_TAB ? 'Landmarks' : t === TERRAIN_TAB ? 'Terrain' : (FAMILY_TABS.find(([id]) => id === t) || [null, catTitle(t)])[1]))),
-      this.guideTab === TERRAIN_TAB ? this.terrainGrid() : h('div', { class: 'guide-grid' }, this.guideEntries(this.guideTab).map((e) => {
+      }, t === LANDMARK_TAB ? 'Landmarks' : t === TERRAIN_TAB ? 'Terrain' : t === VISITOR_TAB ? 'Visitors' : (FAMILY_TABS.find(([id]) => id === t) || [null, catTitle(t)])[1]))),
+      this.guideTab === TERRAIN_TAB ? this.terrainGrid() : this.guideTab === VISITOR_TAB ? this.visitorGrid() : h('div', { class: 'guide-grid' }, this.guideEntries(this.guideTab).map((e) => {
         const known = this.game.discovered.has(e.key);
         // Undiscovered entries with a teaser (the Heartwood Sapling) can still be opened as a silhouette.
         const teaser = !known && e.teaser;
@@ -833,6 +900,47 @@ export class UI {
       h('div', { class: 'gs-row' }, h('b', {}, 'Radius'), h('span', {}, `${st.radius}`)));
   }
 
+  /** Field Guide → Visitors: befriended ones in full; the rest as silhouettes, with the clues found so far. */
+  visitorGrid() {
+    const g = this.game, sil = { silhouette: [78, 84, 92] };
+    return h('div', { class: 'guide-grid' }, this.guideEntries(VISITOR_TAB).map((e) => {
+      const st = g.guest(e.visitor.id), known = !!st.befriended;
+      return h('button', { class: 'guide-cell' + (known ? '' : ' unknown') + (st.known.length && !known ? ' teaser' : ''), onclick: () => this.open('visitor', e.visitor.id) },
+        this.sprites.element(e.sprite, known ? null : sil, 4),
+        h('span', {}, known ? e.name : '???', !known && st.known.length ? ic('sparkle', 1) : null));
+    }));
+  }
+
+  /** A visitor's page: its art and name once befriended, and every clue the player has found. No numbers. */
+  visitorBody(id) {
+    const g = this.game, def = g.guestDef(id), st = g.guest(id);
+    if (!def) return ['Visitor', h('p', { class: 'sub' }, 'Unknown.')];
+    const S = this.content.story?.visitors || {};
+    const known = !!st.befriended;
+    const clues = g.guestPrefKeys(def).filter((k) => st.known.includes(k)).map((k) => h('li', {}, def.clues[k] || ''));
+    return [known ? def.name : '???', [
+      h('div', { class: 'hero' }, this.sprites.element(def.sprite, known ? null : { silhouette: [40, 44, 52] }, 6, '', true)),
+      h('p', { class: 'center' }, h('b', {}, known ? def.name : (S.unknownName || 'Someone small'))),
+      known && def.text ? h('p', { class: 'sub center' }, def.text) : null,
+      h('div', { class: 'section' }, 'Signs'),
+      clues.length ? h('ul', { class: 'clues' }, clues) : h('p', { class: 'sub' }, S.noClues || 'No signs of it yet.'),
+    ]];
+  }
+
+  /** The gentle moment of befriending a visitor. */
+  befriendCard(def, again) {
+    const S = this.content.story?.visitors || {};
+    const ov = document.getElementById('overlay');
+    const done = () => { ov.classList.remove('show'); ov.replaceChildren(); this.nextCard(); };
+    ov.replaceChildren(h('div', { class: 'reveal-card pop' },
+      h('div', { class: 'rays-wrap' }, this.burst('#ffe8a0'), this.sprites.element(def.sprite, null, 7, 'grow-in', true)),
+      h('h2', {}, def.name), h('p', { class: 'sub' }, again ? (S.befriendAgain || 'It knows you now.') : (S.befriend || '')),
+      again ? null : h('p', { class: 'sub' }, def.text || ''),
+      h('button', { class: 'btn green', onclick: done }, 'Lovely')));
+    ov.onclick = (e) => { if (e.target === ov) done(); };
+    ov.classList.add('show');
+  }
+
   entryBody(e) {
     const st = e.creatureStats;
     const R = this.content.tuning.creatureRoll || {};
@@ -848,7 +956,7 @@ export class UI {
     ];
   }
 
-  /** How an earned landmark forms: "Forms where Stone ▮▮… and Depth ▮▮… cover a 3×3 patch." */
+  /** How an earned landmark forms: "Forms where Shimmer ▮▮… and Spirit ▮▮… cover a 3×3 patch." */
   landmarkHowFound(def) {
     const e = def.earned || {};
     const n = e.size || 3;
@@ -978,22 +1086,22 @@ export class UI {
       }
       lines.spawns.push(general);
       const tr = T.terrain || {};
-      if (k === 'stone') {
-        lines.other.push(`After its creature leaves, Stone fades ${Math.round(1 / ((tr.statDecayRate || {}).stone || 1))}× more slowly than other stats.`);
-        lines.other.push('Where Stone is the strongest stat, geodes lie exposed on top: tap to collect.');
+      if (k === 'shimmer') {
+        lines.other.push(`After its creature leaves, Shimmer fades ${Math.round(1 / ((tr.statDecayRate || {}).shimmer || 1))}× more slowly than other stats.`);
+        lines.other.push('Where Shimmer is the strongest stat, geodes lie exposed among the crystals: tap to collect.');
       }
-      if (k === 'depth') {
-        lines.other.push('Where Depth is the strongest stat, geodes are buried. Things whose main need is Depth are always buried: they show as loose soil, tap to dig.');
-        lines.other.push('Depth lowers the ground, so water runs here and collects.');
+      if (k === 'spirit') {
+        lines.other.push('Where Spirit is the strongest stat, geodes are veiled. Things whose main need is Spirit are always veiled: they show as a stirring mound, tap to uncover.');
+        lines.other.push('Spirit lowers the ground, so mist and water drift here and collect.');
       }
-      if (k === 'damp') {
-        const mg = (tr.damp || {}).mushroomGrowth || {};
-        lines.spawns.push(['Damp grows mushrooms faster: from ', this.requirementText('damp', mg.minDamp ?? 6), `, each tile gets extra mushroom chances, up to ×${1 + (mg.maxBonus ?? 2)} its usual rate.`]);
-        lines.other.push('Water slowly seeps to drier neighbours and runs downhill; high Stone blocks it.');
+      if (k === 'spore') {
+        const mg = (tr.spore || {}).mushroomGrowth || {};
+        lines.spawns.push(['Spore grows mushrooms faster: from ', this.requirementText('spore', mg.minSpore ?? 6), `, each tile gets extra mushroom chances, up to ×${1 + (mg.maxBonus ?? 2)} its usual rate.`]);
+        lines.other.push('Spore slowly drifts to drier neighbours and runs downhill; high Shimmer blocks it.');
       }
       if (k === 'glow') {
         const gc = tr.glowCycle || {};
-        lines.other.push(`Glow counts ×${gc.dayFactor ?? 0.4} by day and ×${gc.nightFactor ?? 1.6} at night toward spawns. On deep ground it counts in full even by day.`);
+        lines.other.push(`Glow counts ×${gc.dayFactor ?? 0.4} by day and ×${gc.nightFactor ?? 1.6} at night toward spawns. On fae-touched (Spirit) ground it counts in full even by day.`);
       }
       if (k === 'bloom') {
         const bc = tr.bloomCycle || {};
@@ -1010,7 +1118,7 @@ export class UI {
       for (const [k, b] of Object.entries(cb.requires || {})) lines.appears.push([this.requirementText(k, b.min), ' or more']);
       lines.appears.push('All of these on the same tile.');
       if (def.combo === 'pool') {
-        lines.spawns.push(`Only things that need Damp can spawn on water: ${itemList(this.content.spawnableItems.filter((i) => i.spawn.requires && i.spawn.requires.damp))}.`);
+        lines.spawns.push(`Only things that need Spore can spawn on water: ${itemList(this.content.spawnableItems.filter((i) => i.spawn.requires && i.spawn.requires.spore))}.`);
         lines.spawns.push(`Water Reed grows only in pools, and is ×${cb.clusterBonus ?? 2.5} likelier beside another reed.`);
         const lp = cb.lilyPads || {};
         lines.other.push(`Pools that join into a pond of ${lp.minTiles ?? 6} or more tiles may grow lily pads (more in bigger ponds).`);
@@ -1123,13 +1231,13 @@ export class UI {
       h('p', { class: 'sub' }, `${g.isNight(now) ? 'Night' : 'Day'}${g.isRaining(now) ? ', raining' : ''} · ` +
         (g.inClearing(tile) ? (g.isFree(tile) ? 'open tile' : 'tile is occupied (nothing spawns here now)') : 'outside the clearing')),
       (() => {
-        // Each stat's identity on this tile: elevation, seeped Damp, Glow/Bloom time factors, placement.
+        // Each stat's identity on this tile: elevation, seeped Spore, Glow/Bloom time factors, placement.
         const e = g.elevationOf(stats), sh = g.shares(stats);
         const amb = g.ambientAt(tile.x, tile.y);
         const gf = g.glowFactor(now, stats), bf = g.bloomFactor(now);
         const hideAt = (this.content.tuning.terrain?.verdure || {}).hideThreshold ?? 30;
         const surface = (stats.verdure || 0) >= hideAt ? 'hidden in tall grass (tap to reveal)' : 'on the surface';
-        const geode = sh.dominant === 'depth' ? 'buried' : sh.dominant === 'stone' ? 'exposed on the rock' : 'half-sunk in a mound';
+        const geode = sh.dominant === 'spirit' ? 'veiled' : sh.dominant === 'shimmer' ? 'exposed among crystals' : 'half-sunk in a mound';
         const row = (k, v) => h('div', { class: 'inspect-kv' }, h('span', { class: 'sub' }, k), h('b', {}, v));
         return h('div', { class: 'inspect-terrain' },
           row('Elevation', `${e >= 0 ? '+' : ''}${e.toFixed(2)} ${e > 0.15 ? '(raised)' : e < -0.15 ? '(sunken)' : '(level)'}`),
@@ -1141,10 +1249,21 @@ export class UI {
             const n = th.filter((x) => v >= x).length;
             return n ? `${cap(k)} ${n}` : null;
           }).filter(Boolean).join(' · ') || 'none'),
-          row('Ambient Damp', `${amb.toFixed(1)} (seeped / pooled)`),
-          row('Glow factor', `×${gf.toFixed(2)} ${g.isNight(now) ? '(night)' : (stats.depth || 0) > 0 ? '(day, deep tiles glow more)' : '(day)'}`),
+          row('Ambient Spore', `${amb.toFixed(1)} (seeped / pooled)`),
+          row('Glow factor', `×${gf.toFixed(2)} ${g.isNight(now) ? '(night)' : (stats.spirit || 0) > 0 ? '(day, fae-touched tiles glow more)' : '(day)'}`),
           row('Bloom cycle', `×${bf.toFixed(2)}`),
-          row('Spawns here', `${surface}; geodes ${geode}; Depth items buried`));
+          row('Spawns here', `${surface}; geodes ${geode}; Spirit items veiled`),
+          ...g.guestDefs().map((d) => { const st = g.guest(d.id); return row(`Visitor: ${d.name}`, `interest ${st.interest.toFixed(1)} · ${g.guestStage(d.id, now)}${st.befriended ? ' · befriended' : ''} · clues ${st.known.length}/${g.guestPrefKeys(d).length} · ${g.guestTiles(d, g.field(now)).length} tiles suit it${st.present ? ` · present until ${new Date(st.present.until).toLocaleTimeString()}` : ''}`); }),
+          ...g.relicSources(now).map((p) => [p, g.stats.falloff(Math.hypot(p.tile.x - tile.x, p.tile.y - tile.y), p.radius)]).filter(([, w]) => w > 0).map(([p, w]) => {
+            const r = g.state.relics.find((x) => x.id === p.id), lv = g.stats.level(p, now), k = Object.keys(p.contributions)[0];
+            return row(`Relic: ${(this.content.items[r.relicID] || {}).name || r.relicID} (${r.tile.x}, ${r.tile.y})`,
+              `+${(p.contributions[k] * w * lv).toFixed(1)} ${cap(k)} (falloff ×${w.toFixed(2)}, level ×${lv.toFixed(2)}, reach ${p.radius.toFixed(1)} of ${g.relicTier(r.tier).radius})`);
+          }),
+          ...g.buriedSeeds().map((b) => [b, g.boostWeight(b, tile)]).filter(([, w]) => w > 0).map(([b, w]) => {
+            const ph = g.seedPhase(b, now), lv = g.boostLevel(b, now);
+            return row(`Buried ${cap(b.school)} Seed (${b.tile.x}, ${b.tile.y})`,
+              `+${(b.stats[b.school] * w * lv).toFixed(1)} ${cap(b.school)} (falloff ×${w.toFixed(2)}, level ×${lv.toFixed(2)}, ${ph.phase}, ${duration(ph.ends / 1000)} left)`);
+          }));
       })(),
       (() => {
         // Where-to-spawn weight for this tile (effect-aware), and its share of all spawn locations.
@@ -1251,7 +1370,8 @@ export class UI {
     const full = h('input', { type: 'checkbox', checked: true });
     const glim = h('input', { type: 'checkbox' });
     const give = speciesSelect();
-    const itemSel = h('select', { class: 'select' }, ['mushroom', 'plant', 'seed', 'geode', 'gem', 'material'].map((cat) =>
+    const guestSel = h('select', { class: 'select' }, (this.content.visitorList || []).map((v) => h('option', { value: v.id }, v.name)));
+    const itemSel = h('select', { class: 'select' }, ['relic', 'mushroom', 'plant', 'seed', 'schoolSeed', 'geode', 'gem', 'material'].map((cat) =>
       h('optgroup', { label: catTitle(cat) }, Object.values(this.content.items).filter((i) => i.category === cat)
         .map((i) => h('option', { value: i.id }, i.name)))));
     const setupName = h('input', { type: 'text', placeholder: 'Setup name', maxlength: 30 });
@@ -1299,7 +1419,7 @@ export class UI {
         b('Complete open requests', () => a.dev((gm, t) => gm.devCompleteRequests(t), (n) => `${n} request(s) completed.`)),
         b('Complete all requests', () => a.dev((gm, t) => gm.devCompleteRequests(t, true), (n) => `${n} request(s) completed.`)),
         b('Reset requests', () => a.dev((gm) => gm.devResetRequests(), 'Requests reset (rewards kept).')),
-        b('New visitors', () => a.dev((gm, t) => gm.devNewVisitors(t), (n) => `${n} new visitor(s).`)),
+        b('New traders', () => a.dev((gm, t) => gm.devNewVisitors(t), (n) => `${n} new trader(s).`)),
         b('One of every decor', () => a.dev((gm) => gm.devGrantDecor(), (n) => `+${n} decor.`))),
       h('div', { class: 'section' }, 'Spirit Well'),
       h('div', { class: 'row gap wrap' },
@@ -1311,6 +1431,20 @@ export class UI {
         b('One of every egg', () => a.dev((gm) => gm.devGiveEggs(1), (n) => `+${n} eggs.`)),
         b('Hatch nests now', () => a.dev((gm, t) => gm.devHatchNow(t), (n) => `${n} nest(s) ready to hatch.`)),
         b('+2 nests', () => a.dev((gm) => { gm.state.unlocks.nests += 2; }, 'Two more nests.'))),
+
+      h('div', { class: 'section' }, 'Opening and relics'),
+      h('p', { class: 'sub' }, 'Choose the opening relic\'s school without the questions (needs the opening relic on the map). Any relic: Give → Relics below.'),
+      h('div', { class: 'row gap wrap' }, CORE_STATS.map((k) => b(cap(k), () => {
+        if (!this.game.openingSpawn) { this.toast('The opening relic has already been taken.'); return; }
+        this.sheet = null; this.close(); this.openOpening(k);
+      }))),
+      h('div', { class: 'section' }, 'Return harvest'),
+      h('div', { class: 'row gap wrap' }, [2, 8, 24].map((n) => b(`Return after ${n}h`, () => { this.sheet = null; this.close(); a.debugReturn(n); }))),
+      h('div', { class: 'section' }, 'Visitors'),
+      h('p', { class: 'sub' }, 'Set a visitor\'s interest stage, or bring it into the grotto now. Its interest shows in the spawn inspector.'),
+      h('div', { class: 'row gap wrap' }, guestSel,
+        ...[['signs', 'Signs'], ['clues', 'Clues'], ['ready', 'Ready'], ['none', 'Reset']].map(([st, label]) => b(label, () => a.dev((gm, t) => gm.devGuestStage(guestSel.value, st, t), `${label}.`))),
+        b('Present now', () => { a.dev((gm, t) => gm.devGuestPresent(guestSel.value, t), 'It has come to the grotto.'); this.sheet = null; this.close(); })),
 
       h('div', { class: 'section' }, 'Give'),
       h('div', { class: 'row gap wrap' }, give,
@@ -1343,6 +1477,40 @@ export class UI {
       h('button', { class: 'btn green', onclick: done }, 'Lovely')));
     ov.onclick = (e) => { if (e.target === ov) done(); };
     ov.classList.add('show');
+  }
+
+  /**
+   * The opening (Content/opening.json): the relic's card and inscription, a few quiet questions, then the
+   * reveal. Closing before the reveal changes nothing; the relic waits where it was. At the reveal it takes
+   * its school and goes into the Bag; burying it is up to the player.
+   */
+  openOpening(forceSchool = null) {
+    const o = this.content.opening, g = this.game;
+    if (!o || !g.openingSpawn) return;
+    const ov = document.getElementById('overlay');
+    const answers = [];
+    const close = () => { ov.classList.remove('show'); ov.replaceChildren(); ov.onclick = null; this.nextCard(); };
+    const show = (...kids) => { ov.replaceChildren(h('div', { class: 'reveal-card pop opening' }, ...kids)); ov.classList.add('show'); };
+    const reveal = () => {
+      const school = forceSchool || g.openingSchool(answers);
+      g.claimOpeningRelic(school, g.now(), forceSchool ? null : answers);
+      const def = this.content.items['relic.' + school + '.common'];
+      ov.onclick = null;
+      show(h('div', { class: 'rays-wrap' }, this.burst(STAT_COLORS[school]), this.sprites.element(def.sprite, null, 8, 'grow-in', true)),
+        h('h2', {}, def.name), h('p', { class: 'inscription' }, (o.reveal || {})[school] || ''),
+        h('button', { class: 'btn green', onclick: () => { close(); this.app.changed(); } }, o.card.keep || 'Keep it'));
+    };
+    const ask = (i) => {
+      const q = o.questions[i];
+      if (!q) { reveal(); return; }
+      show(this.sprites.element('relic.unknown', null, 5, '', true), h('h2', {}, q.text),
+        h('div', { class: 'answers' }, q.answers.map((a, k) => h('button', { class: 'btn answer', onclick: () => { answers.push(k); ask(i + 1); } }, a.text))));
+    };
+    ov.onclick = (e) => { if (e.target === ov) close(); };
+    if (forceSchool) { reveal(); return; }
+    show(this.sprites.element('relic.unknown', null, 8, 'grow-in', true), h('h2', {}, o.card.title),
+      h('p', { class: 'sub' }, o.card.intro), h('p', { class: 'inscription' }, o.card.inscription),
+      h('button', { class: 'btn green', onclick: () => ask(0) }, o.card.begin || 'Hold it'));
   }
 
   /** Shows the next waiting celebration card, if any. */

@@ -1,0 +1,37 @@
+{
+ "id": "ov.terrain.dreaming-hollow.b",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "................",
+    "...XXX..........",
+    "..XWWHX.........",
+    ".XWWWGvX.G......",
+    "..XWvGv..Gv.....",
+    "...XXX...Gv.....",
+    "........vGvX....",
+    ".......XWWWWWX..",
+    ".......XWWHWWX..",
+    ".......XWWGvWX..",
+    "..XXX....vGv....",
+    ".XWWWX..........",
+    ".WWWWW..........",
+    ".XWWWX..........",
+    "..XXX...........",
+    "................"
+   ]
+  }
+ ],
+ "tags": [
+  "overlay"
+ ]
+}

@@ -1,0 +1,37 @@
+{
+ "id": "ov.spore.s9b",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "................",
+    "...bbZZZbb......",
+    "..bZZZDBBBC.....",
+    ".bZZZDBEBBBD....",
+    "bZZZZBBBBBBBb...",
+    "bZZZZDBCBBBDb...",
+    "bZZZZZDBBBDZb...",
+    ".bZZZZZZZbbbbb..",
+    "..bZZDBBBDZZZZb.",
+    "...bDBEBBBDZZZZb",
+    "....EBBBBBBCZEZb",
+    "....DBBBBBDZZZZb",
+    ".....DBBBDZZZZb.",
+    ".........bbbbb..",
+    "..C........E....",
+    "................"
+   ]
+  }
+ ],
+ "tags": [
+  "overlay"
+ ]
+}

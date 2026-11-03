@@ -35,7 +35,7 @@ MASTER = os.path.join(ROOT, "design", "Undergrowth_Spawn_Table.xlsx")
 TUNING = os.path.join(ROOT, "Resources", "tuning.json")
 CONTENT = os.path.join(ROOT, "Resources", "Content")
 
-STATS = ["damp", "glow", "bloom", "verdure", "stone", "depth"]
+STATS = ["spore", "glow", "bloom", "verdure", "shimmer", "spirit"]
 CATS = ["mushroom", "plant", "geode"]
 RARITIES = [("common", "Common"), ("uncommon", "Uncommon"), ("rare", "Rare"), ("veryRare", "Very rare"), ("legendary", "Legendary")]
 RAR_LABEL = dict(RARITIES)
@@ -257,7 +257,7 @@ class Export:
         gc = t["terrain"]["glowCycle"]
         row("glowDay", "Glow factor by day", gc.get("dayFactor", 0.4), "How strongly Glow counts toward spawns by day…")
         row("glowNight", "Glow factor at night", gc.get("nightFactor", 1.6), "…and at night.")
-        row("glowDepth", "Depth for full Glow by day", gc.get("depthForFullGlow", 40), "On deep ground Glow counts in full even by day (from this much Depth).")
+        row("glowSpirit", "Spirit for full Glow by day", gc.get("spiritForFullGlow", 40), "On fae-touched ground Glow counts in full even by day (from this much Spirit).")
 
         section("Where spawns land (not in the view sheets)")
         lw = sp["locationWeighting"]
@@ -267,9 +267,9 @@ class Export:
         row("locCap", "Intensity bonus cap", lw.get("maxIntensityBonus", 3))
         row("locMax", "Highest tile weight", lw.get("maxWeight", 24))
         row("blank", "Blank tile: spawn goes ahead", sp.get("blankTileSpawnChance", 1), "A spawn that lands on a tile with no effects only goes ahead this share of the time.", fmt="0%")
-        mg = t["terrain"]["damp"]["mushroomGrowth"]
-        row("mgPer", "Damp: extra mushrooms per point", mg.get("perPoint", 0.08), "Damp tiles get extra mushroom-only chances: usual rate × min(cap, Damp × this).")
-        row("mgMax", "Damp: extra mushrooms cap", mg.get("maxBonus", 1))
+        mg = t["terrain"]["spore"]["mushroomGrowth"]
+        row("mgPer", "Spore: extra mushrooms per point", mg.get("perPoint", 0.08), "Spore tiles get extra mushroom-only chances: usual rate × min(cap, Spore × this).")
+        row("mgMax", "Spore: extra mushrooms cap", mg.get("maxBonus", 1))
         ws.freeze_panes = "A4"
         self.ws_settings = ws
 
@@ -347,8 +347,8 @@ class Export:
         r += 1
         put(ws, f"A{r}", "Combo tiles (they work alongside named terrains)", F_BOLD, fill=FILL_BLOCK)
         r += 1
-        combo_notes = {"pool": "Shallow water: only items that need Damp can spawn on it; Water Reed grows only here.",
-                       "moss": "Moss over ground and stone; bugs gather. No spawn effect.",
+        combo_notes = {"pool": "Shallow water: only items that need Spore can spawn on it; Water Reed grows only here.",
+                       "moss": "Moss over ground and crystal; bugs gather. No spawn effect.",
                        "meadow": "Plants are this much likelier to be the category chosen (Plants ×, applied before the category clamp)."}
         self.combo_row = {}
         for cid in ("pool", "moss", "meadow"):
@@ -476,8 +476,8 @@ class Export:
         S = self.S
         night = f"({S['time']}=\"Night\")"
         if "glow" in K:
-            dref = val("depth", 0)
-            work("gf", "Glow factor", lambda k: f"=IF({night},{S['glowNight']},{S['glowDay']}+({S['glowNight']}-{S['glowDay']})*MIN(1,{val('depth', k)}/{S['glowDepth']}))", "0.00")
+            dref = val("spirit", 0)
+            work("gf", "Glow factor", lambda k: f"=IF({night},{S['glowNight']},{S['glowDay']}+({S['glowNight']}-{S['glowDay']})*MIN(1,{val('spirit', k)}/{S['glowSpirit']}))", "0.00")
         fac = lambda s, k: (cell("gf", k) if s == "glow" else S["bloomF"] if s == "bloom" else "1")
         work("vexp", "Plant variety exponent", lambda k: f"=MAX({S['varMin']},1-{S['varPer']}*{val('bloom', k)}*{S['bloomF']})", "0.00")
         # Combos and the named terrain that forms
@@ -523,7 +523,7 @@ class Export:
                 pool_ok = (cell("pool", k) + '="Yes"') if has_pool else "FALSE"
                 parts.append(f"IF(ISNUMBER(SEARCH(\"pool only\",{cond})),{pool_ok},TRUE)")
                 if has_pool:
-                    parts.append(f"IF({cell('pool', k)}=\"Yes\",{self.need_ref(iid, 'damp')}>0,TRUE)")
+                    parts.append(f"IF({cell('pool', k)}=\"Yes\",{self.need_ref(iid, 'spore')}>0,TRUE)")
                 elig = "AND(" + ",".join(parts) + ")"
                 scal = "+".join(f"{self.scale_ref(iid, s)}/100*MAX(0,{val(s, k)}-{self.need_ref(iid, s)})*{fac(s, k)}" for s in K) or "0"
                 mult = f"MIN({S['scaleMax']},MAX({S['scaleMin']},1+{scal}))"
@@ -610,8 +610,8 @@ class Export:
             ("Terrains", "Named terrains (stat pairs and the legendary triples) and combo tiles: the minimums that form them, their home finds (comma-separated item names) and their rules."),
             ("Settings", "Intensity levels, how weights scale, the category tilt, terrain affinity, and where spawns land. The Preview section (time of day, rain, Bloom factor) only changes the view sheets."),
             ("Single Stats / Pairs / Triples", "The views: for a tile where the listed stats all sit at each intensity level, the chance that a spawn there is each item. The category is picked first (rows at the bottom of each block), then the item within it. They update as you edit."),
-            ("Example", "To make Crystal Cap show up on Moderate Glow + Stone: on Items, set its Glow min and Stone min to 16 (both were 50). The Pairs sheet's Glow + Stone block then shows it from the Moderate column."),
-            ("Not in the views", "Where on the map spawns land (Settings → Where spawns land), Damp's extra mushroom growth, reeds clustering, one-at-a-time limits and creature special effects. Those still apply in the game."),
+            ("Example", "To make Crystal Cap show up on Moderate Glow + Shimmer: on Items, set its Glow min and Shimmer min to 16 (both were 50). The Pairs sheet's Glow + Shimmer block then shows it from the Moderate column."),
+            ("Not in the views", "Where on the map spawns land (Settings → Where spawns land), Spore's extra mushroom growth, reeds clustering, one-at-a-time limits and creature special effects. Those still apply in the game."),
             ("Glow and Bloom", "Glow counts less by day (more on deep ground) and more at night; Bloom follows its daily cycle (Bloom factor). Both affect stat scaling, the category tilt, and the plant variety on Bloom."),
         ]
         r = 3
@@ -807,15 +807,15 @@ def do_import(path):
     setp(["terrain", "bloom", "minVarietyExponent"], num(val("Lowest variety exponent")), "Lowest variety exponent")
     setp(["terrain", "glowCycle", "dayFactor"], num(val("Glow factor by day")), "Glow by day")
     setp(["terrain", "glowCycle", "nightFactor"], num(val("Glow factor at night")), "Glow at night")
-    setp(["terrain", "glowCycle", "depthForFullGlow"], num(val("Depth for full Glow by day")), "Depth for full Glow")
+    setp(["terrain", "glowCycle", "spiritForFullGlow"], num(val("Spirit for full Glow by day")), "Spirit for full Glow")
     gbe = [num(val(f"Tile weight with {lab} ×")) for lab in ("no effects", "one effect", "two effects", "three or more")]
     setp(sp + ["locationWeighting", "generalByEffectCount"], gbe, "Tile weight by effect count")
     setp(sp + ["locationWeighting", "perStatPoint"], num(val("+ per stat point on the tile")), "Tile weight per stat point")
     setp(sp + ["locationWeighting", "maxIntensityBonus"], num(val("Intensity bonus cap")), "Intensity bonus cap")
     setp(sp + ["locationWeighting", "maxWeight"], num(val("Highest tile weight")), "Highest tile weight")
     setp(sp + ["blankTileSpawnChance"], num(val("Blank tile: spawn goes ahead")), "Blank tile spawn chance")
-    setp(["terrain", "damp", "mushroomGrowth", "perPoint"], num(val("Damp: extra mushrooms per point")), "Damp mushroom growth per point")
-    setp(["terrain", "damp", "mushroomGrowth", "maxBonus"], num(val("Damp: extra mushrooms cap")), "Damp mushroom growth cap")
+    setp(["terrain", "spore", "mushroomGrowth", "perPoint"], num(val("Spore: extra mushrooms per point")), "Spore mushroom growth per point")
+    setp(["terrain", "spore", "mushroomGrowth", "maxBonus"], num(val("Spore: extra mushrooms cap")), "Spore mushroom growth cap")
 
     if len(changes) > item_changes:
         with open(TUNING, "w") as f:

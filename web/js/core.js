@@ -2,13 +2,73 @@
 // A JavaScript port of Packages/UndergrowthCore (the Swift package). Same data
 // files, same rules; times are stored as epoch milliseconds.
 
-export const CORE_STATS = ['damp', 'glow', 'bloom', 'verdure', 'stone', 'depth'];
+export const CORE_STATS = ['spore', 'glow', 'bloom', 'verdure', 'shimmer', 'spirit'];
 export const RARITIES = ['common', 'uncommon', 'rare', 'veryRare', 'legendary'];
 export const RARITY_NAMES = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', veryRare: 'Very rare', legendary: 'Legendary' };
 export const rarityIndex = (r) => Math.max(0, RARITIES.indexOf(r));
 /** 2 = spawn-table content (older forests are replanted). 3 = clearing, tutorial, unlocks (2 migrates).
- *  4 = creature influence radius doubled (owned/placed creatures are scaled on load). */
-export const SAVE_VERSION = 4;
+ *  4 = creature influence radius doubled (owned/placed creatures are scaled on load).
+ *  5 = garden schools: damp/stone/depth became spore/shimmer/spirit, soil packs became school seeds
+ *      (migrateSchools remaps every saved key on load).
+ *  6 = relics: placed creatures become buried relics of their main stat's school (Game.migrate). */
+export const SAVE_VERSION = 6;
+
+/** Version 5 renames, kept so older saves load: stat ids, terrain and landmark ids, soil packs. */
+export const SCHOOL_RENAMES = {
+  stats: { damp: 'spore', stone: 'shimmer', depth: 'spirit' },
+  terrains: { damp: 'spore', stone: 'shimmer', depth: 'spirit', 'dripstone-ledge': 'dewcrystal-dell', 'crystal-outcrop': 'crystal-glade',
+    'rock-garden': 'prism-garden', 'geode-bed': 'dreaming-hollow', 'overgrown-rocks': 'overgrown-crystals' },
+  landmarks: { 'landmark.cave': 'landmark.crystal-grotto', 'landmark.standing-stones': 'landmark.singing-crystals' },
+  items: { 'supply.dew-moss': 'seed.spore', 'supply.glow-dust': 'seed.glow', 'supply.petal-mulch': 'seed.bloom',
+    'supply.leaf-mould': 'seed.verdure', 'supply.grit': 'seed.shimmer', 'supply.loose-loam': 'seed.spirit' },
+  listings: { 'shop-dew-moss': 'shop-seed-spore', 'shop-glow-dust': 'shop-seed-glow', 'shop-petal-mulch': 'shop-seed-bloom',
+    'shop-leaf-mould': 'shop-seed-verdure', 'shop-grit': 'shop-seed-shimmer', 'shop-loose-loam': 'shop-seed-spirit' },
+};
+
+/**
+ * Saves from before version 5 name the old stats. Remaps, in place: creature and placement
+ * contributions, soil boosts, the ambient water layer (ambientDamp → ambientSpore), guide discoveries
+ * (terrain:<id>, landmark:<id>, item:<id>), formed landmarks, soil packs in the Bag (→ the matching
+ * school seed), shop purchase counts and any pending Spirit Well result. Safe to run twice.
+ */
+export function migrateSchools(state) {
+  if (!state || (state.version || 0) >= 5) return state;
+  const R = SCHOOL_RENAMES;
+  const statKeys = (o) => {
+    if (!o || typeof o !== 'object') return o;
+    for (const [a, b] of Object.entries(R.stats)) if (a in o) { o[b] = (o[b] || 0) + o[a]; delete o[a]; }
+    return o;
+  };
+  const renameKeys = (o, map) => {
+    if (!o || typeof o !== 'object') return;
+    for (const [a, b] of Object.entries(map)) if (a in o) { o[b] = (typeof o[a] === 'number' ? (o[b] || 0) : 0) + o[a]; delete o[a]; }
+  };
+  for (const c of state.creatures || []) statKeys(c.contributions);
+  for (const p of state.placements || []) statKeys(p.contributions);
+  for (const b of state.soilBoosts || []) statKeys(b.stats);
+  if (state.ambientDamp && !state.ambientSpore) state.ambientSpore = state.ambientDamp;
+  delete state.ambientDamp;
+  const landmarkKey = (id) => id.replace(/^landmark\./, '');
+  state.discovered = [...new Set((state.discovered || []).map((k) => {
+    const [kind, ...rest] = k.split(':'), id = rest.join(':');
+    if (kind === 'terrain' && R.terrains[id]) return 'terrain:' + R.terrains[id];
+    if (kind === 'landmark' && R.landmarks['landmark.' + id]) return 'landmark:' + landmarkKey(R.landmarks['landmark.' + id]);
+    if (kind === 'item' && R.items[id]) return 'item:' + R.items[id];
+    return k;
+  }))];
+  for (const l of state.landmarks || []) if (R.landmarks[l.id]) l.id = R.landmarks[l.id];
+  // Soil packs in the Bag become the matching school seed (and that seed counts as found).
+  for (const [a, b] of Object.entries(R.items)) if (state.inventory && state.inventory[a] > 0 && !state.discovered.includes('item:' + b)) state.discovered.push('item:' + b);
+  renameKeys(state.inventory, R.items);
+  if (state.offerings) { renameKeys(state.offerings.bought, R.listings); renameKeys(state.offerings.delivered, R.listings); }
+  // A pending Spirit Well result may name a soil pack.
+  const walk = (o) => {
+    if (Array.isArray(o)) return o.forEach((v, i) => { if (typeof v === 'string' && R.items[v]) o[i] = R.items[v]; else walk(v); });
+    if (o && typeof o === 'object') for (const k in o) { if (typeof o[k] === 'string' && R.items[o[k]]) o[k] = R.items[o[k]]; else walk(o[k]); }
+  };
+  if (state.wish) walk(state.wish.pending);
+  return state;
+}
 export const TUTORIAL_STEPS = ['forage', 'pickClover', 'plant', 'dig', 'crack', 'place', 'watch', 'wrap', 'done'];
 
 // ---------------------------------------------------------------- utilities
@@ -152,7 +212,7 @@ export class StatEngine {
     return Math.max(0, rampAt(p.removedAt) - (now - p.removedAt) / decay);
   }
 
-  /** Fade-rate multiplier for a stat after its creature leaves (terrain.statDecayRate; Stone lingers). */
+  /** Fade-rate multiplier for a stat after its creature leaves (terrain.statDecayRate; Shimmer lingers). */
   decayRate(stat) {
     const r = (this.t.terrain && this.t.terrain.statDecayRate) || {};
     return Math.max(0.01, stat && r[stat] != null ? r[stat] : 1);
@@ -188,7 +248,7 @@ export class StatEngine {
     const K = keys.length;
     const values = new Float64Array(size.width * size.height * K);
     for (const p of placements) {
-      // Per stat: after removal each stat fades at its own rate (Stone slowest).
+      // Per stat: after removal each stat fades at its own rate (Shimmer slowest).
       const contribs = Object.entries(p.contributions)
         .map(([k, v]) => [keys.indexOf(k), v * this.level(p, now, p.removedAt == null ? null : k)])
         .filter(([, v]) => v !== 0);
@@ -378,7 +438,7 @@ export function decorVariant(def, colorIndex = 0) {
 
 /**
  * A readable hint for where an item grows, from its stat minimums (story.json "hints"), e.g.
- * "Grows where Stone meets deep soil." Used for items not yet in the Field Guide.
+ * "Grows where Shimmer meets deep soil." Used for items not yet in the Field Guide.
  */
 export function itemHint(item, story) {
   const H = (story && story.hints) || {};
@@ -410,10 +470,14 @@ export class Game {
   constructor(content, state) {
     this.content = content;
     this.state = state;
+    migrateSchools(state);                 // version 5: garden schools (before any defaults below)
     state.geodes = state.geodes || [];
     state.visitors = state.visitors || [];
     state.soilBoosts = state.soilBoosts || [];
-    state.ambientDamp = state.ambientDamp || {};
+    state.relics = state.relics || [];
+    state.guests = state.guests || {};          // visitors (Content/visitors.json): interest, clues, presence
+    state.guestTracks = state.guestTracks || [];
+    state.ambientSpore = state.ambientSpore || {};
     state.nextGlimmer = !!state.nextGlimmer;
     // Offerings (older saves start empty).
     state.offerings = state.offerings || { delivered: {} };
@@ -484,7 +548,31 @@ export class Game {
         s.clearing = { x0: c.x0, x1: c.x1, y0: c.y0 - up, y1: c.y1 + down };
       }
     }
+    if ((s.version || 0) < 6) this.migrateToRelics();
     s.version = SAVE_VERSION;
+  }
+
+  /**
+   * Save version 6: creatures no longer shape the land. Each placed creature becomes a buried relic of
+   * its main stat's school, at the creature's tier, on its tile, already at full strength (the land
+   * it made stays). The creature itself is kept (resting, hidden while creature placement is off),
+   * as are eggs and nests. Placements that were already fading are left to fade as before.
+   */
+  migrateToRelics() {
+    const s = this.state, now = s.lastUpdated || s.createdAt || 0;
+    const keep = [];
+    for (const p of s.placements || []) {
+      if (p.removedAt != null) { keep.push(p); continue; }
+      const c = (s.creatures || []).find((x) => x.id === p.creatureID);
+      const def = c && this.content.creatures[c.typeID];
+      const main = Object.entries(p.contributions || {}).filter(([k, v]) => CORE_STATS.includes(k) && v > 0).sort((a, b) => b[1] - a[1])[0];
+      if (!main) { keep.push(p); continue; }
+      const tier = (def && RARITIES.includes(def.rarity)) ? def.rarity : 'common';
+      const relicID = 'relic.' + main[0] + '.' + tier;
+      s.relics.push({ id: 'r-' + p.id, relicID, school: main[0], tier, tile: { ...p.tile }, buriedAt: Math.min(p.placedAt || now, now - 86400000), fromCreature: p.creatureID || null });
+      this.discover('item:' + relicID);
+    }
+    s.placements = keep;
   }
 
   /** A brand-new forest. Players start with no creatures (unless tuning lists starters). */
@@ -554,9 +642,24 @@ export class Game {
         made.push(sp);
       }
     }
+    // The old guaranteed creature (an egg in one geode) only while creatures shape the land.
     const holdIn = st.guaranteedIn || ['mushroom', 'geode'];
-    const holders = made.filter((sp) => holdIn.includes(this.content.items[sp.itemID].category));
+    const holders = this.creaturesOn ? made.filter((sp) => holdIn.includes(this.content.items[sp.itemID].category)) : [];
     if (holders.length) holders[this.rng.int(0, holders.length - 1)].forcedCreature = { rarity: st.guaranteedCreatureRarity || 'common' };
+    // The opening's relic (Content/opening.json): close to the old log, unlike any other find.
+    if (st.relic && this.content.items[st.relic.item]) {
+      const near = st.relic.near ?? 2, ring = [];
+      for (let dy = -near; dy <= near; dy++) for (let dx = -near; dx <= near; dx++) {
+        const t = { x: centre.x + dx, y: centre.y + dy };
+        if ((dx || dy) && Math.max(Math.abs(dx), Math.abs(dy)) >= 1 && this.isFree(t)) ring.push(t);
+      }
+      const tile = ring.length ? ring[this.rng.int(0, ring.length - 1)] : this.freeNear(centre);
+      if (tile) {
+        const sp = { id: this.rng.uuid(), itemID: st.relic.item, tile, spawnedAt: now, keep: true, starter: true, placement: 'surface', opening: true };
+        this.state.spawns.push(sp);
+        made.push(sp);
+      }
+    }
     return made;
   }
 
@@ -732,6 +835,7 @@ export class Game {
     if (name === 'guide') return this.discovered.size;
     if (name === 'creatures') return this.state.creatures.length;
     if (name === 'placed') return this.activePlacements.length;
+    if (name === 'relic') return (this.state.relics || []).length;
     return this.state.counters[name] || 0;
   }
 
@@ -873,8 +977,9 @@ export class Game {
     const speeds = this.activeEffects('rampSpeed');
     const spread = (this.t.influenceSpreadHours || 0) * 3600 * 1000;
     const lmBoost = this.landmarkEffects ? this.landmarkEffects('radiusBoost') : [];
-    if (!links.length && !speeds.length && !spread && !lmBoost.length) return this.state.placements;
-    return this.state.placements.map((p) => {
+    const relics = this.relicSources(now);
+    if (!links.length && !speeds.length && !spread && !lmBoost.length) return relics.length ? [...this.state.placements, ...relics] : this.state.placements;
+    return [...this.state.placements.map((p) => {
       const q = { ...p };
       for (const [e, lm] of lmBoost) if (dist(lm.tile, p.tile) <= (e.range || 0)) q.radius += e.add || 0;
       if (spread) {
@@ -890,7 +995,86 @@ export class Game {
       for (const [e, src] of speeds) if (dist(p.tile, src.tile) < this.stats.reach(src.radius)) m = Math.max(m, e.mult || 1);
       if (m !== 1) q.rampSeconds = (p.rampSeconds ?? this.t.rampSecondsToFull) / m;
       return q;
-    });
+    }), ...relics];
+  }
+
+  // ---- relics (Content/relics.json, tuning.relics): the only permanent way to change the land
+  get relicCfg() { return this.t.relics || {}; }
+  relicTier(tier) { return (this.relicCfg.tiers || {})[tier] || (this.relicCfg.tiers || {}).common || { strength: 20, radius: 2.5, rampHours: 1, spreadHours: 1 }; }
+  relicAt(t) { return (this.state.relics || []).find((r) => sameTile(r.tile, t)) || null; }
+  relicDef(id) { return (this.content.relicList || []).find((r) => r.id === id) || null; }
+  /**
+   * Buried relics as permanent stat sources, shaped like placements so the stat engine, terrain,
+   * spawn weighting and the inspector treat them like creatures did: strength (ramping over rampHours)
+   * with the creature falloff, and influence that starts close around the relic and spreads to its
+   * full radius over spreadHours. They never decay.
+   */
+  relicSources(now) {
+    const out = [];
+    const min = this.t.influenceSpreadMinRadius ?? 0.5;
+    for (const r of this.state.relics || []) {
+      const tier = this.relicTier(r.tier);
+      const spread = (tier.spreadHours ?? this.t.influenceSpreadHours ?? 0) * 3600 * 1000;
+      const frac = spread > 0 ? Math.min(1, Math.max(0, (now - r.buriedAt) / spread)) : 1;
+      out.push({ id: r.id, relic: r.relicID, tile: r.tile, contributions: { [r.school]: tier.strength }, radius: min + (tier.radius - min) * frac,
+        placedAt: r.buriedAt, startLevel: 0, removedAt: null, rampSeconds: Math.max(1, (tier.rampHours ?? 1) * 3600) });
+    }
+    return out;
+  }
+  // ---- the opening (Content/opening.json): the first relic's school comes from a few quiet questions
+  get openingSpawn() { return this.state.spawns.find((sp) => sp.opening) || null; }
+  /** Totals of each school for a set of answers (answer index per question). */
+  openingTotals(answers) {
+    const qs = (this.content.opening && this.content.opening.questions) || [], tot = {};
+    for (const k of CORE_STATS) tot[k] = 0;
+    answers.forEach((a, i) => { const ans = qs[i] && qs[i].answers[a]; if (ans) for (const k in ans.weights || {}) tot[k] = (tot[k] || 0) + ans.weights[k]; });
+    return tot;
+  }
+  /** The school a set of answers chooses: the highest total, ties broken at random among the leaders. */
+  openingSchool(answers) {
+    const tot = this.openingTotals(answers), best = Math.max(...CORE_STATS.map((k) => tot[k]));
+    const lead = CORE_STATS.filter((k) => tot[k] === best);
+    return lead[this.rng.int(0, lead.length - 1)];
+  }
+  /** The relic takes its school and goes into the Bag as a common relic of that school. */
+  claimOpeningRelic(school, now, answers = null) {
+    if (!CORE_STATS.includes(school)) throw new GameError('Unknown school.');
+    const sp = this.openingSpawn;
+    if (sp) this.state.spawns = this.state.spawns.filter((x) => x !== sp);
+    const id = 'relic.' + school + '.common';
+    this.state.opening = { school, at: now, answers };
+    return this.grant([{ item: id, count: 1 }]);
+  }
+
+  /** Bury a relic from the Bag on an open tile. It stays for good. */
+  buryRelic(itemID, tile, now) {
+    const def = this.content.items[itemID];
+    if (!def || def.category !== 'relic') throw new GameError("That isn't a relic.");
+    if (!def.school) throw new GameError('It is waiting to learn what you want of it.');
+    if (!(this.state.inventory[itemID] > 0)) throw new GameError("You don't have that.");
+    if (!tile || !this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
+    if (!this.isFree(tile)) throw new GameError('Something is already there.');
+    this.consume(itemID);
+    this.bump('relic');
+    const r = { id: this.rng.uuid(), relicID: itemID, school: def.school, tier: def.tier, tile: { ...tile }, buriedAt: now };
+    this.state.relics.push(r);
+    this.discover('item:' + itemID);
+    this.events.push({ type: 'relicBuried', relic: r });
+    this.statCache = this.statField(now);
+    return r;
+  }
+  /** A relic dropped by a find on mature, strong relic ground (tuning.relics.findDrop), or null. */
+  relicFromFind(tile, stats, now) {
+    const fd = this.relicCfg.findDrop || {};
+    if (!(fd.chance > 0)) return null;
+    const top = CORE_STATS.reduce((a, k) => ((stats[k] || 0) > (stats[a] || 0) ? k : a), CORE_STATS[0]);
+    if ((stats[top] || 0) < (fd.minStat ?? 26)) return null;
+    const age = (fd.minAgeHours ?? 24) * 3600000;
+    const src = (this.state.relics || []).find((r) => r.school === top && now - r.buriedAt >= age && dist(r.tile, tile) < this.stats.reach(this.relicTier(r.tier).radius));
+    if (!src || !this.rng.chance(fd.chance)) return null;
+    const tier = weightedPick(Object.entries(fd.tierWeights || { common: 1 }), this.rng) || 'common';
+    const id = 'relic.' + top + '.' + tier;
+    return this.content.items[id] ? id : null;
   }
 
   static expandStagedRules(rules, stages) {
@@ -949,10 +1133,10 @@ export class Game {
   // ---- terrain: each stat's own identity (tuning.terrain)
   get terrain() { return this.t.terrain || {}; }
 
-  /** Elevation -1..1 from a tile's stats: Stone raises the ground, Depth sinks it. */
+  /** Elevation -1..1 from a tile's stats: Shimmer raises the ground, Spirit sinks it. */
   elevationOf(stats) {
     const e = this.terrain.elevation || {};
-    const v = (stats.stone || 0) * (e.stonePerPoint ?? 0.025) - (stats.depth || 0) * (e.depthPerPoint ?? 0.025);
+    const v = (stats.shimmer || 0) * (e.shimmerPerPoint ?? 0.025) - (stats.spirit || 0) * (e.spiritPerPoint ?? 0.025);
     const m = e.max ?? 1;
     return Math.max(-m, Math.min(m, v));
   }
@@ -978,7 +1162,7 @@ export class Game {
     const night = kind === 'visual' ? (g.visualNight ?? 1.5) : (g.nightFactor ?? 1.6);
     const day = kind === 'visual' ? (g.visualDay ?? 0.35) : (g.dayFactor ?? 0.4);
     if (this.isNight(t)) return night;
-    const k = Math.min(1, (stats.depth || 0) / Math.max(1, g.depthForFullGlow ?? 40));
+    const k = Math.min(1, (stats.spirit || 0) / Math.max(1, g.spiritForFullGlow ?? 40));
     return day + (night - day) * k;
   }
 
@@ -1033,37 +1217,37 @@ export class Game {
     return this._keys;
   }
 
-  /** Ambient Damp (seeped/pooled water), separate from creature contributions. */
-  ambientAt(x, y) { return (this.state.ambientDamp && this.state.ambientDamp[x + ',' + y]) || 0; }
+  /** Ambient Spore (seeped/pooled water), separate from creature contributions. */
+  ambientAt(x, y) { return (this.state.ambientSpore && this.state.ambientSpore[x + ',' + y]) || 0; }
 
   /**
-   * One step of Damp spreading (per spawn tick). Each clearing tile takes in water from wetter
+   * One step of Spore spreading (per spawn tick). Each clearing tile takes in water from wetter
    * neighbours (spreadRate × difference), more easily downhill (downhillBoost) and hardly uphill
-   * (uphillPenalty); water also runs down slopes on its own (gravityPerTick). High-Stone tiles
-   * block seepage across them (none at stoneBlocksAt). It evaporates (evaporation), less on low
-   * ground (lowGroundRetention), so hollows turn boggy. Creature Damp is a source; only this
+   * (uphillPenalty); water also runs down slopes on its own (gravityPerTick). High-Shimmer tiles
+   * block seepage across them (none at shimmerBlocksAt). It evaporates (evaporation), less on low
+   * ground (lowGroundRetention), so hollows turn boggy. Creature Spore is a source; only this
    * ambient layer changes, so creature ramp/decay stays as it is.
    */
   ambientTick(t) {
-    const cfg = this.terrain.ambientDamp || {};
+    const cfg = this.terrain.ambientSpore || {};
     if (cfg.enabled === false) return;
     const W = this.state.size.width, c = this.clearing;
-    const amb = this.state.ambientDamp || {};
+    const amb = this.state.ambientSpore || {};
     const field = this.statField(t, { raw: true });     // water physics uses the raw values
     const n = W * this.state.size.height;
     const D = new Float32Array(n), E = new Float32Array(n), S = new Float32Array(n);
     let any = false;
-    const K = field.keys.length, kd = field.keys.indexOf('damp'), ks = field.keys.indexOf('stone'), kp = field.keys.indexOf('depth');
-    const el = this.terrain.elevation || {}, sp = el.stonePerPoint ?? 0.025, dp = el.depthPerPoint ?? 0.025, em = el.max ?? 1;
+    const K = field.keys.length, kd = field.keys.indexOf('spore'), ks = field.keys.indexOf('shimmer'), kp = field.keys.indexOf('spirit');
+    const el = this.terrain.elevation || {}, sp = el.shimmerPerPoint ?? 0.025, dp = el.spiritPerPoint ?? 0.025, em = el.max ?? 1;
     for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
       const i = y * W + x, o = i * K;
       D[i] = field.values[o + kd]; S[i] = field.values[o + ks];
       E[i] = Math.max(-em, Math.min(em, S[i] * sp - field.values[o + kp] * dp));
       if (D[i] > 0) any = true;
     }
-    if (!any) { this.state.ambientDamp = {}; return; }
+    if (!any) { this.state.ambientSpore = {}; return; }
     const rate = cfg.spreadRate ?? 0.05, down = cfg.downhillBoost ?? 2.5, up = cfg.uphillPenalty ?? 0.8;
-    const grav = cfg.gravityPerTick ?? 0, block = Math.max(1, cfg.stoneBlocksAt ?? 40);
+    const grav = cfg.gravityPerTick ?? 0, block = Math.max(1, cfg.shimmerBlocksAt ?? 40);
     const evap = cfg.evaporation ?? 0.06, keep = cfg.lowGroundRetention ?? 0.7, max = cfg.max ?? 45, minKeep = cfg.minKeep ?? 0.05;
     const next = {}, names = this.tileKeys.names;
     for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
@@ -1089,30 +1273,30 @@ export class Game {
       const v = Math.min(max, a + inflow - e * a);
       if (v >= minKeep) next[key] = Math.round(v * 100) / 100;
     }
-    this.state.ambientDamp = next;
+    this.state.ambientSpore = next;
   }
 
   /** Where a new spawn sits. Item data spawn.placement: surface | buried | auto (default). Auto:
-   *  items whose highest requirement is Depth are buried; geodes are buried on Depth-dominant
-   *  tiles and exposed on Stone-dominant ones; everything else is on the surface. */
+   *  items whose highest requirement is Spirit are buried; geodes are buried on Spirit-dominant
+   *  tiles and exposed on Shimmer-dominant ones; everything else is on the surface. */
   resolvePlacement(item, stats) {
     const p = (item.spawn && item.spawn.placement) || 'auto';
     if (p === 'surface' || p === 'buried') return p;
     const req = (item.spawn && item.spawn.requires) || {};
     let top = null, best = -1;
     for (const k in req) { const m = req[k].min ?? 0; if (m > best) { best = m; top = k; } }
-    if (top === 'depth') return 'buried';
-    if (item.category === 'geode' && this.shares(stats).dominant === 'depth') return 'buried';
+    if (top === 'spirit') return 'buried';
+    if (item.category === 'geode' && this.shares(stats).dominant === 'spirit') return 'buried';
     return 'surface';
   }
 
-  /** How a spawn shows right now: 'surface', 'exposed' (geode on Stone), 'buried', or 'hidden' (tall grass). */
+  /** How a spawn shows right now: 'surface', 'exposed' (geode on Shimmer), 'buried', or 'hidden' (tall grass). */
   spawnView(spawn, t, stats = null) {
     if (spawn.placement === 'buried') return 'buried';
     const st = stats || this.tileStats(spawn.tile, t);
     if (!spawn.tutorial && !spawn.revealed && (st.verdure || 0) >= ((this.terrain.verdure || {}).hideThreshold ?? 30)) return 'hidden';
     const def = this.content.items[spawn.itemID];
-    if (def && def.category === 'geode' && this.shares(st).dominant === 'stone') return 'exposed';
+    if (def && def.category === 'geode' && this.shares(st).dominant === 'shimmer') return 'exposed';
     return 'surface';
   }
 
@@ -1130,25 +1314,101 @@ export class Game {
   }
 
   // ---- stats
-  /** Tiles a soil boost reaches: its own tile, plus its radius (a square) when it has one (Wide Spread). */
+  /**
+   * Tiles a soil boost reaches. A plain boost (landmark aura, gem) covers its own tile plus a square of
+   * its radius at full strength. A buried school seed (b.seed) spreads with the creature falloff over
+   * its radius instead. Each tile comes with its share w (0..1) of the boost's stats.
+   */
   boostTiles(b) {
     const r = b.radius || 0;
-    if (!r) return this.inBounds(b.tile) ? [b.tile] : [];
+    if (b.seed) {
+      const reach = this.stats.reach(r), R = Math.ceil(reach), out = [];
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const t = { x: b.tile.x + dx, y: b.tile.y + dy };
+        const w = this.stats.falloff(Math.hypot(dx, dy), r);
+        if (w > 0 && this.inBounds(t)) out.push({ ...t, w });
+      }
+      return out;
+    }
+    if (!r) return this.inBounds(b.tile) ? [{ ...b.tile, w: 1 }] : [];
     const out = [];
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-      const t = { x: b.tile.x + dx, y: b.tile.y + dy };
+      const t = { x: b.tile.x + dx, y: b.tile.y + dy, w: 1 };
       if (this.inBounds(t)) out.push(t);
     }
     return out;
   }
+  /** A boost's share (0..1) on one tile: the same shape as boostTiles. */
+  boostWeight(b, t) {
+    const dx = t.x - b.tile.x, dy = t.y - b.tile.y;
+    if (b.seed) return this.stats.falloff(Math.hypot(dx, dy), b.radius || 0);
+    return Math.max(Math.abs(dx), Math.abs(dy)) <= (b.radius || 0) ? 1 : 0;
+  }
+  /** A boost's strength now (0..1): plain boosts are full while active; a buried seed ramps in, holds, then fades. */
+  boostLevel(b, now) {
+    if (!b.seed) return 1;
+    const ramp = Math.max(1, b.rampMs || 0), fade = Math.max(1, b.fadeMs || 0);
+    const up = Math.min(1, Math.max(0, (now - b.appliedAt) / ramp));
+    const down = b.fullUntil != null && now > b.fullUntil ? Math.max(0, 1 - (now - b.fullUntil) / fade) : 1;
+    return Math.min(up, down);
+  }
+  /** Stats a boost gives one of its tiles right now. */
+  boostStatsAt(b, w, now) {
+    const m = w * this.boostLevel(b, now), out = {};
+    for (const k in b.stats) out[k] = b.stats[k] * m;
+    return out;
+  }
   activeBoosts(now) { return this.state.soilBoosts.filter((b) => now >= b.appliedAt && (b.expiresAt == null || now < b.expiresAt)); }
+
+  // ---- school seeds (tuning.schoolSeeds): buried from the Bag, saved as soil boosts with a seed
+  get seedCfg() { return this.t.schoolSeeds || {}; }
+  /** Buried school seeds still in the ground (ramping, holding or fading). */
+  buriedSeeds() { return this.state.soilBoosts.filter((b) => b.seed); }
+  buriedSeedAt(t) { return this.state.soilBoosts.find((b) => b.seed && sameTile(b.tile, t)) || null; }
+  /** Its stage right now: 'rooting' (ramping in), 'growing' (full), 'fading', and ms until the next change. */
+  seedPhase(b, now) {
+    if (now < b.appliedAt + (b.rampMs || 0)) return { phase: 'rooting', left: b.appliedAt + b.rampMs - now, ends: b.expiresAt - now };
+    if (now < b.fullUntil) return { phase: 'growing', left: b.fullUntil - now, ends: b.expiresAt - now };
+    return { phase: 'fading', left: b.expiresAt - now, ends: b.expiresAt - now };
+  }
+  /** The school a find belongs to: its highest stat need (null for finds that need nothing). */
+  schoolOf(item) {
+    const req = (item && item.spawn && item.spawn.requires) || {};
+    let top = null, best = 0;
+    for (const k in req) { const m = req[k].min ?? 0; if (m > best && CORE_STATS.includes(k)) { best = m; top = k; } }
+    return top;
+  }
+
+  /** Bury a school seed on an open tile: its school's stat grows around it, then fades (tuning.schoolSeeds). */
+  burySeed(itemID, tile, now) {
+    const def = this.content.items[itemID], cfg = this.seedCfg;
+    if (!def || !def.use || def.use.type !== 'bury') throw new GameError("That can't be buried.");
+    if (!(this.state.inventory[itemID] > 0)) throw new GameError("You don't have that.");
+    if (!tile || !this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
+    if (!this.isFree(tile)) throw new GameError('Something is already there.');
+    const max = cfg.maxBuried ?? 6;
+    if (this.buriedSeeds().length >= max) throw new GameError(`Only ${max} seeds can be buried at once. Wait for one to fade.`);
+    this.consume(itemID);
+    this.bump('bury');
+    const hour = 3600 * 1000;
+    const rampMs = (cfg.rampHours ?? 3) * hour, fullUntil = now + (cfg.durationHours ?? 72) * hour;
+    const b = {
+      id: this.rng.uuid(), tile: { ...tile }, seed: itemID, school: def.school, stats: { [def.school]: cfg.strength ?? 12 },
+      appliedAt: now, rampMs, fullUntil, fadeMs: (cfg.fadeHours ?? 6) * hour,
+      radius: (cfg.radius ?? 1.5) + this.upgradeTier('wideSpread') * ((this.upgradeDef('wideSpread') || {}).radiusPerTier ?? 1),
+    };
+    b.expiresAt = b.fullUntil + b.fadeMs;
+    this.state.soilBoosts.push(b);
+    this.statCache = this.statField(now);
+    return b;
+  }
 
   /** Tile stats for every tile. Values below intensity.minInfluence are 0 (inactive) unless opts.raw. */
   statField(now, opts = {}) {
     const f = this.stats.field(this.state.size, this.effectivePlacements(now), now);
-    for (const b of [...this.activeBoosts(now), ...this.landmarkAuras()]) for (const t of this.boostTiles(b)) f.add(t.x, t.y, b.stats);
-    // Ambient Damp (seeped and pooled water) on top of what creatures give.
-    const amb = this.state.ambientDamp || {}, kd = f.keys.indexOf('damp'), KK = f.keys.length, idx = this.tileKeys.index;
+    for (const b of [...this.activeBoosts(now), ...this.landmarkAuras()]) for (const t of this.boostTiles(b)) f.add(t.x, t.y, this.boostStatsAt(b, t.w, now));
+    // Ambient Spore (seeped and pooled water) on top of what creatures give.
+    const amb = this.state.ambientSpore || {}, kd = f.keys.indexOf('spore'), KK = f.keys.length, idx = this.tileKeys.index;
     for (const key in amb) {
       const i = idx.get(key);
       if (i != null) f.values[i * KK + kd] += amb[key];
@@ -1183,8 +1443,11 @@ export class Game {
 
   tileStats(tile, now, opts = {}) {
     const s = this.stats.statsAt(tile, this.effectivePlacements(now), now);
-    for (const b of [...this.activeBoosts(now), ...this.landmarkAuras()]) if (Math.max(Math.abs(b.tile.x - tile.x), Math.abs(b.tile.y - tile.y)) <= (b.radius || 0)) for (const k in b.stats) s[k] = (s[k] || 0) + b.stats[k];
-    s.damp = (s.damp || 0) + this.ambientAt(tile.x, tile.y);
+    for (const b of [...this.activeBoosts(now), ...this.landmarkAuras()]) {
+      const w = this.boostWeight(b, tile);
+      if (w > 0) { const add = this.boostStatsAt(b, w, now); for (const k in add) s[k] = (s[k] || 0) + add[k]; }
+    }
+    s.spore = (s.spore || 0) + this.ambientAt(tile.x, tile.y);
     const m = this.revealFactor(tile.x, tile.y, now);
     const floor = opts.raw ? 0 : this.minInfluence;
     for (const k in s) { s[k] = Math.min(this.t.statCap, Math.max(0, s[k] * m)); if (s[k] < floor) s[k] = 0; }
@@ -1215,6 +1478,10 @@ export class Game {
   // ---- time passing
   advance(now) {
     const report = { spawned: 0, despawned: 0, ticks: 0, visitors: 0 };
+    // Real time away (developer time speed and skips don't count as being away).
+    const realNow = now - (this.state.debugTimeOffset || 0);
+    const lastReal = this.state.lastRealSeen ?? ((this.state.lastUpdated ?? now) - (this.state.debugTimeOffset || 0));
+    const away = Math.max(0, realNow - lastReal);
     // Revealed tiles that have finished fading in no longer need tracking (keeps per-tile scans fast).
     const ramp = ((this.t.expansion && this.t.expansion.revealRampSeconds) || 0) * 1000;
     for (const k in this.state.revealed || {}) if (now - this.state.revealed[k] >= ramp) delete this.state.revealed[k];
@@ -1248,10 +1515,281 @@ export class Game {
     for (let d = first; d <= today; d++) report.visitors += this.checkWanderers(now);
     this.state.lastWandererDay = today;
 
+    // The return harvest: extra growth for real time away, mostly on relic ground.
+    const harvest = this.returnHarvest(now, away);
+    if (harvest) report.harvest = harvest;
+    // Visitors: interest checks on their schedule (offline catch-up included).
+    this.visitorTick(now);
+    this.state.lastRealSeen = realNow;
+
     this.state.lastUpdated = now;
     this.statCache = this.statField(now);
     this.checkProgress(now);
     return report;
+  }
+
+  // ---- visitors (Content/visitors.json, tuning.visitors): forest animals drawn by the grotto's ground
+  get guestCfg() { return this.t.visitors || {}; }
+  guestDefs() { return this.content.visitorList || []; }
+  guestDef(id) { return this.guestDefs().find((v) => v.id === id) || null; }
+  guest(id) {
+    const g = this.state.guests[id] = this.state.guests[id] || { interest: 0, known: [], befriended: false, present: null, presDay: -1, presCount: 0 };
+    return g;
+  }
+  /** Its preference keys, in the order clues reveal them (school or terrain first). */
+  guestPrefKeys(def) { return ['school', 'terrain', 'min', 'find', 'time', 'rain'].filter((k) => def.likes[k] != null && def.likes[k] !== false && !(k === 'min' && def.likes.terrain)); }
+  /** Tiles that meet a visitor's ground preference (its school at its minimum, or its named terrain). */
+  guestTiles(def, field) {
+    const out = [], c = this.clearing, L = def.likes;
+    for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+      const st = field.statsAt(x, y);
+      if (L.school ? (st[L.school] || 0) >= (L.min ?? this.minInfluence) : L.terrain ? (this.terrainAt(st) || {}).id === L.terrain : false) out.push({ x, y });
+    }
+    return out;
+  }
+  /** Its stage now, from its interest (and presence): none, signs, clues, present (or ready: interested enough to come). */
+  guestStage(id, now) {
+    const g = this.guest(id), st = this.guestCfg.stages || {};
+    if (g.present && now >= g.present.from && now < g.present.until) return 'present';
+    if (g.interest >= (st.present ?? 60)) return 'ready';
+    if (g.interest >= (st.clues ?? 20)) return 'clues';
+    if (g.interest >= (st.signs ?? 10)) return 'signs';
+    return 'none';
+  }
+  presentGuests(now) { return this.guestDefs().filter((d) => this.guestStage(d.id, now) === 'present').map((d) => ({ def: d, g: this.guest(d.id) })); }
+  trackAt(t) { return this.state.guestTracks.find((x) => sameTile(x.tile, t)) || null; }
+
+  /**
+   * Interest checks every visitors.checkMinutes of game time, catching up offline (up to maxCatchUpDays).
+   * Each check's random choices are seeded from the forest, the visitor and the check's time, so it's
+   * deterministic from timestamps. Ground is read once per call (relics are permanent; finds and
+   * weather are read per check).
+   */
+  visitorTick(now) {
+    const cfg = this.guestCfg, defs = this.guestDefs();
+    if (!defs.length || !cfg.checkMinutes) return;
+    const step = cfg.checkMinutes * 60000;
+    if (this.state.guestsAt == null) { this.state.guestsAt = Math.floor(now / step) * step; return; }
+    let k0 = Math.floor(this.state.guestsAt / step) + 1;
+    const k1 = Math.floor(now / step);
+    if (k1 < k0) return;
+    k0 = Math.max(k0, k1 - Math.ceil((cfg.maxCatchUpDays ?? 7) * DAY / step));
+    const field = this.statField(now);
+    const tiles = new Map(defs.map((d) => [d.id, this.guestTiles(d, field)]));
+    const saved = this.rng;
+    try {
+      for (let k = k0; k <= k1; k++) {
+        const t = k * step;
+        const life = ((cfg.tracks || {}).hours ?? 24) * HOUR;
+        this.state.guestTracks = this.state.guestTracks.filter((x) => t - x.at < life);
+        defs.forEach((d, i) => { this.rng = new RNG({ rng: hash32(this.state.seed, i + 1, k) }); this.guestCheck(d, t, tiles.get(d.id)); });
+      }
+    } finally { this.rng = saved; }
+    this.state.guestsAt = k1 * step;
+  }
+
+  guestCheck(def, t, tiles) {
+    const cfg = this.guestCfg, g = this.guest(def.id), L = def.likes, I = cfg.interest || {}, S = cfg.stages || {};
+    const raining = this.isRaining(t);
+    const findOn = L.find ? this.state.spawns.filter((sp) => sp.itemID === L.find && sp.spawnedAt <= t && tiles.some((x) => sameTile(x, sp.tile))) : [];
+    const met = tiles.length >= (cfg.minTiles ?? 2) && (!L.find || findOn.length > 0);
+    const gain = (I.gain ?? 1.5) * (L.rain && raining ? (I.rainMult ?? 2) : 1);
+    g.interest = Math.max(0, Math.min(I.max ?? 100, g.interest + (met ? gain : -(I.decay ?? 1))));
+    if (g.present && t >= g.present.until) g.present = null;
+    const inWindow = this.dayPhase(t) === L.time && (!L.rain || raining);
+    if (!met || !inWindow) return;
+    // Signs: tracks on its ground, laid only while it's here (so their time and weather clues are true).
+    const tr = cfg.tracks || {};
+    if (g.interest >= (S.signs ?? 10) && this.state.guestTracks.filter((x) => x.visitorID === def.id).length < (tr.maxPerVisitor ?? 3) && this.rng.chance(tr.chance ?? 0.35)) {
+      this.layTrack(def, t, tiles, findOn, raining);
+    }
+    // Present: in its window, interested enough, a few times a day at most.
+    const pr = cfg.presence || {}, day = Game.dayNumber(t);
+    if (g.presDay !== day) { g.presDay = day; g.presCount = 0; }
+    const perDay = g.befriended ? (pr.befriendedPerDay ?? 2) : (pr.perDay ?? 1);
+    const chance = (pr.chance ?? 0.35) * (g.befriended ? (pr.befriendedChanceMult ?? 2) : 1);
+    if (!g.present && g.interest >= (S.present ?? 60) && g.presCount < perDay && this.rng.chance(chance)) this.startPresence(def, t, tiles);
+  }
+
+  /** A clue it can honestly leave right now, preferring one the player doesn't know yet. */
+  pickClue(def, raining, canNibble) {
+    const g = this.guest(def.id);
+    const honest = this.guestPrefKeys(def).filter((k) => (k !== 'rain' || raining) && (k !== 'find' || canNibble));
+    const fresh = honest.filter((k) => !g.known.includes(k));
+    const pool = fresh.length ? fresh : honest.filter((k) => k !== 'find');
+    return pool.length ? pool[this.rng.int(0, pool.length - 1)] : null;
+  }
+
+  layTrack(def, t, tiles, findOn, raining) {
+    const g = this.guest(def.id), S = this.guestCfg.stages || {};
+    const readable = g.interest >= (S.clues ?? 20);
+    const clue = readable ? this.pickClue(def, raining, findOn.length > 0) : null;
+    if (clue === 'find') {                 // its liked find gets nibbled (a tiny mark; picking it reads the clue)
+      const sp = findOn[this.rng.int(0, findOn.length - 1)];
+      sp.nibbled = def.id;
+      return;
+    }
+    const free = tiles.filter((x) => this.isFree(x) && !this.trackAt(x));
+    const pool = free.length ? free : tiles;
+    if (!pool.length) return;
+    const tile = pool[this.rng.int(0, pool.length - 1)];
+    this.state.guestTracks.push({ id: this.rng.uuid(), visitorID: def.id, tile: { ...tile }, at: t, clue });
+  }
+
+  startPresence(def, t, tiles) {
+    const g = this.guest(def.id), pr = this.guestCfg.presence || {};
+    const mins = range(pr.minutes || [20, 40]);
+    const tile = tiles.length ? tiles[this.rng.int(0, tiles.length - 1)] : this.clearingTiles()[0];
+    g.present = { from: t, until: t + this.rng.range(mins[0], mins[1]) * 60000, tile: { ...tile } };
+    g.presCount++;
+    g.visits = (g.visits || 0) + 1;
+    g.firstSeen = g.firstSeen || t;
+    g.lastPresence = { ...g.present };
+    // A befriended visitor sometimes leaves a gift: its liked find nearby, or a school seed.
+    if (g.befriended && this.rng.chance((this.guestCfg.gift || {}).chance ?? 0.5)) {
+      const item = def.likes.find && this.content.items[def.likes.find];
+      const spot = item && [tile, ...tiles].find((x) => this.isFree(x));
+      if (spot) { const sp = this.newSpawn(item, spot, t); sp.gift = def.id; this.state.spawns.push(sp); }
+      else if (def.gift && this.content.items[def.gift]) this.grant([{ item: def.gift, count: 1 }]);
+      this.events.push({ type: 'visitorGift', id: def.id, item: spot ? def.likes.find : def.gift });
+    }
+  }
+
+  /** Reading tracks: the clue is recorded in the visitor's Field Guide page. Returns the clue text. */
+  readTrack(trackID) {
+    const tr = this.state.guestTracks.find((x) => x.id === trackID);
+    if (!tr) throw new GameError('The tracks have faded.');
+    const def = this.guestDef(tr.visitorID);
+    if (!def) return '';
+    if (!tr.clue) return (this.content.story?.visitors || {}).faint || 'Small tracks, too faint to read.';
+    const g = this.guest(def.id);
+    if (!g.known.includes(tr.clue)) g.known.push(tr.clue);
+    return tr.text || def.clues[tr.clue] || '';
+  }
+
+  /** Picking a nibbled find reads its clue (its visitor likes this find). */
+  readNibble(spawn) {
+    const def = spawn.nibbled && this.guestDef(spawn.nibbled);
+    if (!def) return null;
+    const g = this.guest(def.id);
+    if (!g.known.includes('find')) g.known.push('find');
+    return def.clues.find || null;
+  }
+
+  /** Tapping a present visitor befriends it. */
+  befriendGuest(id, now) {
+    const def = this.guestDef(id);
+    if (!def || this.guestStage(id, now) !== 'present') throw new GameError('It has gone.');
+    const g = this.guest(id);
+    if (g.befriended) return { def, again: true };
+    g.befriended = now;
+    for (const k of this.guestPrefKeys(def)) if (!g.known.includes(k)) g.known.push(k);
+    this.discover('visitor:' + id.replace(/^visitor\./, ''));
+    this.bump('befriend');
+    return { def, again: false };
+  }
+
+  /** First return after the first relic: the visitor of its school takes an interest, and its tracks circle the relic. */
+  firstVisitorSigns(relic, now) {
+    const def = this.guestDefs().find((d) => d.likes.school === relic.school && d.rarity === 'common');
+    if (!def) return;
+    const fv = this.guestCfg.firstVisitor || {}, g = this.guest(def.id);
+    g.interest = Math.max(g.interest, fv.interest ?? 22);
+    // Close around the relic, on open ground where possible (so the tracks can be seen and read).
+    const ring = [];
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (dx || dy) ring.push({ x: relic.tile.x + dx, y: relic.tile.y + dy });
+    const spots = ring.filter((x) => this.inClearing(x) && !this.landmarkAt(x) && !this.relicAt(x) && !this.trackAt(x));
+    spots.sort((a, b) => (this.isFree(b) ? 0 : 1) - (this.isFree(a) ? 0 : 1) || dist(a, relic.tile) - dist(b, relic.tile));
+    const first = (this.content.story?.visitors || {}).firstClue || 'Small tracks circle the place where you buried the relic.';
+    spots.slice(0, fv.tracks ?? 3).forEach((tile) => this.state.guestTracks.push({ id: this.rng.uuid(), visitorID: def.id, tile: { ...tile }, at: now, clue: 'school', text: first }));
+  }
+
+  // ---- the return harvest (tuning.returnHarvest)
+  get harvestCfg() { return this.t.returnHarvest || {}; }
+  /**
+   * Extra growth for time away. Deterministic: its random choices are seeded from the forest and the away
+   * window, and it runs once per return (state.lastRealSeen moves on), so reloading never grants twice.
+   * Returns a summary for the morning reveal (and pushes a returnHarvest event), or null.
+   */
+  returnHarvest(now, awayMs) {
+    const cfg = this.harvestCfg;
+    if (!cfg.perHour || awayMs < (cfg.minAwayMinutes ?? 45) * 60000) return null;
+    const hours = Math.min(awayMs / HOUR, cfg.maxHours ?? 10);
+    const start = now - hours * HOUR;
+    const saved = this.rng;
+    this.rng = new RNG({ rng: hash32(this.state.seed, Math.floor(start / 60000), Math.floor(now / 60000)) });
+    const made = [];
+    try {
+      const field = this.statField(now);
+      const st = this.t.spawns, c = this.clearing, area = (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1);
+      const cap = Math.min(st.maxTotal, Math.max(st.minCap || 3, Math.round(area * (st.maxPerOpenTile || 0.1)))) + (cfg.overCap ?? 0);
+      const occ = this.occupied(), minTotal = cfg.minStatTotal ?? 6;
+      const cands = [];
+      for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+        if (occ.has(x + ',' + y)) continue;
+        const sv = field.statsAt(x, y);
+        const total = CORE_STATS.reduce((a, k) => a + (sv[k] || 0), 0);
+        if (total >= minTotal) cands.push({ tile: { x, y }, w: total, stats: sv });
+      }
+      const when = () => start + this.rng.next() * (now - start);
+      const put = (item, tile, t) => {
+        const sp = this.newSpawn(item, tile, t);
+        sp.harvest = true;
+        this.state.spawns.push(sp);
+        made.push(sp);
+        const i = cands.findIndex((x) => sameTile(x.tile, tile));
+        if (i >= 0) cands.splice(i, 1);
+      };
+      // The first return after the first relic: its ground is thick with finds of its school.
+      const h = this.state.harvest = this.state.harvest || {};
+      const first = (this.state.relics || [])[0];
+      if (first && !h.firstDone) {
+        const fr = cfg.firstReturn || {};
+        const near = cands.filter((x) => (x.stats[first.school] || 0) > 0 && dist(x.tile, first.tile) < this.stats.reach(this.relicTier(first.tier).radius))
+          .sort((a, b) => (b.stats[first.school] || 0) - (a.stats[first.school] || 0));
+        const ofSchool = (tile, t, minRarity) => this.spawnDetails(tile, t)
+          .filter((d) => this.schoolOf(d.item) === first.school && rarityIndex(d.item.rarity) >= rarityIndex(minRarity)).map((d) => [d.item, d.weight]);
+        let uncommon = 0, n = 0;
+        for (const x of [...near]) {
+          if (n >= (fr.minFinds ?? 8) || this.state.spawns.length >= cap) break;
+          const t = when();
+          const wantRare = uncommon < (fr.minUncommon ?? 1);
+          const item = (wantRare && weightedPick(ofSchool(x.tile, t, 'uncommon'), this.rng)) || weightedPick(ofSchool(x.tile, t, 'common'), this.rng);
+          if (!item) continue;
+          if (rarityIndex(item.rarity) >= 1) uncommon++;
+          put(item, x.tile, t);
+          n++;
+        }
+        h.firstDone = now;
+        this.firstVisitorSigns(first, now);
+      }
+      // Then growth for the time away, weighted by how developed each tile is.
+      let budget = Math.round(hours * cfg.perHour) - made.length;
+      while (budget-- > 0 && cands.length && this.state.spawns.length < cap) {
+        const pick = weightedPick(cands.map((x) => [x, x.w]), this.rng);
+        if (!pick) break;
+        const t = when();
+        const item = this.pickSpawn(pick.tile, t);
+        if (!item) { cands.splice(cands.indexOf(pick), 1); continue; }
+        put(item, pick.tile, t);
+      }
+    } finally {
+      this.rng = saved;
+    }
+    if (!made.length) return null;
+    // The best find: the rarest, nearest a relic.
+    const relicDist = (t) => Math.min(99, ...(this.state.relics || []).map((r) => dist(r.tile, t)));
+    const best = [...made].sort((a, b) => rarityIndex(this.content.items[b.itemID].rarity) - rarityIndex(this.content.items[a.itemID].rarity) || relicDist(a.tile) - relicDist(b.tile))[0];
+    const fresh = made.filter((sp) => !this.discovered.has('item:' + sp.itemID));
+    const summary = {
+      at: now, hours: Math.round(hours * 10) / 10, finds: made.length,
+      uncommon: made.filter((sp) => rarityIndex(this.content.items[sp.itemID].rarity) >= 1).length,
+      best: { itemID: best.itemID, tile: best.tile }, somethingNew: fresh.length > 0,
+      newNearRelic: fresh.some((sp) => relicDist(sp.tile) <= 4),
+    };
+    this.state.harvest.last = summary;
+    this.events.push({ type: 'returnHarvest', ...summary });
+    return summary;
   }
 
   // ---- progression: slots, blend, expansion, first-uncommon hint
@@ -1375,9 +1913,14 @@ export class Game {
 
   takeEvents() { const e = this.events; this.events = []; return e; }
 
+  /** How long an unpicked find lasts: its own lifetimeHours, else by rarity (tuning.spawns.wilting). */
   lifetime(itemID) {
-    const h = this.content.items[itemID]?.spawn?.lifetimeHours;
-    return h != null ? h * HOUR : this.t.spawns.lifetimeSeconds * 1000;
+    const def = this.content.items[itemID];
+    const h = def?.spawn?.lifetimeHours;
+    if (h != null) return h * HOUR;
+    const w = this.t.spawns.wilting || {};
+    if (def && w[def.rarity] != null) return w[def.rarity] * HOUR;
+    return this.t.spawns.lifetimeSeconds * 1000;
   }
 
   expireSpawns(t) {
@@ -1422,28 +1965,28 @@ export class Game {
   /**
    * Category growth bonuses, proportional per tile (so a few qualifying tiles never hog the forest):
    * each qualifying free tile gets an extra chance this tick of `normal per-tile spawn rate × bonus`,
-   * restricted to its category. Damp tiles grow mushrooms faster (terrain.damp.mushroomGrowth);
+   * restricted to its category. Spore tiles grow mushrooms faster (terrain.spore.mushroomGrowth);
    * wild meadows sprout plants faster (combos.meadow.plantGrowth).
    */
   growthBonuses(t, cap, field) {
     const st = this.t.spawns, c = this.clearing;
     const area = (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1);
     const perTile = (st.attemptsPerTick * st.spawnChance * this.buffMult('lively', t)) / Math.max(1, area);   // the normal rate for one tile
-    const mg = (this.terrain.damp || {}).mushroomGrowth || {};
+    const mg = (this.terrain.spore || {}).mushroomGrowth || {};
     const meadow = this.combo('meadow'), pg = meadow.plantGrowth || {};
     const K = field.keys.length, W = this.state.size.width, names = this.tileKeys.names;
-    const kd = field.keys.indexOf('damp'), kb = field.keys.indexOf('bloom'), kv = field.keys.indexOf('verdure');
+    const kd = field.keys.indexOf('spore'), kb = field.keys.indexOf('bloom'), kv = field.keys.indexOf('verdure');
     const mreq = Object.entries(meadow.requires || {}).map(([k, b]) => [field.keys.indexOf(k), b]);
     const occ = this.occupied();
     let made = 0;
     for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
       if (this.state.spawns.length >= cap) return made;
       const o = (y * W + x) * K;
-      const damp = field.values[o + kd] || 0;
-      if (damp < (mg.minDamp ?? 6) && !(field.values[o + kb] > 0)) continue;     // most tiles: nothing to do
+      const spore = field.values[o + kd] || 0;
+      if (spore < (mg.minSpore ?? 6) && !(field.values[o + kb] > 0)) continue;     // most tiles: nothing to do
       const isMeadow = mreq.length && mreq.every(([ki, b]) => ki >= 0 && boundMatches(b, field.values[o + ki]));
       let cat = null, bonus = 0;
-      if (damp >= (mg.minDamp ?? 6)) { cat = 'mushroom'; bonus = Math.min(mg.maxBonus ?? 2, damp * (mg.perPoint ?? 0.08)); }
+      if (spore >= (mg.minSpore ?? 6)) { cat = 'mushroom'; bonus = Math.min(mg.maxBonus ?? 2, spore * (mg.perPoint ?? 0.08)); }
       if (isMeadow) {
         const b = Math.min(pg.maxBonus ?? 2.5, ((field.values[o + kb] || 0) + (field.values[o + kv] || 0)) * (pg.perPoint ?? 0.06));
         if (b > bonus || this.rng.chance(0.5)) { cat = 'plant'; bonus = b; }
@@ -1497,18 +2040,18 @@ export class Game {
           }
         }
       }
-      for (const b of [...this.activeBoosts(t), ...this.landmarkAuras()]) for (const bt of this.boostTiles(b)) sources[bt.y * W + bt.x] += 1;
+      for (const b of [...this.activeBoosts(t), ...this.landmarkAuras()]) if (this.boostLevel(b, t) > 0) for (const bt of this.boostTiles(b)) sources[bt.y * W + bt.x] += 1;
     }
     const tiles = [];
     let total = 0;
     const occ = this.occupied();
-    // Per-tick constants (Glow by day/night and Depth, Bloom's cycle) instead of per tile.
+    // Per-tick constants (Glow by day/night and Spirit, Bloom's cycle) instead of per tile.
     const K = on ? field.keys.length : 0;
     const coreIdx = on ? CORE_STATS.map((k) => field.keys.indexOf(k)) : [];
-    const depthIdx = on ? field.keys.indexOf('depth') : -1;
+    const spiritIdx = on ? field.keys.indexOf('spirit') : -1;
     const bloomF = this.bloomFactor(t), gc = this.terrain.glowCycle || {}, night = this.isNight(t);
-    const gN = gc.nightFactor ?? 1.6, gD = gc.dayFactor ?? 0.4, gFull = Math.max(1, gc.depthForFullGlow ?? 40);
-    const glowAt = (depth) => (night ? gN : gD + (gN - gD) * Math.min(1, depth / gFull));
+    const gN = gc.nightFactor ?? 1.6, gD = gc.dayFactor ?? 0.4, gFull = Math.max(1, gc.spiritForFullGlow ?? 40);
+    const glowAt = (spirit) => (night ? gN : gD + (gN - gD) * Math.min(1, spirit / gFull));
     const comboReqs = on ? Object.entries(this.t.combos || {}).filter(([id]) => !id.startsWith('_'))
       .map(([id, cb]) => [id, Object.entries(cb.requires || {}).map(([k, b]) => [field.keys.indexOf(k), b])]) : [];
     const terReqs = on ? this.terrainDefs.map((d) => [d, Object.entries(d.requires).map(([k, b]) => [field.keys.indexOf(k), b])]) : [];
@@ -1524,7 +2067,7 @@ export class Game {
             const v = field.values[o + coreIdx[ki]] || 0;
             if (!v) continue;
             const k = CORE_STATS[ki];
-            intensity += v * (k === 'glow' ? glowAt(field.values[o + depthIdx] || 0) : k === 'bloom' ? bloomF : 1);
+            intensity += v * (k === 'glow' ? glowAt(field.values[o + spiritIdx] || 0) : k === 'bloom' ? bloomF : 1);
           }
           let combos = 0;
           for (const [, reqs] of comboReqs) if (reqs.every(([ki, b]) => ki >= 0 && boundMatches(b, field.values[o + ki]))) combos++;
@@ -1576,7 +2119,7 @@ export class Game {
     const onMap = new Set(this.state.spawns.map((x) => x.itemID));
     const sc = (this.t.spawns && this.t.spawns.scaling) || {};
     const lo = sc.minMultiplier ?? 0.25, hi = sc.maxMultiplier ?? 4;
-    // Glow counts for more at night (and in Depth), Bloom follows its daily cycle.
+    // Glow counts for more at night (and in Spirit), Bloom follows its daily cycle.
     const fac = this.statFactors(t, s);
     const varietyExp = this.varietyExponent(s, t);
     const out = [];
@@ -1594,13 +2137,13 @@ export class Game {
     for (const k of CORE_STATS) { lvl[k] = intensityOf(s[k] || 0, this.t).level; maxLvl = Math.max(maxLvl, lvl[k]); }
     const cs = (this.t.spawns && this.t.spawns.categoryScaling) || {};
     const favoured = new Set(Object.keys(cs).filter((cat) => typeof cs[cat] === 'object' && Object.keys(cs[cat]).some((k) => lvl[k] > 0)));
-    const pool = isPool && this.combo('pool').onlyDampItems;
+    const pool = isPool && this.combo('pool').onlySporeItems;
     const keenFor = {};
     for (const [id, u] of Object.entries(this.t.upgrades || {})) if (u && u.category && this.upgradeTier(id)) keenFor[u.category] = (keenFor[u.category] || 0) + this.upgradeTier(id) * (u.perTierPerRarity ?? 0);
     for (const item of opts.items || this.content.spawnableItems) {
       const rule = item.spawn;
       if (!rule) continue;
-      if (pool && !(rule.requires && rule.requires.damp)) continue;   // shallow water: only Damp-loving things
+      if (pool && !(rule.requires && rule.requires.spore)) continue;   // shallow water: only Spore-loving things
       if (rule.terrain === 'pool' && !isPool) continue;                // e.g. Water Reed: shallow pools only
       if (rule.time === 'night' && !night) continue;
       if (rule.time === 'day' && night) continue;
@@ -1670,7 +2213,7 @@ export class Game {
 
   /**
    * Category weights for a tile: spawns.categoryWeights × a stat multiplier, so a category's own
-   * stats (spawns.categoryScaling, % per point) make it likelier there. E.g. Stone/Depth from
+   * stats (spawns.categoryScaling, % per point) make it likelier there. E.g. Shimmer/Spirit from
    * Geode Critters tilt the area towards geodes. Clamped to categoryScaling.min/maxMultiplier.
    */
   categoryDetails(details, stats, t = null) {
@@ -1738,6 +2281,7 @@ export class Game {
   ownsSpecies(id) { return this.state.creatures.some((c) => c.typeID === id); }
 
   checkWanderers(t) {
+    if (!this.creaturesOn) return 0;
     const field = this.statField(t);
     const loc = new Map(this.spawnLocations(t, field).tiles.map((x) => [x.tile.x + ',' + x.tile.y, x.weight]));
     let arrived = 0;
@@ -1764,7 +2308,7 @@ export class Game {
     return arrived;
   }
 
-  visitorAt(t) { return this.state.visitors.find((v) => sameTile(v.tile, t)) || null; }
+  visitorAt(t) { return this.creaturesOn ? this.state.visitors.find((v) => sameTile(v.tile, t)) || null : null; }
 
   befriend(visitorID, now) {
     const i = this.state.visitors.findIndex((v) => v.id === visitorID);
@@ -1786,6 +2330,7 @@ export class Game {
    * per-family pity counter guarantees a find after enough misses.
    */
   findCreature(kind, sourceItem, tile, stats, now, plantedAt = null) {
+    if (!this.creaturesOn) return null;                 // creature finds (and their eggs) are off
     const candidates = this.content.creatureList.filter((def) => {
       const src = def.source;
       if (!src || src.kind !== kind) return false;
@@ -1817,6 +2362,10 @@ export class Game {
 
   // ---- eggs (tuning.creatureFinds "egg"): finds give eggs; eggs hatch in nests from the nest tile's stats
   get eggMode() { return (this.t.creatureFinds || 'egg') === 'egg' && (this.content.eggs || []).length > 0; }
+  /** Creatures shape the land only while tuning.creaturePlacement.enabled (off: relics do). */
+  get creaturesOn() { return (this.t.creaturePlacement || {}).enabled !== false; }
+  /** The egg system (finds give eggs, nests) runs only while creatures are on and tuning.eggs.enabled. */
+  get eggsOn() { return this.creaturesOn && (this.t.eggs || {}).enabled !== false; }
   get eggCfg() { return this.t.eggs || {}; }
   eggDef(id) { return (this.content.eggs || []).find((e) => e.id === id) || null; }
 
@@ -1858,7 +2407,7 @@ export class Game {
   }
 
   get nestSlots() { return (this.eggCfg.baseNests ?? 1) + (this.state.unlocks.nests || 0) + this.landmarkEffects('extraNest').reduce((a, [e]) => a + (e.add || 1), 0); }
-  nestAt(t) { return this.state.nests.find((n) => sameTile(n.tile, t)) || null; }
+  nestAt(t) { return this.eggsOn ? this.state.nests.find((n) => sameTile(n.tile, t)) || null : null; }
   nestProgress(n, now) { return Math.min(1, Math.max(0, (now - n.startedAt) / (Math.max(1, n.hatchSeconds) * 1000))); }
 
   /** Put an egg from the Bag in a nest on an open tile. */
@@ -1985,12 +2534,14 @@ export class Game {
     for (const x of s.plantedSeeds) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.visitors || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of (s.decor && s.decor.placed) || []) out.add(x.tile.x + ',' + x.tile.y);
-    for (const x of s.nests || []) out.add(x.tile.x + ',' + x.tile.y);
+    if (this.eggsOn) for (const x of s.nests || []) out.add(x.tile.x + ',' + x.tile.y);
+    for (const x of s.relics || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.scenery || []) out.add(x.tile.x + ',' + x.tile.y);
+    for (const x of s.soilBoosts || []) if (x.seed) out.add(x.tile.x + ',' + x.tile.y);
     return out;
   }
 
-  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t) && !this.nestAt(t) && !this.sceneryAt(t); }
+  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t) && !this.nestAt(t) && !this.sceneryAt(t) && !this.buriedSeedAt(t) && !this.relicAt(t); }
   seedProgress(seed, now) { return Math.min(1, Math.max(0, (now - seed.plantedAt) / (Math.max(1, seed.growSeconds) * 1000))); }
 
   // ---- creatures
@@ -2200,6 +2751,7 @@ export class Game {
   collect(spawnID, now) {
     const i = this.state.spawns.findIndex((s) => s.id === spawnID);
     if (i < 0) throw new GameError('Unknown item.');
+    if (this.state.spawns[i].opening) throw new GameError('It waits to be asked.');
     const [spawn] = this.state.spawns.splice(i, 1);
     const def = this.content.items[spawn.itemID];
     if (!def) return [];
@@ -2234,11 +2786,21 @@ export class Game {
     for (const e of this.effects('bonusDrop', spawn.tile)) {
       if ((e.items || []).includes(def.id) && e.table && this.rng.chance(e.chance || 0)) pending.push(...this.rollTable(e.table, def.id, now));
     }
-    // Guaranteed drops (tutorial): make sure each forced item is included at least once.
+    // On mature, strong relic ground a find very occasionally holds a relic (tuning.relics.findDrop).
+    const relicDrop = !spawn.forced && this.relicFromFind(spawn.tile, stats, now);
+    if (relicDrop) pending.push({ item: relicDrop, count: 1 });
+    // A find of a garden school sometimes drops that school's seed (tuning.schoolSeeds.dropChance).
+    const school = this.schoolOf(def), seedID = school && this.content.schoolSeedFor && this.content.schoolSeedFor[school];
+    if (seedID && !spawn.forced && this.rng.chance(this.seedCfg.dropChance ?? 0)) pending.push({ item: seedID, count: 1 });
+    // Guaranteed drops (the opening's finds): make sure each forced item is included at least once.
     for (const f of spawn.forced || []) {
       if (!pending.some((x) => x.item === f.item)) pending.push({ item: f.item, count: f.count || 1 });
     }
     if (def.inGuide !== false) this.discover('item:' + def.id);
+    if (spawn.nibbled) this.events.push({ type: 'nibbleClue', text: this.readNibble(spawn) });
+    // Tracks under a find are read as it's picked.
+    const track = this.trackAt(spawn.tile);
+    if (track) this.events.push({ type: 'nibbleClue', text: this.readTrack(track.id) });
     this.bump('collect');
     this.bump('collect:' + def.category);
     if (def.category === 'geode') this.bump('dig');
@@ -2413,19 +2975,24 @@ export class Game {
     return results;
   }
 
-  /** Use an item from the bag. Soil boosts need a tile; a Moonfall Shard doesn't. */
+  /** Use an item from the bag. Soil boosts and school seeds need a tile; a Moonfall Shard doesn't. */
   use(itemID, tile, now) {
     const def = this.content.items[itemID];
     if (!def || !def.use) throw new GameError("That can't be used.");
     if (!(this.state.inventory[itemID] > 0)) throw new GameError("You don't have that.");
     const use = def.use;
+    if (use.type === 'bury') {
+      const b = this.burySeed(itemID, tile, now);
+      const hours = Math.round((b.fullUntil - now) / 3600000);
+      return `${def.name} buried. ${def.school.charAt(0).toUpperCase() + def.school.slice(1)} will grow around it over the next few hours, and last about ${Math.round(hours / 24)} days.`;
+    }
     if (use.type === 'soilBoost') {
       if (!tile || !this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
       this.consume(itemID);
       this.bump('use');
       this.state.soilBoosts.push({
         id: this.rng.uuid(), tile: { ...tile }, stats: { ...use.stats }, appliedAt: now,
-        radius: (use.radius || 0) + this.upgradeTier('wideSpread') * ((this.upgradeDef('wideSpread') || {}).radiusPerTier ?? 1),
+        radius: use.radius || 0,
         expiresAt: use.permanent ? null : now + (use.hours || 24) * HOUR,
       });
       this.statCache = this.statField(now);
@@ -2616,14 +3183,18 @@ export class Game {
         out.type = 'item'; out.item = eggs[this.rng.int(0, eggs.length - 1)].id; out.count = 1;
       }
       if (r.type === 'buff') { out.buff = r.buff; if (r.mult) out.mult = r.mult; if (r.hours) out.hours = r.hours; }
+      if (r.type === 'relic') {                         // a relic of that tier, of a school chosen at random
+        out.type = 'item'; out.item = 'relic.' + CORE_STATS[this.rng.int(0, CORE_STATS.length - 1)] + '.' + (r.tier || 'common'); out.count = 1;
+      }
       return out;
     }
     return { type: 'item', item: 'seed.mystery-seed', count: 1, tier: tiers[0] || 'common' };
   }
 
   wishRewardValid(r) {
-    if (r.type === 'item') return !!this.content.items[r.item];
-    if (r.type === 'egg') return (this.content.eggs || []).some((e) => e.tier === r.tier);
+    if (r.type === 'item') return !!this.content.items[r.item] && (this.eggsOn || this.content.items[r.item].category !== 'egg');
+    if (r.type === 'egg') return this.eggsOn && (this.content.eggs || []).some((e) => e.tier === r.tier);
+    if (r.type === 'relic') return CORE_STATS.every((k) => this.content.items['relic.' + k + '.' + (r.tier || 'common')]);
     if (r.type === 'buff') return !!this.buffDef(r.buff);
     return false;
   }
@@ -2771,14 +3342,22 @@ export class Game {
   }
 
   /** Every request with its status: open ones first, then locked, then delivered. */
+  /** Listings that belong to switched-off systems (eggs, nests, creature slots) stay in the data but aren't offered. */
+  requestHidden(req) {
+    const r = req.reward || {};
+    if (!this.eggsOn && (r.type === 'egg' || (r.type === 'item' && this.content.items[r.id]?.category === 'egg') || (r.type === 'unlock' && r.id === 'nest') || (r.type === 'upgrade' && r.id === 'hatchSpeed'))) return true;
+    if (!this.creaturesOn && ((r.type === 'unlock' && (r.id === 'slot' || r.id === 'trowel')))) return true;
+    return false;
+  }
+
   requestBoard(now) {
-    const list = (this.content.requests || []).filter((r) => r.kind !== 'visitor').map((r) => this.requestStatus(r, now));
+    const list = (this.content.requests || []).filter((r) => r.kind !== 'visitor' && !this.requestHidden(r)).map((r) => this.requestStatus(r, now));
     const rank = (s) => (s.done ? 2 : s.locks.length ? 1 : 0);
     return list.sort((a, b) => rank(a) - rank(b));
   }
 
-  // ---- visitors: wanderers at the Old Log asking for items, paying in eggs (kind "visitor")
-  get visitorCfg() { return this.t.visitors || {}; }
+  // ---- traders: wanderers at the Old Log asking for items (requests of kind "visitor"; called Traders in the game)
+  get visitorCfg() { return this.t.traders || {}; }   // Old Log traders (requests of kind "visitor")
 
   /** Today's visitors (local day): picked once a day from the visitor requests whose gating is met. */
   visitorsToday(now) {
@@ -2799,10 +3378,10 @@ export class Game {
   pickVisitor(now, h) {
     const v = this.state.visitorReqs;
     const taken = new Set([...(v ? v.offers.map((o) => o.requestID) : []), ...(v ? v.done : [])]);
-    const pool = (this.content.requests || []).filter((r) => r.kind === 'visitor' && !taken.has(r.id) && !this.requestLocks(r, now).length);
+    const pool = (this.content.requests || []).filter((r) => r.kind === 'visitor' && !this.requestHidden(r) && !taken.has(r.id) && !this.requestLocks(r, now).length);
     if (!pool.length) return null;
     const req = pool[h % pool.length];
-    const wanderers = this.content.creatureList.filter((c) => c.family === 'wanderer');
+    const wanderers = this.content.creatureList.filter((c) => c.family === 'wanderer');   // a trader's look (cosmetic)
     const w = wanderers.length ? wanderers[hash32(h, 7) % wanderers.length].id : null;
     return { requestID: req.id, wandererID: w };
   }
@@ -2812,7 +3391,7 @@ export class Game {
     const v = this.visitorsToday(now);
     const i = v.offers.findIndex((o) => o.requestID === requestID);
     if (i < 0) throw new GameError('That visitor has gone.');
-    if (v.rerolls >= (this.visitorCfg.maxRerolls ?? 3)) throw new GameError('No more visitors today. New ones come tomorrow.');
+    if (v.rerolls >= (this.visitorCfg.maxRerolls ?? 3)) throw new GameError('No more traders today. New ones come tomorrow.');
     const next = this.pickVisitor(now, this.rng.int(0, 1e9));
     if (!next) throw new GameError('Nobody else is visiting today.');
     this.spendCompost(this.visitorCfg.rerollCost ?? 0);
@@ -3098,6 +3677,24 @@ export class Game {
     return made;
   }
 
+  /** Developer: put a visitor at an interest stage (signs, clues, ready to visit, or none). */
+  devGuestStage(id, stage, now) {
+    const S = this.guestCfg.stages || {}, g = this.guest(id);
+    g.interest = { none: 0, signs: S.signs ?? 10, clues: S.clues ?? 20, ready: S.present ?? 60 }[stage] ?? g.interest;
+    if (stage === 'none') { g.present = null; g.known = []; this.state.guestTracks = this.state.guestTracks.filter((x) => x.visitorID !== id); }
+  }
+  /** Developer: the visitor comes to the grotto right now, on ground it likes (or anywhere open). */
+  devGuestPresent(id, now) {
+    const def = this.guestDef(id);
+    if (!def) throw new GameError('Unknown visitor.');
+    const g = this.guest(id), tiles = this.guestTiles(def, this.statField(now));
+    g.interest = Math.max(g.interest, (this.guestCfg.stages || {}).present ?? 60);
+    const tile = tiles.find((x) => this.isFree(x)) || this.freeNear(this.state.landmarks[0].tile);
+    const pr = this.guestCfg.presence || {};
+    g.present = { from: now, until: now + ((pr.minutes || [20, 40])[1]) * 60000, tile: { ...tile } };
+    g.firstSeen = g.firstSeen || now; g.lastPresence = { ...g.present };
+  }
+
   debugGrant(itemID, count = 1) { this.state.inventory[itemID] = (this.state.inventory[itemID] || 0) + count; }
   debugGrantCreature(typeID, glimmer, now) { return this.grant([{ creature: this.rollCreature(typeID, 'debug', now, glimmer) }]); }
 }
@@ -3128,14 +3725,31 @@ export class Content {
     this.requests = bundle.requests || [];
     this.cosmetics = bundle.cosmetics || [];
     this.eggs = bundle.eggs || [];
-    this.supplies = bundle.supplies || [];
-    // Soil packs (supplies.json) are Bag items you spread on a tile.
-    for (const sp of this.supplies) {
-      if (this.items[sp.id]) continue;
-      const it = { id: sp.id, category: 'supply', name: sp.name, rarity: 'common', sprite: sp.sprite, inGuide: false, guideText: sp.text,
-        use: { type: 'soilBoost', verb: 'Spread', stats: { ...sp.stats }, hours: sp.hours, permanent: sp.hours == null, radius: 0 } };
+    // School seeds (schoolSeeds.json, from the Offerings spreadsheet): one per garden school. Buried
+    // from the Bag, a seed starts its school's terrain around its tile (numbers: tuning.schoolSeeds).
+    this.opening = bundle.opening || null;
+    this.visitorList = bundle.visitors || [];
+    this.schoolSeeds = bundle.schoolSeeds || [];
+    this.schoolSeedFor = {};
+    for (const sd of this.schoolSeeds) {
+      this.schoolSeedFor[sd.school] = sd.id;
+      if (this.items[sd.id]) continue;
+      const name = sd.school.charAt(0).toUpperCase() + sd.school.slice(1);
+      const it = { id: sd.id, category: 'schoolSeed', name: sd.name, rarity: 'common', sprite: sd.sprite, marker: sd.marker, school: sd.school, guideText: sd.text,
+        howFound: `Sold at the Old Log. Finds that need ${name} sometimes drop one.`,
+        use: { type: 'bury', verb: 'Bury', school: sd.school, text: `Bury it on an open tile to start ${name} ground around it.` } };
       this.itemList.push(it);
-      this.items[sp.id] = it;
+      this.items[sd.id] = it;
+    }
+    // Relics (relics.json) are Bag items you bury; relic.unknown is the opening's relic before it has a school.
+    this.relicList = bundle.relics || [];
+    for (const r of [...this.relicList, { id: 'relic.unknown', name: 'A strange relic', school: null, tier: 'common', sprite: 'relic.unknown', worldSprite: 'relic.unknown', inscription: '', inGuide: false }]) {
+      if (this.items[r.id]) continue;
+      const it = { id: r.id, category: 'relic', name: r.name, rarity: r.tier, sprite: r.sprite, worldSprite: r.worldSprite, school: r.school, tier: r.tier,
+        inscription: r.inscription, guideText: r.inscription, use: { type: 'relic', verb: 'Bury' } };
+      if (r.inGuide === false) it.inGuide = false;
+      this.itemList.push(it);
+      this.items[r.id] = it;
     }
     // Eggs are Bag items (category "egg"), built from eggs.json.
     for (const e of this.eggs) {

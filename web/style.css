@@ -363,3 +363,12 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .wish-foot .btn.green { margin-left: auto; }
 .wish-confirm { display: flex; flex-direction: column; gap: 6px; width: 100%; }
 .sub.new { color: #ffe9a8; }
+
+/* Relic inscriptions: a quieter, carved voice. */
+.inscription { color: #e6dcc0; letter-spacing: 0.02em; line-height: 1.5; margin: 6px 0; }
+.inscription::before { content: '“'; }
+.inscription::after { content: '”'; }
+.opening .answers { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 8px; }
+.opening .btn.answer { width: 100%; text-align: left; white-space: normal; line-height: 1.35; }
+.clues { margin: 4px 0 0 16px; padding: 0; color: #e6dcc0; line-height: 1.5; }
+.clues li { margin-bottom: 4px; }
