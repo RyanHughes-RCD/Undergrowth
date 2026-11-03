@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Landmark sprites from the pixel-art pictures in design/ (landmark_*.jpg).
+"""Landmark sprites from the pixel-art pictures in design/ (landmark_*.jpg). Only the Old Log is left;
+the animation helpers (ripples, sparkles) stay for any future landmark picture.
 
 Each source is pixel art drawn on a 20px grid on a white background. This reads one colour per art
 pixel, shrinks it to its in-game width (LANDMARKS below; tiles are 16 art px), keeps the source's
 own colours, and redraws a clean 1px dark outline so edges stay crisp after scaling. Greenery
 (grass, moss, vines) is left unoutlined, as in the sources.
 
-Some get animation frames drawn on top:
-  - Moonwell: ripples spreading across the water.
-  - Fairy Ring: the source's baked-in sparkles are removed and replaced by twinkling ones.
+A landmark entry can ask for animation frames drawn on top ("anim": "ripples" across water, or
+"sparkles" replacing baked-in ones).
 
     python3 tools/gen_landmark_art.py
 
@@ -34,13 +34,6 @@ ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 # (objects stand on the anchor), and an optional animation.
 LANDMARKS = {
     "landmark.old-log": {"source": "landmark_old_log.jpg", "width": 40, "anchorUp": 4},
-    "landmark.spirit-well": {"source": "landmark_spirit_well.jpg", "width": 28, "anchorUp": 4},
-    "landmark.crystal-grotto": {"source": "landmark_cave.jpg", "width": 40, "anchorUp": 4},
-    # Flat landmarks are centred on their tile instead of standing on its foot line.
-    "landmark.moonwell": {"source": "landmark_moonwell.jpg", "width": 38, "flat": True, "anim": "ripples"},
-    # The ring's mushrooms are too small to shrink: each keeps its drawn size and only their places
-    # are pulled in (spread = share of the source's spacing).
-    "landmark.fairy-ring": {"source": "landmark_fairy_ring.jpg", "spread": 0.68, "flat": True, "anim": "sparkles", "stripLoose": True},
 }
 
 

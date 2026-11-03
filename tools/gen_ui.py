@@ -26,24 +26,6 @@ def icon(name, palette, draw, size=12, outline=True, frames=1, durations=None):
 
 def make_icons():
     # 2 main, 3 light, 4 dark, 5 accent
-    def burrow(c, f):
-        c.ellipse(6, 8.5, 5.5, 4.5, 2, clip=lambda x, y: y <= 9)
-        c.ellipse(4.5, 6, 2, 1.2, 3)
-        c.rect(1, 9, 10, 10, 5)
-        c.ellipse(6, 9, 2.2, 2.6, 4, clip=lambda x, y: y <= 9)
-    icon("burrow", ["#5ea347", "#8ccf63", "#2a1a14", "#7a5232"], burrow)
-
-    def critter(c, f):
-        # A little round forest critter: antennae, big eyes, cheeks (the Creatures tab).
-        c.ellipse(6, 7.5, 4.6, 3.8, 2)
-        c.ellipse(5, 6, 2.4, 1.6, 3)
-        c.rect(2, 10, 3, 10, 4); c.rect(8, 10, 9, 10, 4)          # feet
-        c.line(4, 4, 3, 1, 4); c.line(8, 4, 9, 1, 4)
-        c.set(3, 1, 5); c.set(9, 1, 5)
-        c.set(4, 7, 1); c.set(8, 7, 1); c.set(4, 6, 3); c.set(8, 6, 3)
-        c.set(3, 8, 5); c.set(9, 8, 5)
-    icon("creatures", ["#7cc35a", "#b8ec8a", "#3f7a32", "#ff9ccf"], critter)
-
     def bag(c, f):
         c.rect(2, 4, 9, 10, 2)
         c.rect(2, 4, 9, 5, 4)
@@ -57,12 +39,6 @@ def make_icons():
         c.rect(2, 1, 3, 10, 4)
         c.rect(5, 3, 8, 3, 3); c.rect(5, 5, 8, 5, 3); c.rect(5, 7, 7, 7, 3)
     icon("guide", ["#3f7a46", "#d8e8c0", "#234a2a"], book)
-
-    def scroll(c, f):
-        c.rect(2, 2, 9, 9, 2)
-        c.rect(1, 1, 10, 2, 4); c.rect(1, 9, 10, 10, 4)
-        c.rect(3, 4, 8, 4, 3); c.rect(3, 6, 7, 6, 3)
-    icon("tasks", ["#f0e0b8", "#8a6440", "#c9a870"], scroll)
 
     def bug(c, f):
         c.ellipse(6, 7, 4.5, 4, 2)
@@ -92,11 +68,6 @@ def make_icons():
         c.rect(5, 5, 6, 6, 3)
     icon("sparkle", ["#ffd84a", "#ffffff"], sparkle)
 
-    def star(c, f):
-        c.rect(5, 2, 6, 9, 2); c.rect(2, 5, 9, 6, 2)
-        c.set(5, 5, 3); c.set(6, 6, 3)
-    icon("glimmer", ["#ffe680", "#ffffff"], star, outline=False)
-
     def moon(c, f):
         c.ellipse(6, 6, 5, 5, 2)
         c.ellipse(8.5, 4.5, 4, 4, 0)
@@ -109,21 +80,6 @@ def make_icons():
             c.set(x if x < 11 else 10, y if y < 11 else 10, 3)
         c.set(5, 5, 3)
     icon("sun", ["#ffc83a", "#fff3a8"], sun)
-
-    def rain(c, f):
-        c.ellipse(4, 4.5, 3, 2.5, 2); c.ellipse(7.5, 4, 3.5, 3, 2)
-        c.rect(2, 5, 10, 6, 2)
-        c.set(5, 3, 3)
-        for (x, y) in ((3, 8), (6, 9), (9, 8), (4, 10)):
-            c.set(x, y, 4)
-    icon("rain", ["#b8c8d8", "#ffffff", "#5a9cff"], rain)
-
-    def gem(c, f):
-        for y in range(2, 10):
-            half = min(4, y - 1) if y < 5 else max(0, 9 - y)
-            c.rect(6 - half, y, 5 + half, y, 2)
-        c.rect(3, 3, 6, 4, 3); c.rect(7, 6, 8, 7, 4)
-    icon("gem", ["#5ad0f0", "#d8f8ff", "#2a7aa8"], gem)
 
     def leaf(c, f):
         c.ellipse(6.5, 5.5, 3.5, 4.5, 2)
@@ -200,3 +156,4 @@ def make_burst():
 def main():
     make_icons()
     make_burst()
+

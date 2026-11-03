@@ -79,7 +79,10 @@ public final class ContentDatabase {
         }
 
         guard let first = roots.first else { throw LoadError.missingTuning(URL(fileURLWithPath: "/")) }
-        let tuningURL = first.appendingPathComponent("tuning.json")
+        // The web game's tuning.json moved on to the garden; this engine reads its own frozen copy
+        // (Resources/ios/tuning.json) when it's there, and falls back to tuning.json (user content, tests).
+        let iosTuningURL = first.appendingPathComponent("ios/tuning.json")
+        let tuningURL = fm.fileExists(atPath: iosTuningURL.path) ? iosTuningURL : first.appendingPathComponent("tuning.json")
         guard fm.fileExists(atPath: tuningURL.path) else { throw LoadError.missingTuning(first) }
         let tuning = try read(Tuning.self, tuningURL)
         let namesURL = first.appendingPathComponent("Content/nameParts.json")

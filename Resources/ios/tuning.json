@@ -1,0 +1,105 @@
+{
+ "_about": "Frozen tuning for the Swift package (Packages/UndergrowthCore) and the iOS app, which still run the older creature-and-spawn engine. The web game's tuning is ../tuning.json; this file only keeps the iOS app loading. Not used by the web build.",
+ "grid": {
+  "width": 40,
+  "height": 56
+ },
+ "placementSlots": 3,
+ "starterCreatures": [],
+ "statCap": 100,
+ "rampSecondsToFull": 43200,
+ "decaySecondsToZero": 43200,
+ "falloff": {
+  "curve": "smoothstep",
+  "innerRadiusFraction": 0.0,
+  "radiusPadding": 1
+ },
+ "glimmerChance": 0.01,
+ "creatureRoll": {
+  "_about": "balanceVersion: bump after rebalancing (design/creature_balance.json); owned creatures are re-rolled to the new species values on load, keeping name, glimmer and placement.",
+  "balanceVersion": 3,
+  "bonusRange": [
+   0.8,
+   1.0
+  ],
+  "glimmerBonusMult": 1.5,
+  "glimmerRadiusBonus": 2
+ },
+ "spawns": {
+  "tickSeconds": 180,
+  "attemptsPerTick": 3,
+  "spawnChance": 0.25,
+  "maxTotal": 640,
+  "lifetimeSeconds": 172800,
+  "maxCatchUpTicks": 288
+ },
+ "seeds": {
+  "growSeconds": [
+   3600,
+   10800
+  ],
+  "_about": "Mystery Seeds only grow seed flowers (items with spawn.seedOnly, from the spawn spreadsheet). Up to softNeedsUpTo rarity they grow anywhere: unmet stat needs just weigh them by unmetFactor; met needs get the usual terrain pull. Rarer seed flowers need their terrain.",
+  "softNeedsUpTo": "uncommon",
+  "unmetFactor": 1
+ },
+ "rarityWeights": {
+  "common": 60,
+  "uncommon": 25,
+  "rare": 10,
+  "veryRare": 3,
+  "legendary": 0.5
+ },
+ "pity": {
+  "fungling": 25,
+  "sproutling": 15,
+  "geodeCritter": 20,
+  "rareGem": 10,
+  "rareEgg": 6,
+  "hatchNewSpecies": 4
+ },
+ "visuals": {
+  "maxDecorationsPerTile": 3,
+  "refreshSeconds": 5,
+  "edge": {
+   "ground": [
+    "tile.edge.a",
+    "tile.edge.b"
+   ],
+   "decorations": [
+    "deco.shrub.a",
+    "deco.shrub.b",
+    "deco.shrub.c",
+    "deco.shrub.d",
+    "deco.shrub.e",
+    "deco.shrub.f"
+   ],
+   "baseDensity": 1.0,
+   "densityPerTile": 0,
+   "maxDensity": 1.0
+  },
+  "debugSpeeds": [
+   1,
+   60,
+   600,
+   3600
+  ]
+ },
+ "naming": {
+  "quietThreshold": 0.3,
+  "featureFraction": 0.45
+ },
+ "clock": {
+  "_about": "Real local time of day. One place for the four lighting states; night (nightStartHour to dawnStartHour) also drives night-only spawns and Glow.",
+  "dawnStartHour": 5,
+  "dayStartHour": 7,
+  "duskStartHour": 17,
+  "nightStartHour": 19,
+  "transitionMinutes": 50,
+  "rainChance": 0.25,
+  "weatherBlockHours": 2
+ },
+ "wanderers": {
+  "maxCatchUpDays": 7
+ },
+ "debugTools": true
+}

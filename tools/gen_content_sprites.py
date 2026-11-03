@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Placeholder art for everything in the spawn table (run via gen_placeholders.py).
+"""Placeholder art for the Plant & Fungi Catalogue (run via gen_placeholders.py).
 
-Reads Resources/Content/{items,creatures}.json and draws a sprite for every
-entry from shape templates + per-entry colours, so newly imported rows get art
-automatically. Unknown names fall back to a colour picked from the name.
-Creature sprites are coloured from their stats, get fancier with rarity, and
-each gets a ".glimmer" variant with a shifted, brighter "shiny" palette.
+Reads Resources/Content/items.json and draws a sprite for every plant and fungus from shape templates
+and per-entry colours, plus its bud stage (plant.bud.<key>) for the garden, so newly imported rows get
+art automatically. Unknown names fall back to a colour picked from the name.
 """
 import colorsys
 import json
@@ -549,305 +547,32 @@ def draw_plant(shape, leaf, petal, centre):
     return palette, d
 
 
-# ------------------------------------------------------------------ geodes, gems, materials
-
-GEODES = {
-    "pebble-geode": ("#8a8490", "#b8b2c0", None),
-    "mossy-geode": ("#7a8478", "#a8b8a0", "#6a9a48"),
-    "rootbound-geode": ("#8a7a68", "#b8a890", "#7a5440"),
-    "deep-geode": ("#3e3450", "#625478", "#ff9ef0"),
-    "glimmering-geode": ("#5a6a88", "#8aa0c8", "#9ff4ff"),
-    "ancient-heartstone": ("#5a2a2a", "#8a4040", "#ffc04a"),
-}
-
-
-def draw_geode(gid, base, light, accent):
-    palette = pal(base, light, "#6b4a2f", accent or light, "#ffffff")
-
-    def d(c, f):
-        big = gid == "ancient-heartstone"
-        c.ellipse(8, 11, 6.5 if big else 5.5, 5 if big else 4.5, 2, clip=lambda x, y: y <= 12)
-        c.ellipse(6.5, 8.5, 2, 1.5, 3)
-        c.rect(2, 13, 13, 14, 4)
-        c.set(3, 12, 4); c.set(12, 12, 4)
-        if gid == "mossy-geode":
-            c.ellipse(9, 8, 3, 1.4, 5); c.set(5, 10, 5)
-        elif gid == "rootbound-geode":
-            c.line(3, 9, 12, 12, 5); c.line(5, 12, 10, 7, 5)
-        elif gid in ("deep-geode", "glimmering-geode"):
-            for (x, y) in ((10, 8), (5, 11), (9, 11)):
-                c.set(x, y, 5 if (f + x) % 2 == 0 else 6)
-        elif big:
-            c.ellipse(8, 9, 2.2, 2, 5)
-            c.set(8, 8, 6 if f == 0 else 5)
-    return palette, d
-
-
-GEMS = {
-    "quartz": ("point", "#dce8f0"), "flint": ("shard", "#5a5a64"), "mica-flake": ("flake", "#c8b890"),
-    "agate": ("banded", "#c87850"), "pyrite": ("cube", "#d8c050"), "jasper": ("round", "#b84a3a"),
-    "malachite": ("banded", "#2f9a5a"), "emerald": ("cut", "#2fbf6a"), "amethyst": ("point", "#9a5ad8"),
-    "amber": ("round", "#e89a2c"), "moonstone": ("round", "#b8d0f0"), "garnet": ("cut", "#b8283c"),
-    "topaz": ("cut", "#f0b030"), "fluorite": ("point", "#7ae0c0"), "sapphire": ("cut", "#2a4ad8"),
-    "star-sapphire": ("star", "#1e2a8a"), "opal": ("opal", "#e8e0f8"), "bioluminite": ("point", "#5af0f8"),
-    "spore-crystal": ("point", "#b8e050"),
-    "heartstone-core": ("heart", "#e04a3a"), "moonfall-shard": ("crescent", "#c8e0ff"),
-}
-GEM_GLOW = {"fluorite", "bioluminite", "opal", "heartstone-core", "moonfall-shard", "star-sapphire"}
-
-
-def draw_gem(shape, base):
-    palette = pal(base, shade(base, 0.5), shade(base, -0.35), "#ffffff", "#ff9ccf", "#9ff4ff")
-
-    def d(c, f):
-        if shape == "point":
-            for y in range(3, 14):
-                half = (y - 3) // 2 if y < 9 else (14 - y)
-                c.rect(8 - half, y, 8 + half, y, 2)
-            c.line(8, 4, 8, 12, 3); c.line(9, 8, 10, 10, 4)
-        elif shape == "shard":
-            for y in range(4, 14):
-                c.rect(6 + (y - 4) // 3, y, 10 - (14 - y) // 4, y, 2)
-            c.line(7, 5, 8, 12, 3)
-        elif shape == "flake":
-            c.ellipse(8, 10, 5.5, 2.5, 2)
-            c.line(4, 10, 11, 9, 3)
-        elif shape in ("round", "banded", "opal"):
-            c.ellipse(8, 9, 4.5, 4.5, 2)
-            c.ellipse(9, 10.5, 2.5, 2.5, 4)
-            c.ellipse(7, 7.5, 1.6, 1.6, 3)
-            if shape == "banded":
-                c.line(4, 9, 12, 8, 3); c.line(5, 11, 11, 11, 4)
-            if shape == "opal":
-                for (x, y, col) in ((6, 9, 6), (10, 8, 7), (8, 11, 6), (9, 6, 7)):
-                    c.set(x, y, col if f == 0 else (7 if col == 6 else 6))
-        elif shape == "cube":
-            c.rect(4, 6, 11, 13, 2)
-            c.rect(4, 6, 11, 7, 3); c.rect(10, 6, 11, 13, 4)
-        elif shape in ("cut", "star"):
-            for y in range(4, 13):
-                half = min(5, y - 2) if y < 8 else max(0, 13 - y)
-                c.rect(8 - half, y, 8 + half, y, 2)
-            c.rect(6, 5, 9, 6, 3); c.rect(9, 9, 11, 10, 4)
-            if shape == "star":
-                for (x, y) in ((7, 9), (10, 7), (9, 11), (5, 8)):
-                    c.set(x, y, 5 if (x + f) % 2 else 3)
-        elif shape == "heart":
-            c.ellipse(6, 7, 3, 3, 2); c.ellipse(10, 7, 3, 3, 2)
-            for y in range(8, 14):
-                half = max(0, 13 - y)
-                c.rect(8 - half, y, 8 + half - 1, y, 2)
-            c.set(6, 6, 3); c.set(7, 7, 5 if f == 0 else 3)
-        elif shape == "crescent":
-            c.ellipse(8, 8, 5, 5, 2)
-            c.ellipse(10, 7, 4, 4, 0)
-            c.set(5, 7, 3); c.set(6, 11, 5 if f == 0 else 3)
-        c.set(6, 6, 5)
-    return palette, d
-
-
-# ------------------------------------------------------------------ creatures
-# palette: 2 main, 3 light, 4 body/secondary, 5 accent, 6 eye, 7 shade
-
-FAMILY_BASE = {"fungling": "#c4734a", "sproutling": "#6cc24a", "geodeCritter": "#8a7f96", "wanderer": "#9ad8c8"}
-BODY = {"fungling": "#efe2c8", "sproutling": "#7a5a32", "geodeCritter": "#5a5066", "wanderer": "#f4f8ff"}
-RANK = {"common": 0, "uncommon": 1, "rare": 2, "veryRare": 3, "legendary": 4}
-
-
-def creature_palette(c):
-    fam = c["family"]
-    s1 = c["stats"][0]
-    s2 = c["stats"][1] if len(c["stats"]) > 1 else s1
-    main = mix(FAMILY_BASE[fam], STAT_COLOURS.get(s2, "#888888"), 0.25)
-    if fam == "wanderer":
-        main = mix(STAT_COLOURS.get(s1, "#ffffff"), "#ffffff", 0.35)
-    # Species in a family share stats, so give each its own hue/brightness from its name.
-    h = zlib.crc32(c["id"].encode())
-    main = hue_shift(main, ((h % 9) - 4) * 0.05, (((h >> 8) % 5) - 2) * 0.06)
-    accent = STAT_COLOURS.get(s1, "#ffffff")
-    if RANK[c["rarity"]] >= 4:
-        accent = "#ffd84a"
-    return ["transparent", "#21171c", main, shade(main, 0.4), BODY[fam], accent, "#21171c", shade(main, -0.25)]
-
-
-def crown(c, rank, dy, f):
-    """Rarer creatures get a little crest/crown on top."""
-    if rank >= 2:
-        c.set(8, 0 + dy, 5)
-    if rank >= 3:
-        c.set(6, 1 + dy, 5); c.set(10, 1 + dy, 5)
-    if rank >= 4:
-        c.rect(6, 1 + dy, 10, 1 + dy, 5)
-        c.set(6, 0 + dy, 5); c.set(10, 0 + dy, 5)
-        if f == 0:
-            c.set(3, 2, 3); c.set(13, 3, 3)
-
-
-def fungling(c, dy, rank, f, variant):
-    c.rect(5, 8 + dy, 10, 13, 4)
-    for x in (5, 6, 9, 10):
-        c.set(x, 14, 4)
-    rx = 6.6 + (0.6 if variant % 2 else 0)
-    c.ellipse(8, 7.5 + dy, rx, 5 - (variant % 3) * 0.5, 2, clip=lambda x, y: y <= 7 + dy)
-    for x in range(2, 14):
-        c.set(x, 8 + dy, 7)
-    spots = [(5, 4), (10, 5), (8, 3), (4, 6), (11, 6), (7, 5)][: 2 + rank]
-    for (x, y) in spots:
-        c.set(x, y + dy, 3)
-    c.set(6, 10 + dy, 6); c.set(9, 10 + dy, 6)
-    c.set(5, 11 + dy, 5); c.set(10, 11 + dy, 5)
-    crown(c, rank, dy + 1, f)
-
-
-def leaf(c, bx, by, tx, ty, width, fill=2, light=3, vein=7):
-    """A pointed leaf from its base (bx, by) to its tip (tx, ty): widest a third of the way out,
-    tapering to a point, lit on its upper side, with a darker midrib."""
-    ax, ay = tx - bx, ty - by
-    length = math.hypot(ax, ay)
-    ux, uy = ax / length, ay / length
-    for y in range(int(min(by, ty) - width - 1), int(max(by, ty) + width + 2)):
-        for x in range(int(min(bx, tx) - width - 1), int(max(bx, tx) + width + 2)):
-            px, py = x - bx, y - by
-            t = (px * ux + py * uy) / length              # 0 at the base, 1 at the tip
-            d = -px * uy + py * ux                        # across the leaf (negative = upper side)
-            if not 0 <= t <= 1.05:
-                continue
-            half = width * (math.sin(math.pi * min(1, t) ** 0.75) ** 0.9)
-            if abs(d) > half + 0.15:
-                continue
-            col = light if d < -0.35 else fill
-            if abs(d) < 0.5 and 0.12 < t < 0.85:
-                col = vein
-            c.set(x, y, col)
-
-
-def sproutling(c, dy, rank, f, variant):
-    # Body: a round bulb sitting on two little feet.
-    c.ellipse(8, 10.5 + dy * 0.3, 4.9, 3.7, 2)
-    c.ellipse(6.4, 9.0 + dy * 0.3, 1.8, 1.2, 3)               # highlight
-    for x in range(4, 13):                                    # shaded belly
-        if c.get(x, 13) == 2:
-            c.set(x, 13, 7)
-    c.set(6, 11, 6); c.set(10, 11, 6)                         # eyes
-    # Feet: two rounded nubs with a gap between them (so the outline separates them).
-    for fx in (5, 10):
-        c.rect(fx - 1, 14, fx, 14, 4)
-    c.set(4, 14, 4); c.set(11, 14, 4)
-    # A short stem with two pointed leaves held up and out, clear of the body (on the bob frame the
-    # stem dips and the leaf tips droop a little).
-    top = 3 + dy
-    c.line(8, 7, 8, top, 4)
-    droop = 1 if dy else 0
-    leaf(c, 7.4, top + 0.8, 2.8, top - 1.9 + droop * 0.6, 1.45)
-    leaf(c, 8.6, top + 0.6, 13.4, top - 2.3 + droop * 0.6, 1.45)
-    if variant % 2:                                           # some have a small extra leaf on the stem
-        leaf(c, 8.5, 6.0, 11.6, 4.8 + droop, 0.9)
-    # Rarer ones carry a bud on the stem tip, then petals, then a crown of light.
-    if rank >= 1:
-        c.set(8, top - 1, 5)
-    if rank >= 2:
-        c.set(7, top - 1, 5); c.set(9, top - 1, 5)
-    if rank >= 3:
-        c.set(8, top - 2, 5)
-    if rank >= 4 and f == 0:
-        c.set(1, 1, 5); c.set(14, 9, 5)
-
-
-def geode_critter(c, dy, rank, f, variant):
-    c.ellipse(8, 10.5 + dy * 0.5, 6.5, 4.5, 2, clip=lambda x, y: y <= 13)
-    c.rect(3, 12, 12, 13, 7)
-    for (x, y) in ((4, 9), (6, 8), (10, 9), (12, 11), (5, 12)):
-        c.set(x, y, 3)
-    tips = [(6, 4), (8, 3), (10, 5), (4, 6), (12, 6)][: 2 + min(3, rank)]
-    for (x, top) in tips:
-        for y in range(top + dy, 8):
-            c.set(x, y, 5)
-        c.set(x, top + dy, 3)
-    c.set(6, 11, 6); c.set(10, 11, 6)
-    for x in (4, 5, 10, 11):
-        c.set(x, 14, 4)
-    if variant % 2:
-        c.set(13, 10, 7); c.set(2, 10, 7)
-    if rank >= 4:
-        crown(c, rank, dy, f)
-
-
-def wanderer(c, dy, rank, f, variant):
-    """A floating wisp/fae: glowing orb body, wings, trailing sparkles."""
-    y0 = 7 + (1 if f else 0)
-    c.ellipse(4, y0 - 1, 3, 2, 3 if f == 0 else 2)
-    c.ellipse(12, y0 - 1, 3, 2, 3 if f == 0 else 2)
-    c.ellipse(8, y0 + 1, 4, 4, 2)
-    c.ellipse(7, y0, 1.6, 1.4, 3)
-    c.set(7, y0 + 1, 6); c.set(9, y0 + 1, 6)
-    for i, (x, y) in enumerate(((8, 13), (6, 14), (10, 14))):
-        if (i + f) % 2 == 0:
-            c.set(x, y, 5)
-    crown(c, rank, max(0, y0 - 6), f)
-
-
-FAMILY_DRAW = {"fungling": fungling, "sproutling": sproutling, "geodeCritter": geode_critter, "wanderer": wanderer}
-
-
-def make_creature(c, glimmer=False):
-    draw = FAMILY_DRAW[c["family"]]
-    rank = RANK[c["rarity"]]
-    variant = zlib.crc32(c["id"].encode()) % 6
-    palette = creature_palette(c)
-    if glimmer:
-        palette = palette[:2] + [shiny(x) for x in palette[2:6]] + [palette[6], shiny(palette[7])]
-        palette[5] = "#fff6b0"
-    frames = []
-    for f in range(2):
-        cv = Canvas(16, 16)
-        draw(cv, f if c["family"] != "wanderer" else 0, rank, f, variant)
-        cv.outline(1)
-        if glimmer and f == 0:
-            cv.set(1, 2, 5); cv.set(14, 6, 5)
-        frames.append(cv)
-    sid = c["sprite"] + (".glimmer" if glimmer else "")
-    if glimmer and c.get("glimmerSprite"):
-        sid = c["glimmerSprite"]
-    write(sid, (16, 16), frames, palette=palette, anchor=(8, 15), tags=["creature"], durations=[0.6, 0.6])
-
-
 # ------------------------------------------------------------------ main
 
 def main():
     items = json.load(open(os.path.join(CONTENT, "items.json")))
-    creatures = json.load(open(os.path.join(CONTENT, "creatures.json")))
     for it in items:
         key = it["id"].split(".", 1)[1]
         cat = it["category"]
-        anim = None
         if cat == "mushroom":
             shape, cap, stem, accent = MUSHROOMS.get(key, ("dome", name_colour(key), None, None))
             palette, d = draw_mushroom(shape, cap, stem, accent)
             anim = key in GLOWING
+
+            # Its bud stage while growing in the garden: a little closed button on a short stem.
+            def bud(c, f, key=key):
+                h = 3 + (sum(map(ord, key)) % 2)
+                c.rect(7, 15 - h, 8, 14, 4)
+                c.set(8, 14, 5)
+                c.ellipse(7.5, 14 - h, 2.6, 1.8, 2, clip=lambda x, y, t=14 - h: y <= t)
+                c.set(7, 13 - h, 3)
         elif cat == "plant":
             shape, leaf, petal, centre = PLANTS.get(key, ("flower", "#5fbf4a", name_colour(key), None))
             palette, d = draw_plant(shape, leaf, petal, centre)
             anim = key in PLANT_GLOW
-        elif cat == "geode":
-            base, light, accent = GEODES.get(key, ("#8a8490", "#b8b2c0", name_colour(key)))
-            palette, d = draw_geode(key, base, light, accent)
-            anim = key in ("glimmering-geode", "ancient-heartstone", "deep-geode")
-        elif cat in ("gem", "material"):
-            shape, base = GEMS.get(key, ("round", name_colour(key)))
-            palette, d = draw_gem(shape, base)
-            anim = key in GEM_GLOW
-        elif cat == "seed":
-            palette = pal("#9a6a3a", "#d8a868", "#5a3d26")
-
-            def d(c, f):
-                c.ellipse(8, 10, 2.5, 3.5, 2); c.set(7, 8, 3); c.set(9, 12, 4)
-        else:
-            continue
-        sprite(it["sprite"], palette, d, frames=2 if anim else 1, durations=[0.8, 0.8] if anim else None)
-        if cat == "plant":
-            # Its own bud stage while growing from a seed (stem, leaves and a closed bud in its colour).
             leafy = petal is None
 
+            # Its bud stage while growing in the garden (stem, leaves and a closed bud in its colour).
             def bud(c, f, leafy=leafy, key=key):
                 h = 6 + (sum(map(ord, key)) % 4)
                 c.line(8, 14, 8, 15 - h, 2)
@@ -857,20 +582,20 @@ def main():
                     c.ellipse(8, top, 1.8, 1.6, 4); c.set(7, top - 1, 3)
                 else:
                     c.ellipse(8, top, 1.4, 2, 5); c.set(8, top + 1, 3); c.set(7, top - 1, 6)
-            sprite("plant.bud." + key, palette, bud, tags=("plant", "bud"))
-    for c in creatures:
-        make_creature(c)
-        make_creature(c, glimmer=True)
-    # Remove placeholder art for items/creatures that are no longer in the content.
-    used = {it["sprite"] for it in items} | {c["sprite"] for c in creatures} | {c.get("glimmerSprite") for c in creatures}
+        else:
+            continue
+        sprite(it["sprite"], palette, d, frames=2 if anim else 1, durations=[0.8, 0.8] if anim else None)
+        sprite("plant.bud." + key, palette, bud, tags=("plant", "bud"))
+    # Remove placeholder art for catalogue entries that are no longer in the content.
+    used = {it["sprite"] for it in items} | {"plant.bud." + it["id"].split(".", 1)[1] for it in items}
     removed = 0
-    for folder in ("item", "creature"):
+    for folder in ("item", "plant"):
         d = os.path.join(ROOT, "Resources", "Sprites", folder)
         for name in os.listdir(d) if os.path.isdir(d) else []:
             if name.endswith(".json") and name[:-5] not in used:
                 os.remove(os.path.join(d, name))
                 removed += 1
-    print("content sprites: %d items, %d creatures (+ glimmers); removed %d unused" % (len(items), len(creatures), removed))
+    print("content sprites: %d catalogue entries (+ buds); removed %d unused" % (len(items), removed))
 
 
 if __name__ == "__main__":

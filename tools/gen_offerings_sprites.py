@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Placeholder art for Offerings: decor props, eggs, nests, school seeds, landmarks and the Old Log board icon.
+"""Placeholder art for the Store and Old Log: decor props, relic ornaments and the Old Log board icon.
 
     python3 tools/gen_offerings_sprites.py
 
@@ -143,285 +143,28 @@ def decor():
     sprite("decor.mushroom-lamp", ["#8a2a22", "#c84a3a", "#e87a6a", "#efe2c8", "#fff3a8", "#ffd84a"], mushroom_lamp, frames=2, durations=[1.2, 1.2])
 
 
-FAMILY_EGG = {   # shell, shell light, spot
-    "fungling": ("#e8dcc0", "#fff6e4", "#a0603a"),
-    "sproutling": ("#a8d890", "#e0f8c8", "#4f8a2c"),
-    "geodeCritter": ("#9a9aa6", "#d0d0dc", "#5a5066"),
-}
-TIER_ACCENT = {"common": None, "uncommon": "#5fd35a", "rare": "#5a9cff", "veryRare": "#c58cff", "legendary": "#ffc84a"}
-
-
-def eggs():
-    """One egg per family and tier: the family's shell, the tier's colour as a band (and a sparkle for rare+)."""
-    for fam, (shell, light, spot) in FAMILY_EGG.items():
-        for tier, accent in TIER_ACCENT.items():
-            pal = [shell, light, spot, accent or spot, "#ffffff"]
-
-            def egg(c, f, tier=tier, accent=accent):
-                c.ellipse(8, 9.5, 4.6, 5.6, 2)
-                c.ellipse(6.6, 7, 1.6, 2.2, 3)
-                for (x, y) in ((9, 6), (10, 11), (6, 12), (8, 9)):
-                    c.set(x, y, 4)
-                if accent:
-                    for x in range(4, 13):
-                        if c.get(x, 10) not in (0, None):
-                            c.set(x, 10, 5)
-                if tier in ("rare", "veryRare", "legendary") and f == 1:
-                    c.set(12, 3, 6); c.set(13, 4, 6); c.set(11, 4, 6); c.set(12, 5, 6)
-            frames = 2 if tier in ("rare", "veryRare", "legendary") else 1
-            sprite(f"egg.{fam}.{tier}", pal, egg, frames=frames, durations=[0.9, 0.9] if frames > 1 else None, tags=("egg",))
-
-    def nest(c, f):
-        c.ellipse(8, 12, 7, 3.2, 2)
-        c.ellipse(8, 11.4, 5.2, 2, 3)
-        for x in range(1, 16, 2):
-            c.set(x, 12 + (x % 3) - 1, 4)
-        c.ellipse(8, 11.6, 3.6, 1.2, 5)
-    sprite("egg.nest", WOOD + ["#3a2616"], nest)
-
-    def nest_front(c, f):
-        # The front lip of the nest, drawn over an egg sitting in it (same shape as the nest's lower half).
-        nest(c, f)
-        for y in range(0, 12):
-            for x in range(16):
-                c.set(x, y, 0)
-        for x in range(4, 13):
-            if c.get(x, 12) == 5:
-                c.set(x, 12, 0)
-    sprite("egg.nest.front", WOOD + ["#3a2616"], nest_front)
-
-
-SCHOOLS = {   # school: (colour, light) for the school seeds (matches the UI's stat colours)
+SCHOOLS = {   # school: (colour, light) for the relic ornaments
     "spore": ("#4a7dff", "#a8c8ff"), "glow": ("#4fe3f0", "#e8ffff"), "bloom": ("#ff79b8", "#ffd0e8"),
     "verdure": ("#4fcf4f", "#c8f8a8"), "shimmer": ("#b7a4e0", "#f4f0ff"), "spirit": ("#7a7ad0", "#d0d0ff"),
 }
 
-
-def school_seeds():
-    """School seeds (Resources/Content/schoolSeeds.json): a seed with its school's colour in the Bag
-    (seed.school.<school>), and the mound with a school-coloured sprout shown where one is buried
-    (seed.buried.<school>)."""
-    for school, (col, light) in SCHOOLS.items():
-        def seed(c, f):
-            c.ellipse(8, 10, 3.6, 4.4, 2)              # seed body
-            c.ellipse(7, 9, 1.6, 2.4, 3)
-            c.rect(6, 11, 10, 12, 4)                   # school band
-            c.set(7, 11, 5)
-            c.set(9, 6, 5); c.set(11, 8, 5)            # a glint
-        sprite(f"seed.school.{school}", ["#7a5232", "#b07a48", col, light], seed, tags=("seed",))
-
-        # Where one is buried: a small, soft mound (no outline, so it sits quietly in the grass) with a
-        # sprout that grows into a bud and then a flower in the school's colour as the seed takes root.
-        petal = "#eaf8c8" if school == "verdure" else col          # pale petals where the ground is green
-        soil = ["transparent", "#5a4630", "#6e583a", "#3a2e1e", "#3f7a2e", "#5fa040", petal, light if school != "verdure" else "#ffe070"]
-
-        def mound(c):                                    # a low, soft heap: two rows, no dark rim
-            c.rect(6, 14, 10, 14, 2)
-            c.rect(5, 15, 11, 15, 1)
-
-        def sprout(c, f):
-            mound(c)
-            c.rect(8, 11, 8, 13, 4)
-            c.set(7, 11, 5); c.set(9, 10, 5)
-            if f: c.set(9, 10, 4); c.set(10, 10, 5)
-
-        def bud(c, f):
-            mound(c)
-            c.rect(8, 9, 8, 13, 4)
-            c.set(7, 12, 5); c.set(9, 11, 5)
-            c.ellipse(8, 8, 1.2, 1.5, 6); c.set(8, 7, 7)
-            if f: c.set(9, 8, 6)
-
-        def bloom(c, f):
-            mound(c)
-            c.rect(8, 8, 8, 13, 4)
-            c.set(7, 12, 5); c.set(6, 11, 5); c.set(9, 11, 5)
-            cx = 8 + (1 if f else 0)
-            for (dx, dy) in ((0, -2), (-2, 0), (2, 0), (0, 2), (-1, -1), (1, -1), (-1, 1), (1, 1)):
-                c.set(cx + dx, 6 + dy, 6)
-            c.set(cx, 6, 7)
-
-        def plain(sid, draw, frames=2, durations=(1.6, 1.6)):
-            out = []
-            for fr in range(frames):
-                c = Canvas(16, 16)
-                draw(c, fr)
-                out.append(c)
-            write(sid, (16, 16), out, palette=soil, anchor=(8, 15), tags=["seed", "marker"], durations=list(durations))
-        plain(f"seed.buried.{school}", sprout)
-        plain(f"seed.bud.{school}", bud)
-        plain(f"seed.bloom.{school}", bloom)
-
 def relics():
-    """Relics (Resources/Content/relics.json): Bag icons relic.<school>.<tier> (one shape per tier, in
-    the school's colour), the stone set in the ground where one is buried (relic.world.<school>, a
-    pulsing rune), and the unknown starter relic before its school is chosen (relic.unknown)."""
+    """Relics (Resources/Content/relics.json): one carved pebble per school in its colour
+    (relic.<school>.common), and the unknown relic of the opening (relic.unknown)."""
     STONE_P = ["#5a5468", "#8a8498", "#bcb6c8"]
 
     def pebble(c, f):                       # common: a smooth pebble with a carved mark
         c.ellipse(8, 10, 5, 4, 3); c.ellipse(7, 9, 3, 2, 4)
         c.rect(7, 9, 9, 9, 5); c.rect(8, 8, 8, 11, 5); c.set(8, 10, 6)
 
-    def charm(c, f):                        # uncommon: an amulet on a loop
-        c.ellipse(8, 4, 2, 2, 2); c.ellipse(8, 4, 1, 1, 0)
-        c.ellipse(8, 10, 4.5, 4.5, 3); c.ellipse(8, 10, 3, 3, 5); c.ellipse(7, 9, 1.4, 1.4, 6)
-
-    def idol(c, f):                         # rare: a small carved figure
-        c.rect(5, 6, 11, 14, 3); c.rect(6, 7, 10, 13, 4)
-        c.ellipse(8, 4.5, 3.2, 2.2, 5); c.set(7, 9, 6); c.set(9, 9, 6); c.rect(7, 11, 9, 11, 2)
-
-    def crown(c, f):                        # very rare: a circlet with points
-        c.rect(3, 9, 13, 13, 3); c.rect(4, 10, 12, 12, 4)
-        for x in (3, 8, 13):
-            c.rect(x - 1, 6, x, 8, 5); c.set(x, 5, 6)
-        c.set(8, 11, 6)
-
-    def star(c, f):                         # legendary: a radiant gem
-        for (dx, dy) in ((0, -6), (0, 6), (-6, 0), (6, 0), (-4, -4), (4, -4), (-4, 4), (4, 4)):
-            c.set(8 + dx, 9 + dy, 6)
-        c.ellipse(8, 9, 4, 4, 3); c.ellipse(8, 9, 2.6, 2.6, 5); c.set(7, 8, 6)
-
-    shapes = {"common": pebble, "uncommon": charm, "rare": idol, "veryRare": crown, "legendary": star}
     for school, (col, light) in SCHOOLS.items():
-        for tier, fn in shapes.items():
-            sprite(f"relic.{school}.{tier}", STONE_P + [col, light], fn, tags=("relic",))
-
-        def world(c, f, col=col):           # a stone set in the ground, its rune pulsing
-            c.ellipse(8, 13, 6, 2.4, 2)
-            c.rect(5, 6, 11, 13, 3); c.rect(6, 7, 10, 12, 4); c.ellipse(8, 6, 3, 1.6, 4)
-            rune = 5 if f == 0 else 6
-            c.rect(8, 8, 8, 11, rune); c.set(7, 9, rune); c.set(9, 10, rune)
-        sprite(f"relic.world.{school}", STONE_P + [col, light], world, frames=2, durations=[1.2, 1.2], tags=("relic", "marker"))
+        sprite(f"relic.{school}.common", STONE_P + [col, light], pebble, tags=("relic",))
 
     def unknown(c, f):                      # the starter relic before its school is chosen
         c.ellipse(8, 10, 5, 4.4, 3); c.ellipse(7, 9, 3, 2.2, 4)
         c.set(8, 10, 5); c.set(7, 9, 5)
         c.set(12 - f * 6, 5 + f, 6); c.set(3 + f * 9, 12 - f * 3, 6)
     sprite("relic.unknown", STONE_P + ["#d8d0f0", "#ffffff"], unknown, frames=2, durations=[0.8, 0.8], tags=("relic",))
-
-
-def landmarks():
-    """Earned landmarks (Resources/Content/landmarks.json 'earned'): they form where two stats are strong
-    across a 3x3 patch and stay for good. 28x24, anchored at the base."""
-    size, anchor = (28, 24), (14, 21)
-
-    def cave(c, f):                      # a mound of crystal with a dark, glittering mouth
-        c.ellipse(14, 15, 12, 8, 3, clip=lambda x, y: y <= 21)
-        c.ellipse(10, 11, 5, 3, 4)
-        c.ellipse(14, 17, 5, 4.5, 5, clip=lambda x, y: y <= 21)
-        c.ellipse(14, 18, 3, 3, 6, clip=lambda x, y: y <= 21)
-        for (x, y) in ((4, 14), (22, 12), (19, 7), (7, 18)):
-            c.set(x, y, 2)
-        c.rect(3, 21, 25, 21, 2)
-    sprite("landmark.crystal-grotto", ["#7a6aa8", "#a898d8", "#d8ccf4", "#2a2448", "#120c18"], cave, size=size, anchor=anchor, tags=("landmark",))
-
-    def fruit_tree(c, f):                # a round crown with red fruit on a short trunk
-        c.rect(12, 13, 15, 21, 2)
-        c.set(11, 21, 2); c.set(16, 21, 2)
-        c.ellipse(14, 9, 10, 7.5, 3)
-        c.ellipse(11, 7, 5, 3.5, 4)
-        for (x, y) in ((8, 10), (13, 5), (18, 8), (20, 12), (10, 13), (16, 11)):
-            c.set(x, y, 5); c.set(x + 1, y, 5); c.set(x, y + 1, 6)
-    sprite("landmark.fruit-tree", ["#6a4426", "#3f8a3a", "#6cc24a", "#e0302c", "#ff8a70"], fruit_tree, size=size, anchor=anchor, tags=("landmark",))
-
-    def moonwell(c, f):                  # a stone ring around glowing water
-        c.ellipse(14, 17, 10, 4.5, 2)
-        c.ellipse(14, 16.5, 7.5, 3, 4 if f == 0 else 5)
-        c.ellipse(12, 16, 3, 1, 5 if f == 0 else 6)
-        for x in (5, 9, 14, 19, 23):
-            c.set(x, 19, 3)
-        for (x, y) in ((10, 10), (17, 8), (14, 12)):
-            c.set(x, y - f, 6)
-    sprite("landmark.moonwell", ["#6a6a78", "#9a9aa6", "#3aa8b8", "#7cf2ff", "#e8ffff"], moonwell, size=size, anchor=anchor, frames=2, durations=[1.1, 1.1], tags=("landmark",))
-
-    def singing_crystals(c, f):          # three upright crystals with glowing marks
-        for (x, h) in ((6, 12), (14, 16), (22, 11)):
-            c.rect(x - 2, 21 - h, x + 2, 21, 2)
-            c.rect(x - 2, 21 - h, x - 1, 21, 3)
-            c.set(x, 21 - h + 4, 4 if f == 0 else 5); c.set(x, 21 - h + 5, 4)
-        c.rect(2, 21, 26, 21, 6)
-    sprite("landmark.singing-crystals", ["#8a7ac0", "#c0b0ea", "#7cf2e8", "#f4f0ff", "#3a3456"], singing_crystals, size=size, anchor=anchor, frames=2, durations=[1.3, 1.3], tags=("landmark",))
-
-    def fairy_ring(c, f):                # a ring of pale mushrooms in the grass
-        import math
-        for i in range(9):
-            a = i / 9 * 6.283
-            x, y = 14 + math.cos(a) * 10, 16 + math.sin(a) * 4.5
-            c.rect(int(x), int(y), int(x), int(y) + 1, 4)
-            c.ellipse(x, y - 0.5, 1.8, 1.1, 2 if (i + f) % 3 else 3)
-        c.set(14, 15, 5 if f else 4)
-    sprite("landmark.fairy-ring", ["#d8c0e8", "#ffffff", "#efe2c8", "#ffd84a"], fairy_ring, size=size, anchor=anchor, frames=2, durations=[0.9, 0.9], tags=("landmark",))
-
-    def spring(c, f):                    # water welling up between mossy stones
-        c.ellipse(14, 17, 9, 4, 4)
-        for (x, y) in ((6, 16), (22, 17), (10, 20), (19, 20), (14, 13)):
-            c.ellipse(x, y, 2.5, 1.8, 2); c.set(x - 1, y - 1, 3)
-        c.ellipse(14, 17, 5, 2, 5)
-        for k in range(3):
-            c.set(13 + k, 14 - (k + f) % 2, 6)
-    sprite("landmark.spring", ["#8a8a96", "#7aa85a", "#2f6aa8", "#4a90d8", "#c8f0ff"], spring, size=size, anchor=anchor, frames=2, durations=[0.6, 0.6], tags=("landmark",))
-
-    def nest_hollow(c, f):               # a hollow stump lined with moss and twigs
-        c.rect(7, 9, 21, 21, 2)
-        c.rect(7, 9, 9, 21, 3)
-        c.ellipse(14, 9, 7, 2.5, 4)
-        c.ellipse(14, 9, 5, 1.6, 5)
-        for x in range(8, 21, 3):
-            c.set(x, 8, 6)
-        c.rect(5, 21, 23, 21, 2)
-    sprite("landmark.nest-hollow", ["#6a4426", "#8a5a36", "#3a2616", "#1b120c", "#7aa85a"], nest_hollow, size=size, anchor=anchor, tags=("landmark",))
-
-    def fruit(c, f):
-        c.ellipse(8, 10, 4.5, 4.2, 2)
-        c.ellipse(6.5, 8.5, 1.6, 1.2, 3)
-        c.rect(8, 4, 8, 6, 4)
-        c.ellipse(10, 5, 2, 1, 5)
-    sprite("item.material.forest-fruit", ["#d8302c", "#ff8a70", "#6a4426", "#4fae3a"], fruit, tags=("item",))
-
-
-def spirit_well():
-    """The Spirit Well: an old round well of mossy stone with a little wooden roof and a faintly
-    glowing surface (forest view, 28x24), and its stone rim seen from above for the Wishing screen
-    (the screen draws the water, ripples and glow inside it)."""
-    pal = ["#5e5e68", "#8a8a96", "#b8b8c4", "#3f6a2e", "#7aa85a", "#5a3a22", "#8a5a36", "#9ff4e8", "#2f7a8a"]
-
-    def well(c, f):
-        c.rect(5, 3, 6, 15, 7); c.rect(21, 3, 22, 15, 7)          # posts
-        for x in range(3, 25):                                     # roof
-            y = 3 - (1 if 8 < x < 19 else 0) - (1 if 11 < x < 16 else 0)
-            c.set(x, y, 8); c.set(x, y + 1, 7)
-        c.rect(13, 5, 14, 9, 7)                                    # rope
-        c.ellipse(14, 17, 10, 4.2, 3)                              # stone rim
-        c.ellipse(14, 16.6, 7.4, 2.6, 10)                          # water
-        c.ellipse(12, 16, 3, 1, 9 if f == 0 else 2)                # glint
-        c.rect(4, 17, 24, 21, 3)                                   # stone body
-        for (x, y) in ((6, 19), (11, 20), (16, 19), (21, 20), (8, 18), (19, 18)):
-            c.set(x, y, 2); c.set(x + 1, y, 4)
-        for (x, y) in ((5, 17), (9, 21), (17, 21), (23, 18), (13, 18)):
-            c.set(x, y, 5); c.set(x, y - 1, 6)                     # moss
-        if f == 1:
-            c.set(10, 12, 9); c.set(18, 11, 9)                     # rising motes
-    sprite("landmark.spirit-well", pal, well, size=(28, 24), anchor=(14, 21), frames=2, durations=[1.0, 1.0], tags=("landmark",))
-
-    def rim(c, f):                        # top-down: a ring of mossy stones around a round opening
-        import math
-        cx = cy = 31.5
-        for y in range(64):
-            for x in range(64):
-                d = math.hypot(x - cx, y - cy)
-                if 22 <= d <= 30:
-                    a = math.atan2(y - cy, x - cx)
-                    block = int((a + math.pi) / (2 * math.pi) * 18)
-                    seam = abs(((a + math.pi) / (2 * math.pi) * 18) - round((a + math.pi) / (2 * math.pi) * 18)) < 0.06 or abs(d - 26) < 0.5
-                    col = 2 if seam else (3 if block % 3 else 4)
-                    if d < 23.2:
-                        col = 2
-                    if (x * 7 + y * 3 + block) % 23 == 0 and d > 25:
-                        col = 5
-                    if (x * 5 + y * 11) % 29 == 0 and d > 26:
-                        col = 6
-                    c.set(x, y, col)
-    sprite("wish.well-top", pal, rim, size=(64, 64), anchor=(32, 32), tags=("ui",))
 
 
 def board_icon():
@@ -436,12 +179,8 @@ def board_icon():
 
 if __name__ == "__main__":
     decor()
-    eggs()
-    school_seeds()
     relics()
-    landmarks()
-    spirit_well()
     board_icon()
-    import gen_landmark_art  # landmarks drawn from design/landmark_*.jpg replace the placeholders above
+    import gen_landmark_art  # the Old Log, drawn from design/landmark_old_log.jpg
     gen_landmark_art.main()
     print("wrote Offerings sprites")

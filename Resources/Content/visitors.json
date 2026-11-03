@@ -1,42 +1,150 @@
 [
-  {"id": "visitor.hedgehog", "name": "Mossback Hedgehog", "sprite": "creature.mossling", "rarity": "common",
-   "likes": {"school": "spore", "min": 16, "find": "mushroom.ink-cap", "time": "night"},
-   "clues": {"school": "Small round tracks wander through the mossy ground.", "min": "The tracks keep to where the moss grows thickest.", "find": "An Ink Cap has been nibbled, right down to the gills.", "time": "The tracks are fresh just after dark."},
-   "text": "A round little hedgehog with moss growing in its prickles. It snuffles for mushrooms in the dark.",
-   "gift": "seed.spore"},
-  {"id": "visitor.moth", "name": "Lantern Moth", "sprite": "creature.puff-fungling", "rarity": "common",
-   "likes": {"school": "glow", "min": 16, "time": "dusk"},
-   "clues": {"school": "Fine glittering dust lies over the glowing ground.", "min": "The dust gathers where the glow is brightest.", "time": "The dust is still bright at dusk, as if something just left."},
-   "text": "A soft moth whose wings hold a little light. It comes when the day is fading.",
-   "gift": "seed.glow"},
-  {"id": "visitor.bumble", "name": "Honey Bumble", "sprite": "creature.bud-sproutling", "rarity": "common",
-   "likes": {"school": "bloom", "min": 16, "find": "plant.meadow-daisy", "time": "day"},
-   "clues": {"school": "Pollen lies in little footprints among the flowers.", "min": "The footprints keep to where the flowers grow thickest.", "find": "A Meadow Daisy has been nibbled at the edges.", "time": "The pollen is fresh in the middle of the day."},
-   "text": "A fat, fuzzy bumble that hums between flowers on warm days.",
-   "gift": "seed.bloom"},
-  {"id": "visitor.rabbit", "name": "Fern Rabbit", "sprite": "creature.fernling", "rarity": "common",
-   "likes": {"school": "verdure", "min": 16, "time": "dawn"},
-   "clues": {"school": "Something has made little paths through the long grass.", "min": "The paths only go where the grass is tallest.", "time": "The grass on the paths is still bent and wet at dawn."},
-   "text": "A shy rabbit with fern-green ears. It nibbles the grass in the first light.",
-   "gift": "seed.verdure"},
-  {"id": "visitor.beetle", "name": "Prism Beetle", "sprite": "creature.quartz-beetle", "rarity": "common",
-   "likes": {"school": "shimmer", "min": 16, "find": "mushroom.pebble-cap", "time": "day"},
-   "clues": {"school": "Tiny scratches criss-cross the crystals.", "min": "The scratches are on the biggest crystals.", "find": "A Pebble Cap has been nibbled, leaving a glittering rim.", "time": "The scratches catch the sun at midday, still sharp."},
-   "text": "A beetle with a shell like cut glass. It basks on crystals in the sun.",
-   "gift": "seed.shimmer"},
-  {"id": "visitor.fox", "name": "Mist Fox", "sprite": "creature.delve-pup", "rarity": "common",
-   "likes": {"school": "spirit", "min": 16, "time": "dawn"},
-   "clues": {"school": "Light pawprints cross the misty ground and vanish.", "min": "The pawprints go where the mist lies thickest.", "time": "The pawprints are fresh at dawn, the mist still settling in them."},
-   "text": "A small grey fox that seems half made of mist. It slips through at first light.",
-   "gift": "seed.spirit"},
-  {"id": "visitor.newt", "name": "Foxfire Newt", "sprite": "creature.glowmoss-sprite", "rarity": "rare",
-   "likes": {"terrain": "foxfire-fen", "time": "night", "rain": true},
-   "clues": {"terrain": "A trail of tiny handprints winds between the glowing roots of the fen.", "time": "The handprints glow faintly, fresh in the night.", "rain": "The handprints are pressed into wet earth after rain."},
-   "text": "A newt with glowing spots, out on rainy nights where foxfire burns.",
-   "gift": "seed.glow"},
-  {"id": "visitor.stag", "name": "Petal Stag", "sprite": "creature.night-bloomer", "rarity": "rare",
-   "likes": {"terrain": "moonlit-garden", "time": "night"},
-   "clues": {"terrain": "Small hoofprints wander through the moonlit flowers, and the petals are bent.", "time": "The hoofprints are fresh by moonlight."},
-   "text": "A tiny stag with flowers in its antlers. It walks only in moonlit gardens.",
-   "gift": "seed.bloom"}
+ {
+  "id": "visitor.hedgehog",
+  "name": "Mossback Hedgehog",
+  "sprite": "visitor.hedgehog",
+  "rarity": "common",
+  "likes": {
+   "school": "spore",
+   "min": 16,
+   "find": "mushroom.ink-cap",
+   "time": "night"
+  },
+  "clues": {
+   "school": "Small round tracks wander through the mossy ground.",
+   "min": "The tracks keep to where the moss grows thickest.",
+   "find": "An Ink Cap has been nibbled, right down to the gills.",
+   "time": "The tracks are fresh just after dark."
+  },
+  "text": "A round little hedgehog with moss growing in its prickles. It snuffles for mushrooms in the dark.",
+  "gift": "seed.spore"
+ },
+ {
+  "id": "visitor.moth",
+  "name": "Lantern Moth",
+  "sprite": "visitor.moth",
+  "rarity": "common",
+  "likes": {
+   "school": "glow",
+   "min": 16,
+   "time": "dusk"
+  },
+  "clues": {
+   "school": "Fine glittering dust lies over the glowing ground.",
+   "min": "The dust gathers where the glow is brightest.",
+   "time": "The dust is still bright at dusk, as if something just left."
+  },
+  "text": "A soft moth whose wings hold a little light. It comes when the day is fading.",
+  "gift": "seed.glow"
+ },
+ {
+  "id": "visitor.bumble",
+  "name": "Honey Bumble",
+  "sprite": "visitor.bumble",
+  "rarity": "common",
+  "likes": {
+   "school": "bloom",
+   "min": 16,
+   "find": "plant.meadow-daisy",
+   "time": "day"
+  },
+  "clues": {
+   "school": "Pollen lies in little footprints among the flowers.",
+   "min": "The footprints keep to where the flowers grow thickest.",
+   "find": "A Meadow Daisy has been nibbled at the edges.",
+   "time": "The pollen is fresh in the middle of the day."
+  },
+  "text": "A fat, fuzzy bumble that hums between flowers on warm days.",
+  "gift": "seed.bloom"
+ },
+ {
+  "id": "visitor.rabbit",
+  "name": "Fern Rabbit",
+  "sprite": "visitor.rabbit",
+  "rarity": "common",
+  "likes": {
+   "school": "verdure",
+   "min": 16,
+   "time": "dawn"
+  },
+  "clues": {
+   "school": "Something has made little paths through the long grass.",
+   "min": "The paths only go where the grass is tallest.",
+   "time": "The grass on the paths is still bent and wet at dawn."
+  },
+  "text": "A shy rabbit with fern-green ears. It nibbles the grass in the first light.",
+  "gift": "seed.verdure"
+ },
+ {
+  "id": "visitor.beetle",
+  "name": "Prism Beetle",
+  "sprite": "visitor.beetle",
+  "rarity": "common",
+  "likes": {
+   "school": "shimmer",
+   "min": 16,
+   "find": "mushroom.pebble-cap",
+   "time": "day"
+  },
+  "clues": {
+   "school": "Tiny scratches criss-cross the crystals.",
+   "min": "The scratches are on the biggest crystals.",
+   "find": "A Pebble Cap has been nibbled, leaving a glittering rim.",
+   "time": "The scratches catch the sun at midday, still sharp."
+  },
+  "text": "A beetle with a shell like cut glass. It basks on crystals in the sun.",
+  "gift": "seed.shimmer"
+ },
+ {
+  "id": "visitor.fox",
+  "name": "Mist Fox",
+  "sprite": "visitor.fox",
+  "rarity": "common",
+  "likes": {
+   "school": "spirit",
+   "min": 16,
+   "time": "dawn"
+  },
+  "clues": {
+   "school": "Light pawprints cross the misty ground and vanish.",
+   "min": "The pawprints go where the mist lies thickest.",
+   "time": "The pawprints are fresh at dawn, the mist still settling in them."
+  },
+  "text": "A small grey fox that seems half made of mist. It slips through at first light.",
+  "gift": "seed.spirit"
+ },
+ {
+  "id": "visitor.newt",
+  "name": "Foxfire Newt",
+  "sprite": "visitor.newt",
+  "rarity": "rare",
+  "likes": {
+   "terrain": "foxfire-fen",
+   "time": "night",
+   "rain": true
+  },
+  "clues": {
+   "terrain": "A trail of tiny handprints winds between the glowing roots of the fen.",
+   "time": "The handprints glow faintly, fresh in the night.",
+   "rain": "The handprints are pressed into wet earth after rain."
+  },
+  "text": "A newt with glowing spots, out on rainy nights where foxfire burns.",
+  "gift": "seed.glow"
+ },
+ {
+  "id": "visitor.stag",
+  "name": "Petal Stag",
+  "sprite": "visitor.stag",
+  "rarity": "rare",
+  "likes": {
+   "terrain": "moonlit-garden",
+   "time": "night"
+  },
+  "clues": {
+   "terrain": "Small hoofprints wander through the moonlit flowers, and the petals are bent.",
+   "time": "The hoofprints are fresh by moonlight."
+  },
+  "text": "A tiny stag with flowers in its antlers. It walks only in moonlit gardens.",
+  "gift": "seed.bloom"
+ }
 ]
