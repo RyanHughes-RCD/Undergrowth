@@ -260,7 +260,7 @@ export class ForestView {
       // a geode exposed on rock (the bare crystal), or on the surface (geodes half-sunk in a dirt mound).
       const view = g.spawnView(sp, now, field.statsAt(sp.tile.x, sp.tile.y));
       const sprite = view === 'buried' ? 'spawn.buried.a' : view === 'hidden' ? 'spawn.rustle.a' : view === 'exposed' ? def.sprite : (def.worldSprite || def.sprite);
-      objs.push({ sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: view !== 'hidden' && view !== 'buried', rustle: view === 'hidden', dig: view === 'buried', view, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100,
+      objs.push({ sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: view !== 'hidden' && view !== 'buried' && !sp.opening, rustle: view === 'hidden', dig: view === 'buried', view, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100,
         flip: !!def.flipInWorld && (hash32(sp.tile.x, sp.tile.y, 3) & 1) === 1 });
     }
     // Landmarks: a wide one (the Old Log stump, two tiles) is drawn centred across its footprint, and

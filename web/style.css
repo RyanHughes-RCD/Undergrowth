@@ -368,3 +368,5 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .inscription { color: #e6dcc0; letter-spacing: 0.02em; line-height: 1.5; margin: 6px 0; }
 .inscription::before { content: '“'; }
 .inscription::after { content: '”'; }
+.opening .answers { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 8px; }
+.opening .btn.answer { width: 100%; text-align: left; white-space: normal; line-height: 1.35; }

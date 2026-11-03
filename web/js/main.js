@@ -230,7 +230,7 @@ class App {
    */
   collectAll() {
     const g = this.game, now = g.now();
-    const spawns = [...g.state.spawns];
+    const spawns = g.state.spawns.filter((sp) => !sp.opening);   // the opening's relic waits to be asked
     if (!spawns.length) return;
     const counts = new Map(), creatures = [];
     let n = 0;
@@ -382,6 +382,7 @@ class App {
       return;
     }
     const spawn = g.spawnAt(tile);
+    if (spawn && spawn.opening) { ui.selectedTile = null; ui.openOpening(); return; }
     if (spawn) {
       const name = this.content.items[spawn.itemID]?.name || 'something';
       const view = g.spawnView(spawn, now);
@@ -471,7 +472,7 @@ class App {
   /** Bury a relic: tap a tile, then confirm on the card (its inscription). */
   beginRelic(itemID) {
     const def = this.content.items[itemID];
-    if (def && !def.school) { this.ui.openRelicQuestions && this.ui.openRelicQuestions(itemID); return; }
+    if (def && !def.school) { this.ui.openOpening(); return; }
     this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'relic', itemID }; this.changed(false);
   }
 

@@ -319,7 +319,8 @@
     "startHeight": 14
   },
   "start": {
-    "_about": "A new forest opens on a little grotto around the old log: scenery along its edge, and finds waiting (kept until picked). Plants with 'forced' always drop those items (seeds). One geode holds the guaranteed creature: an egg (family eggFamily, 'random' = any) whose first nesting hatches in firstEggHatchMinutes.",
+    "_about": "A new forest opens on a little grotto around the old log: scenery along its edge, and finds waiting (kept until picked). Plants with 'forced' always drop those items (seeds). relic: the opening's relic (Content/opening.json) waits on a free tile within relic.near of the old log; tapping it asks the questions that choose its school. guaranteedIn / eggFamily / firstEggHatchMinutes (the old guaranteed egg) only apply while creatures are on.",
+    "relic": {"item": "relic.unknown", "near": 2},
     "spawns": [
       {"item": "mushroom.brown-button-cap", "count": 2},
       {"item": "mushroom.red-toadstool", "count": 1, "forced": [{"item": "seed.spore", "count": 1}]},

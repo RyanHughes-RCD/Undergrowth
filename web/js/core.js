@@ -640,9 +640,24 @@ export class Game {
         made.push(sp);
       }
     }
+    // The old guaranteed creature (an egg in one geode) only while creatures shape the land.
     const holdIn = st.guaranteedIn || ['mushroom', 'geode'];
-    const holders = made.filter((sp) => holdIn.includes(this.content.items[sp.itemID].category));
+    const holders = this.creaturesOn ? made.filter((sp) => holdIn.includes(this.content.items[sp.itemID].category)) : [];
     if (holders.length) holders[this.rng.int(0, holders.length - 1)].forcedCreature = { rarity: st.guaranteedCreatureRarity || 'common' };
+    // The opening's relic (Content/opening.json): close to the old log, unlike any other find.
+    if (st.relic && this.content.items[st.relic.item]) {
+      const near = st.relic.near ?? 2, ring = [];
+      for (let dy = -near; dy <= near; dy++) for (let dx = -near; dx <= near; dx++) {
+        const t = { x: centre.x + dx, y: centre.y + dy };
+        if ((dx || dy) && Math.max(Math.abs(dx), Math.abs(dy)) >= 1 && this.isFree(t)) ring.push(t);
+      }
+      const tile = ring.length ? ring[this.rng.int(0, ring.length - 1)] : this.freeNear(centre);
+      if (tile) {
+        const sp = { id: this.rng.uuid(), itemID: st.relic.item, tile, spawnedAt: now, keep: true, starter: true, placement: 'surface', opening: true };
+        this.state.spawns.push(sp);
+        made.push(sp);
+      }
+    }
     return made;
   }
 
@@ -1004,6 +1019,31 @@ export class Game {
     }
     return out;
   }
+  // ---- the opening (Content/opening.json): the first relic's school comes from a few quiet questions
+  get openingSpawn() { return this.state.spawns.find((sp) => sp.opening) || null; }
+  /** Totals of each school for a set of answers (answer index per question). */
+  openingTotals(answers) {
+    const qs = (this.content.opening && this.content.opening.questions) || [], tot = {};
+    for (const k of CORE_STATS) tot[k] = 0;
+    answers.forEach((a, i) => { const ans = qs[i] && qs[i].answers[a]; if (ans) for (const k in ans.weights || {}) tot[k] = (tot[k] || 0) + ans.weights[k]; });
+    return tot;
+  }
+  /** The school a set of answers chooses: the highest total, ties broken at random among the leaders. */
+  openingSchool(answers) {
+    const tot = this.openingTotals(answers), best = Math.max(...CORE_STATS.map((k) => tot[k]));
+    const lead = CORE_STATS.filter((k) => tot[k] === best);
+    return lead[this.rng.int(0, lead.length - 1)];
+  }
+  /** The relic takes its school and goes into the Bag as a common relic of that school. */
+  claimOpeningRelic(school, now, answers = null) {
+    if (!CORE_STATS.includes(school)) throw new GameError('Unknown school.');
+    const sp = this.openingSpawn;
+    if (sp) this.state.spawns = this.state.spawns.filter((x) => x !== sp);
+    const id = 'relic.' + school + '.common';
+    this.state.opening = { school, at: now, answers };
+    return this.grant([{ item: id, count: 1 }]);
+  }
+
   /** Bury a relic from the Bag on an open tile. It stays for good. */
   buryRelic(itemID, tile, now) {
     const def = this.content.items[itemID];
@@ -2429,6 +2469,7 @@ export class Game {
   collect(spawnID, now) {
     const i = this.state.spawns.findIndex((s) => s.id === spawnID);
     if (i < 0) throw new GameError('Unknown item.');
+    if (this.state.spawns[i].opening) throw new GameError('It waits to be asked.');
     const [spawn] = this.state.spawns.splice(i, 1);
     const def = this.content.items[spawn.itemID];
     if (!def) return [];
@@ -3382,6 +3423,7 @@ export class Content {
     this.eggs = bundle.eggs || [];
     // School seeds (schoolSeeds.json, from the Offerings spreadsheet): one per garden school. Buried
     // from the Bag, a seed starts its school's terrain around its tile (numbers: tuning.schoolSeeds).
+    this.opening = bundle.opening || null;
     this.schoolSeeds = bundle.schoolSeeds || [];
     this.schoolSeedFor = {};
     for (const sd of this.schoolSeeds) {

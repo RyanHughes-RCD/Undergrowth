@@ -85,7 +85,7 @@ export class UI {
     if (this.mode && this.mode.type === 'relic' && this.mode.tile) bottom.append(this.relicConfirmCard(this.mode.itemID, this.mode.tile));
     if (this.selectedTile) bottom.append(this.tileCard(this.selectedTile));
     const invCount = Object.values(g.state.inventory).reduce((a, b) => a + b, 0);
-    const finds = g.state.spawns.length;
+    const finds = g.state.spawns.filter((sp) => !sp.opening).length;
     if (finds >= 2 && !this.mode) {
       bottom.append(h('div', { class: 'collect-row' },
         h('button', { class: 'btn green collect-all', onclick: () => this.app.collectAll() }, ic('bag', 1), ` Collect all (${finds})`)));
@@ -1415,6 +1415,40 @@ export class UI {
       h('button', { class: 'btn green', onclick: done }, 'Lovely')));
     ov.onclick = (e) => { if (e.target === ov) done(); };
     ov.classList.add('show');
+  }
+
+  /**
+   * The opening (Content/opening.json): the relic's card and inscription, a few quiet questions, then the
+   * reveal. Closing before the reveal changes nothing; the relic waits where it was. At the reveal it takes
+   * its school and goes into the Bag; burying it is up to the player.
+   */
+  openOpening(forceSchool = null) {
+    const o = this.content.opening, g = this.game;
+    if (!o || !g.openingSpawn) return;
+    const ov = document.getElementById('overlay');
+    const answers = [];
+    const close = () => { ov.classList.remove('show'); ov.replaceChildren(); ov.onclick = null; this.nextCard(); };
+    const show = (...kids) => { ov.replaceChildren(h('div', { class: 'reveal-card pop opening' }, ...kids)); ov.classList.add('show'); };
+    const reveal = () => {
+      const school = forceSchool || g.openingSchool(answers);
+      g.claimOpeningRelic(school, g.now(), forceSchool ? null : answers);
+      const def = this.content.items['relic.' + school + '.common'];
+      ov.onclick = null;
+      show(h('div', { class: 'rays-wrap' }, this.burst(STAT_COLORS[school]), this.sprites.element(def.sprite, null, 8, 'grow-in', true)),
+        h('h2', {}, def.name), h('p', { class: 'inscription' }, (o.reveal || {})[school] || ''),
+        h('button', { class: 'btn green', onclick: () => { close(); this.app.changed(); } }, o.card.keep || 'Keep it'));
+    };
+    const ask = (i) => {
+      const q = o.questions[i];
+      if (!q) { reveal(); return; }
+      show(this.sprites.element('relic.unknown', null, 5, '', true), h('h2', {}, q.text),
+        h('div', { class: 'answers' }, q.answers.map((a, k) => h('button', { class: 'btn answer', onclick: () => { answers.push(k); ask(i + 1); } }, a.text))));
+    };
+    ov.onclick = (e) => { if (e.target === ov) close(); };
+    if (forceSchool) { reveal(); return; }
+    show(this.sprites.element('relic.unknown', null, 8, 'grow-in', true), h('h2', {}, o.card.title),
+      h('p', { class: 'sub' }, o.card.intro), h('p', { class: 'inscription' }, o.card.inscription),
+      h('button', { class: 'btn green', onclick: () => ask(0) }, o.card.begin || 'Hold it'));
   }
 
   /** Shows the next waiting celebration card, if any. */
