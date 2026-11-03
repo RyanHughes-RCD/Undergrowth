@@ -17,7 +17,7 @@
     "radiusPadding": 1
   },
   "glimmerChance": 0.01,
-  "geodes": { "batchMax": 5 },
+  "geodes": { "_about": "enabled false: geodes are out of the game for now: none spawn, geodes on the map leave on load, and geodes, gems and geode-only materials are hidden from the Bag, Field Guide, Store and Spirit Well (kept in saves). The data stays.", "enabled": false, "batchMax": 5 },
   "interactions": {
     "_about": "Creatures whose influence reaches overlap can interact. Cosmetic moments are visual only (renderer). Reward moments are rolled per spawn tick per eligible pair: pairChancePerTick, then rewardChance x rarity bonus, capped at maxRewardsPerDay; each pair then waits pairCooldownMinutes.",
     "pairChancePerTick": 0.02,
@@ -72,10 +72,10 @@
       "genericMinFactor": 0.08
     },
     "categoryScaling": {
-      "minMultiplier": 0.25,
+      "minMultiplier": 0.05,
       "maxMultiplier": 6,
-      "mushroom": {"spore": 10, "glow": 10},
-      "plant": {"bloom": 10, "verdure": 10},
+      "mushroom": {"spore": 10, "glow": 6, "bloom": -12},
+      "plant": {"bloom": 10, "verdure": 8, "spore": -12},
       "geode": {"shimmer": 10, "spirit": 10}
     },
     "categoryWeights": {
@@ -348,7 +348,8 @@
       {"item": "mushroom.red-toadstool", "count": 1, "forced": [{"item": "seed.spore", "count": 1}]},
       {"item": "plant.clover", "count": 1, "forced": [{"item": "seed.mystery-seed", "count": 1}]},
       {"item": "plant.sorrel", "count": 1, "forced": [{"item": "seed.mystery-seed", "count": 1}, {"item": "seed.bloom", "count": 1}]},
-      {"item": "geode.pebble-geode", "count": 2}
+      {"item": "plant.clover", "count": 1},
+      {"item": "mushroom.brown-button-cap", "count": 1}
     ],
     "radius": 3,
     "guaranteedIn": ["geode"],

@@ -114,8 +114,10 @@ MUSHROOMS = {
     "velvet-shank": ("flat", "#b8743a", "#5a3a22", "#e0a060"),
     "ember-cap": ("dome", "#d86a2a", "#f0e0c8", "#ffc070"),
     "veil-cap": ("bell", "#c8c8f0", "#e8e8ff", "#9a9ad0"),
+    "ring-morel": ("morel", "#c8a070", "#efe2c8", "#fff0d0"),
+    "wisp-cap": ("bell", "#dcdcf4", "#f0f0ff", "#b0b0e8"),
 }
-GLOWING = {"foxfire-button", "ember-cap", "glowcap", "crystal-cap", "moonlight-morel", "ghost-fungus", "starlight-bonnet", "ancient-sporecrown"}
+GLOWING = {"foxfire-button", "ember-cap", "wisp-cap", "glowcap", "crystal-cap", "moonlight-morel", "ghost-fungus", "starlight-bonnet", "ancient-sporecrown"}
 
 
 def draw_mushroom(shape, cap, stem, accent):
@@ -244,11 +246,20 @@ PLANTS = {
     "columbine": ("columbine", "#4f8a2c", "#9a5ad8", "#f8e8a0"),
     "bleeding-heart": ("bleedingheart", "#5a9a3a", "#ff6aa8", "#ffffff"),
     "meadow-daisy": ("flower", "#5fbf4a", "#f8f8f0", "#ffd84a"),
+    "lantern-flower": ("lantern", "#3f6a4a", "#7cf2ff", "#e8ffff"),
+    "starwort": ("lily", "#3f6a4a", "#e8f0ff", "#7cf2ff"),
+    "buttercup": ("rose", "#5fbf4a", "#ffd84a", "#fff3c4"),
+    "wild-rose": ("rose", "#4f8a2c", "#ff8ab8", "#ffd84a"),
+    "sun-lily": ("lily", "#4f8a2c", "#ffb030", "#fff0a0"),
+    "dawn-peony": ("rose", "#4f8a2c", "#ffc0d0", "#fff0e0"),
+    "greenheart-vine": ("fern", "#2aa82a", None, None),
+    "prism-rose": ("rose", "#6a8a7a", "#c8b4f4", "#f4f0ff"),
+    "mistbell": ("bells", "#5a7a6a", "#c8c8f4", "#9a9ad0"),
     "honeybell": ("snowdrop", "#5fa04a", "#ffd870", "#ffb030"),
     "feather-fern": ("fern", "#4f9440", None, None),
     "glassbell": ("snowdrop", "#7a9a9a", "#d8ccf8", "#f4f0ff"),
 }
-PLANT_GLOW = {"glassbell", "glowbloom", "moonflower", "deeproot-lantern", "crystal-thistle"}
+PLANT_GLOW = {"lantern-flower", "starwort", "prism-rose", "glassbell", "glowbloom", "moonflower", "deeproot-lantern", "crystal-thistle"}
 
 
 def draw_plant(shape, leaf, petal, centre):

@@ -480,7 +480,7 @@ export class UI {
   bagBody() {
     const g = this.game;
     const owned = Object.entries(g.state.inventory).filter(([, n]) => n > 0)
-      .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def && (g.eggsOn || e.def.category !== 'egg'));   // eggs are kept, hidden, while the egg system is off
+      .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def && (g.eggsOn || e.def.category !== 'egg') && !g.itemOff(e.def));   // eggs are kept, hidden, while the egg system is off
     const decor = Object.entries(g.state.decor.owned).filter(([, n]) => n > 0).map(([id, n]) => ({ def: g.decorDef(id), n })).filter((e) => e.def);
     const compostOn = (this.content.tuning.offerings || {}).compostEnabled !== false;
     const head = compostOn ? [h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
@@ -492,7 +492,7 @@ export class UI {
         h('b', {}, `×${n}`),
         h('button', { class: 'btn green small', onclick: () => this.app.beginDecor(def.id) }, 'Place'))));
     }
-    if (!owned.length) return [...head, h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms, plants and geodes in the forest to collect them.')];
+    if (!owned.length) return [...head, h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms and flowers in the forest to collect them.')];
     const order = ['relic', 'egg', 'seed', 'schoolSeed', 'geode', 'material', 'gem', 'plant', 'mushroom'];
     const cats = [...new Set(owned.map((e) => e.def.category))].sort((a, b) =>
       ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
@@ -845,7 +845,7 @@ export class UI {
         };
       }));
     }
-    return content.itemList.filter((i) => i.inGuide !== false && i.category === tab)
+    return content.itemList.filter((i) => i.inGuide !== false && i.category === tab && !this.game.itemOff(i))
       .map((i, idx) => ({ i, idx })).sort((a, b) => rarityIndex(a.i.rarity) - rarityIndex(b.i.rarity) || a.idx - b.idx)
       .map(({ i }) => ({
         key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: null, rarity: i.rarity, text: i.guideText,
@@ -860,7 +860,7 @@ export class UI {
   guideBody() {
     const content = this.content;
     const order = ['mushroom', 'plant', 'geode', 'gem', 'material'];
-    const cats = [...new Set(content.itemList.filter((i) => i.inGuide !== false).map((i) => i.category))]
+    const cats = [...new Set(content.itemList.filter((i) => i.inGuide !== false && !this.game.itemOff(i)).map((i) => i.category))]
       .sort((a, b) => ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
     const famTabs = this.game.creaturesOn ? FAMILY_TABS.filter(([id]) => content.creatureList.some((c) => c.family === id)).map(([id]) => id) : [];
     if (this.guideTab === 'creatures') this.guideTab = famTabs[0];
@@ -1077,24 +1077,25 @@ export class UI {
     if (def.kind === 'base') {
       lines.appears.push('Every tile until a stat reaches Low intensity.');
       lines.spawns.push(`Can appear: ${itemList(this.content.spawnableItems.filter((i) => !i.spawn.requires || !Object.keys(i.spawn.requires).length))}.`);
-      lines.spawns.push('Mushrooms, plants and geodes are equally likely to be the kind that turns up.');
+      lines.spawns.push(g.geodesOn ? 'Mushrooms, plants and geodes are equally likely to be the kind that turns up.' : 'Mushrooms and plants are equally likely to be the kind that turns up.');
     } else if (def.kind === 'stat') {
       const k = def.stat;
       lines.appears.push([this.requirementText(k, band(0).min), ' or more. It grows through every level of the meter.']);
       const needs = this.content.spawnableItems.filter((i) => i.spawn.requires && i.spawn.requires[k]);
       if (needs.length) lines.spawns.push(`Wild finds that need ${cap(k)}: ${itemList(needs)}. Each appears once its own need is met (see its Field Guide entry).`);
-      for (const cat of ['mushroom', 'plant', 'geode']) {
+      for (const cat of ['mushroom', 'plant', 'geode'].filter((c) => c !== 'geode' || g.geodesOn)) {
         const lo = this.categoryMultAt(cat, k, band(0).min), mid = this.categoryMultAt(cat, k, band(3).min);
         if (lo) lines.spawns.push([`${catName[cat]} become likelier to be the kind chosen here: about ×${lo.toFixed(1)} at `, this.miniMeter(k, band(0).min), `, ×${mid.toFixed(1)} at `, this.miniMeter(k, band(3).min), `, up to ×${(T.spawns.categoryScaling || {}).maxMultiplier ?? 6}.`]);
       }
       lines.spawns.push(general);
       const tr = T.terrain || {};
       if (k === 'shimmer') {
-        lines.other.push(`After its creature leaves, Shimmer fades ${Math.round(1 / ((tr.statDecayRate || {}).shimmer || 1))}× more slowly than other stats.`);
-        lines.other.push('Where Shimmer is the strongest stat, geodes lie exposed among the crystals: tap to collect.');
+        if (g.creaturesOn) lines.other.push(`After its creature leaves, Shimmer fades ${Math.round(1 / ((tr.statDecayRate || {}).shimmer || 1))}× more slowly than other stats.`);
+        if (g.geodesOn) lines.other.push('Where Shimmer is the strongest stat, geodes lie exposed among the crystals: tap to collect.');
       }
       if (k === 'spirit') {
-        lines.other.push('Where Spirit is the strongest stat, geodes are veiled. Things whose main need is Spirit are always veiled: they show as a stirring mound, tap to uncover.');
+        lines.other.push(g.geodesOn ? 'Where Spirit is the strongest stat, geodes are veiled. Things whose main need is Spirit are always veiled: they show as a stirring mound, tap to uncover.'
+          : 'Things whose main need is Spirit are veiled: they show as a stirring mound, tap to uncover.');
         lines.other.push('Spirit lowers the ground, so mist and water drift here and collect.');
       }
       if (k === 'spore') {
@@ -1225,7 +1226,7 @@ export class UI {
         h('span', { class: 'num' }, fmt(d.weight)),
         h('b', { class: 'num' }, (d.weight / total * 100).toFixed(1) + '%')));
     };
-    const cats = ['mushroom', 'plant', 'geode'];
+    const cats = ['mushroom', 'plant', 'geode'].filter((c) => c !== 'geode' || g.geodesOn);
     const seed = g.seedDetails(tile, now);
     const raw = g.tileStats(tile, now, { raw: true });
     return [
@@ -1374,7 +1375,7 @@ export class UI {
     const glim = h('input', { type: 'checkbox' });
     const give = speciesSelect();
     const guestSel = h('select', { class: 'select' }, (this.content.visitorList || []).map((v) => h('option', { value: v.id }, v.name)));
-    const itemSel = h('select', { class: 'select' }, ['relic', 'mushroom', 'plant', 'seed', 'schoolSeed', 'geode', 'gem', 'material'].map((cat) =>
+    const itemSel = h('select', { class: 'select' }, ['relic', 'mushroom', 'plant', 'seed', 'schoolSeed', 'geode', 'gem', 'material'].filter((cat) => this.game.geodesOn || (cat !== 'geode' && cat !== 'gem')).map((cat) =>
       h('optgroup', { label: catTitle(cat) }, Object.values(this.content.items).filter((i) => i.category === cat)
         .map((i) => h('option', { value: i.id }, i.name)))));
     const setupName = h('input', { type: 'text', placeholder: 'Setup name', maxlength: 30 });
