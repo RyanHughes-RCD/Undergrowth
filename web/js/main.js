@@ -120,6 +120,11 @@ class App {
         if (e.newNearRelic) parts.push(ui.story('messages.harvestNewNearRelic'));
         else if (e.somethingNew) parts.push(ui.story('messages.harvestNew'));
         ui.celebrate(ui.story('messages.harvestTitle'), parts.join(', ') + '.');
+      } else if (e.type === 'nibbleClue') {
+        if (e.text) ui.toast(e.text);
+      } else if (e.type === 'visitorGift') {
+        const def = this.game.guestDef(e.id), it = this.content.items[e.item];
+        if (def && it) ui.toast(ui.story('visitors.gift', { name: def.name, item: it.name }), it.sprite);
       } else if (e.type === 'terrainDiscovered') {
         const t = (this.content.terrain || []).find((x) => x.id === e.id);
         if (t) ui.toast(`New terrain in your Field Guide: ${t.name}.`);
@@ -369,6 +374,12 @@ class App {
     }
     const nest = g.nestAt(tile);
     if (nest) { ui.selectedTile = null; ui.open('nest', nest.id); this.changed(false); return; }
+    // A present visitor: tapping it befriends it.
+    if (tile.hitKind === 'guest') {
+      const r = this.attempt(() => g.befriendGuest(tile.hitKey, now));
+      if (r) { ui.befriendCard(r.def, r.again); this.changed(); }
+      return;
+    }
     const relic = g.relicAt(tile);
     if (relic) { ui.selectedTile = null; ui.open('relic', relic.id); this.changed(false); return; }
     const buried = g.buriedSeedAt(tile);
@@ -423,6 +434,13 @@ class App {
       if (results) { this.present(results, 'a sprouting seed'); this.changed(); }
       return;
     }
+    // Tracks: reading them gives a clue (recorded in the visitor's Field Guide page).
+    const track = g.trackAt(tile);
+    if (track) {
+      const text = this.attempt(() => g.readTrack(track.id));
+      if (text) { ui.toast(text); this.changed(); }
+      return;
+    }
     ui.selectedCreatureID = null;
     ui.selectedTile = ui.selectedTile && ui.selectedTile.x === tile.x && ui.selectedTile.y === tile.y ? null : tile;
     this.changed(false);
@@ -458,7 +476,7 @@ class App {
   rerollVisitor(requestID) {
     const g = this.game;
     const next = this.attempt(() => g.rerollVisitor(requestID, g.now()));
-    if (next) { { const nm = this.content.creatures[next.wandererID]?.name || 'new visitor'; this.ui.toast(`${/^[aeiou]/i.test(nm) ? 'An' : 'A'} ${nm} wanders over instead.`); } this.changed(); }
+    if (next) { { const nm = this.content.creatures[next.wandererID]?.name || 'new trader'; this.ui.toast(`${/^[aeiou]/i.test(nm) ? 'An' : 'A'} ${nm} wanders over instead.`); } this.changed(); }
   }
 
     compostItem(itemID) {

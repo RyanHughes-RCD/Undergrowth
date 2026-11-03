@@ -475,6 +475,8 @@ export class Game {
     state.visitors = state.visitors || [];
     state.soilBoosts = state.soilBoosts || [];
     state.relics = state.relics || [];
+    state.guests = state.guests || {};          // visitors (Content/visitors.json): interest, clues, presence
+    state.guestTracks = state.guestTracks || [];
     state.ambientSpore = state.ambientSpore || {};
     state.nextGlimmer = !!state.nextGlimmer;
     // Offerings (older saves start empty).
@@ -1516,12 +1518,190 @@ export class Game {
     // The return harvest: extra growth for real time away, mostly on relic ground.
     const harvest = this.returnHarvest(now, away);
     if (harvest) report.harvest = harvest;
+    // Visitors: interest checks on their schedule (offline catch-up included).
+    this.visitorTick(now);
     this.state.lastRealSeen = realNow;
 
     this.state.lastUpdated = now;
     this.statCache = this.statField(now);
     this.checkProgress(now);
     return report;
+  }
+
+  // ---- visitors (Content/visitors.json, tuning.visitors): forest animals drawn by the grotto's ground
+  get guestCfg() { return this.t.visitors || {}; }
+  guestDefs() { return this.content.visitorList || []; }
+  guestDef(id) { return this.guestDefs().find((v) => v.id === id) || null; }
+  guest(id) {
+    const g = this.state.guests[id] = this.state.guests[id] || { interest: 0, known: [], befriended: false, present: null, presDay: -1, presCount: 0 };
+    return g;
+  }
+  /** Its preference keys, in the order clues reveal them (school or terrain first). */
+  guestPrefKeys(def) { return ['school', 'terrain', 'min', 'find', 'time', 'rain'].filter((k) => def.likes[k] != null && def.likes[k] !== false && !(k === 'min' && def.likes.terrain)); }
+  /** Tiles that meet a visitor's ground preference (its school at its minimum, or its named terrain). */
+  guestTiles(def, field) {
+    const out = [], c = this.clearing, L = def.likes;
+    for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+      const st = field.statsAt(x, y);
+      if (L.school ? (st[L.school] || 0) >= (L.min ?? this.minInfluence) : L.terrain ? (this.terrainAt(st) || {}).id === L.terrain : false) out.push({ x, y });
+    }
+    return out;
+  }
+  /** Its stage now, from its interest (and presence): none, signs, clues, present (or ready: interested enough to come). */
+  guestStage(id, now) {
+    const g = this.guest(id), st = this.guestCfg.stages || {};
+    if (g.present && now >= g.present.from && now < g.present.until) return 'present';
+    if (g.interest >= (st.present ?? 60)) return 'ready';
+    if (g.interest >= (st.clues ?? 20)) return 'clues';
+    if (g.interest >= (st.signs ?? 10)) return 'signs';
+    return 'none';
+  }
+  presentGuests(now) { return this.guestDefs().filter((d) => this.guestStage(d.id, now) === 'present').map((d) => ({ def: d, g: this.guest(d.id) })); }
+  trackAt(t) { return this.state.guestTracks.find((x) => sameTile(x.tile, t)) || null; }
+
+  /**
+   * Interest checks every visitors.checkMinutes of game time, catching up offline (up to maxCatchUpDays).
+   * Each check's random choices are seeded from the forest, the visitor and the check's time, so it's
+   * deterministic from timestamps. Ground is read once per call (relics are permanent; finds and
+   * weather are read per check).
+   */
+  visitorTick(now) {
+    const cfg = this.guestCfg, defs = this.guestDefs();
+    if (!defs.length || !cfg.checkMinutes) return;
+    const step = cfg.checkMinutes * 60000;
+    if (this.state.guestsAt == null) { this.state.guestsAt = Math.floor(now / step) * step; return; }
+    let k0 = Math.floor(this.state.guestsAt / step) + 1;
+    const k1 = Math.floor(now / step);
+    if (k1 < k0) return;
+    k0 = Math.max(k0, k1 - Math.ceil((cfg.maxCatchUpDays ?? 7) * DAY / step));
+    const field = this.statField(now);
+    const tiles = new Map(defs.map((d) => [d.id, this.guestTiles(d, field)]));
+    const saved = this.rng;
+    try {
+      for (let k = k0; k <= k1; k++) {
+        const t = k * step;
+        const life = ((cfg.tracks || {}).hours ?? 24) * HOUR;
+        this.state.guestTracks = this.state.guestTracks.filter((x) => t - x.at < life);
+        defs.forEach((d, i) => { this.rng = new RNG({ rng: hash32(this.state.seed, i + 1, k) }); this.guestCheck(d, t, tiles.get(d.id)); });
+      }
+    } finally { this.rng = saved; }
+    this.state.guestsAt = k1 * step;
+  }
+
+  guestCheck(def, t, tiles) {
+    const cfg = this.guestCfg, g = this.guest(def.id), L = def.likes, I = cfg.interest || {}, S = cfg.stages || {};
+    const raining = this.isRaining(t);
+    const findOn = L.find ? this.state.spawns.filter((sp) => sp.itemID === L.find && sp.spawnedAt <= t && tiles.some((x) => sameTile(x, sp.tile))) : [];
+    const met = tiles.length >= (cfg.minTiles ?? 2) && (!L.find || findOn.length > 0);
+    const gain = (I.gain ?? 1.5) * (L.rain && raining ? (I.rainMult ?? 2) : 1);
+    g.interest = Math.max(0, Math.min(I.max ?? 100, g.interest + (met ? gain : -(I.decay ?? 1))));
+    if (g.present && t >= g.present.until) g.present = null;
+    const inWindow = this.dayPhase(t) === L.time && (!L.rain || raining);
+    if (!met || !inWindow) return;
+    // Signs: tracks on its ground, laid only while it's here (so their time and weather clues are true).
+    const tr = cfg.tracks || {};
+    if (g.interest >= (S.signs ?? 10) && this.state.guestTracks.filter((x) => x.visitorID === def.id).length < (tr.maxPerVisitor ?? 3) && this.rng.chance(tr.chance ?? 0.35)) {
+      this.layTrack(def, t, tiles, findOn, raining);
+    }
+    // Present: in its window, interested enough, a few times a day at most.
+    const pr = cfg.presence || {}, day = Game.dayNumber(t);
+    if (g.presDay !== day) { g.presDay = day; g.presCount = 0; }
+    const perDay = g.befriended ? (pr.befriendedPerDay ?? 2) : (pr.perDay ?? 1);
+    const chance = (pr.chance ?? 0.35) * (g.befriended ? (pr.befriendedChanceMult ?? 2) : 1);
+    if (!g.present && g.interest >= (S.present ?? 60) && g.presCount < perDay && this.rng.chance(chance)) this.startPresence(def, t, tiles);
+  }
+
+  /** A clue it can honestly leave right now, preferring one the player doesn't know yet. */
+  pickClue(def, raining, canNibble) {
+    const g = this.guest(def.id);
+    const honest = this.guestPrefKeys(def).filter((k) => (k !== 'rain' || raining) && (k !== 'find' || canNibble));
+    const fresh = honest.filter((k) => !g.known.includes(k));
+    const pool = fresh.length ? fresh : honest.filter((k) => k !== 'find');
+    return pool.length ? pool[this.rng.int(0, pool.length - 1)] : null;
+  }
+
+  layTrack(def, t, tiles, findOn, raining) {
+    const g = this.guest(def.id), S = this.guestCfg.stages || {};
+    const readable = g.interest >= (S.clues ?? 20);
+    const clue = readable ? this.pickClue(def, raining, findOn.length > 0) : null;
+    if (clue === 'find') {                 // its liked find gets nibbled (a tiny mark; picking it reads the clue)
+      const sp = findOn[this.rng.int(0, findOn.length - 1)];
+      sp.nibbled = def.id;
+      return;
+    }
+    const free = tiles.filter((x) => this.isFree(x) && !this.trackAt(x));
+    const pool = free.length ? free : tiles;
+    if (!pool.length) return;
+    const tile = pool[this.rng.int(0, pool.length - 1)];
+    this.state.guestTracks.push({ id: this.rng.uuid(), visitorID: def.id, tile: { ...tile }, at: t, clue });
+  }
+
+  startPresence(def, t, tiles) {
+    const g = this.guest(def.id), pr = this.guestCfg.presence || {};
+    const mins = range(pr.minutes || [20, 40]);
+    const tile = tiles.length ? tiles[this.rng.int(0, tiles.length - 1)] : this.clearingTiles()[0];
+    g.present = { from: t, until: t + this.rng.range(mins[0], mins[1]) * 60000, tile: { ...tile } };
+    g.presCount++;
+    g.visits = (g.visits || 0) + 1;
+    g.firstSeen = g.firstSeen || t;
+    g.lastPresence = { ...g.present };
+    // A befriended visitor sometimes leaves a gift: its liked find nearby, or a school seed.
+    if (g.befriended && this.rng.chance((this.guestCfg.gift || {}).chance ?? 0.5)) {
+      const item = def.likes.find && this.content.items[def.likes.find];
+      const spot = item && [tile, ...tiles].find((x) => this.isFree(x));
+      if (spot) { const sp = this.newSpawn(item, spot, t); sp.gift = def.id; this.state.spawns.push(sp); }
+      else if (def.gift && this.content.items[def.gift]) this.grant([{ item: def.gift, count: 1 }]);
+      this.events.push({ type: 'visitorGift', id: def.id, item: spot ? def.likes.find : def.gift });
+    }
+  }
+
+  /** Reading tracks: the clue is recorded in the visitor's Field Guide page. Returns the clue text. */
+  readTrack(trackID) {
+    const tr = this.state.guestTracks.find((x) => x.id === trackID);
+    if (!tr) throw new GameError('The tracks have faded.');
+    const def = this.guestDef(tr.visitorID);
+    if (!def) return '';
+    if (!tr.clue) return (this.content.story?.visitors || {}).faint || 'Small tracks, too faint to read.';
+    const g = this.guest(def.id);
+    if (!g.known.includes(tr.clue)) g.known.push(tr.clue);
+    return tr.text || def.clues[tr.clue] || '';
+  }
+
+  /** Picking a nibbled find reads its clue (its visitor likes this find). */
+  readNibble(spawn) {
+    const def = spawn.nibbled && this.guestDef(spawn.nibbled);
+    if (!def) return null;
+    const g = this.guest(def.id);
+    if (!g.known.includes('find')) g.known.push('find');
+    return def.clues.find || null;
+  }
+
+  /** Tapping a present visitor befriends it. */
+  befriendGuest(id, now) {
+    const def = this.guestDef(id);
+    if (!def || this.guestStage(id, now) !== 'present') throw new GameError('It has gone.');
+    const g = this.guest(id);
+    if (g.befriended) return { def, again: true };
+    g.befriended = now;
+    for (const k of this.guestPrefKeys(def)) if (!g.known.includes(k)) g.known.push(k);
+    this.discover('visitor:' + id.replace(/^visitor\./, ''));
+    this.bump('befriend');
+    return { def, again: false };
+  }
+
+  /** First return after the first relic: the visitor of its school takes an interest, and its tracks circle the relic. */
+  firstVisitorSigns(relic, now) {
+    const def = this.guestDefs().find((d) => d.likes.school === relic.school && d.rarity === 'common');
+    if (!def) return;
+    const fv = this.guestCfg.firstVisitor || {}, g = this.guest(def.id);
+    g.interest = Math.max(g.interest, fv.interest ?? 22);
+    // Close around the relic, on open ground where possible (so the tracks can be seen and read).
+    const ring = [];
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (dx || dy) ring.push({ x: relic.tile.x + dx, y: relic.tile.y + dy });
+    const spots = ring.filter((x) => this.inClearing(x) && !this.landmarkAt(x) && !this.relicAt(x) && !this.trackAt(x));
+    spots.sort((a, b) => (this.isFree(b) ? 0 : 1) - (this.isFree(a) ? 0 : 1) || dist(a, relic.tile) - dist(b, relic.tile));
+    const first = (this.content.story?.visitors || {}).firstClue || 'Small tracks circle the place where you buried the relic.';
+    spots.slice(0, fv.tracks ?? 3).forEach((tile) => this.state.guestTracks.push({ id: this.rng.uuid(), visitorID: def.id, tile: { ...tile }, at: now, clue: 'school', text: first }));
   }
 
   // ---- the return harvest (tuning.returnHarvest)
@@ -1581,6 +1761,7 @@ export class Game {
           n++;
         }
         h.firstDone = now;
+        this.firstVisitorSigns(first, now);
       }
       // Then growth for the time away, weighted by how developed each tile is.
       let budget = Math.round(hours * cfg.perHour) - made.length;
@@ -2616,6 +2797,10 @@ export class Game {
       if (!pending.some((x) => x.item === f.item)) pending.push({ item: f.item, count: f.count || 1 });
     }
     if (def.inGuide !== false) this.discover('item:' + def.id);
+    if (spawn.nibbled) this.events.push({ type: 'nibbleClue', text: this.readNibble(spawn) });
+    // Tracks under a find are read as it's picked.
+    const track = this.trackAt(spawn.tile);
+    if (track) this.events.push({ type: 'nibbleClue', text: this.readTrack(track.id) });
     this.bump('collect');
     this.bump('collect:' + def.category);
     if (def.category === 'geode') this.bump('dig');
@@ -3171,8 +3356,8 @@ export class Game {
     return list.sort((a, b) => rank(a) - rank(b));
   }
 
-  // ---- visitors: wanderers at the Old Log asking for items, paying in eggs (kind "visitor")
-  get visitorCfg() { return this.t.visitors || {}; }
+  // ---- traders: wanderers at the Old Log asking for items (requests of kind "visitor"; called Traders in the game)
+  get visitorCfg() { return this.t.traders || {}; }   // Old Log traders (requests of kind "visitor")
 
   /** Today's visitors (local day): picked once a day from the visitor requests whose gating is met. */
   visitorsToday(now) {
@@ -3206,7 +3391,7 @@ export class Game {
     const v = this.visitorsToday(now);
     const i = v.offers.findIndex((o) => o.requestID === requestID);
     if (i < 0) throw new GameError('That visitor has gone.');
-    if (v.rerolls >= (this.visitorCfg.maxRerolls ?? 3)) throw new GameError('No more visitors today. New ones come tomorrow.');
+    if (v.rerolls >= (this.visitorCfg.maxRerolls ?? 3)) throw new GameError('No more traders today. New ones come tomorrow.');
     const next = this.pickVisitor(now, this.rng.int(0, 1e9));
     if (!next) throw new GameError('Nobody else is visiting today.');
     this.spendCompost(this.visitorCfg.rerollCost ?? 0);
@@ -3492,6 +3677,24 @@ export class Game {
     return made;
   }
 
+  /** Developer: put a visitor at an interest stage (signs, clues, ready to visit, or none). */
+  devGuestStage(id, stage, now) {
+    const S = this.guestCfg.stages || {}, g = this.guest(id);
+    g.interest = { none: 0, signs: S.signs ?? 10, clues: S.clues ?? 20, ready: S.present ?? 60 }[stage] ?? g.interest;
+    if (stage === 'none') { g.present = null; g.known = []; this.state.guestTracks = this.state.guestTracks.filter((x) => x.visitorID !== id); }
+  }
+  /** Developer: the visitor comes to the grotto right now, on ground it likes (or anywhere open). */
+  devGuestPresent(id, now) {
+    const def = this.guestDef(id);
+    if (!def) throw new GameError('Unknown visitor.');
+    const g = this.guest(id), tiles = this.guestTiles(def, this.statField(now));
+    g.interest = Math.max(g.interest, (this.guestCfg.stages || {}).present ?? 60);
+    const tile = tiles.find((x) => this.isFree(x)) || this.freeNear(this.state.landmarks[0].tile);
+    const pr = this.guestCfg.presence || {};
+    g.present = { from: now, until: now + ((pr.minutes || [20, 40])[1]) * 60000, tile: { ...tile } };
+    g.firstSeen = g.firstSeen || now; g.lastPresence = { ...g.present };
+  }
+
   debugGrant(itemID, count = 1) { this.state.inventory[itemID] = (this.state.inventory[itemID] || 0) + count; }
   debugGrantCreature(typeID, glimmer, now) { return this.grant([{ creature: this.rollCreature(typeID, 'debug', now, glimmer) }]); }
 }
@@ -3525,6 +3728,7 @@ export class Content {
     // School seeds (schoolSeeds.json, from the Offerings spreadsheet): one per garden school. Buried
     // from the Bag, a seed starts its school's terrain around its tile (numbers: tuning.schoolSeeds).
     this.opening = bundle.opening || null;
+    this.visitorList = bundle.visitors || [];
     this.schoolSeeds = bundle.schoolSeeds || [];
     this.schoolSeedFor = {};
     for (const sd of this.schoolSeeds) {

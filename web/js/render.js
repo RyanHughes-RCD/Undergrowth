@@ -294,6 +294,10 @@ export class ForestView {
       if (egg) objs.push({ sprite: egg.sprite, x: pos.x, y: pos.y - 2, sortY: pos.y + 0.01, tile: n.tile, kind: 'nest', key: n.id, phase: hash32(n.tile.x, n.tile.y, 9) % 1000 / 250, dig: g.nestProgress(n, now) >= 1 });
       objs.push({ sprite: 'egg.nest.front', ...pos, sortY: pos.y + 0.02, tile: n.tile, kind: 'nest', key: n.id + ':front', phase: 0, still: true });
     }
+    // Visitors in the grotto right now: shy, drifting near their favourite ground. Tap to befriend.
+    for (const { def, g: st } of g.presentGuests(now)) {
+      objs.push({ sprite: def.sprite, ...at(st.present.tile), tile: st.present.tile, kind: 'guest', key: def.id, wander: true, phase: hash32(st.present.tile.x, st.present.tile.y, 17) % 1000 / 160 });
+    }
     // Buried relics: the stone set in the ground, its rune in the school's colour.
     for (const r of s.relics || []) {
       const def = this.app.content.items[r.relicID];
@@ -470,6 +474,7 @@ export class ForestView {
     // Objects (sorted by their feet): map objects on screen + the shrub treeline.
     const now = performance.now();
     const pad = 32;
+    this.drawTracks(ctx);
     const drawn = this.objects.filter((o) => o.x >= view.minX - pad && o.x <= view.maxX + pad && o.y >= view.minY - pad && o.y <= view.maxY + pad * 2)
       .concat(edgeObjs);
     const sortY = (o) => (o.roam && this.roam.has(o.key) ? this.roam.get(o.key).y : o.sortY ?? o.y);
@@ -487,6 +492,12 @@ export class ForestView {
         const cyc = (t + o.phase) % 3.8;
         ft = cyc < 0.5 ? 0.3 : 0;
         if (cyc < 0.5) { y -= cyc < 0.25 ? 1 : 0; x += Math.round(Math.sin(t * 40) * 0.6); }
+      }
+      if (o.wander && !reducedMotion()) {
+        // A present visitor: drifts a little around its spot, pausing now and then.
+        const k = (t * 0.35 + o.phase) % (Math.PI * 2);
+        x += Math.round(Math.sin(k) * 5); y += Math.round(Math.sin(k * 2) * 1.5);
+        flip = Math.cos(k) < 0;
       }
       if (o.rustle) {
         // Hidden in tall grass: still most of the time, with a short rustle every few seconds.
@@ -1125,6 +1136,29 @@ export class ForestView {
       }
     }
     ctx.globalAlpha = 1;
+  }
+
+  /**
+   * Visitor signs: little footprints on the tiles a visitor likes (fading over tuning.visitors.tracks.hours),
+   * and a tiny bite out of a find it nibbled. Visual only.
+   */
+  drawTracks(ctx) {
+    const g = this.game, now = g.now(), life = ((this.app.content.tuning.visitors || {}).tracks || {}).hours ?? 24;
+    for (const tr of g.state.guestTracks || []) {
+      const a = Math.max(0.15, 1 - (now - tr.at) / (life * 3600000)) * 0.85;
+      const bx = tr.tile.x * TS + 3, by = tr.tile.y * TS + 4, h = hash32(tr.tile.x, tr.tile.y, 23);
+      ctx.globalAlpha = a; ctx.fillStyle = '#2a1e18';
+      for (let i = 0; i < 4; i++) {                       // two pairs of small prints crossing the tile
+        const x = bx + i * 3 + ((h >> i) & 1), y = by + (i % 2 ? 5 : 2) + i * 2;
+        ctx.fillRect(x, y, 2, 1); ctx.fillRect(x, y - 1, 1, 1); ctx.fillRect(x + 1, y - 1, 1, 1);
+      }
+      ctx.fillStyle = '#e8dcc0'; ctx.globalAlpha = a * 0.5; ctx.fillRect(bx + 1, by + 1, 1, 1);
+    }
+    ctx.globalAlpha = 1;
+    for (const sp of g.state.spawns) if (sp.nibbled) {        // a bite mark on the find
+      const x = sp.tile.x * TS + TS / 2 + 3, y = sp.tile.y * TS + TS / 2 + FOOT - 10;
+      ctx.fillStyle = '#1b1420'; ctx.fillRect(x, y, 2, 1); ctx.fillRect(x + 1, y + 1, 1, 1);
+    }
   }
 
   /** A puff of soil where something was dug up. */

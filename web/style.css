@@ -370,3 +370,5 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .inscription::after { content: '”'; }
 .opening .answers { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 8px; }
 .opening .btn.answer { width: 100%; text-align: left; white-space: normal; line-height: 1.35; }
+.clues { margin: 4px 0 0 16px; padding: 0; color: #e6dcc0; line-height: 1.5; }
+.clues li { margin-bottom: 4px; }

@@ -33,6 +33,7 @@ export function duration(seconds) {
 const CATEGORY_TITLES = { egg: 'Eggs', relic: 'Relics', schoolSeed: 'School seeds', seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
 const LANDMARK_TAB = 'landmarks';
 const TERRAIN_TAB = 'terrain';
+const VISITOR_TAB = 'visitors';
 const FAMILY_TABS = [['fungling', 'Funglings'], ['sproutling', 'Sproutlings'], ['geodeCritter', 'Geode Critters'], ['wanderer', 'Wanderers']];
 const catTitle = (c) => CATEGORY_TITLES[c] || cap(c);
 
@@ -372,6 +373,7 @@ export class UI {
       nest: () => this.nestBody(arg),
       buriedSeed: () => this.buriedSeedBody(arg),
       relic: () => this.relicBody(arg),
+      visitor: () => this.visitorBody(arg),
       landmark: () => this.landmarkBody(arg),
     }[type];
     if (!build) return;
@@ -691,15 +693,15 @@ export class UI {
     ];
   }
 
-  /** Today's visitors: wanderers asking for items, paying in eggs. New ones each day; can be swapped for compost. */
+  /** Today's traders (requests of kind "visitor"): wanderers asking for items. New ones each day; can be swapped for compost. */
   visitorSection() {
     const g = this.game, now = g.now(), a = this.app;
     const v = g.visitorsToday(now);
     if (!v.offers.length) return [];
-    const cfg = this.content.tuning.visitors || {};
+    const cfg = this.content.tuning.traders || {};
     const left = (cfg.maxRerolls ?? 3) - v.rerolls;
     const cost = cfg.rerollCost ?? 0;
-    return [h('div', { class: 'section' }, 'Visitors today'), h('p', { class: 'sub' }, 'Wanderers stop by the log to trade. New visitors come each day.'),
+    return [h('div', { class: 'section' }, 'Traders today'), h('p', { class: 'sub' }, 'Traders stop by the log. New traders come each day.'),
       ...v.offers.map((o) => {
         const req = g.requestDef(o.requestID);
         if (!req) return null;
@@ -814,6 +816,9 @@ export class UI {
     if (tab === TERRAIN_TAB) {
       return (content.terrain || []).map((t) => ({ key: 'terrain:' + t.id, name: t.name, terrain: t }));
     }
+    if (tab === VISITOR_TAB) {
+      return (content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, variant: null, visitor: v }));
+    }
     if (tab === LANDMARK_TAB) {
       return (content.landmarks || []).filter((l) => l.inGuide !== false).map((l) => ({
         key: 'landmark:' + l.id.replace(/^landmark\./, ''), name: l.name, sprite: l.sprite, variant: null,
@@ -856,15 +861,15 @@ export class UI {
       .sort((a, b) => ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
     const famTabs = this.game.creaturesOn ? FAMILY_TABS.filter(([id]) => content.creatureList.some((c) => c.family === id)).map(([id]) => id) : [];
     if (this.guideTab === 'creatures') this.guideTab = famTabs[0];
-    const tabs = [LANDMARK_TAB, TERRAIN_TAB, ...famTabs, ...cats];
+    const tabs = [LANDMARK_TAB, TERRAIN_TAB, ...((content.visitorList || []).length ? [VISITOR_TAB] : []), ...famTabs, ...cats];
     const all = tabs.flatMap((t) => this.guideEntries(t));
     const found = all.filter((e) => this.game.discovered.has(e.key)).length;
     const sil = { silhouette: [78, 84, 92] };
     return [`Field Guide · ${found}/${all.length}`, [
       h('div', { class: 'tabs' }, tabs.map((t) => h('button', {
         class: 'tab' + (t === this.guideTab ? ' on' : ''), onclick: () => { this.guideTab = t; this.renderSheet(); },
-      }, t === LANDMARK_TAB ? 'Landmarks' : t === TERRAIN_TAB ? 'Terrain' : (FAMILY_TABS.find(([id]) => id === t) || [null, catTitle(t)])[1]))),
-      this.guideTab === TERRAIN_TAB ? this.terrainGrid() : h('div', { class: 'guide-grid' }, this.guideEntries(this.guideTab).map((e) => {
+      }, t === LANDMARK_TAB ? 'Landmarks' : t === TERRAIN_TAB ? 'Terrain' : t === VISITOR_TAB ? 'Visitors' : (FAMILY_TABS.find(([id]) => id === t) || [null, catTitle(t)])[1]))),
+      this.guideTab === TERRAIN_TAB ? this.terrainGrid() : this.guideTab === VISITOR_TAB ? this.visitorGrid() : h('div', { class: 'guide-grid' }, this.guideEntries(this.guideTab).map((e) => {
         const known = this.game.discovered.has(e.key);
         // Undiscovered entries with a teaser (the Heartwood Sapling) can still be opened as a silhouette.
         const teaser = !known && e.teaser;
@@ -893,6 +898,47 @@ export class UI {
     return h('div', { class: 'guide-stats' },
       st.bonuses.map(([k, v]) => h('div', { class: 'gs-row' }, h('b', { style: `color:${STAT_COLORS[k] || '#fff'}` }, cap(k)), this.miniMeter(k, v))),
       h('div', { class: 'gs-row' }, h('b', {}, 'Radius'), h('span', {}, `${st.radius}`)));
+  }
+
+  /** Field Guide → Visitors: befriended ones in full; the rest as silhouettes, with the clues found so far. */
+  visitorGrid() {
+    const g = this.game, sil = { silhouette: [78, 84, 92] };
+    return h('div', { class: 'guide-grid' }, this.guideEntries(VISITOR_TAB).map((e) => {
+      const st = g.guest(e.visitor.id), known = !!st.befriended;
+      return h('button', { class: 'guide-cell' + (known ? '' : ' unknown') + (st.known.length && !known ? ' teaser' : ''), onclick: () => this.open('visitor', e.visitor.id) },
+        this.sprites.element(e.sprite, known ? null : sil, 4),
+        h('span', {}, known ? e.name : '???', !known && st.known.length ? ic('sparkle', 1) : null));
+    }));
+  }
+
+  /** A visitor's page: its art and name once befriended, and every clue the player has found. No numbers. */
+  visitorBody(id) {
+    const g = this.game, def = g.guestDef(id), st = g.guest(id);
+    if (!def) return ['Visitor', h('p', { class: 'sub' }, 'Unknown.')];
+    const S = this.content.story?.visitors || {};
+    const known = !!st.befriended;
+    const clues = g.guestPrefKeys(def).filter((k) => st.known.includes(k)).map((k) => h('li', {}, def.clues[k] || ''));
+    return [known ? def.name : '???', [
+      h('div', { class: 'hero' }, this.sprites.element(def.sprite, known ? null : { silhouette: [40, 44, 52] }, 6, '', true)),
+      h('p', { class: 'center' }, h('b', {}, known ? def.name : (S.unknownName || 'Someone small'))),
+      known && def.text ? h('p', { class: 'sub center' }, def.text) : null,
+      h('div', { class: 'section' }, 'Signs'),
+      clues.length ? h('ul', { class: 'clues' }, clues) : h('p', { class: 'sub' }, S.noClues || 'No signs of it yet.'),
+    ]];
+  }
+
+  /** The gentle moment of befriending a visitor. */
+  befriendCard(def, again) {
+    const S = this.content.story?.visitors || {};
+    const ov = document.getElementById('overlay');
+    const done = () => { ov.classList.remove('show'); ov.replaceChildren(); this.nextCard(); };
+    ov.replaceChildren(h('div', { class: 'reveal-card pop' },
+      h('div', { class: 'rays-wrap' }, this.burst('#ffe8a0'), this.sprites.element(def.sprite, null, 7, 'grow-in', true)),
+      h('h2', {}, def.name), h('p', { class: 'sub' }, again ? (S.befriendAgain || 'It knows you now.') : (S.befriend || '')),
+      again ? null : h('p', { class: 'sub' }, def.text || ''),
+      h('button', { class: 'btn green', onclick: done }, 'Lovely')));
+    ov.onclick = (e) => { if (e.target === ov) done(); };
+    ov.classList.add('show');
   }
 
   entryBody(e) {
@@ -1207,6 +1253,7 @@ export class UI {
           row('Glow factor', `×${gf.toFixed(2)} ${g.isNight(now) ? '(night)' : (stats.spirit || 0) > 0 ? '(day, fae-touched tiles glow more)' : '(day)'}`),
           row('Bloom cycle', `×${bf.toFixed(2)}`),
           row('Spawns here', `${surface}; geodes ${geode}; Spirit items veiled`),
+          ...g.guestDefs().map((d) => { const st = g.guest(d.id); return row(`Visitor: ${d.name}`, `interest ${st.interest.toFixed(1)} · ${g.guestStage(d.id, now)}${st.befriended ? ' · befriended' : ''} · clues ${st.known.length}/${g.guestPrefKeys(d).length} · ${g.guestTiles(d, g.field(now)).length} tiles suit it${st.present ? ` · present until ${new Date(st.present.until).toLocaleTimeString()}` : ''}`); }),
           ...g.relicSources(now).map((p) => [p, g.stats.falloff(Math.hypot(p.tile.x - tile.x, p.tile.y - tile.y), p.radius)]).filter(([, w]) => w > 0).map(([p, w]) => {
             const r = g.state.relics.find((x) => x.id === p.id), lv = g.stats.level(p, now), k = Object.keys(p.contributions)[0];
             return row(`Relic: ${(this.content.items[r.relicID] || {}).name || r.relicID} (${r.tile.x}, ${r.tile.y})`,
@@ -1323,6 +1370,7 @@ export class UI {
     const full = h('input', { type: 'checkbox', checked: true });
     const glim = h('input', { type: 'checkbox' });
     const give = speciesSelect();
+    const guestSel = h('select', { class: 'select' }, (this.content.visitorList || []).map((v) => h('option', { value: v.id }, v.name)));
     const itemSel = h('select', { class: 'select' }, ['relic', 'mushroom', 'plant', 'seed', 'schoolSeed', 'geode', 'gem', 'material'].map((cat) =>
       h('optgroup', { label: catTitle(cat) }, Object.values(this.content.items).filter((i) => i.category === cat)
         .map((i) => h('option', { value: i.id }, i.name)))));
@@ -1371,7 +1419,7 @@ export class UI {
         b('Complete open requests', () => a.dev((gm, t) => gm.devCompleteRequests(t), (n) => `${n} request(s) completed.`)),
         b('Complete all requests', () => a.dev((gm, t) => gm.devCompleteRequests(t, true), (n) => `${n} request(s) completed.`)),
         b('Reset requests', () => a.dev((gm) => gm.devResetRequests(), 'Requests reset (rewards kept).')),
-        b('New visitors', () => a.dev((gm, t) => gm.devNewVisitors(t), (n) => `${n} new visitor(s).`)),
+        b('New traders', () => a.dev((gm, t) => gm.devNewVisitors(t), (n) => `${n} new trader(s).`)),
         b('One of every decor', () => a.dev((gm) => gm.devGrantDecor(), (n) => `+${n} decor.`))),
       h('div', { class: 'section' }, 'Spirit Well'),
       h('div', { class: 'row gap wrap' },
@@ -1383,6 +1431,20 @@ export class UI {
         b('One of every egg', () => a.dev((gm) => gm.devGiveEggs(1), (n) => `+${n} eggs.`)),
         b('Hatch nests now', () => a.dev((gm, t) => gm.devHatchNow(t), (n) => `${n} nest(s) ready to hatch.`)),
         b('+2 nests', () => a.dev((gm) => { gm.state.unlocks.nests += 2; }, 'Two more nests.'))),
+
+      h('div', { class: 'section' }, 'Opening and relics'),
+      h('p', { class: 'sub' }, 'Choose the opening relic\'s school without the questions (needs the opening relic on the map). Any relic: Give → Relics below.'),
+      h('div', { class: 'row gap wrap' }, CORE_STATS.map((k) => b(cap(k), () => {
+        if (!this.game.openingSpawn) { this.toast('The opening relic has already been taken.'); return; }
+        this.sheet = null; this.close(); this.openOpening(k);
+      }))),
+      h('div', { class: 'section' }, 'Return harvest'),
+      h('div', { class: 'row gap wrap' }, [2, 8, 24].map((n) => b(`Return after ${n}h`, () => { this.sheet = null; this.close(); a.debugReturn(n); }))),
+      h('div', { class: 'section' }, 'Visitors'),
+      h('p', { class: 'sub' }, 'Set a visitor\'s interest stage, or bring it into the grotto now. Its interest shows in the spawn inspector.'),
+      h('div', { class: 'row gap wrap' }, guestSel,
+        ...[['signs', 'Signs'], ['clues', 'Clues'], ['ready', 'Ready'], ['none', 'Reset']].map(([st, label]) => b(label, () => a.dev((gm, t) => gm.devGuestStage(guestSel.value, st, t), `${label}.`))),
+        b('Present now', () => { a.dev((gm, t) => gm.devGuestPresent(guestSel.value, t), 'It has come to the grotto.'); this.sheet = null; this.close(); })),
 
       h('div', { class: 'section' }, 'Give'),
       h('div', { class: 'row gap wrap' }, give,

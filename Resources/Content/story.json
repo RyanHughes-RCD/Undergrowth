@@ -140,5 +140,16 @@
     "neededNote": "the Store is asking for some of these",
     "pending": "The well kept your last offering's gifts for you.",
     "tooLittle": "The water doesn't stir. It seems to want more than that."
+  },
+  "visitors": {
+    "_about": "Visitor text (Content/visitors.json holds each visitor's own clues).",
+    "firstClue": "Small tracks circle the place where you buried the relic.",
+    "faint": "Small tracks, too faint to read yet.",
+    "befriendTitle": "{name}",
+    "befriend": "It stops, looks at you for a long moment, and lets you come close.",
+    "befriendAgain": "It knows you now.",
+    "gift": "The {name} left something for you: {item}.",
+    "noClues": "No signs of it yet.",
+    "unknownName": "Someone small"
   }
 }

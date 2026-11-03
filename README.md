@@ -60,7 +60,7 @@ Then open <http://localhost:8000>.
   - Wild plants are the greenery: Clover, Sorrel, Fern, Moss Tuft, Pebblewort, Hollow Root, Water Reed, Pitcher Plant, Deeproot Lantern and the legendary Heartwood Sapling. They keep spawning and dropping seeds. The tile spawn workbook's views show wild spawns only.
 - **Gems are trade goods:** gems and geode materials are kept to trade in the Store rather than crushed into tiles (`gems.soilBoost: false`; their old uses stay in the data). The "Crush a gem" task became "Make a trade at the Store".
 - **Compost is paused** (`offerings.compostEnabled: false`): no compost buttons, compost heap or visitor swaps. Recolouring decor is free meanwhile.
-- **Creatures:** there's no cap on how many are out in the forest, and no slot bar. The **Creatures** tab lists who's out and who's resting.
+- **Creatures** (off while `creaturePlacement.enabled` is false): there's no cap on how many are out in the forest, and no slot bar. The **Creatures** tab lists who's out and who's resting; it's hidden while creatures are off.
 - **Blend celebration:** fires once, the first time two creatures each give a tile `blend.minEach` or more.
 - **Forest expansion is bought:**
   - The clearing only grows when you buy **Room to grow** in the Store (Upgrades tab). It's an upgrade line of 10 tiers, chained in the Offerings spreadsheet (`expand-1`…`expand-10`), with prices rising from commons to rare finds. Each tier pushes the treeline back `ringTiles` (2) on each side.
@@ -83,6 +83,8 @@ The iOS app doesn't have these yet. It ignores the new data files.
 
 The forest is 40×56 tiles (`tuning.json` → `grid`). You start in a small clearing that grows outward over time. At full zoom-out the clearing plus a thin treeline border (`visuals.viewBorderTiles`, half a tile) fills the screen width at a crisp whole-pixel scale, and you can never pan past that border. Drag to explore the rest of the clearing. Pinch to zoom in.
 
+
+> **Since relics (save version 6), creatures no longer shape the land** and creature finds, eggs and wanderers are off (`creaturePlacement.enabled`, `eggs.enabled`). The land changes through buried relics (permanent) and school seeds (temporary), and the grotto's animals are Visitors. The creature notes below describe the switched-off system, kept in the code.
 
 - **You start with no creatures.** Tap things that grow in the forest:
   - **Mushrooms**: pick them; Funglings sometimes hide inside.
@@ -418,14 +420,16 @@ The Store's **Trades**, **Eggs** and **Upgrades** tabs sell things for bundles o
   - Keen Eye: plants III: uncommon+ flowers from seeds 26% → 35% on Bloom ground.
 - **Spreadsheet:** `Requests` kinds `shop` and `upgrade`, reward types `item` (any item, egg or school seed id, with a count) and `upgrade` (an id from `tuning.upgrades`). The **School Seeds** sheet (was Supplies) sets id, name, school, Bag sprite, marker sprite and Field Guide text; the importer writes `schoolSeeds.json`. The importer refreshes every row's Check formula on import.
 
-### Visitors (web)
+### Traders (web)
 
-- **Wanderers stop by the Old Log to trade items for eggs** (requests of kind `visitor`).
-  - Each local day, `visitors.perDay` (2) of them are picked from the visitor requests whose gating is met. They stay all day and are replaced the next day; trading with one is a one-day thing, so the same visitor can come back.
+"Visitor" now means only the grotto's animals (see Visitors). The Old Log's trading wanderers are called **Traders** in the game; in the data they're still requests of kind `visitor`, and their settings moved from `tuning.visitors` to `tuning.traders`.
+
+- **Traders stop by the Old Log to trade items** (requests of kind `visitor`). Since eggs are off they pay in school seeds (two, or three for the later ones).
+  - Each local day, `traders.perDay` (2) of them are picked from the trader requests whose gating is met. They stay all day and are replaced the next day; trading with one is a one-day thing, so the same trader can come back.
   - The wanderer shown with each is cosmetic, drawn from the Wanderer creatures.
-- **Someone else:** swaps a visitor for another for `visitors.rerollCost` (6) compost, up to `visitors.maxRerolls` (3) times a day.
-- **The pool:** nine visitors. Three open at 4 Field Guide entries and pay uncommon eggs; more open at 8–12 entries; three at 24 entries pay rare eggs.
-- **Save:** `visitorReqs` (day, offers, done, rerolls). Developer mode → Offerings has "New visitors".
+- **Someone else:** swaps a trader for another for `traders.rerollCost` (6) compost, up to `traders.maxRerolls` (3) times a day.
+- **The pool:** ten traders. Three open at 4 Field Guide entries; more open at 8–12 entries; three at 24 entries.
+- **Save:** `visitorReqs` (day, offers, done, rerolls). Developer mode → Offerings has "New traders".
 
 ### Eggs (web)
 
@@ -578,6 +582,32 @@ The grotto grows while the player is away, mostly on relic ground (`tuning.json`
 - **Wilting:** unpicked finds fade after `spawns.wilting` hours by rarity: common 30, uncommon 60, rare 120, very rare and legendary 168 (an item's own `lifetimeHours`, like Ink Cap's 24, still wins). The grove changes to follow its terrain instead of clogging up. Starting finds never fade.
 - **Morning reveal:** after a return with away growth, the camera pans briefly to the best find (the rarest, nearest a relic; `reveal.panSeconds`, instant with reduced motion) and highlights it. A small card sums it up: "While you were away: 13 finds, 2 uncommon, something new near the relic." Then Collect All does the rest. The old "While you were away, N new things appeared" toast only shows when there was no harvest.
 
+## Visitors (web)
+
+Small forest animals come to the grotto, mostly while the player is away. They leave tracks and clues, and can be befriended once the player has worked out what they like. They are separate from the Old Log's Traders.
+
+- **Data:** `Resources/Content/visitors.json`; numbers in `tuning.json` → `visitors`. Each visitor has a name, a sprite (existing creature art as placeholders), hidden preferences (`likes`: a `school` with a `min` intensity or a named `terrain`, optionally a `find` that must be growing unpicked there, a time window `time` of dawn, day, dusk or night, and optionally `rain`), a clue line for each preference (`clues`), Field Guide text and a gift.
+
+  | Visitor | Likes | Find | Time |
+  |---|---|---|---|
+  | Mossback Hedgehog | Spore, Moderate | Ink Cap | night |
+  | Lantern Moth | Glow, Moderate | | dusk |
+  | Honey Bumble | Bloom, Moderate | Meadow Daisy | day |
+  | Fern Rabbit | Verdure, Moderate | | dawn |
+  | Prism Beetle | Shimmer, Moderate | Pebble Cap | day |
+  | Mist Fox | Spirit, Moderate | | dawn |
+  | Foxfire Newt (rare) | Foxfire Fen | | night, in rain |
+  | Petal Stag (rare) | Moonlit Garden | | night |
+
+- **Interest** (saved per visitor in `state.guests`): checked every `checkMinutes` (30) of game time, offline catch-up included (up to `maxCatchUpDays`, 7). Each check's random choices are seeded from the forest, the visitor and the check's time, so it's deterministic. Interest rises by `interest.gain` (1.5, ×`rainMult` in rain for rain lovers) while the grotto meets its preferences (at least `minTiles` (2) tiles of its ground, plus its find growing there if it has one), and falls by `interest.decay` (1) when it doesn't. It drives four stages (`stages`):
+  1. **Signs** (10): during its time window, tracks appear on tiles of its ground (`tracks.chance` per check, at most `maxPerVisitor`, fading over `tracks.hours`, 24). They're little footprints drawn on the ground, visual only.
+  2. **Clues** (20): tapping tracks (or picking a find standing on them) reads a clue line, which is recorded on the visitor's Field Guide page. Below this stage the tracks are "too faint to read yet". Clues are honest by construction: tracks only appear on ground it likes and only while it's there (so "fresh at dawn" is true), rain clues only when it's raining, and a liked find gets nibbled (a tiny bite mark; picking it reads the clue). Each new clue names a preference the player doesn't know yet, while any are left.
+  3. **Present** (60): in its time window (and in rain, for rain lovers), it comes into the grotto with `presence.chance` per check, for `presence.minutes` (20–40), at most `presence.perDay` (1) a day. It drifts shyly near a tile of its ground and leaves afterwards. Mostly this happens while the player is away.
+  4. **Befriend:** tapping a present visitor befriends it: a gentle card with its art, and its Field Guide entry (`visitor:<id>`) in full with every clue. A befriended visitor comes more often (`befriendedPerDay` 2, `befriendedChanceMult` 2) and on some visits (`gift.chance`, 0.5) leaves a gift: its liked find nearby, or its school's seed.
+- **First visitor:** on the first return after the first relic, the visitor of that relic's school gets `firstVisitor.interest` (22, already at the clue stage), and its tracks circle the relic site with one clue ready: "Small tracks circle the place where you buried the relic."
+- **Pacing:** in simulation (a player returning every 8 hours, leaving its liked find), the first visitor is first present 13–51 hours after the relic is buried, for every school: day 2 to 3 for a player who starts in the evening.
+- **Field Guide → Visitors:** unknown visitors are silhouettes; their page lists the clues found so far. Befriended ones show in full. There are no numbers anywhere.
+
 ## School seeds (web)
 
 One seed per school: Spore, Glow, Bloom, Verdure, Shimmer and Spirit Seeds (`seed.<school>`, `Resources/Content/schoolSeeds.json`, from the Offerings spreadsheet's **School Seeds** sheet). Mystery Seeds are unchanged: they're still planted and still grow flowers.
@@ -715,6 +745,9 @@ A separate test forest for trying any content or combination without touching yo
   - **Spawn heatmap:** tints tiles by spawn-location weight.
   - **Spawn inspector:** tap a tile for its stats, location weight breakdown and item odds.
   - **Stat overlay.**
+- **Opening and relics:** choose the opening relic's school without the questions (one button per school); give any relic from Give → Relics.
+- **Return harvest:** "Return after 2h / 8h / 24h" simulates closing the game for that long and coming back (counts as real time away, so the harvest, the morning reveal and visitor checks all run).
+- **Visitors:** pick a visitor and set its interest stage (Signs, Clues, Ready, or Reset), or bring it into the grotto now (**Present now**). The spawn inspector lists every visitor's interest, stage, clues found and how many tiles suit it.
 - Normal mode keeps only time speed, skip ahead, views and the tutorial/reset tools. Giving items and creatures is in developer mode only.
 
 ## Look and feel (web)

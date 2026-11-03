@@ -261,7 +261,19 @@
     "wideSpread": {"name": "Wide Spread", "text": "Buried school seeds reach a little farther", "radiusPerTier": 0.5, "maxTier": 1, "sprite": "seed.school.verdure"}
   },
   "visitors": {
-    "_about": "Wanderers at the Old Log asking for items, paying in eggs (requests of kind 'visitor'). perDay of them each local day, chosen from the ones whose gating is met; a visitor can be swapped for another for rerollCost compost, up to maxRerolls a day.",
+    "_about": "Visitors (Content/visitors.json): forest animals that come to the grotto, mostly while the player is away. Separate from the Old Log's traders. Every checkMinutes of game time (offline catch-up included, up to maxCatchUpDays) each visitor's interest rises by interest.gain while the grotto meets its preferences (its school at its min intensity on at least minTiles tiles, or its named terrain there; and its liked find growing unpicked on that ground, if it has one; x rainMult in rain if it likes rain), and falls by interest.decay when it doesn't. Stages: signs (tracks appear on its ground during its time window, chance tracks.chance per check, fading after tracks.hours), clues (tapping tracks reads a clue that names a preference the player doesn't know yet; a liked find gets nibbled), present (in its time window, and in rain if it likes rain, it comes with presence.chance per check for presence.minutes, at most presence.perDay a day). Tapping a present visitor befriends it; befriended ones come more often (befriended*) and leave a gift (a liked find or a school seed) with gift.chance. firstVisitor: on the first return after the first relic, the visitor of that relic's school gets this much interest and its tracks circle the relic, one clue ready.",
+    "checkMinutes": 30,
+    "maxCatchUpDays": 7,
+    "minTiles": 2,
+    "interest": {"gain": 1.5, "decay": 1, "rainMult": 2, "max": 100},
+    "stages": {"signs": 10, "clues": 20, "present": 60},
+    "tracks": {"chance": 0.35, "hours": 24, "maxPerVisitor": 3},
+    "presence": {"chance": 0.35, "minutes": [20, 40], "perDay": 1, "befriendedPerDay": 2, "befriendedChanceMult": 2},
+    "gift": {"chance": 0.5},
+    "firstVisitor": {"interest": 22, "tracks": 3}
+  },
+  "traders": {
+    "_about": "Traders: wanderers at the Old Log asking for items (requests of kind 'visitor' in the spreadsheet; they now pay in school seeds). perDay of them each local day, chosen from the ones whose gating is met; a visitor can be swapped for another for rerollCost compost, up to maxRerolls a day.",
     "perDay": 2,
     "rerollCost": 6,
     "maxRerolls": 3
