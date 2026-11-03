@@ -1513,6 +1513,10 @@ export class Game {
       return end == null || end > now;
     });
     this.state.soilBoosts = this.state.soilBoosts.filter((b) => b.expiresAt == null || b.expiresAt > now);
+    // The return harvest first (its finds are dated inside the away window), so relic ground gets its
+    // own school's finds before ordinary growth fills the rest of the clearing up to the cap.
+    const harvest = this.returnHarvest(now, away);
+    if (harvest) report.harvest = harvest;
     const tick = Math.max(1, this.t.spawns.tickSeconds) * 1000;
     let ticks = Math.floor((now - this.state.lastSpawnTick) / tick);
     const max = this.t.spawns.maxCatchUpTicks;
@@ -1538,9 +1542,6 @@ export class Game {
     for (let d = first; d <= today; d++) report.visitors += this.checkWanderers(now);
     this.state.lastWandererDay = today;
 
-    // The return harvest: extra growth for real time away, mostly on relic ground.
-    const harvest = this.returnHarvest(now, away);
-    if (harvest) report.harvest = harvest;
     // Visitors: interest checks on their schedule (offline catch-up included).
     this.visitorTick(now);
     this.state.lastRealSeen = realNow;
