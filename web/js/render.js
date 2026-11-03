@@ -203,9 +203,9 @@ export class ForestView {
   }
 
   /**
-   * A soil tile with some corners faded into the ground (mask: NW NE SE SW, '1' = fade). Each faded corner
-   * is rounded off with a soft edge: full soil inside a circle of radius `r` centred `r` in from the corner,
-   * fading to nothing over `soft` pixels beyond it, in a few steps so it stays crisp pixel art. Cached.
+   * A soil tile with some corners clipped into the ground (mask: NW NE SE SW, '1' = clip). Each clipped
+   * corner is rounded off a little (tuning.visuals.softCorners): full soil inside a circle of `radius` px
+   * centred that far in from the corner, fading out over `soft` px beyond it in `steps` steps. Cached.
    */
   softTile(id, mask) {
     const k = id + '|' + mask;
@@ -218,7 +218,8 @@ export class ForestView {
     const cx = c.getContext('2d');
     cx.drawImage(src.canvas, 0, 0);
     const img = cx.getImageData(0, 0, c.width, c.height), W = c.width, H = c.height;
-    const r = W / 2, soft = 5, steps = 4;
+    const sc = this.app.content.tuning.visuals.softCorners || {};
+    const r = sc.radius ?? 4, soft = sc.soft ?? 2, steps = sc.steps ?? 2;
     const corners = [[0, 0], [W, 0], [W, H], [0, H]];
     for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
       let alpha = 1;

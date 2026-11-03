@@ -701,7 +701,13 @@
     }
    }
   },
-  "overlayFadeSeconds": 0.6
+  "overlayFadeSeconds": 0.6,
+  "softCorners": {
+   "_about": "Soil tiles clip a corner where neither tile beside it has the same soil: the corner is rounded off with a circle of `radius` art pixels, fading out over the last `soft` pixels in `steps` alpha steps.",
+   "radius": 4,
+   "soft": 2,
+   "steps": 2
+  }
  },
  "debugTools": true
 }

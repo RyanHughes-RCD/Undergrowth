@@ -341,9 +341,9 @@ tools/
 - **Treeline:** the edge bushes and the ground under them use deep, shadowed greens (`tools/gen_topdown.py`), so the clearing has a clear dark border.
 - **Old Log art:** `tools/gen_landmark_art.py` turns `design/landmark_old_log.jpg` (pixel art on a 20 px grid) into the sprite, with the picture's own colours and a clean dark outline.
 - **Soil:** each school's soil is the grass tile with its greens moved toward the school's colour plus a few motif specks (`tile.<school>.3a/b`). A soil change fades in over `visuals.overlayFadeSeconds`.
-  - **Soft corners:** a soil tile's corner fades into the ground around it unless the tile above or below and the tile beside that corner have the same soil. Edges between matching tiles stay solid, so patches join up, and a lone tile becomes a soft round patch.
-  - A faded corner shows the ground most common around the tile, whether grass or another soil.
-  - The fade runs over the outer 5 pixels of a quarter-circle, in four alpha steps so it stays crisp (`ForestView.softTile` in `render.js`, cached per tile and corner mask).
+  - **Clipped corners:** a soil tile's corner is clipped a little unless the tile above or below or the tile beside that corner has the same soil. Edges between matching tiles stay solid, so patches join up with slightly rounded outer corners.
+  - A clipped corner shows the ground most common around the tile, whether grass or another soil.
+  - The rounding has a 4-pixel radius and softens over its last 2 pixels in two alpha steps (`visuals.softCorners`; `ForestView.softTile` in `render.js`, cached per tile and corner mask).
 - **Tree shadows (canopy):**
   - `design/shadow_overlay_v2.webp` is turned by `tools/gen_canopy.py` into `web/img/canopy.png`, a seamless light mask.
   - It's drawn world-anchored with a slow sway, plus soft light shafts (`visuals.canopy`).
