@@ -1058,6 +1058,7 @@ export class Game {
     if (!(this.state.inventory[itemID] > 0)) throw new GameError("You don't have that.");
     if (!tile || !this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
+    if (this.relicAt(tile)) throw new GameError('A relic is already buried there.');
     this.consume(itemID);
     this.bump('relic');
     const r = { id: this.rng.uuid(), relicID: itemID, school: def.school, tier: def.tier, tile: { ...tile }, buriedAt: now };
@@ -1067,6 +1068,18 @@ export class Game {
     this.statCache = this.statField(now);
     return r;
   }
+  /** Dig a buried relic back up: it returns to the Bag, and the ground it was shaping goes back to how it was. */
+  digRelic(tile, now) {
+    const r = this.relicAt(tile);
+    if (!r) throw new GameError('No relic is buried there.');
+    this.state.relics = this.state.relics.filter((x) => x !== r);
+    this.grant([{ item: r.relicID, count: 1 }]);
+    this.bump('dug');
+    this.events.push({ type: 'relicDug', relic: r });
+    this.statCache = this.statField(now);
+    return r;
+  }
+
   /** A relic dropped by a find on mature, strong relic ground (tuning.relics.findDrop), or null. */
   relicFromFind(tile, stats, now) {
     const fd = this.relicCfg.findDrop || {};
@@ -2552,13 +2565,12 @@ export class Game {
     for (const x of s.visitors || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of (s.decor && s.decor.placed) || []) out.add(x.tile.x + ',' + x.tile.y);
     if (this.eggsOn) for (const x of s.nests || []) out.add(x.tile.x + ',' + x.tile.y);
-    for (const x of s.relics || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.scenery || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.soilBoosts || []) if (x.seed) out.add(x.tile.x + ',' + x.tile.y);
     return out;
   }
 
-  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t) && !this.nestAt(t) && !this.sceneryAt(t) && !this.buriedSeedAt(t) && !this.relicAt(t); }
+  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t) && !this.nestAt(t) && !this.sceneryAt(t) && !this.buriedSeedAt(t); }   // a buried relic leaves its tile open
   seedProgress(seed, now) { return Math.min(1, Math.max(0, (now - seed.plantedAt) / (Math.max(1, seed.growSeconds) * 1000))); }
 
   // ---- creatures

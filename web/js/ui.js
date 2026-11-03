@@ -163,6 +163,8 @@ export class UI {
     if (this.mode.type === 'place') {
       const c = g.creature(this.mode.creatureID);
       text = `Tap an empty tile to place ${c ? this.app.displayName(c) : 'creature'}`;
+    } else if (this.mode.type === 'dig') {
+      text = 'Tap where a relic is buried to dig it up';
     } else if (this.mode.type === 'relic') {
       text = this.mode.tile ? 'Tap another tile, or bury it here' : `Tap an open tile to bury the ${this.content.items[this.mode.itemID]?.name || 'relic'}`;
     } else if (this.mode.type === 'nest') {
@@ -195,7 +197,12 @@ export class UI {
       h('div', { class: 'row space' }, h('b', {}, terrains.length ? terrains.map((t) => t.name).join(' · ') : 'Blank ground'),
         h('button', { class: 'x', onclick: () => { this.selectedTile = null; this.app.changed(false); } }, ic('close', 1))),
       active.length ? h('div', { class: 'stat-grid' }, active.map((k) => this.intensityRow(k, stats[k])))
-        : h('p', { class: 'sub' }, 'No intensity here yet. Creatures nearby will change this ground.'),
+        : h('p', { class: 'sub' }, g.creaturesOn ? 'No intensity here yet. Creatures nearby will change this ground.' : 'No intensity here yet. A relic or seed buried nearby will change this ground.'),
+      // A buried relic leaves nothing on the surface; its tile card says so, and it can be dug up from here.
+      ...(() => { const r = g.relicAt(tile); if (!r) return []; const def = this.content.items[r.relicID] || {};
+        return [h('div', { class: 'row space relic-row' }, h('span', { class: 'sub' }, `${def.name || 'A relic'} is buried here.`),
+          h('span', { class: 'row gap' }, h('button', { class: 'btn small grey', onclick: () => this.open('relic', r.id) }, 'About'),
+            h('button', { class: 'btn small', onclick: () => this.app.digRelicAt(tile) }, 'Dig up')))]; })(),
       ...g.activeBoosts(now).filter((b) => b.tile.x === tile.x && b.tile.y === tile.y).map((b) => b.seed
         ? h('div', { class: 'sub boost' }, `${(this.content.items[b.seed] || {}).name || 'A school seed'} is buried here · ${g.seedPhase(b, now).phase} · ${duration(g.seedPhase(b, now).ends / 1000)} left`)
         : h('div', { class: 'sub boost' }, ic('gem', 1), this.joinNodes(Object.entries(b.stats).map(([k, v]) => this.amountText(k, v)), ', '),
@@ -480,6 +487,10 @@ export class UI {
     const compostOn = (this.content.tuning.offerings || {}).compostEnabled !== false;
     const head = compostOn ? [h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
       h('span', { class: 'sub' }, 'Spare finds turn into compost.'))] : [];
+    // Relics in the ground leave no mark, so digging one up starts here (or from a tile's card).
+    const buried = (g.state.relics || []).length;
+    if (buried) head.push(h('div', { class: 'row space dig-row' }, h('span', { class: 'sub' }, `${buried} relic${buried === 1 ? '' : 's'} in the ground`),
+      h('button', { class: 'btn small', onclick: () => this.app.beginDig() }, 'Dig up a relic')));
     if (decor.length) {
       head.push(h('div', { class: 'section' }, 'Decor'), ...decor.map(({ def, n }) => h('div', { class: 'list-row' },
         h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)),
@@ -754,7 +765,7 @@ export class UI {
     return h('div', { class: 'card relic-card' },
       h('div', { class: 'row gap' }, h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)), h('b', {}, def.name || 'Relic')),
       def.inscription ? h('p', { class: 'inscription' }, def.inscription) : null,
-      h('p', { class: 'sub' }, 'Once it is in the ground, it stays.'),
+      h('p', { class: 'sub' }, 'It stays in the ground until you dig it up.'),
       h('div', { class: 'row end gap' }, h('button', { class: 'btn green', onclick: () => this.app.buryRelicHere() }, 'Bury it here')));
   }
 

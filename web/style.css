@@ -370,3 +370,4 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .opening .btn.answer { width: 100%; text-align: left; white-space: normal; line-height: 1.35; }
 .clues { margin: 4px 0 0 16px; padding: 0; color: #e6dcc0; line-height: 1.5; }
 .clues li { margin-bottom: 4px; }
+.dig-row, .relic-row { align-items: center; gap: 8px; margin: 6px 0; }
