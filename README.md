@@ -406,7 +406,7 @@ The Store's **Trades**, **Eggs** and **Upgrades** tabs sell things for bundles o
   - **Quick Roots** I–III: seeds grow 25% faster per tier.
   - **Warm Nest** I–III: eggs hatch 25% faster per tier.
   - **Keen Eye: mushrooms / plants / geodes** I–III: that category's uncommon and rarer finds weigh ×(1 + 0.35 × tier × rarity step). For plants this is the flowers seeds grow into.
-  - **Wide Spread** (late: 35 Field Guide entries, day 10): school seeds buried after buying it reach one tile farther (`radiusPerTier`, added to the seed's saved `radius`).
+  - **Wide Spread** (late: 35 Field Guide entries, day 10): school seeds buried after buying it reach half a tile farther (`radiusPerTier`, added to the seed's saved `radius`).
 - In simulation:
   - Quick Roots I: seeds 130 → 104 minutes on average.
   - Warm Nest II: a common egg hatches in 4h instead of 6.
@@ -534,6 +534,33 @@ The six tile stats are six garden schools. In version 5 three of them were renam
 - **Art:** Spore uses the old Damp overlays (`ov.spore.*`), Spirit the old dirt overlays recoloured misty blue-violet (`ov.spirit.*`, `SPIRIT_TONES` in `tools/gen_terrain.py`), and Shimmer the old stone spikes recoloured lilac and teal (`deco.spikes.*`).
 - **Save version 5** (`migrateSchools` in `web/js/core.js`, run before anything else when a forest loads, real and developer saves alike): creature and placement contributions, soil boosts, `ambientDamp` → `ambientSpore`, guide discoveries (`terrain:<id>`, `landmark:<id>`), formed landmarks, soil packs in the Bag (each becomes the matching school seed, and that seed counts as found), shop purchase counts and any pending Spirit Well result are remapped. The old → new ids are in `SCHOOL_RENAMES`.
 - **iOS:** `StatKey` constants in `Packages/UndergrowthCore` are renamed (`.spore`, `.shimmer`, `.spirit`) so the shared Resources load. iOS saves are not migrated.
+
+## Relics (web)
+
+Relics are the only way to change the land for good. A buried relic is a permanent source of its school's stat; school seeds only change it for a while, and more weakly.
+
+- **Data:** `Resources/Content/relics.json` (kept by hand): 30 relics, one per school and tier (`relic.<school>.<tier>`), each with a name, an inscription, a Bag sprite (`relic.<school>.<tier>`) and the stone shown where it's buried (`relic.world.<school>`). Numbers: `tuning.json` → `relics`.
+- **Burying:** in the Bag a relic has **Bury**. Tap an open tile; a card shows its inscription and "Once it is in the ground, it stays." Occupied tiles, landmarks and the treeline are refused. Buried relics can't be dug up.
+- **Effect:** built like a placed creature and fed through the same code (`relicSources` in `effectivePlacements`): its strength at its own tile with the creature falloff, ramping up over `rampHours`, and influence that starts close around it and reaches its full radius over `spreadHours`. It never fades. Relics count as effects for where spawns land, form terrain through the normal rules (different schools overlapping make the pair terrains and triples), and are listed in the spawn inspector.
+
+  | Tier | Strength | Radius | Ramp | Spread | Full footprint (Low+ / Moderate+ tiles) |
+  |---|---|---|---|---|---|
+  | Common | 22 | 2.5 | 30 min | 1h | 21 / 5 |
+  | Uncommon | 30 | 3.5 | 1h | 2h | 37 / 13 |
+  | Rare | 42 | 5 | 2h | 3h | 69 / 37 |
+  | Very rare | 56 | 6.5 | 3h | 4h | 109 / 69 |
+  | Legendary | 75 | 8 | 4h | 6h | 177 / 121 |
+
+  A common relic makes a Low-to-Moderate patch out to about 2 tiles within the hour. Earned landmarks (16+ of two stats over a 3×3) need uncommon or better relics; legendary triples (30+ of three stats) need rare ones.
+- **The tile answers at once:** the moment a relic goes in, its tile reacts for `reactionSeconds` (8): Spore tiny caps, Glow a faint pulse, Bloom buds opening, Verdure blades rising, Shimmer a humming glint, Spirit a curl of mist (shorter and still with reduced motion). The game has no audio, so there's no sound cue. The surrounding tiles then change through the normal intensity stages as the influence spreads.
+- **Where relics come from:**
+  - Old Log shop: a common relic of each school (`shop-relic-<school>`, from 8 Field Guide entries, paid in no-need commons and that school's common gem) and an uncommon one (`shop-relic-<school>-2`, from 14 entries, paid in that school's own finds).
+  - Old Log requests (kind `relic`), one-off: the six old egg requests now give uncommon and rare relics.
+  - The Spirit Well: `{"type": "relic", "tier": …}` rewards (a random school) in its rare (common relic), epic (uncommon) and legendary (rare) pools.
+  - Finds: picking a find on a tile whose strongest stat is at least `findDrop.minStat` (26, Moderate+), inside a relic's area that has been buried for `findDrop.minAgeHours` (24), drops a relic of that school with `findDrop.chance` (0.6%), mostly common.
+- **Creatures no longer shape the land** (`creaturePlacement.enabled: false`): placing, the Creatures tab, wanderers arriving and creature finds are off. The egg system is off too (`eggs.enabled: false`): no eggs from finds, the Spirit Well, the shop or requests; Nest, nest unlocks and Warm Nest are hidden. The code stays. Trader requests at the Old Log now pay in school seeds instead of eggs. Two tasks changed: "Bury a second relic" and "Bury a school seed".
+- **Older saves (save version 6):** each placed creature becomes a buried relic of its main stat's school, at the creature's tier, on its tile, already at full strength. Resting creatures, eggs in the Bag and nests are kept in the save and hidden; nothing is deleted. Creatures that were already fading keep fading as before.
+- **School seeds can't do a relic's job:** a search over every arrangement of the six seeds that can be buried at once (with and without Wide Spread, now +0.5 radius) never reaches a triple (best 17.8 of the 30 needed) or an earned landmark (best 13.9 of 16).
 
 ## School seeds (web)
 

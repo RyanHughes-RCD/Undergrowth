@@ -221,6 +221,54 @@ def school_seeds():
                frames=2, durations=[1.4, 1.4], tags=("seed", "marker"))
 
 
+def relics():
+    """Relics (Resources/Content/relics.json): Bag icons relic.<school>.<tier> (one shape per tier, in
+    the school's colour), the stone set in the ground where one is buried (relic.world.<school>, a
+    pulsing rune), and the unknown starter relic before its school is chosen (relic.unknown)."""
+    STONE_P = ["#5a5468", "#8a8498", "#bcb6c8"]
+
+    def pebble(c, f):                       # common: a smooth pebble with a carved mark
+        c.ellipse(8, 10, 5, 4, 3); c.ellipse(7, 9, 3, 2, 4)
+        c.rect(7, 9, 9, 9, 5); c.rect(8, 8, 8, 11, 5); c.set(8, 10, 6)
+
+    def charm(c, f):                        # uncommon: an amulet on a loop
+        c.ellipse(8, 4, 2, 2, 2); c.ellipse(8, 4, 1, 1, 0)
+        c.ellipse(8, 10, 4.5, 4.5, 3); c.ellipse(8, 10, 3, 3, 5); c.ellipse(7, 9, 1.4, 1.4, 6)
+
+    def idol(c, f):                         # rare: a small carved figure
+        c.rect(5, 6, 11, 14, 3); c.rect(6, 7, 10, 13, 4)
+        c.ellipse(8, 4.5, 3.2, 2.2, 5); c.set(7, 9, 6); c.set(9, 9, 6); c.rect(7, 11, 9, 11, 2)
+
+    def crown(c, f):                        # very rare: a circlet with points
+        c.rect(3, 9, 13, 13, 3); c.rect(4, 10, 12, 12, 4)
+        for x in (3, 8, 13):
+            c.rect(x - 1, 6, x, 8, 5); c.set(x, 5, 6)
+        c.set(8, 11, 6)
+
+    def star(c, f):                         # legendary: a radiant gem
+        for (dx, dy) in ((0, -6), (0, 6), (-6, 0), (6, 0), (-4, -4), (4, -4), (-4, 4), (4, 4)):
+            c.set(8 + dx, 9 + dy, 6)
+        c.ellipse(8, 9, 4, 4, 3); c.ellipse(8, 9, 2.6, 2.6, 5); c.set(7, 8, 6)
+
+    shapes = {"common": pebble, "uncommon": charm, "rare": idol, "veryRare": crown, "legendary": star}
+    for school, (col, light) in SCHOOLS.items():
+        for tier, fn in shapes.items():
+            sprite(f"relic.{school}.{tier}", STONE_P + [col, light], fn, tags=("relic",))
+
+        def world(c, f, col=col):           # a stone set in the ground, its rune pulsing
+            c.ellipse(8, 13, 6, 2.4, 2)
+            c.rect(5, 6, 11, 13, 3); c.rect(6, 7, 10, 12, 4); c.ellipse(8, 6, 3, 1.6, 4)
+            rune = 5 if f == 0 else 6
+            c.rect(8, 8, 8, 11, rune); c.set(7, 9, rune); c.set(9, 10, rune)
+        sprite(f"relic.world.{school}", STONE_P + [col, light], world, frames=2, durations=[1.2, 1.2], tags=("relic", "marker"))
+
+    def unknown(c, f):                      # the starter relic before its school is chosen
+        c.ellipse(8, 10, 5, 4.4, 3); c.ellipse(7, 9, 3, 2.2, 4)
+        c.set(8, 10, 5); c.set(7, 9, 5)
+        c.set(12 - f * 6, 5 + f, 6); c.set(3 + f * 9, 12 - f * 3, 6)
+    sprite("relic.unknown", STONE_P + ["#d8d0f0", "#ffffff"], unknown, frames=2, durations=[0.8, 0.8], tags=("relic",))
+
+
 def landmarks():
     """Earned landmarks (Resources/Content/landmarks.json 'earned'): they form where two stats are strong
     across a 3x3 patch and stay for good. 28x24, anchored at the base."""
@@ -359,6 +407,7 @@ if __name__ == "__main__":
     decor()
     eggs()
     school_seeds()
+    relics()
     landmarks()
     spirit_well()
     board_icon()

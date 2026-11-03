@@ -30,7 +30,7 @@ export function duration(seconds) {
   return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
 }
 
-const CATEGORY_TITLES = { egg: 'Eggs', schoolSeed: 'School seeds', seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
+const CATEGORY_TITLES = { egg: 'Eggs', relic: 'Relics', schoolSeed: 'School seeds', seed: 'Seeds', geode: 'Geodes to crack', gem: 'Gems', material: 'Materials', plant: 'Plants', mushroom: 'Mushrooms' };
 const LANDMARK_TAB = 'landmarks';
 const TERRAIN_TAB = 'terrain';
 const FAMILY_TABS = [['fungling', 'Funglings'], ['sproutling', 'Sproutlings'], ['geodeCritter', 'Geode Critters'], ['wanderer', 'Wanderers']];
@@ -82,6 +82,7 @@ export class UI {
     const bottom = h('div', { class: 'hud-bottom' });
     if (this.mode) bottom.append(this.modeBanner());
     if (this.mode && this.mode.type === 'nest' && this.mode.tile) bottom.append(this.nestPreviewCard(this.mode.eggID, this.mode.tile, true));
+    if (this.mode && this.mode.type === 'relic' && this.mode.tile) bottom.append(this.relicConfirmCard(this.mode.itemID, this.mode.tile));
     if (this.selectedTile) bottom.append(this.tileCard(this.selectedTile));
     const invCount = Object.values(g.state.inventory).reduce((a, b) => a + b, 0);
     const finds = g.state.spawns.length;
@@ -90,7 +91,7 @@ export class UI {
         h('button', { class: 'btn green collect-all', onclick: () => this.app.collectAll() }, ic('bag', 1), ` Collect all (${finds})`)));
     }
     bottom.append(h('div', { class: 'nav' },
-      this.navButton('creatures', 'Creatures', g.state.creatures.length, () => this.open('creatures')),
+      g.creaturesOn ? this.navButton('creatures', 'Creatures', g.state.creatures.length, () => this.open('creatures')) : null,
       this.navButton('bag', 'Bag', invCount, () => this.open('bag')),
       (this.content.requests || []).length ? this.navButton('store', 'Store', this.storeReadyCount(now), () => this.open('store')) : null,
       this.navButton('guide', 'Guide', 0, () => this.open('guide')),
@@ -166,6 +167,8 @@ export class UI {
     if (this.mode.type === 'place') {
       const c = g.creature(this.mode.creatureID);
       text = `Tap an empty tile to place ${c ? this.app.displayName(c) : 'creature'}`;
+    } else if (this.mode.type === 'relic') {
+      text = this.mode.tile ? 'Tap another tile, or bury it here' : `Tap an open tile to bury the ${this.content.items[this.mode.itemID]?.name || 'relic'}`;
     } else if (this.mode.type === 'nest') {
       text = this.mode.tile ? 'Tap another tile to compare, or nest it here' : `Tap an open tile to see what the ${this.content.items[this.mode.eggID]?.name || 'egg'} could hatch into there`;
     } else if (this.mode.type === 'decor') {
@@ -246,6 +249,7 @@ export class UI {
   useText(use) {
     if (!use) return null;
     if (use.type === 'bury') return this.buryText(use.school);
+    if (use.type === 'relic') return null;
     if (use.type !== 'soilBoost' || !use.stats) return use.text;
     const all = Object.keys(use.stats).length === CORE_STATS.length;
     const amount = all ? ['every stat ', this.miniMeter('shimmer', Object.values(use.stats)[0])] : this.joinNodes(Object.entries(use.stats).map(([k, v]) => this.amountText(k, v)), ' and ');
@@ -258,7 +262,7 @@ export class UI {
   buryText(school) {
     const cfg = this.content.tuning.schoolSeeds || {}, g = this.game;
     const wide = g ? g.upgradeTier('wideSpread') * ((g.upgradeDef('wideSpread') || {}).radiusPerTier ?? 1) : 0;
-    return ['Bury: grows ', this.amountText(school, cfg.strength ?? 12), ` around a tile${wide ? ' (Wide Spread: one tile farther)' : ''}, rooting over ${cfg.rampHours ?? 3}h and lasting about ${Math.round((cfg.durationHours ?? 72) / 24)} days before it fades.`];
+    return ['Bury: grows ', this.amountText(school, cfg.strength ?? 12), ` around a tile${wide ? ' (Wide Spread: a little farther)' : ''}, rooting over ${cfg.rampHours ?? 3}h and lasting about ${Math.round((cfg.durationHours ?? 72) / 24)} days before it fades.`];
   }
 
   /** A buried school seed: its school, how far along it is, and what it does. */
@@ -367,6 +371,7 @@ export class UI {
       decor: () => this.decorBody(arg),
       nest: () => this.nestBody(arg),
       buriedSeed: () => this.buriedSeedBody(arg),
+      relic: () => this.relicBody(arg),
       landmark: () => this.landmarkBody(arg),
     }[type];
     if (!build) return;
@@ -473,7 +478,7 @@ export class UI {
   bagBody() {
     const g = this.game;
     const owned = Object.entries(g.state.inventory).filter(([, n]) => n > 0)
-      .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def);
+      .map(([id, n]) => ({ def: this.content.items[id], n })).filter((e) => e.def && (g.eggsOn || e.def.category !== 'egg'));   // eggs are kept, hidden, while the egg system is off
     const decor = Object.entries(g.state.decor.owned).filter(([, n]) => n > 0).map(([id, n]) => ({ def: g.decorDef(id), n })).filter((e) => e.def);
     const compostOn = (this.content.tuning.offerings || {}).compostEnabled !== false;
     const head = compostOn ? [h('div', { class: 'row space compost-row' }, h('span', {}, ic('leaf', 1), ` Compost: ${g.state.compost}`),
@@ -486,7 +491,7 @@ export class UI {
         h('button', { class: 'btn green small', onclick: () => this.app.beginDecor(def.id) }, 'Place'))));
     }
     if (!owned.length) return [...head, h('p', { class: 'sub' }, 'Your bag is empty. Tap mushrooms, plants and geodes in the forest to collect them.')];
-    const order = ['egg', 'seed', 'schoolSeed', 'geode', 'material', 'gem', 'plant', 'mushroom'];
+    const order = ['relic', 'egg', 'seed', 'schoolSeed', 'geode', 'material', 'gem', 'plant', 'mushroom'];
     const cats = [...new Set(owned.map((e) => e.def.category))].sort((a, b) =>
       ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
     return [...head, ...cats.map((cat) => [
@@ -502,11 +507,11 @@ export class UI {
             def.tradeOnly ? h('div', { class: 'sub' }, 'Worth keeping: the Store trades for it.') : null),
           h('b', {}, `×${n}`),
           def.onGrow ? h('button', { class: 'btn green small', onclick: () => this.app.beginPlanting(def.id) }, 'Plant') : null,
-          def.egg ? h('button', { class: 'btn green small', disabled: g.state.nests.length >= g.nestSlots, onclick: () => this.app.beginNest(def.id) }, 'Nest') : null,
+          def.egg && g.eggsOn ? h('button', { class: 'btn green small', disabled: g.state.nests.length >= g.nestSlots, onclick: () => this.app.beginNest(def.id) }, 'Nest') : null,
           def.onCrack ? h('div', { class: 'crack-btns' },
             h('button', { class: 'btn orange small', onclick: () => { this.sheet = null; this.close(); this.openCrack(def.id); } }, 'Crack'),
             n > 1 ? h('button', { class: 'btn orange small', title: `Crack ${Math.min(n, this.batchMax)} at once`, onclick: () => { this.sheet = null; this.close(); this.openBatchCrack(def.id, Math.min(n, this.batchMax)); } }, `×${Math.min(n, this.batchMax)}`) : null) : null,
-          def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'bury' ? 'Bury' : def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : 'Crush') : 'Use') : null,
+          def.use ? h('button', { class: 'btn small', onclick: () => this.app.beginUsing(def.id) }, def.use.type === 'bury' || def.use.type === 'relic' ? 'Bury' : def.use.type === 'soilBoost' ? (def.use.verb === 'Set into a tile' ? 'Set' : 'Crush') : 'Use') : null,
           compostOn && g.compostValue(def.id) ? h('button', { class: 'btn grey small', title: `Compost one for ${g.compostValue(def.id)}`, onclick: () => this.app.compostItem(def.id) }, `+${g.compostValue(def.id)}`) : null)),
     ])];
   }
@@ -746,6 +751,31 @@ export class UI {
     }), list.length > 8 ? h('span', { class: 'sub' }, `+${list.length - 8} more`) : null);
   }
 
+  /** Confirm card for burying a relic: its inscription, and that it stays for good. */
+  relicConfirmCard(itemID, tile) {
+    const def = this.content.items[itemID] || {};
+    return h('div', { class: 'card relic-card' },
+      h('div', { class: 'row gap' }, h('div', { class: 'thumb' }, this.sprites.element(def.sprite, null, 3)), h('b', {}, def.name || 'Relic')),
+      def.inscription ? h('p', { class: 'inscription' }, def.inscription) : null,
+      h('p', { class: 'sub' }, 'Once it is in the ground, it stays.'),
+      h('div', { class: 'row end gap' }, h('button', { class: 'btn green', onclick: () => this.app.buryRelicHere() }, 'Bury it here')));
+  }
+
+  /** A buried relic: what it is, its school and inscription. */
+  relicBody(id) {
+    const g = this.game, now = g.now();
+    const r = (g.state.relics || []).find((x) => x.id === id);
+    if (!r) return ['Relic', h('p', { class: 'sub' }, 'Nothing here.')];
+    const def = this.content.items[r.relicID] || {};
+    const days = Math.floor((now - r.buriedAt) / 86400000);
+    return [def.name || 'Relic', [
+      h('div', { class: 'hero' }, this.sprites.element(def.sprite || 'relic.unknown', null, 6, '', true)),
+      h('p', { class: 'center' }, h('b', {}, `${cap(r.school)} school`), ` · ${rarityName(r.tier)}`),
+      def.inscription ? h('p', { class: 'inscription center' }, def.inscription) : null,
+      h('p', { class: 'sub center' }, days < 1 ? 'Buried today. Its ground is still spreading.' : `Buried ${days} day${days === 1 ? '' : 's'} ago.`),
+    ]];
+  }
+
   nestPreviewCard(eggID, tile, confirm) {
     const g = this.game, now = g.now();
     const stats = g.tileStats(tile, now);
@@ -824,7 +854,7 @@ export class UI {
     const order = ['mushroom', 'plant', 'geode', 'gem', 'material'];
     const cats = [...new Set(content.itemList.filter((i) => i.inGuide !== false).map((i) => i.category))]
       .sort((a, b) => ((order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)) || a.localeCompare(b));
-    const famTabs = FAMILY_TABS.filter(([id]) => content.creatureList.some((c) => c.family === id)).map(([id]) => id);
+    const famTabs = this.game.creaturesOn ? FAMILY_TABS.filter(([id]) => content.creatureList.some((c) => c.family === id)).map(([id]) => id) : [];
     if (this.guideTab === 'creatures') this.guideTab = famTabs[0];
     const tabs = [LANDMARK_TAB, TERRAIN_TAB, ...famTabs, ...cats];
     const all = tabs.flatMap((t) => this.guideEntries(t));
@@ -1177,6 +1207,11 @@ export class UI {
           row('Glow factor', `×${gf.toFixed(2)} ${g.isNight(now) ? '(night)' : (stats.spirit || 0) > 0 ? '(day, fae-touched tiles glow more)' : '(day)'}`),
           row('Bloom cycle', `×${bf.toFixed(2)}`),
           row('Spawns here', `${surface}; geodes ${geode}; Spirit items veiled`),
+          ...g.relicSources(now).map((p) => [p, g.stats.falloff(Math.hypot(p.tile.x - tile.x, p.tile.y - tile.y), p.radius)]).filter(([, w]) => w > 0).map(([p, w]) => {
+            const r = g.state.relics.find((x) => x.id === p.id), lv = g.stats.level(p, now), k = Object.keys(p.contributions)[0];
+            return row(`Relic: ${(this.content.items[r.relicID] || {}).name || r.relicID} (${r.tile.x}, ${r.tile.y})`,
+              `+${(p.contributions[k] * w * lv).toFixed(1)} ${cap(k)} (falloff ×${w.toFixed(2)}, level ×${lv.toFixed(2)}, reach ${p.radius.toFixed(1)} of ${g.relicTier(r.tier).radius})`);
+          }),
           ...g.buriedSeeds().map((b) => [b, g.boostWeight(b, tile)]).filter(([, w]) => w > 0).map(([b, w]) => {
             const ph = g.seedPhase(b, now), lv = g.boostLevel(b, now);
             return row(`Buried ${cap(b.school)} Seed (${b.tile.x}, ${b.tile.y})`,
@@ -1288,7 +1323,7 @@ export class UI {
     const full = h('input', { type: 'checkbox', checked: true });
     const glim = h('input', { type: 'checkbox' });
     const give = speciesSelect();
-    const itemSel = h('select', { class: 'select' }, ['mushroom', 'plant', 'seed', 'schoolSeed', 'geode', 'gem', 'material'].map((cat) =>
+    const itemSel = h('select', { class: 'select' }, ['relic', 'mushroom', 'plant', 'seed', 'schoolSeed', 'geode', 'gem', 'material'].map((cat) =>
       h('optgroup', { label: catTitle(cat) }, Object.values(this.content.items).filter((i) => i.category === cat)
         .map((i) => h('option', { value: i.id }, i.name)))));
     const setupName = h('input', { type: 'text', placeholder: 'Setup name', maxlength: 30 });

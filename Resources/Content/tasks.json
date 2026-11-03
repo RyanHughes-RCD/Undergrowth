@@ -6,8 +6,8 @@
   {"id": "crack-geodes", "text": "Crack 3 geodes", "counter": "crack", "target": 3, "reward": [{"item": "gem.agate", "count": 1}]},
   {"id": "first-trade", "text": "Make a trade at the Store", "counter": "deliver", "target": 1, "reward": [{"item": "geode.mossy-geode", "count": 1}]},
   {"id": "guide-10", "text": "Discover 10 Field Guide entries", "counter": "guide", "target": 10, "reward": [{"item": "gem.jasper", "count": 1}]},
-  {"id": "second-creature", "text": "Find a second creature", "counter": "creatures", "target": 2, "reward": [{"item": "seed.mystery-seed", "count": 3}]},
+  {"id": "second-relic", "text": "Bury a second relic", "counter": "relic", "target": 2, "reward": [{"item": "seed.mystery-seed", "count": 3}]},
   {"id": "plant-5", "text": "Plant 5 seeds", "counter": "plant", "target": 5, "reward": [{"item": "gem.malachite", "count": 1}]},
-  {"id": "two-placed", "text": "Have two creatures out at once", "counter": "placed", "target": 2, "reward": [{"item": "geode.rootbound-geode", "count": 1}]},
-  {"id": "pick-25", "text": "Collect 25 things from the forest", "counter": "collect", "target": 25, "reward": [{"item": "material.moonfall-shard", "count": 1}]}
+  {"id": "bury-seed", "text": "Bury a school seed", "counter": "bury", "target": 1, "reward": [{"item": "geode.rootbound-geode", "count": 1}]},
+  {"id": "pick-25", "text": "Collect 25 things from the forest", "counter": "collect", "target": 25, "reward": [{"item": "geode.mossy-geode", "count": 2}]}
 ]

@@ -31,10 +31,15 @@ EGG_HEADERS = ["Status", "ID", "Family", "Tier", "Name", "Sprite", "Hatch hours"
 SEED_HEADERS = ["Status", "ID", "Name", "School", "Sprite", "Marker sprite", "Text", "Check"]
 SEED_SHEET = "School Seeds"
 UNLOCKS = ["slot", "nest", "expansion", "trowel"]
-KINDS = ["cosmetic", "unlock", "egg", "visitor", "shop", "upgrade"]
+KINDS = ["cosmetic", "unlock", "egg", "visitor", "shop", "upgrade", "relic"]
 REWARDS = ["cosmetic", "unlock", "egg", "compost", "item", "upgrade"]
 STATS = ["spore", "glow", "bloom", "verdure", "shimmer", "spirit"]
 TUNING = os.path.join(ROOT, "Resources", "tuning.json")
+
+
+def relic_ids():
+    """Relic ids (Resources/Content/relics.json, kept by hand) that requests may give."""
+    return [r["id"] for r in (load("relics.json") or [])]
 
 
 def upgrade_ids():
@@ -59,7 +64,7 @@ def request_check_formula(r):
     parts.append(f'IF(M{r}="unlock",IF(COUNTIF(Lists!$D:$D,N{r})=0,"Unknown unlock "&N{r}&". ",""),"")')
     parts.append(f'IF(M{r}="egg",IF(COUNTIF(Lists!$E:$E,N{r})=0,"Unknown egg "&N{r}&". ",""),"")')
     parts.append(f'IF(M{r}="upgrade",IF(COUNTIF(Lists!$G:$G,N{r})=0,"Unknown upgrade "&N{r}&". ",""),"")')
-    parts.append(f'IF(M{r}="item",IF(COUNTIF(Lists!$A:$A,N{r})+COUNTIF(Lists!$E:$E,N{r})+COUNTIF(Lists!$H:$H,N{r})=0,"Unknown item "&N{r}&". ",""),"")')
+    parts.append(f'IF(M{r}="item",IF(COUNTIF(Lists!$A:$A,N{r})+COUNTIF(Lists!$E:$E,N{r})+COUNTIF(Lists!$H:$H,N{r})+COUNTIF(Lists!$I:$I,N{r})=0,"Unknown item "&N{r}&". ",""),"")')
     parts.append(f'IF(AND(Q{r}<>"",COUNTIF($B:$B,Q{r})=0),"Unknown request "&Q{r}&". ","")')
     parts.append(f'IF(COUNTIF($B:$B,B{r})>1,"Duplicate id. ","")')
     s = "&".join(parts)
@@ -233,7 +238,7 @@ def read(wb, errors):
             errors.append(f"Requests row {r} ({rid}): unknown egg {rref!r}")
         if rtype == "upgrade" and rref not in ups:
             errors.append(f"Requests row {r} ({rid}): unknown upgrade {rref!r} (tuning.json upgrades)")
-        if rtype == "item" and rref not in items and rref not in egg_ids and rref not in seed_ids:
+        if rtype == "item" and rref not in items and rref not in egg_ids and rref not in seed_ids and rref not in relic_ids():
             errors.append(f"Requests row {r} ({rid}): unknown item {rref!r}")
         reward = {"type": rtype}
         if rref:
@@ -276,7 +281,8 @@ def refresh_lists(wb):
             ("Sprite ids", sorted(sprite_ids())), ("Unlock ids", UNLOCKS),
             ("Egg ids", sorted(set(eggs_sheet) | {e["id"] for e in eggs})), ("Families", families),
             ("Upgrade ids", upgrade_ids()),
-            ("School seed ids", [text(v[1]) for _, v in rows(wb[SEED_SHEET], len(SEED_HEADERS))] if SEED_SHEET in wb.sheetnames else [])]
+            ("School seed ids", [text(v[1]) for _, v in rows(wb[SEED_SHEET], len(SEED_HEADERS))] if SEED_SHEET in wb.sheetnames else []),
+            ("Relic ids", relic_ids())]
     # Keep every row's Check formula current (new checks reach rows added before them).
     for name, ncol, fn in (("Requests", len(REQ_HEADERS), request_check_formula), ("Cosmetics", len(COS_HEADERS), cosmetic_check_formula),
                            ("Eggs", len(EGG_HEADERS), egg_check_formula), (SEED_SHEET, len(SEED_HEADERS), seed_check_formula)):
@@ -299,7 +305,7 @@ def write_how_to(ws):
     lines = [
         ("What this is", "Everything players can earn at the Old Log: requests (what they ask for and what they give), decor props, and eggs."),
         ("Edit", "Blue text on yellow cells. Add a row to add a request, prop or egg; set Status to 'Off' to take one out without deleting it, or 'Idea' for drafts."),
-        ("Requests", "Up to four items (item ids from the Lists sheet) with counts. Reward type: cosmetic (a prop id from Cosmetics), unlock (slot, nest, expansion, trowel), egg (an egg id) or compost (count = points). "
+        ("Requests", "Up to four items (item ids from the Lists sheet) with counts. Reward type: cosmetic (a prop id from Cosmetics), unlock (slot, nest, expansion, trowel), egg (an egg id), item (any item, school seed or relic id) or compost (count = points). Kind relic: a one-off request that gives a relic. "
                      "Gating: a Field Guide count, another request done first, and/or a forest day. Mix items from different terrains so each request asks for two or three kinds of ground."),
         ("Cosmetics", "Placeable props with no effect on stats. Sprite: a sprite id (new ones get placeholders with --stubs). Compost price: blank if it only comes from a request. Colours: 'Name #hex' pairs; the first is the natural colour."),
         ("Eggs", "One row per family and tier: hatch time and how often foraged eggs come in that tier."),

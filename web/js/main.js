@@ -106,6 +106,11 @@ class App {
         const name = (pid) => { const pl = this.game.state.placements.find((x) => x.id === pid); const c = pl && this.game.creature(pl.creatureID); return c ? this.displayName(c) : 'Two creatures'; };
         const it = this.content.items[e.itemID];
         ui.toast(e.kind === 'seed' ? `${name(e.a)} and ${name(e.b)} planted a seed together.` : `${name(e.a)} and ${name(e.b)} dug up a ${it ? it.name : 'geode'}!`, it ? it.sprite : null);
+      } else if (e.type === 'relicBuried') {
+        const def = this.content.items[e.relic.relicID];
+        this.view.relicReaction(e.relic.tile, e.relic.school);
+        // The first relic ends the first session quietly; later ones just say so.
+        ui.toast((this.game.state.relics || []).length <= 1 ? ui.story('messages.firstRelic') : `${def ? def.name : 'The relic'} is in the ground. The land around it will answer.`);
       } else if (e.type === 'terrainDiscovered') {
         const t = (this.content.terrain || []).find((x) => x.id === e.id);
         if (t) ui.toast(`New terrain in your Field Guide: ${t.name}.`);
@@ -294,6 +299,12 @@ class App {
       }
       return;
     }
+    if (ui.mode && ui.mode.type === 'relic') {
+      if (!g.isFree(tile) || !g.inClearing(tile)) { this.ui.toast(g.inClearing(tile) ? 'Something is already there.' : "That's outside the clearing."); return; }
+      ui.mode = { ...ui.mode, tile };
+      this.changed(false);
+      return;
+    }
     if (ui.mode && ui.mode.type === 'nest') {
       // First tap: preview what would hatch there. "Nest it here" confirms.
       if (!g.isFree(tile) || !g.inClearing(tile)) { this.ui.toast(g.inClearing(tile) ? 'Something is already there.' : "That's outside the clearing."); return; }
@@ -349,6 +360,8 @@ class App {
     }
     const nest = g.nestAt(tile);
     if (nest) { ui.selectedTile = null; ui.open('nest', nest.id); this.changed(false); return; }
+    const relic = g.relicAt(tile);
+    if (relic) { ui.selectedTile = null; ui.open('relic', relic.id); this.changed(false); return; }
     const buried = g.buriedSeedAt(tile);
     if (buried) { ui.selectedTile = null; ui.open('buriedSeed', buried.id); this.changed(false); return; }
     const decor = g.decorAt(tile);
@@ -455,6 +468,22 @@ class App {
     this.wish.open();
   }
 
+  /** Bury a relic: tap a tile, then confirm on the card (its inscription). */
+  beginRelic(itemID) {
+    const def = this.content.items[itemID];
+    if (def && !def.school) { this.ui.openRelicQuestions && this.ui.openRelicQuestions(itemID); return; }
+    this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'relic', itemID }; this.changed(false);
+  }
+
+  buryRelicHere() {
+    const g = this.game, m = this.ui.mode;
+    if (!m || m.type !== 'relic' || !m.tile) return;
+    const r = this.attempt(() => g.buryRelic(m.itemID, m.tile, g.now()));
+    if (!r) return;
+    this.ui.mode = null;
+    this.changed();
+  }
+
   beginNest(eggID) { this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = { type: 'nest', eggID }; this.changed(false); }
 
   nestHere() {
@@ -504,6 +533,7 @@ class App {
 
   beginUsing(itemID) {
     const def = this.content.items[itemID];
+    if (def?.use?.type === 'relic') { this.beginRelic(itemID); return; }
     if (def?.use?.type !== 'soilBoost' && def?.use?.type !== 'bury') {
       const msg = this.attempt(() => this.game.use(itemID, null, this.game.now()));
       if (msg) { this.ui.toast(msg, def?.sprite); this.changed(); }

@@ -9,8 +9,9 @@ export const rarityIndex = (r) => Math.max(0, RARITIES.indexOf(r));
 /** 2 = spawn-table content (older forests are replanted). 3 = clearing, tutorial, unlocks (2 migrates).
  *  4 = creature influence radius doubled (owned/placed creatures are scaled on load).
  *  5 = garden schools: damp/stone/depth became spore/shimmer/spirit, soil packs became school seeds
- *      (migrateSchools remaps every saved key on load). */
-export const SAVE_VERSION = 5;
+ *      (migrateSchools remaps every saved key on load).
+ *  6 = relics: placed creatures become buried relics of their main stat's school (Game.migrate). */
+export const SAVE_VERSION = 6;
 
 /** Version 5 renames, kept so older saves load: stat ids, terrain and landmark ids, soil packs. */
 export const SCHOOL_RENAMES = {
@@ -473,6 +474,7 @@ export class Game {
     state.geodes = state.geodes || [];
     state.visitors = state.visitors || [];
     state.soilBoosts = state.soilBoosts || [];
+    state.relics = state.relics || [];
     state.ambientSpore = state.ambientSpore || {};
     state.nextGlimmer = !!state.nextGlimmer;
     // Offerings (older saves start empty).
@@ -544,7 +546,31 @@ export class Game {
         s.clearing = { x0: c.x0, x1: c.x1, y0: c.y0 - up, y1: c.y1 + down };
       }
     }
+    if ((s.version || 0) < 6) this.migrateToRelics();
     s.version = SAVE_VERSION;
+  }
+
+  /**
+   * Save version 6: creatures no longer shape the land. Each placed creature becomes a buried relic of
+   * its main stat's school, at the creature's tier, on its tile, already at full strength (the land
+   * it made stays). The creature itself is kept (resting, hidden while creature placement is off),
+   * as are eggs and nests. Placements that were already fading are left to fade as before.
+   */
+  migrateToRelics() {
+    const s = this.state, now = s.lastUpdated || s.createdAt || 0;
+    const keep = [];
+    for (const p of s.placements || []) {
+      if (p.removedAt != null) { keep.push(p); continue; }
+      const c = (s.creatures || []).find((x) => x.id === p.creatureID);
+      const def = c && this.content.creatures[c.typeID];
+      const main = Object.entries(p.contributions || {}).filter(([k, v]) => CORE_STATS.includes(k) && v > 0).sort((a, b) => b[1] - a[1])[0];
+      if (!main) { keep.push(p); continue; }
+      const tier = (def && RARITIES.includes(def.rarity)) ? def.rarity : 'common';
+      const relicID = 'relic.' + main[0] + '.' + tier;
+      s.relics.push({ id: 'r-' + p.id, relicID, school: main[0], tier, tile: { ...p.tile }, buriedAt: Math.min(p.placedAt || now, now - 86400000), fromCreature: p.creatureID || null });
+      this.discover('item:' + relicID);
+    }
+    s.placements = keep;
   }
 
   /** A brand-new forest. Players start with no creatures (unless tuning lists starters). */
@@ -792,6 +818,7 @@ export class Game {
     if (name === 'guide') return this.discovered.size;
     if (name === 'creatures') return this.state.creatures.length;
     if (name === 'placed') return this.activePlacements.length;
+    if (name === 'relic') return (this.state.relics || []).length;
     return this.state.counters[name] || 0;
   }
 
@@ -933,8 +960,9 @@ export class Game {
     const speeds = this.activeEffects('rampSpeed');
     const spread = (this.t.influenceSpreadHours || 0) * 3600 * 1000;
     const lmBoost = this.landmarkEffects ? this.landmarkEffects('radiusBoost') : [];
-    if (!links.length && !speeds.length && !spread && !lmBoost.length) return this.state.placements;
-    return this.state.placements.map((p) => {
+    const relics = this.relicSources(now);
+    if (!links.length && !speeds.length && !spread && !lmBoost.length) return relics.length ? [...this.state.placements, ...relics] : this.state.placements;
+    return [...this.state.placements.map((p) => {
       const q = { ...p };
       for (const [e, lm] of lmBoost) if (dist(lm.tile, p.tile) <= (e.range || 0)) q.radius += e.add || 0;
       if (spread) {
@@ -950,7 +978,61 @@ export class Game {
       for (const [e, src] of speeds) if (dist(p.tile, src.tile) < this.stats.reach(src.radius)) m = Math.max(m, e.mult || 1);
       if (m !== 1) q.rampSeconds = (p.rampSeconds ?? this.t.rampSecondsToFull) / m;
       return q;
-    });
+    }), ...relics];
+  }
+
+  // ---- relics (Content/relics.json, tuning.relics): the only permanent way to change the land
+  get relicCfg() { return this.t.relics || {}; }
+  relicTier(tier) { return (this.relicCfg.tiers || {})[tier] || (this.relicCfg.tiers || {}).common || { strength: 20, radius: 2.5, rampHours: 1, spreadHours: 1 }; }
+  relicAt(t) { return (this.state.relics || []).find((r) => sameTile(r.tile, t)) || null; }
+  relicDef(id) { return (this.content.relicList || []).find((r) => r.id === id) || null; }
+  /**
+   * Buried relics as permanent stat sources, shaped like placements so the stat engine, terrain,
+   * spawn weighting and the inspector treat them like creatures did: strength (ramping over rampHours)
+   * with the creature falloff, and influence that starts close around the relic and spreads to its
+   * full radius over spreadHours. They never decay.
+   */
+  relicSources(now) {
+    const out = [];
+    const min = this.t.influenceSpreadMinRadius ?? 0.5;
+    for (const r of this.state.relics || []) {
+      const tier = this.relicTier(r.tier);
+      const spread = (tier.spreadHours ?? this.t.influenceSpreadHours ?? 0) * 3600 * 1000;
+      const frac = spread > 0 ? Math.min(1, Math.max(0, (now - r.buriedAt) / spread)) : 1;
+      out.push({ id: r.id, relic: r.relicID, tile: r.tile, contributions: { [r.school]: tier.strength }, radius: min + (tier.radius - min) * frac,
+        placedAt: r.buriedAt, startLevel: 0, removedAt: null, rampSeconds: Math.max(1, (tier.rampHours ?? 1) * 3600) });
+    }
+    return out;
+  }
+  /** Bury a relic from the Bag on an open tile. It stays for good. */
+  buryRelic(itemID, tile, now) {
+    const def = this.content.items[itemID];
+    if (!def || def.category !== 'relic') throw new GameError("That isn't a relic.");
+    if (!def.school) throw new GameError('It is waiting to learn what you want of it.');
+    if (!(this.state.inventory[itemID] > 0)) throw new GameError("You don't have that.");
+    if (!tile || !this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
+    if (!this.isFree(tile)) throw new GameError('Something is already there.');
+    this.consume(itemID);
+    this.bump('relic');
+    const r = { id: this.rng.uuid(), relicID: itemID, school: def.school, tier: def.tier, tile: { ...tile }, buriedAt: now };
+    this.state.relics.push(r);
+    this.discover('item:' + itemID);
+    this.events.push({ type: 'relicBuried', relic: r });
+    this.statCache = this.statField(now);
+    return r;
+  }
+  /** A relic dropped by a find on mature, strong relic ground (tuning.relics.findDrop), or null. */
+  relicFromFind(tile, stats, now) {
+    const fd = this.relicCfg.findDrop || {};
+    if (!(fd.chance > 0)) return null;
+    const top = CORE_STATS.reduce((a, k) => ((stats[k] || 0) > (stats[a] || 0) ? k : a), CORE_STATS[0]);
+    if ((stats[top] || 0) < (fd.minStat ?? 26)) return null;
+    const age = (fd.minAgeHours ?? 24) * 3600000;
+    const src = (this.state.relics || []).find((r) => r.school === top && now - r.buriedAt >= age && dist(r.tile, tile) < this.stats.reach(this.relicTier(r.tier).radius));
+    if (!src || !this.rng.chance(fd.chance)) return null;
+    const tier = weightedPick(Object.entries(fd.tierWeights || { common: 1 }), this.rng) || 'common';
+    const id = 'relic.' + top + '.' + tier;
+    return this.content.items[id] ? id : null;
   }
 
   static expandStagedRules(rules, stages) {
@@ -1877,6 +1959,7 @@ export class Game {
   ownsSpecies(id) { return this.state.creatures.some((c) => c.typeID === id); }
 
   checkWanderers(t) {
+    if (!this.creaturesOn) return 0;
     const field = this.statField(t);
     const loc = new Map(this.spawnLocations(t, field).tiles.map((x) => [x.tile.x + ',' + x.tile.y, x.weight]));
     let arrived = 0;
@@ -1903,7 +1986,7 @@ export class Game {
     return arrived;
   }
 
-  visitorAt(t) { return this.state.visitors.find((v) => sameTile(v.tile, t)) || null; }
+  visitorAt(t) { return this.creaturesOn ? this.state.visitors.find((v) => sameTile(v.tile, t)) || null : null; }
 
   befriend(visitorID, now) {
     const i = this.state.visitors.findIndex((v) => v.id === visitorID);
@@ -1925,6 +2008,7 @@ export class Game {
    * per-family pity counter guarantees a find after enough misses.
    */
   findCreature(kind, sourceItem, tile, stats, now, plantedAt = null) {
+    if (!this.creaturesOn) return null;                 // creature finds (and their eggs) are off
     const candidates = this.content.creatureList.filter((def) => {
       const src = def.source;
       if (!src || src.kind !== kind) return false;
@@ -1956,6 +2040,10 @@ export class Game {
 
   // ---- eggs (tuning.creatureFinds "egg"): finds give eggs; eggs hatch in nests from the nest tile's stats
   get eggMode() { return (this.t.creatureFinds || 'egg') === 'egg' && (this.content.eggs || []).length > 0; }
+  /** Creatures shape the land only while tuning.creaturePlacement.enabled (off: relics do). */
+  get creaturesOn() { return (this.t.creaturePlacement || {}).enabled !== false; }
+  /** The egg system (finds give eggs, nests) runs only while creatures are on and tuning.eggs.enabled. */
+  get eggsOn() { return this.creaturesOn && (this.t.eggs || {}).enabled !== false; }
   get eggCfg() { return this.t.eggs || {}; }
   eggDef(id) { return (this.content.eggs || []).find((e) => e.id === id) || null; }
 
@@ -1997,7 +2085,7 @@ export class Game {
   }
 
   get nestSlots() { return (this.eggCfg.baseNests ?? 1) + (this.state.unlocks.nests || 0) + this.landmarkEffects('extraNest').reduce((a, [e]) => a + (e.add || 1), 0); }
-  nestAt(t) { return this.state.nests.find((n) => sameTile(n.tile, t)) || null; }
+  nestAt(t) { return this.eggsOn ? this.state.nests.find((n) => sameTile(n.tile, t)) || null : null; }
   nestProgress(n, now) { return Math.min(1, Math.max(0, (now - n.startedAt) / (Math.max(1, n.hatchSeconds) * 1000))); }
 
   /** Put an egg from the Bag in a nest on an open tile. */
@@ -2124,13 +2212,14 @@ export class Game {
     for (const x of s.plantedSeeds) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.visitors || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of (s.decor && s.decor.placed) || []) out.add(x.tile.x + ',' + x.tile.y);
-    for (const x of s.nests || []) out.add(x.tile.x + ',' + x.tile.y);
+    if (this.eggsOn) for (const x of s.nests || []) out.add(x.tile.x + ',' + x.tile.y);
+    for (const x of s.relics || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.scenery || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.soilBoosts || []) if (x.seed) out.add(x.tile.x + ',' + x.tile.y);
     return out;
   }
 
-  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t) && !this.nestAt(t) && !this.sceneryAt(t) && !this.buriedSeedAt(t); }
+  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t) && !this.nestAt(t) && !this.sceneryAt(t) && !this.buriedSeedAt(t) && !this.relicAt(t); }
   seedProgress(seed, now) { return Math.min(1, Math.max(0, (now - seed.plantedAt) / (Math.max(1, seed.growSeconds) * 1000))); }
 
   // ---- creatures
@@ -2374,6 +2463,9 @@ export class Game {
     for (const e of this.effects('bonusDrop', spawn.tile)) {
       if ((e.items || []).includes(def.id) && e.table && this.rng.chance(e.chance || 0)) pending.push(...this.rollTable(e.table, def.id, now));
     }
+    // On mature, strong relic ground a find very occasionally holds a relic (tuning.relics.findDrop).
+    const relicDrop = !spawn.forced && this.relicFromFind(spawn.tile, stats, now);
+    if (relicDrop) pending.push({ item: relicDrop, count: 1 });
     // A find of a garden school sometimes drops that school's seed (tuning.schoolSeeds.dropChance).
     const school = this.schoolOf(def), seedID = school && this.content.schoolSeedFor && this.content.schoolSeedFor[school];
     if (seedID && !spawn.forced && this.rng.chance(this.seedCfg.dropChance ?? 0)) pending.push({ item: seedID, count: 1 });
@@ -2764,14 +2856,18 @@ export class Game {
         out.type = 'item'; out.item = eggs[this.rng.int(0, eggs.length - 1)].id; out.count = 1;
       }
       if (r.type === 'buff') { out.buff = r.buff; if (r.mult) out.mult = r.mult; if (r.hours) out.hours = r.hours; }
+      if (r.type === 'relic') {                         // a relic of that tier, of a school chosen at random
+        out.type = 'item'; out.item = 'relic.' + CORE_STATS[this.rng.int(0, CORE_STATS.length - 1)] + '.' + (r.tier || 'common'); out.count = 1;
+      }
       return out;
     }
     return { type: 'item', item: 'seed.mystery-seed', count: 1, tier: tiers[0] || 'common' };
   }
 
   wishRewardValid(r) {
-    if (r.type === 'item') return !!this.content.items[r.item];
-    if (r.type === 'egg') return (this.content.eggs || []).some((e) => e.tier === r.tier);
+    if (r.type === 'item') return !!this.content.items[r.item] && (this.eggsOn || this.content.items[r.item].category !== 'egg');
+    if (r.type === 'egg') return this.eggsOn && (this.content.eggs || []).some((e) => e.tier === r.tier);
+    if (r.type === 'relic') return CORE_STATS.every((k) => this.content.items['relic.' + k + '.' + (r.tier || 'common')]);
     if (r.type === 'buff') return !!this.buffDef(r.buff);
     return false;
   }
@@ -2919,8 +3015,16 @@ export class Game {
   }
 
   /** Every request with its status: open ones first, then locked, then delivered. */
+  /** Listings that belong to switched-off systems (eggs, nests, creature slots) stay in the data but aren't offered. */
+  requestHidden(req) {
+    const r = req.reward || {};
+    if (!this.eggsOn && (r.type === 'egg' || (r.type === 'item' && this.content.items[r.id]?.category === 'egg') || (r.type === 'unlock' && r.id === 'nest') || (r.type === 'upgrade' && r.id === 'hatchSpeed'))) return true;
+    if (!this.creaturesOn && ((r.type === 'unlock' && (r.id === 'slot' || r.id === 'trowel')))) return true;
+    return false;
+  }
+
   requestBoard(now) {
-    const list = (this.content.requests || []).filter((r) => r.kind !== 'visitor').map((r) => this.requestStatus(r, now));
+    const list = (this.content.requests || []).filter((r) => r.kind !== 'visitor' && !this.requestHidden(r)).map((r) => this.requestStatus(r, now));
     const rank = (s) => (s.done ? 2 : s.locks.length ? 1 : 0);
     return list.sort((a, b) => rank(a) - rank(b));
   }
@@ -2947,10 +3051,10 @@ export class Game {
   pickVisitor(now, h) {
     const v = this.state.visitorReqs;
     const taken = new Set([...(v ? v.offers.map((o) => o.requestID) : []), ...(v ? v.done : [])]);
-    const pool = (this.content.requests || []).filter((r) => r.kind === 'visitor' && !taken.has(r.id) && !this.requestLocks(r, now).length);
+    const pool = (this.content.requests || []).filter((r) => r.kind === 'visitor' && !this.requestHidden(r) && !taken.has(r.id) && !this.requestLocks(r, now).length);
     if (!pool.length) return null;
     const req = pool[h % pool.length];
-    const wanderers = this.content.creatureList.filter((c) => c.family === 'wanderer');
+    const wanderers = this.content.creatureList.filter((c) => c.family === 'wanderer');   // a trader's look (cosmetic)
     const w = wanderers.length ? wanderers[hash32(h, 7) % wanderers.length].id : null;
     return { requestID: req.id, wandererID: w };
   }
@@ -3289,6 +3393,16 @@ export class Content {
         use: { type: 'bury', verb: 'Bury', school: sd.school, text: `Bury it on an open tile to start ${name} ground around it.` } };
       this.itemList.push(it);
       this.items[sd.id] = it;
+    }
+    // Relics (relics.json) are Bag items you bury; relic.unknown is the opening's relic before it has a school.
+    this.relicList = bundle.relics || [];
+    for (const r of [...this.relicList, { id: 'relic.unknown', name: 'A strange relic', school: null, tier: 'common', sprite: 'relic.unknown', worldSprite: 'relic.unknown', inscription: '', inGuide: false }]) {
+      if (this.items[r.id]) continue;
+      const it = { id: r.id, category: 'relic', name: r.name, rarity: r.tier, sprite: r.sprite, worldSprite: r.worldSprite, school: r.school, tier: r.tier,
+        inscription: r.inscription, guideText: r.inscription, use: { type: 'relic', verb: 'Bury' } };
+      if (r.inGuide === false) it.inGuide = false;
+      this.itemList.push(it);
+      this.items[r.id] = it;
     }
     // Eggs are Bag items (category "egg"), built from eggs.json.
     for (const e of this.eggs) {
