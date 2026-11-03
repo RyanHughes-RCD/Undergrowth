@@ -61,8 +61,8 @@ def shiny(c):
 
 
 STAT_COLOURS = {
-    "damp": "#5a8ad8", "glow": "#7ce8f4", "bloom": "#ff8ab8",
-    "verdure": "#6cc24a", "stone": "#9a92a8", "depth": "#7a5aa0",
+    "spore": "#5a8ad8", "glow": "#7ce8f4", "bloom": "#ff8ab8",
+    "verdure": "#6cc24a", "shimmer": "#9a92a8", "spirit": "#7a5aa0",
 }
 
 

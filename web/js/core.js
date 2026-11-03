@@ -2,13 +2,72 @@
 // A JavaScript port of Packages/UndergrowthCore (the Swift package). Same data
 // files, same rules; times are stored as epoch milliseconds.
 
-export const CORE_STATS = ['damp', 'glow', 'bloom', 'verdure', 'stone', 'depth'];
+export const CORE_STATS = ['spore', 'glow', 'bloom', 'verdure', 'shimmer', 'spirit'];
 export const RARITIES = ['common', 'uncommon', 'rare', 'veryRare', 'legendary'];
 export const RARITY_NAMES = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', veryRare: 'Very rare', legendary: 'Legendary' };
 export const rarityIndex = (r) => Math.max(0, RARITIES.indexOf(r));
 /** 2 = spawn-table content (older forests are replanted). 3 = clearing, tutorial, unlocks (2 migrates).
- *  4 = creature influence radius doubled (owned/placed creatures are scaled on load). */
-export const SAVE_VERSION = 4;
+ *  4 = creature influence radius doubled (owned/placed creatures are scaled on load).
+ *  5 = garden schools: damp/stone/depth became spore/shimmer/spirit, soil packs became school seeds
+ *      (migrateSchools remaps every saved key on load). */
+export const SAVE_VERSION = 5;
+
+/** Version 5 renames, kept so older saves load: stat ids, terrain and landmark ids, soil packs. */
+export const SCHOOL_RENAMES = {
+  stats: { damp: 'spore', stone: 'shimmer', depth: 'spirit' },
+  terrains: { damp: 'spore', stone: 'shimmer', depth: 'spirit', 'dripstone-ledge': 'dewcrystal-dell', 'crystal-outcrop': 'crystal-glade',
+    'rock-garden': 'prism-garden', 'geode-bed': 'dreaming-hollow', 'overgrown-rocks': 'overgrown-crystals' },
+  landmarks: { 'landmark.cave': 'landmark.crystal-grotto', 'landmark.standing-stones': 'landmark.singing-crystals' },
+  items: { 'supply.dew-moss': 'seed.spore', 'supply.glow-dust': 'seed.glow', 'supply.petal-mulch': 'seed.bloom',
+    'supply.leaf-mould': 'seed.verdure', 'supply.grit': 'seed.shimmer', 'supply.loose-loam': 'seed.spirit' },
+  listings: { 'shop-dew-moss': 'shop-seed-spore', 'shop-glow-dust': 'shop-seed-glow', 'shop-petal-mulch': 'shop-seed-bloom',
+    'shop-leaf-mould': 'shop-seed-verdure', 'shop-grit': 'shop-seed-shimmer', 'shop-loose-loam': 'shop-seed-spirit' },
+};
+
+/**
+ * Saves from before version 5 name the old stats. Remaps, in place: creature and placement
+ * contributions, soil boosts, the ambient water layer (ambientDamp → ambientSpore), guide discoveries
+ * (terrain:<id>, landmark:<id>, item:<id>), formed landmarks, soil packs in the Bag (→ the matching
+ * school seed), shop purchase counts and any pending Spirit Well result. Safe to run twice.
+ */
+export function migrateSchools(state) {
+  if (!state || (state.version || 0) >= 5) return state;
+  const R = SCHOOL_RENAMES;
+  const statKeys = (o) => {
+    if (!o || typeof o !== 'object') return o;
+    for (const [a, b] of Object.entries(R.stats)) if (a in o) { o[b] = (o[b] || 0) + o[a]; delete o[a]; }
+    return o;
+  };
+  const renameKeys = (o, map) => {
+    if (!o || typeof o !== 'object') return;
+    for (const [a, b] of Object.entries(map)) if (a in o) { o[b] = (typeof o[a] === 'number' ? (o[b] || 0) : 0) + o[a]; delete o[a]; }
+  };
+  for (const c of state.creatures || []) statKeys(c.contributions);
+  for (const p of state.placements || []) statKeys(p.contributions);
+  for (const b of state.soilBoosts || []) statKeys(b.stats);
+  if (state.ambientDamp && !state.ambientSpore) state.ambientSpore = state.ambientDamp;
+  delete state.ambientDamp;
+  const landmarkKey = (id) => id.replace(/^landmark\./, '');
+  state.discovered = [...new Set((state.discovered || []).map((k) => {
+    const [kind, ...rest] = k.split(':'), id = rest.join(':');
+    if (kind === 'terrain' && R.terrains[id]) return 'terrain:' + R.terrains[id];
+    if (kind === 'landmark' && R.landmarks['landmark.' + id]) return 'landmark:' + landmarkKey(R.landmarks['landmark.' + id]);
+    if (kind === 'item' && R.items[id]) return 'item:' + R.items[id];
+    return k;
+  }))];
+  for (const l of state.landmarks || []) if (R.landmarks[l.id]) l.id = R.landmarks[l.id];
+  // Soil packs in the Bag become the matching school seed (and that seed counts as found).
+  for (const [a, b] of Object.entries(R.items)) if (state.inventory && state.inventory[a] > 0 && !state.discovered.includes('item:' + b)) state.discovered.push('item:' + b);
+  renameKeys(state.inventory, R.items);
+  if (state.offerings) { renameKeys(state.offerings.bought, R.listings); renameKeys(state.offerings.delivered, R.listings); }
+  // A pending Spirit Well result may name a soil pack.
+  const walk = (o) => {
+    if (Array.isArray(o)) return o.forEach((v, i) => { if (typeof v === 'string' && R.items[v]) o[i] = R.items[v]; else walk(v); });
+    if (o && typeof o === 'object') for (const k in o) { if (typeof o[k] === 'string' && R.items[o[k]]) o[k] = R.items[o[k]]; else walk(o[k]); }
+  };
+  if (state.wish) walk(state.wish.pending);
+  return state;
+}
 export const TUTORIAL_STEPS = ['forage', 'pickClover', 'plant', 'dig', 'crack', 'place', 'watch', 'wrap', 'done'];
 
 // ---------------------------------------------------------------- utilities
@@ -152,7 +211,7 @@ export class StatEngine {
     return Math.max(0, rampAt(p.removedAt) - (now - p.removedAt) / decay);
   }
 
-  /** Fade-rate multiplier for a stat after its creature leaves (terrain.statDecayRate; Stone lingers). */
+  /** Fade-rate multiplier for a stat after its creature leaves (terrain.statDecayRate; Shimmer lingers). */
   decayRate(stat) {
     const r = (this.t.terrain && this.t.terrain.statDecayRate) || {};
     return Math.max(0.01, stat && r[stat] != null ? r[stat] : 1);
@@ -188,7 +247,7 @@ export class StatEngine {
     const K = keys.length;
     const values = new Float64Array(size.width * size.height * K);
     for (const p of placements) {
-      // Per stat: after removal each stat fades at its own rate (Stone slowest).
+      // Per stat: after removal each stat fades at its own rate (Shimmer slowest).
       const contribs = Object.entries(p.contributions)
         .map(([k, v]) => [keys.indexOf(k), v * this.level(p, now, p.removedAt == null ? null : k)])
         .filter(([, v]) => v !== 0);
@@ -378,7 +437,7 @@ export function decorVariant(def, colorIndex = 0) {
 
 /**
  * A readable hint for where an item grows, from its stat minimums (story.json "hints"), e.g.
- * "Grows where Stone meets deep soil." Used for items not yet in the Field Guide.
+ * "Grows where Shimmer meets deep soil." Used for items not yet in the Field Guide.
  */
 export function itemHint(item, story) {
   const H = (story && story.hints) || {};
@@ -410,10 +469,11 @@ export class Game {
   constructor(content, state) {
     this.content = content;
     this.state = state;
+    migrateSchools(state);                 // version 5: garden schools (before any defaults below)
     state.geodes = state.geodes || [];
     state.visitors = state.visitors || [];
     state.soilBoosts = state.soilBoosts || [];
-    state.ambientDamp = state.ambientDamp || {};
+    state.ambientSpore = state.ambientSpore || {};
     state.nextGlimmer = !!state.nextGlimmer;
     // Offerings (older saves start empty).
     state.offerings = state.offerings || { delivered: {} };
@@ -949,10 +1009,10 @@ export class Game {
   // ---- terrain: each stat's own identity (tuning.terrain)
   get terrain() { return this.t.terrain || {}; }
 
-  /** Elevation -1..1 from a tile's stats: Stone raises the ground, Depth sinks it. */
+  /** Elevation -1..1 from a tile's stats: Shimmer raises the ground, Spirit sinks it. */
   elevationOf(stats) {
     const e = this.terrain.elevation || {};
-    const v = (stats.stone || 0) * (e.stonePerPoint ?? 0.025) - (stats.depth || 0) * (e.depthPerPoint ?? 0.025);
+    const v = (stats.shimmer || 0) * (e.shimmerPerPoint ?? 0.025) - (stats.spirit || 0) * (e.spiritPerPoint ?? 0.025);
     const m = e.max ?? 1;
     return Math.max(-m, Math.min(m, v));
   }
@@ -978,7 +1038,7 @@ export class Game {
     const night = kind === 'visual' ? (g.visualNight ?? 1.5) : (g.nightFactor ?? 1.6);
     const day = kind === 'visual' ? (g.visualDay ?? 0.35) : (g.dayFactor ?? 0.4);
     if (this.isNight(t)) return night;
-    const k = Math.min(1, (stats.depth || 0) / Math.max(1, g.depthForFullGlow ?? 40));
+    const k = Math.min(1, (stats.spirit || 0) / Math.max(1, g.spiritForFullGlow ?? 40));
     return day + (night - day) * k;
   }
 
@@ -1033,37 +1093,37 @@ export class Game {
     return this._keys;
   }
 
-  /** Ambient Damp (seeped/pooled water), separate from creature contributions. */
-  ambientAt(x, y) { return (this.state.ambientDamp && this.state.ambientDamp[x + ',' + y]) || 0; }
+  /** Ambient Spore (seeped/pooled water), separate from creature contributions. */
+  ambientAt(x, y) { return (this.state.ambientSpore && this.state.ambientSpore[x + ',' + y]) || 0; }
 
   /**
-   * One step of Damp spreading (per spawn tick). Each clearing tile takes in water from wetter
+   * One step of Spore spreading (per spawn tick). Each clearing tile takes in water from wetter
    * neighbours (spreadRate × difference), more easily downhill (downhillBoost) and hardly uphill
-   * (uphillPenalty); water also runs down slopes on its own (gravityPerTick). High-Stone tiles
-   * block seepage across them (none at stoneBlocksAt). It evaporates (evaporation), less on low
-   * ground (lowGroundRetention), so hollows turn boggy. Creature Damp is a source; only this
+   * (uphillPenalty); water also runs down slopes on its own (gravityPerTick). High-Shimmer tiles
+   * block seepage across them (none at shimmerBlocksAt). It evaporates (evaporation), less on low
+   * ground (lowGroundRetention), so hollows turn boggy. Creature Spore is a source; only this
    * ambient layer changes, so creature ramp/decay stays as it is.
    */
   ambientTick(t) {
-    const cfg = this.terrain.ambientDamp || {};
+    const cfg = this.terrain.ambientSpore || {};
     if (cfg.enabled === false) return;
     const W = this.state.size.width, c = this.clearing;
-    const amb = this.state.ambientDamp || {};
+    const amb = this.state.ambientSpore || {};
     const field = this.statField(t, { raw: true });     // water physics uses the raw values
     const n = W * this.state.size.height;
     const D = new Float32Array(n), E = new Float32Array(n), S = new Float32Array(n);
     let any = false;
-    const K = field.keys.length, kd = field.keys.indexOf('damp'), ks = field.keys.indexOf('stone'), kp = field.keys.indexOf('depth');
-    const el = this.terrain.elevation || {}, sp = el.stonePerPoint ?? 0.025, dp = el.depthPerPoint ?? 0.025, em = el.max ?? 1;
+    const K = field.keys.length, kd = field.keys.indexOf('spore'), ks = field.keys.indexOf('shimmer'), kp = field.keys.indexOf('spirit');
+    const el = this.terrain.elevation || {}, sp = el.shimmerPerPoint ?? 0.025, dp = el.spiritPerPoint ?? 0.025, em = el.max ?? 1;
     for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
       const i = y * W + x, o = i * K;
       D[i] = field.values[o + kd]; S[i] = field.values[o + ks];
       E[i] = Math.max(-em, Math.min(em, S[i] * sp - field.values[o + kp] * dp));
       if (D[i] > 0) any = true;
     }
-    if (!any) { this.state.ambientDamp = {}; return; }
+    if (!any) { this.state.ambientSpore = {}; return; }
     const rate = cfg.spreadRate ?? 0.05, down = cfg.downhillBoost ?? 2.5, up = cfg.uphillPenalty ?? 0.8;
-    const grav = cfg.gravityPerTick ?? 0, block = Math.max(1, cfg.stoneBlocksAt ?? 40);
+    const grav = cfg.gravityPerTick ?? 0, block = Math.max(1, cfg.shimmerBlocksAt ?? 40);
     const evap = cfg.evaporation ?? 0.06, keep = cfg.lowGroundRetention ?? 0.7, max = cfg.max ?? 45, minKeep = cfg.minKeep ?? 0.05;
     const next = {}, names = this.tileKeys.names;
     for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
@@ -1089,30 +1149,30 @@ export class Game {
       const v = Math.min(max, a + inflow - e * a);
       if (v >= minKeep) next[key] = Math.round(v * 100) / 100;
     }
-    this.state.ambientDamp = next;
+    this.state.ambientSpore = next;
   }
 
   /** Where a new spawn sits. Item data spawn.placement: surface | buried | auto (default). Auto:
-   *  items whose highest requirement is Depth are buried; geodes are buried on Depth-dominant
-   *  tiles and exposed on Stone-dominant ones; everything else is on the surface. */
+   *  items whose highest requirement is Spirit are buried; geodes are buried on Spirit-dominant
+   *  tiles and exposed on Shimmer-dominant ones; everything else is on the surface. */
   resolvePlacement(item, stats) {
     const p = (item.spawn && item.spawn.placement) || 'auto';
     if (p === 'surface' || p === 'buried') return p;
     const req = (item.spawn && item.spawn.requires) || {};
     let top = null, best = -1;
     for (const k in req) { const m = req[k].min ?? 0; if (m > best) { best = m; top = k; } }
-    if (top === 'depth') return 'buried';
-    if (item.category === 'geode' && this.shares(stats).dominant === 'depth') return 'buried';
+    if (top === 'spirit') return 'buried';
+    if (item.category === 'geode' && this.shares(stats).dominant === 'spirit') return 'buried';
     return 'surface';
   }
 
-  /** How a spawn shows right now: 'surface', 'exposed' (geode on Stone), 'buried', or 'hidden' (tall grass). */
+  /** How a spawn shows right now: 'surface', 'exposed' (geode on Shimmer), 'buried', or 'hidden' (tall grass). */
   spawnView(spawn, t, stats = null) {
     if (spawn.placement === 'buried') return 'buried';
     const st = stats || this.tileStats(spawn.tile, t);
     if (!spawn.tutorial && !spawn.revealed && (st.verdure || 0) >= ((this.terrain.verdure || {}).hideThreshold ?? 30)) return 'hidden';
     const def = this.content.items[spawn.itemID];
-    if (def && def.category === 'geode' && this.shares(st).dominant === 'stone') return 'exposed';
+    if (def && def.category === 'geode' && this.shares(st).dominant === 'shimmer') return 'exposed';
     return 'surface';
   }
 
@@ -1130,25 +1190,101 @@ export class Game {
   }
 
   // ---- stats
-  /** Tiles a soil boost reaches: its own tile, plus its radius (a square) when it has one (Wide Spread). */
+  /**
+   * Tiles a soil boost reaches. A plain boost (landmark aura, gem) covers its own tile plus a square of
+   * its radius at full strength. A buried school seed (b.seed) spreads with the creature falloff over
+   * its radius instead. Each tile comes with its share w (0..1) of the boost's stats.
+   */
   boostTiles(b) {
     const r = b.radius || 0;
-    if (!r) return this.inBounds(b.tile) ? [b.tile] : [];
+    if (b.seed) {
+      const reach = this.stats.reach(r), R = Math.ceil(reach), out = [];
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const t = { x: b.tile.x + dx, y: b.tile.y + dy };
+        const w = this.stats.falloff(Math.hypot(dx, dy), r);
+        if (w > 0 && this.inBounds(t)) out.push({ ...t, w });
+      }
+      return out;
+    }
+    if (!r) return this.inBounds(b.tile) ? [{ ...b.tile, w: 1 }] : [];
     const out = [];
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
-      const t = { x: b.tile.x + dx, y: b.tile.y + dy };
+      const t = { x: b.tile.x + dx, y: b.tile.y + dy, w: 1 };
       if (this.inBounds(t)) out.push(t);
     }
     return out;
   }
+  /** A boost's share (0..1) on one tile: the same shape as boostTiles. */
+  boostWeight(b, t) {
+    const dx = t.x - b.tile.x, dy = t.y - b.tile.y;
+    if (b.seed) return this.stats.falloff(Math.hypot(dx, dy), b.radius || 0);
+    return Math.max(Math.abs(dx), Math.abs(dy)) <= (b.radius || 0) ? 1 : 0;
+  }
+  /** A boost's strength now (0..1): plain boosts are full while active; a buried seed ramps in, holds, then fades. */
+  boostLevel(b, now) {
+    if (!b.seed) return 1;
+    const ramp = Math.max(1, b.rampMs || 0), fade = Math.max(1, b.fadeMs || 0);
+    const up = Math.min(1, Math.max(0, (now - b.appliedAt) / ramp));
+    const down = b.fullUntil != null && now > b.fullUntil ? Math.max(0, 1 - (now - b.fullUntil) / fade) : 1;
+    return Math.min(up, down);
+  }
+  /** Stats a boost gives one of its tiles right now. */
+  boostStatsAt(b, w, now) {
+    const m = w * this.boostLevel(b, now), out = {};
+    for (const k in b.stats) out[k] = b.stats[k] * m;
+    return out;
+  }
   activeBoosts(now) { return this.state.soilBoosts.filter((b) => now >= b.appliedAt && (b.expiresAt == null || now < b.expiresAt)); }
+
+  // ---- school seeds (tuning.schoolSeeds): buried from the Bag, saved as soil boosts with a seed
+  get seedCfg() { return this.t.schoolSeeds || {}; }
+  /** Buried school seeds still in the ground (ramping, holding or fading). */
+  buriedSeeds() { return this.state.soilBoosts.filter((b) => b.seed); }
+  buriedSeedAt(t) { return this.state.soilBoosts.find((b) => b.seed && sameTile(b.tile, t)) || null; }
+  /** Its stage right now: 'rooting' (ramping in), 'growing' (full), 'fading', and ms until the next change. */
+  seedPhase(b, now) {
+    if (now < b.appliedAt + (b.rampMs || 0)) return { phase: 'rooting', left: b.appliedAt + b.rampMs - now, ends: b.expiresAt - now };
+    if (now < b.fullUntil) return { phase: 'growing', left: b.fullUntil - now, ends: b.expiresAt - now };
+    return { phase: 'fading', left: b.expiresAt - now, ends: b.expiresAt - now };
+  }
+  /** The school a find belongs to: its highest stat need (null for finds that need nothing). */
+  schoolOf(item) {
+    const req = (item && item.spawn && item.spawn.requires) || {};
+    let top = null, best = 0;
+    for (const k in req) { const m = req[k].min ?? 0; if (m > best && CORE_STATS.includes(k)) { best = m; top = k; } }
+    return top;
+  }
+
+  /** Bury a school seed on an open tile: its school's stat grows around it, then fades (tuning.schoolSeeds). */
+  burySeed(itemID, tile, now) {
+    const def = this.content.items[itemID], cfg = this.seedCfg;
+    if (!def || !def.use || def.use.type !== 'bury') throw new GameError("That can't be buried.");
+    if (!(this.state.inventory[itemID] > 0)) throw new GameError("You don't have that.");
+    if (!tile || !this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
+    if (!this.isFree(tile)) throw new GameError('Something is already there.');
+    const max = cfg.maxBuried ?? 6;
+    if (this.buriedSeeds().length >= max) throw new GameError(`Only ${max} seeds can be buried at once. Wait for one to fade.`);
+    this.consume(itemID);
+    this.bump('bury');
+    const hour = 3600 * 1000;
+    const rampMs = (cfg.rampHours ?? 3) * hour, fullUntil = now + (cfg.durationHours ?? 72) * hour;
+    const b = {
+      id: this.rng.uuid(), tile: { ...tile }, seed: itemID, school: def.school, stats: { [def.school]: cfg.strength ?? 12 },
+      appliedAt: now, rampMs, fullUntil, fadeMs: (cfg.fadeHours ?? 6) * hour,
+      radius: (cfg.radius ?? 1.5) + this.upgradeTier('wideSpread') * ((this.upgradeDef('wideSpread') || {}).radiusPerTier ?? 1),
+    };
+    b.expiresAt = b.fullUntil + b.fadeMs;
+    this.state.soilBoosts.push(b);
+    this.statCache = this.statField(now);
+    return b;
+  }
 
   /** Tile stats for every tile. Values below intensity.minInfluence are 0 (inactive) unless opts.raw. */
   statField(now, opts = {}) {
     const f = this.stats.field(this.state.size, this.effectivePlacements(now), now);
-    for (const b of [...this.activeBoosts(now), ...this.landmarkAuras()]) for (const t of this.boostTiles(b)) f.add(t.x, t.y, b.stats);
-    // Ambient Damp (seeped and pooled water) on top of what creatures give.
-    const amb = this.state.ambientDamp || {}, kd = f.keys.indexOf('damp'), KK = f.keys.length, idx = this.tileKeys.index;
+    for (const b of [...this.activeBoosts(now), ...this.landmarkAuras()]) for (const t of this.boostTiles(b)) f.add(t.x, t.y, this.boostStatsAt(b, t.w, now));
+    // Ambient Spore (seeped and pooled water) on top of what creatures give.
+    const amb = this.state.ambientSpore || {}, kd = f.keys.indexOf('spore'), KK = f.keys.length, idx = this.tileKeys.index;
     for (const key in amb) {
       const i = idx.get(key);
       if (i != null) f.values[i * KK + kd] += amb[key];
@@ -1183,8 +1319,11 @@ export class Game {
 
   tileStats(tile, now, opts = {}) {
     const s = this.stats.statsAt(tile, this.effectivePlacements(now), now);
-    for (const b of [...this.activeBoosts(now), ...this.landmarkAuras()]) if (Math.max(Math.abs(b.tile.x - tile.x), Math.abs(b.tile.y - tile.y)) <= (b.radius || 0)) for (const k in b.stats) s[k] = (s[k] || 0) + b.stats[k];
-    s.damp = (s.damp || 0) + this.ambientAt(tile.x, tile.y);
+    for (const b of [...this.activeBoosts(now), ...this.landmarkAuras()]) {
+      const w = this.boostWeight(b, tile);
+      if (w > 0) { const add = this.boostStatsAt(b, w, now); for (const k in add) s[k] = (s[k] || 0) + add[k]; }
+    }
+    s.spore = (s.spore || 0) + this.ambientAt(tile.x, tile.y);
     const m = this.revealFactor(tile.x, tile.y, now);
     const floor = opts.raw ? 0 : this.minInfluence;
     for (const k in s) { s[k] = Math.min(this.t.statCap, Math.max(0, s[k] * m)); if (s[k] < floor) s[k] = 0; }
@@ -1422,28 +1561,28 @@ export class Game {
   /**
    * Category growth bonuses, proportional per tile (so a few qualifying tiles never hog the forest):
    * each qualifying free tile gets an extra chance this tick of `normal per-tile spawn rate × bonus`,
-   * restricted to its category. Damp tiles grow mushrooms faster (terrain.damp.mushroomGrowth);
+   * restricted to its category. Spore tiles grow mushrooms faster (terrain.spore.mushroomGrowth);
    * wild meadows sprout plants faster (combos.meadow.plantGrowth).
    */
   growthBonuses(t, cap, field) {
     const st = this.t.spawns, c = this.clearing;
     const area = (c.x1 - c.x0 + 1) * (c.y1 - c.y0 + 1);
     const perTile = (st.attemptsPerTick * st.spawnChance * this.buffMult('lively', t)) / Math.max(1, area);   // the normal rate for one tile
-    const mg = (this.terrain.damp || {}).mushroomGrowth || {};
+    const mg = (this.terrain.spore || {}).mushroomGrowth || {};
     const meadow = this.combo('meadow'), pg = meadow.plantGrowth || {};
     const K = field.keys.length, W = this.state.size.width, names = this.tileKeys.names;
-    const kd = field.keys.indexOf('damp'), kb = field.keys.indexOf('bloom'), kv = field.keys.indexOf('verdure');
+    const kd = field.keys.indexOf('spore'), kb = field.keys.indexOf('bloom'), kv = field.keys.indexOf('verdure');
     const mreq = Object.entries(meadow.requires || {}).map(([k, b]) => [field.keys.indexOf(k), b]);
     const occ = this.occupied();
     let made = 0;
     for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
       if (this.state.spawns.length >= cap) return made;
       const o = (y * W + x) * K;
-      const damp = field.values[o + kd] || 0;
-      if (damp < (mg.minDamp ?? 6) && !(field.values[o + kb] > 0)) continue;     // most tiles: nothing to do
+      const spore = field.values[o + kd] || 0;
+      if (spore < (mg.minSpore ?? 6) && !(field.values[o + kb] > 0)) continue;     // most tiles: nothing to do
       const isMeadow = mreq.length && mreq.every(([ki, b]) => ki >= 0 && boundMatches(b, field.values[o + ki]));
       let cat = null, bonus = 0;
-      if (damp >= (mg.minDamp ?? 6)) { cat = 'mushroom'; bonus = Math.min(mg.maxBonus ?? 2, damp * (mg.perPoint ?? 0.08)); }
+      if (spore >= (mg.minSpore ?? 6)) { cat = 'mushroom'; bonus = Math.min(mg.maxBonus ?? 2, spore * (mg.perPoint ?? 0.08)); }
       if (isMeadow) {
         const b = Math.min(pg.maxBonus ?? 2.5, ((field.values[o + kb] || 0) + (field.values[o + kv] || 0)) * (pg.perPoint ?? 0.06));
         if (b > bonus || this.rng.chance(0.5)) { cat = 'plant'; bonus = b; }
@@ -1497,18 +1636,18 @@ export class Game {
           }
         }
       }
-      for (const b of [...this.activeBoosts(t), ...this.landmarkAuras()]) for (const bt of this.boostTiles(b)) sources[bt.y * W + bt.x] += 1;
+      for (const b of [...this.activeBoosts(t), ...this.landmarkAuras()]) if (this.boostLevel(b, t) > 0) for (const bt of this.boostTiles(b)) sources[bt.y * W + bt.x] += 1;
     }
     const tiles = [];
     let total = 0;
     const occ = this.occupied();
-    // Per-tick constants (Glow by day/night and Depth, Bloom's cycle) instead of per tile.
+    // Per-tick constants (Glow by day/night and Spirit, Bloom's cycle) instead of per tile.
     const K = on ? field.keys.length : 0;
     const coreIdx = on ? CORE_STATS.map((k) => field.keys.indexOf(k)) : [];
-    const depthIdx = on ? field.keys.indexOf('depth') : -1;
+    const spiritIdx = on ? field.keys.indexOf('spirit') : -1;
     const bloomF = this.bloomFactor(t), gc = this.terrain.glowCycle || {}, night = this.isNight(t);
-    const gN = gc.nightFactor ?? 1.6, gD = gc.dayFactor ?? 0.4, gFull = Math.max(1, gc.depthForFullGlow ?? 40);
-    const glowAt = (depth) => (night ? gN : gD + (gN - gD) * Math.min(1, depth / gFull));
+    const gN = gc.nightFactor ?? 1.6, gD = gc.dayFactor ?? 0.4, gFull = Math.max(1, gc.spiritForFullGlow ?? 40);
+    const glowAt = (spirit) => (night ? gN : gD + (gN - gD) * Math.min(1, spirit / gFull));
     const comboReqs = on ? Object.entries(this.t.combos || {}).filter(([id]) => !id.startsWith('_'))
       .map(([id, cb]) => [id, Object.entries(cb.requires || {}).map(([k, b]) => [field.keys.indexOf(k), b])]) : [];
     const terReqs = on ? this.terrainDefs.map((d) => [d, Object.entries(d.requires).map(([k, b]) => [field.keys.indexOf(k), b])]) : [];
@@ -1524,7 +1663,7 @@ export class Game {
             const v = field.values[o + coreIdx[ki]] || 0;
             if (!v) continue;
             const k = CORE_STATS[ki];
-            intensity += v * (k === 'glow' ? glowAt(field.values[o + depthIdx] || 0) : k === 'bloom' ? bloomF : 1);
+            intensity += v * (k === 'glow' ? glowAt(field.values[o + spiritIdx] || 0) : k === 'bloom' ? bloomF : 1);
           }
           let combos = 0;
           for (const [, reqs] of comboReqs) if (reqs.every(([ki, b]) => ki >= 0 && boundMatches(b, field.values[o + ki]))) combos++;
@@ -1576,7 +1715,7 @@ export class Game {
     const onMap = new Set(this.state.spawns.map((x) => x.itemID));
     const sc = (this.t.spawns && this.t.spawns.scaling) || {};
     const lo = sc.minMultiplier ?? 0.25, hi = sc.maxMultiplier ?? 4;
-    // Glow counts for more at night (and in Depth), Bloom follows its daily cycle.
+    // Glow counts for more at night (and in Spirit), Bloom follows its daily cycle.
     const fac = this.statFactors(t, s);
     const varietyExp = this.varietyExponent(s, t);
     const out = [];
@@ -1594,13 +1733,13 @@ export class Game {
     for (const k of CORE_STATS) { lvl[k] = intensityOf(s[k] || 0, this.t).level; maxLvl = Math.max(maxLvl, lvl[k]); }
     const cs = (this.t.spawns && this.t.spawns.categoryScaling) || {};
     const favoured = new Set(Object.keys(cs).filter((cat) => typeof cs[cat] === 'object' && Object.keys(cs[cat]).some((k) => lvl[k] > 0)));
-    const pool = isPool && this.combo('pool').onlyDampItems;
+    const pool = isPool && this.combo('pool').onlySporeItems;
     const keenFor = {};
     for (const [id, u] of Object.entries(this.t.upgrades || {})) if (u && u.category && this.upgradeTier(id)) keenFor[u.category] = (keenFor[u.category] || 0) + this.upgradeTier(id) * (u.perTierPerRarity ?? 0);
     for (const item of opts.items || this.content.spawnableItems) {
       const rule = item.spawn;
       if (!rule) continue;
-      if (pool && !(rule.requires && rule.requires.damp)) continue;   // shallow water: only Damp-loving things
+      if (pool && !(rule.requires && rule.requires.spore)) continue;   // shallow water: only Spore-loving things
       if (rule.terrain === 'pool' && !isPool) continue;                // e.g. Water Reed: shallow pools only
       if (rule.time === 'night' && !night) continue;
       if (rule.time === 'day' && night) continue;
@@ -1670,7 +1809,7 @@ export class Game {
 
   /**
    * Category weights for a tile: spawns.categoryWeights × a stat multiplier, so a category's own
-   * stats (spawns.categoryScaling, % per point) make it likelier there. E.g. Stone/Depth from
+   * stats (spawns.categoryScaling, % per point) make it likelier there. E.g. Shimmer/Spirit from
    * Geode Critters tilt the area towards geodes. Clamped to categoryScaling.min/maxMultiplier.
    */
   categoryDetails(details, stats, t = null) {
@@ -1987,10 +2126,11 @@ export class Game {
     for (const x of (s.decor && s.decor.placed) || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.nests || []) out.add(x.tile.x + ',' + x.tile.y);
     for (const x of s.scenery || []) out.add(x.tile.x + ',' + x.tile.y);
+    for (const x of s.soilBoosts || []) if (x.seed) out.add(x.tile.x + ',' + x.tile.y);
     return out;
   }
 
-  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t) && !this.nestAt(t) && !this.sceneryAt(t); }
+  isFree(t) { return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.creatureAt(t) && !this.spawnAt(t) && !this.seedAt(t) && !this.visitorAt(t) && !this.decorAt(t) && !this.nestAt(t) && !this.sceneryAt(t) && !this.buriedSeedAt(t); }
   seedProgress(seed, now) { return Math.min(1, Math.max(0, (now - seed.plantedAt) / (Math.max(1, seed.growSeconds) * 1000))); }
 
   // ---- creatures
@@ -2234,7 +2374,10 @@ export class Game {
     for (const e of this.effects('bonusDrop', spawn.tile)) {
       if ((e.items || []).includes(def.id) && e.table && this.rng.chance(e.chance || 0)) pending.push(...this.rollTable(e.table, def.id, now));
     }
-    // Guaranteed drops (tutorial): make sure each forced item is included at least once.
+    // A find of a garden school sometimes drops that school's seed (tuning.schoolSeeds.dropChance).
+    const school = this.schoolOf(def), seedID = school && this.content.schoolSeedFor && this.content.schoolSeedFor[school];
+    if (seedID && !spawn.forced && this.rng.chance(this.seedCfg.dropChance ?? 0)) pending.push({ item: seedID, count: 1 });
+    // Guaranteed drops (the opening's finds): make sure each forced item is included at least once.
     for (const f of spawn.forced || []) {
       if (!pending.some((x) => x.item === f.item)) pending.push({ item: f.item, count: f.count || 1 });
     }
@@ -2413,19 +2556,24 @@ export class Game {
     return results;
   }
 
-  /** Use an item from the bag. Soil boosts need a tile; a Moonfall Shard doesn't. */
+  /** Use an item from the bag. Soil boosts and school seeds need a tile; a Moonfall Shard doesn't. */
   use(itemID, tile, now) {
     const def = this.content.items[itemID];
     if (!def || !def.use) throw new GameError("That can't be used.");
     if (!(this.state.inventory[itemID] > 0)) throw new GameError("You don't have that.");
     const use = def.use;
+    if (use.type === 'bury') {
+      const b = this.burySeed(itemID, tile, now);
+      const hours = Math.round((b.fullUntil - now) / 3600000);
+      return `${def.name} buried. ${def.school.charAt(0).toUpperCase() + def.school.slice(1)} will grow around it over the next few hours, and last about ${Math.round(hours / 24)} days.`;
+    }
     if (use.type === 'soilBoost') {
       if (!tile || !this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
       this.consume(itemID);
       this.bump('use');
       this.state.soilBoosts.push({
         id: this.rng.uuid(), tile: { ...tile }, stats: { ...use.stats }, appliedAt: now,
-        radius: (use.radius || 0) + this.upgradeTier('wideSpread') * ((this.upgradeDef('wideSpread') || {}).radiusPerTier ?? 1),
+        radius: use.radius || 0,
         expiresAt: use.permanent ? null : now + (use.hours || 24) * HOUR,
       });
       this.statCache = this.statField(now);
@@ -3128,14 +3276,19 @@ export class Content {
     this.requests = bundle.requests || [];
     this.cosmetics = bundle.cosmetics || [];
     this.eggs = bundle.eggs || [];
-    this.supplies = bundle.supplies || [];
-    // Soil packs (supplies.json) are Bag items you spread on a tile.
-    for (const sp of this.supplies) {
-      if (this.items[sp.id]) continue;
-      const it = { id: sp.id, category: 'supply', name: sp.name, rarity: 'common', sprite: sp.sprite, inGuide: false, guideText: sp.text,
-        use: { type: 'soilBoost', verb: 'Spread', stats: { ...sp.stats }, hours: sp.hours, permanent: sp.hours == null, radius: 0 } };
+    // School seeds (schoolSeeds.json, from the Offerings spreadsheet): one per garden school. Buried
+    // from the Bag, a seed starts its school's terrain around its tile (numbers: tuning.schoolSeeds).
+    this.schoolSeeds = bundle.schoolSeeds || [];
+    this.schoolSeedFor = {};
+    for (const sd of this.schoolSeeds) {
+      this.schoolSeedFor[sd.school] = sd.id;
+      if (this.items[sd.id]) continue;
+      const name = sd.school.charAt(0).toUpperCase() + sd.school.slice(1);
+      const it = { id: sd.id, category: 'schoolSeed', name: sd.name, rarity: 'common', sprite: sd.sprite, marker: sd.marker, school: sd.school, guideText: sd.text,
+        howFound: `Sold at the Old Log. Finds that need ${name} sometimes drop one.`,
+        use: { type: 'bury', verb: 'Bury', school: sd.school, text: `Bury it on an open tile to start ${name} ground around it.` } };
       this.itemList.push(it);
-      this.items[sp.id] = it;
+      this.items[sd.id] = it;
     }
     // Eggs are Bag items (category "egg"), built from eggs.json.
     for (const e of this.eggs) {

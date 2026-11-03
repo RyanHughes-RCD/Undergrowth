@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Imports design/Undergrowth_Offerings.xlsx into the game content.
 
-    python3 tools/import_offerings_table.py           # writes requests.json, cosmetics.json (and eggs.json)
+    python3 tools/import_offerings_table.py           # writes requests.json, cosmetics.json, eggs.json and schoolSeeds.json
     python3 tools/import_offerings_table.py --check   # preview only: validates and lists what would change
     python3 tools/import_offerings_table.py --stubs   # also writes placeholder sprites for new sprite ids
 
-Sheets: Requests (one row per Old Log request), Cosmetics (placeable decor), Eggs (when present) and
-How to use. Only rows whose Status is "In game" are exported. Blue cells on yellow are the editable
+Sheets: Requests (one row per Old Log request), Cosmetics (placeable decor), Eggs and School Seeds (when
+present) and How to use. Only rows whose Status is "In game" are exported. Blue cells on yellow are the editable
 ones; each row's Check column flags unknown item ids, decor, unlocks, eggs and missing sprites.
 Importing the unedited spreadsheet reproduces the JSON exactly. After importing, the Lists sheet
 (valid ids for the Check formulas) is refreshed and the workbook saved.
@@ -28,11 +28,12 @@ REQ_HEADERS = ["Status", "ID", "Name", "Kind", "Item 1", "Count 1", "Item 2", "C
                "Text", "Art notes", "Check"]
 COS_HEADERS = ["Status", "ID", "Name", "Sprite", "Size", "Compost price", "Colours", "Text", "Art notes", "Check"]
 EGG_HEADERS = ["Status", "ID", "Family", "Tier", "Name", "Sprite", "Hatch hours", "Foraging weight", "Text", "Check"]
-SUP_HEADERS = ["Status", "ID", "Name", "Sprite", "Stats", "Hours", "Text", "Check"]
+SEED_HEADERS = ["Status", "ID", "Name", "School", "Sprite", "Marker sprite", "Text", "Check"]
+SEED_SHEET = "School Seeds"
 UNLOCKS = ["slot", "nest", "expansion", "trowel"]
 KINDS = ["cosmetic", "unlock", "egg", "visitor", "shop", "upgrade"]
 REWARDS = ["cosmetic", "unlock", "egg", "compost", "item", "upgrade"]
-STATS = ["damp", "glow", "bloom", "verdure", "stone", "depth"]
+STATS = ["spore", "glow", "bloom", "verdure", "shimmer", "spirit"]
 TUNING = os.path.join(ROOT, "Resources", "tuning.json")
 
 
@@ -70,9 +71,12 @@ def cosmetic_check_formula(r):
             f'IF(COUNTIF($B:$B,B{r})>1,"Duplicate id","OK")))')
 
 
-def supply_check_formula(r):
-    return (f'=IF(OR(B{r}="",A{r}="Off"),"",IF(COUNTIF(Lists!$C:$C,D{r})=0,"Missing sprite "&D{r}&" (import with --stubs)",'
-            f'IF(COUNTIF($B:$B,B{r})>1,"Duplicate id","OK")))')
+def seed_check_formula(r):
+    schools = ",".join(f'D{r}="{s}"' for s in STATS)
+    return (f'=IF(OR(B{r}="",A{r}="Off"),"",IF(NOT(OR({schools})),"Unknown school "&D{r},'
+            f'IF(COUNTIF(Lists!$C:$C,E{r})=0,"Missing sprite "&E{r}&" (import with --stubs)",'
+            f'IF(COUNTIF(Lists!$C:$C,F{r})=0,"Missing sprite "&F{r}&" (import with --stubs)",'
+            f'IF(COUNTIF($B:$B,B{r})>1,"Duplicate id","OK")))))')
 
 
 def egg_check_formula(r):
@@ -162,23 +166,20 @@ def read(wb, errors):
             eggs.append(e)
     egg_ids = {e["id"] for e in eggs}
 
-    supplies = []
-    if "Supplies" in wb.sheetnames:
-        for r, v in rows(wb["Supplies"], len(SUP_HEADERS)):
+    # School seeds: one per garden school, buried from the Bag (numbers in tuning.json schoolSeeds).
+    seeds = []
+    if SEED_SHEET in wb.sheetnames:
+        for r, v in rows(wb[SEED_SHEET], len(SEED_HEADERS)):
             if text(v[0]) != "In game":
                 continue
-            stats = {}
-            for part in (text(v[4]) or "").split(","):
-                bits = part.strip().split()
-                if len(bits) != 2 or bits[0].lower() not in STATS:
-                    errors.append(f"Supplies row {r}: stats should look like 'Damp 12, Glow 6' (got {part.strip()!r})")
-                    continue
-                stats[bits[0].lower()] = num(bits[1])
-            sp = {"id": text(v[1]), "name": text(v[2]), "sprite": text(v[3]), "stats": stats, "hours": num(v[5])}
+            school = (text(v[3]) or "").lower()
+            if school not in STATS:
+                errors.append(f"{SEED_SHEET} row {r}: school must be one of {', '.join(STATS)} (got {text(v[3])!r})")
+            sd = {"id": text(v[1]), "name": text(v[2]), "school": school, "sprite": text(v[4]), "marker": text(v[5])}
             if text(v[6]):
-                sp["text"] = text(v[6])
-            supplies.append(sp)
-    supply_ids = {x["id"] for x in supplies}
+                sd["text"] = text(v[6])
+            seeds.append(sd)
+    seed_ids = {x["id"] for x in seeds}
     ups = set(upgrade_ids())
 
     cosmetics = []
@@ -232,7 +233,7 @@ def read(wb, errors):
             errors.append(f"Requests row {r} ({rid}): unknown egg {rref!r}")
         if rtype == "upgrade" and rref not in ups:
             errors.append(f"Requests row {r} ({rid}): unknown upgrade {rref!r} (tuning.json upgrades)")
-        if rtype == "item" and rref not in items and rref not in egg_ids and rref not in supply_ids:
+        if rtype == "item" and rref not in items and rref not in egg_ids and rref not in seed_ids:
             errors.append(f"Requests row {r} ({rid}): unknown item {rref!r}")
         reward = {"type": rtype}
         if rref:
@@ -255,7 +256,7 @@ def read(wb, errors):
         requests.append(out)
     if len({x["id"] for x in requests}) != len(requests):
         errors.append("Requests: duplicate ids")
-    return requests, cosmetics, eggs, supplies
+    return requests, cosmetics, eggs, seeds
 
 
 # ------------------------------------------------------------------ sheet upkeep
@@ -275,10 +276,10 @@ def refresh_lists(wb):
             ("Sprite ids", sorted(sprite_ids())), ("Unlock ids", UNLOCKS),
             ("Egg ids", sorted(set(eggs_sheet) | {e["id"] for e in eggs})), ("Families", families),
             ("Upgrade ids", upgrade_ids()),
-            ("Supply ids", [text(v[1]) for _, v in rows(wb["Supplies"], len(SUP_HEADERS))] if "Supplies" in wb.sheetnames else [])]
+            ("School seed ids", [text(v[1]) for _, v in rows(wb[SEED_SHEET], len(SEED_HEADERS))] if SEED_SHEET in wb.sheetnames else [])]
     # Keep every row's Check formula current (new checks reach rows added before them).
     for name, ncol, fn in (("Requests", len(REQ_HEADERS), request_check_formula), ("Cosmetics", len(COS_HEADERS), cosmetic_check_formula),
-                           ("Eggs", len(EGG_HEADERS), egg_check_formula), ("Supplies", len(SUP_HEADERS), supply_check_formula)):
+                           ("Eggs", len(EGG_HEADERS), egg_check_formula), (SEED_SHEET, len(SEED_HEADERS), seed_check_formula)):
         if name in wb.sheetnames:
             for r, _ in rows(wb[name], ncol):
                 wb[name].cell(r, ncol).value = fn(r)
@@ -303,8 +304,8 @@ def write_how_to(ws):
         ("Cosmetics", "Placeable props with no effect on stats. Sprite: a sprite id (new ones get placeholders with --stubs). Compost price: blank if it only comes from a request. Colours: 'Name #hex' pairs; the first is the natural colour."),
         ("Eggs", "One row per family and tier: hatch time and how often foraged eggs come in that tier."),
         ("Check column", "Formulas: OK, or what's wrong (unknown item, decor, unlock, egg or request id, missing count, missing sprite, duplicate id)."),
-        ("Import", "python3 tools/import_offerings_table.py (add --check to preview, --stubs for placeholder sprites). It rewrites Resources/Content/requests.json, cosmetics.json and eggs.json, then python3 tools/build_web.py bundles them."),
-        ("Example", "Row 'mossy-bench': 3 Clover (plain ground), 2 Brown Button Cap (plain ground) and 2 Pebble Cap (Stone) give the Mossy bench prop."),
+        ("Import", "python3 tools/import_offerings_table.py (add --check to preview, --stubs for placeholder sprites). It rewrites Resources/Content/requests.json, cosmetics.json, eggs.json and schoolSeeds.json, then python3 tools/build_web.py bundles them."),
+        ("Example", "Row 'mossy-bench': 3 Clover (plain ground), 2 Brown Button Cap (plain ground) and 2 Pebble Cap (Shimmer) give the Mossy bench prop."),
     ]
     for i, (a, b) in enumerate(lines, start=3):
         ws.cell(i, 1, a).font = Font(name="Arial", bold=True)
@@ -338,15 +339,16 @@ def main(argv):
     stubs = "--stubs" in argv
     wb = openpyxl.load_workbook(SHEET)
     errors = []
-    requests, cosmetics, eggs, supplies = read(wb, errors)
+    requests, cosmetics, eggs, seeds = read(wb, errors)
     if stubs and not check:
-        made = write_stubs(cosmetics, eggs + supplies)
+        made = write_stubs(cosmetics, eggs + seeds)
         if made:
             print("placeholder sprites:", ", ".join(made))
     have = sprite_ids()
-    for x in cosmetics + eggs + supplies:
-        if x.get("sprite") and x["sprite"] not in have:
-            errors.append(f"{x['id']}: sprite {x['sprite']} doesn't exist (run with --stubs for a placeholder)")
+    for x in cosmetics + eggs + seeds:
+        for key in ("sprite", "marker"):
+            if x.get(key) and x[key] not in have:
+                errors.append(f"{x['id']}: sprite {x[key]} doesn't exist (run with --stubs for a placeholder)")
     if errors:
         print("Problems:")
         for e in errors:
@@ -355,8 +357,8 @@ def main(argv):
     outputs = [("requests.json", requests), ("cosmetics.json", cosmetics)]
     if "Eggs" in wb.sheetnames:
         outputs.append(("eggs.json", eggs))
-    if "Supplies" in wb.sheetnames:
-        outputs.append(("supplies.json", supplies))
+    if SEED_SHEET in wb.sheetnames:
+        outputs.append(("schoolSeeds.json", seeds))
     for name, data in outputs:
         path = os.path.join(CONTENT, name)
         new = "[\n" + ",\n".join("  " + json.dumps(x, ensure_ascii=False) for x in data) + "\n]\n"

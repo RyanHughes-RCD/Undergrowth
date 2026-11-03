@@ -1,0 +1,37 @@
+{
+ "id": "ov.spore.s8a",
+ "size": [
+  16,
+  16
+ ],
+ "anchor": [
+  8,
+  8
+ ],
+ "paletteRef": "pal.ground",
+ "frames": [
+  {
+   "rows": [
+    "................",
+    ".EC....bbZZZbb..",
+    "......bZZZZZZZb.",
+    ".....DDDDDZZZZb.",
+    "....DBEBBBDZZZZ.",
+    ".C..DBBBBBDDZZb.",
+    "....DBBBBBDBDZC.",
+    ".....DDDDDBBDb..",
+    "......DBBBBBD...",
+    ".......DDDDD....",
+    "................",
+    "...E............",
+    "................",
+    "................",
+    "................",
+    "................"
+   ]
+  }
+ ],
+ "tags": [
+  "overlay"
+ ]
+}

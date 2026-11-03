@@ -58,11 +58,11 @@
   "guide": {
     "landmarks": {
       "landmark.old-log": "The last remnant of an ancient forest. Moss still clings to it, and something in its rings remembers what this place used to be. The creatures you welcome are slowly bringing that forest back.",
-      "landmark.cave": "Where stone and deep earth met long enough, the ground opened into a cave. Cool air breathes out of it.",
+      "landmark.crystal-grotto": "Where crystals and old fae mist met long enough, a grotto opened among them. Cool, glittering air breathes out of it.",
       "landmark.fruit-tree": "Flowers and long grass fed this tree until it fruited. Birds and wanderers alike come for it.",
       "landmark.moonwell": "Water and light pooled together into a well that glows softly, brightest under the moon.",
-      "landmark.standing-stones": "Stones lit from within, standing in a ring. Creatures near them feel stronger.",
-      "landmark.fairy-ring": "A ring of pale mushrooms in damp grass. Wanderers can't resist stepping into it.",
+      "landmark.singing-crystals": "Tall crystals lit from within, standing in a ring and humming softly. Creatures near them feel stronger.",
+      "landmark.fairy-ring": "A ring of pale mushrooms in mossy grass. Wanderers can't resist stepping into it.",
       "landmark.spring": "Water welling up between mossy stones. It never stops.",
       "landmark.nest-hollow": "An old stump hollowed by roots and lined with moss: a safe place for an egg.",
       "landmark.spirit-well": "An old stone well in a small clearing past the first trees. The water is very still, and very deep."
@@ -74,12 +74,12 @@
   "hints": {
     "_about": "Hints for items not yet in the Field Guide, built from their stat minimums (strongest first). {verb}, {a}, {b}, {c} are filled in.",
     "stats": {
-      "damp": "wet ground",
+      "spore": "mossy ground",
       "glow": "glowing ground",
       "bloom": "flowers",
       "verdure": "long grass",
-      "stone": "Stone",
-      "depth": "deep soil"
+      "shimmer": "shimmering crystals",
+      "spirit": "fae mist"
     },
     "verbs": {
       "mushroom": "grows",
@@ -111,7 +111,7 @@
       "mushrooms": [
         "Something stirs beneath the water. It remembers the forest floor...",
         "A quiet hunger lingers in the depths.",
-        "The water carries the scent of damp earth and forgotten things.",
+        "The water carries the scent of moss and forgotten things.",
         "Pale shapes drift far below, like caps in the dark.",
         "The well smells of rain on rotting wood."
       ],

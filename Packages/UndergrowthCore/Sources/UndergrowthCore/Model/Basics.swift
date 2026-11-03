@@ -10,15 +10,15 @@ public struct StatKey: RawRepresentable, Hashable, Codable, Comparable, CustomSt
     public init(rawValue: String) { self.rawValue = rawValue }
     public init(_ raw: String) { self.rawValue = raw }
 
-    public static let damp = StatKey("damp")
+    public static let spore = StatKey("spore")
     public static let glow = StatKey("glow")
     public static let bloom = StatKey("bloom")
     public static let verdure = StatKey("verdure")
-    public static let stone = StatKey("stone")
-    public static let depth = StatKey("depth")
+    public static let shimmer = StatKey("shimmer")
+    public static let spirit = StatKey("spirit")
 
     /// Display order for the six core stats.
-    public static let core: [StatKey] = [.damp, .glow, .bloom, .verdure, .stone, .depth]
+    public static let core: [StatKey] = [.spore, .glow, .bloom, .verdure, .shimmer, .spirit]
 
     public var description: String { rawValue }
     public var displayName: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }

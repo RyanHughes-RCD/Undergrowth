@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Placeholder art for Offerings: decor props, eggs, nests and the Old Log board icon.
+"""Placeholder art for Offerings: decor props, eggs, nests, school seeds, landmarks and the Old Log board icon.
 
     python3 tools/gen_offerings_sprites.py
 
@@ -191,24 +191,34 @@ def eggs():
     sprite("egg.nest.front", WOOD + ["#3a2616"], nest_front)
 
 
-SUPPLY = {   # stat: (band colour, sparkle)
-    "damp": ("#4a7dff", "#a8c8ff"), "glow": ("#4fe3f0", "#e8ffff"), "bloom": ("#ff79b8", "#ffd0e8"),
-    "verdure": ("#4fcf4f", "#c8f8a8"), "stone": ("#a0a0b0", "#e0e0e8"), "depth": ("#9a5ad8", "#d8b8ff"),
+SCHOOLS = {   # school: (colour, light) for the school seeds (matches the UI's stat colours)
+    "spore": ("#4a7dff", "#a8c8ff"), "glow": ("#4fe3f0", "#e8ffff"), "bloom": ("#ff79b8", "#ffd0e8"),
+    "verdure": ("#4fcf4f", "#c8f8a8"), "shimmer": ("#b7a4e0", "#f4f0ff"), "spirit": ("#7a7ad0", "#d0d0ff"),
 }
 
 
-def supplies():
-    """Soil packs from the Old Log's shop: a small burlap sack with the stat's colour on its tie."""
-    for stat, (band, light) in SUPPLY.items():
-        def sack(c, f, band=band):
-            c.ellipse(8, 10.5, 5, 4.4, 3)
-            c.ellipse(6.5, 9, 1.8, 2, 4)
-            c.rect(6, 4, 10, 6, 3)
-            c.rect(5, 6, 11, 6, 5)                 # the tie, in the stat's colour
-            c.set(7, 3, 6); c.set(9, 2, 6); c.set(8, 3, 5)
-            for (x, y) in ((6, 12), (10, 11), (9, 13)):
-                c.set(x, y, 2)
-        sprite(f"supply.{stat}", ["#6a4a2a", "#a07848", "#c8a070", band, light], sack, tags=("supply",))
+def school_seeds():
+    """School seeds (Resources/Content/schoolSeeds.json): a seed with its school's colour in the Bag
+    (seed.school.<school>), and the mound with a school-coloured sprout shown where one is buried
+    (seed.buried.<school>)."""
+    for school, (col, light) in SCHOOLS.items():
+        def seed(c, f):
+            c.ellipse(8, 10, 3.6, 4.4, 2)              # seed body
+            c.ellipse(7, 9, 1.6, 2.4, 3)
+            c.rect(6, 11, 10, 12, 4)                   # school band
+            c.set(7, 11, 5)
+            c.set(9, 6, 5); c.set(11, 8, 5)            # a glint
+        sprite(f"seed.school.{school}", ["#7a5232", "#b07a48", col, light], seed, tags=("seed",))
+
+        def marker(c, f):
+            c.ellipse(8, 13, 6, 2.6, 2)                # the mound of fresh earth
+            c.ellipse(7, 12.4, 3.6, 1.4, 3)
+            c.set(4, 14, 4); c.set(11, 14, 4)
+            c.rect(8, 7, 8, 11, 6)                     # sprout stem
+            c.set(7, 7, 5); c.set(6, 6, 5); c.set(9, 6, 5); c.set(10, 5, 5)   # two leaves
+            c.set(6, 5, 7 if f == 0 else 5); c.set(10, 4, 5 if f == 0 else 7)
+        sprite(f"seed.buried.{school}", ["#5a3c22", "#8a6038", "#3e2a18", col, "#3f7a2e", light], marker,
+               frames=2, durations=[1.4, 1.4], tags=("seed", "marker"))
 
 
 def landmarks():
@@ -216,7 +226,7 @@ def landmarks():
     across a 3x3 patch and stay for good. 28x24, anchored at the base."""
     size, anchor = (28, 24), (14, 21)
 
-    def cave(c, f):                      # a mound of rock with a dark mouth
+    def cave(c, f):                      # a mound of crystal with a dark, glittering mouth
         c.ellipse(14, 15, 12, 8, 3, clip=lambda x, y: y <= 21)
         c.ellipse(10, 11, 5, 3, 4)
         c.ellipse(14, 17, 5, 4.5, 5, clip=lambda x, y: y <= 21)
@@ -224,7 +234,7 @@ def landmarks():
         for (x, y) in ((4, 14), (22, 12), (19, 7), (7, 18)):
             c.set(x, y, 2)
         c.rect(3, 21, 25, 21, 2)
-    sprite("landmark.cave", ["#5e5e68", "#8a8a96", "#b8b8c4", "#2a2430", "#120c18"], cave, size=size, anchor=anchor, tags=("landmark",))
+    sprite("landmark.crystal-grotto", ["#7a6aa8", "#a898d8", "#d8ccf4", "#2a2448", "#120c18"], cave, size=size, anchor=anchor, tags=("landmark",))
 
     def fruit_tree(c, f):                # a round crown with red fruit on a short trunk
         c.rect(12, 13, 15, 21, 2)
@@ -245,13 +255,13 @@ def landmarks():
             c.set(x, y - f, 6)
     sprite("landmark.moonwell", ["#6a6a78", "#9a9aa6", "#3aa8b8", "#7cf2ff", "#e8ffff"], moonwell, size=size, anchor=anchor, frames=2, durations=[1.1, 1.1], tags=("landmark",))
 
-    def standing_stones(c, f):           # three upright stones with glowing marks
+    def singing_crystals(c, f):          # three upright crystals with glowing marks
         for (x, h) in ((6, 12), (14, 16), (22, 11)):
             c.rect(x - 2, 21 - h, x + 2, 21, 2)
             c.rect(x - 2, 21 - h, x - 1, 21, 3)
             c.set(x, 21 - h + 4, 4 if f == 0 else 5); c.set(x, 21 - h + 5, 4)
         c.rect(2, 21, 26, 21, 6)
-    sprite("landmark.standing-stones", ["#7c7c86", "#a0a0b0", "#4fe3f0", "#e8ffff", "#3a3446"], standing_stones, size=size, anchor=anchor, frames=2, durations=[1.3, 1.3], tags=("landmark",))
+    sprite("landmark.singing-crystals", ["#8a7ac0", "#c0b0ea", "#7cf2e8", "#f4f0ff", "#3a3456"], singing_crystals, size=size, anchor=anchor, frames=2, durations=[1.3, 1.3], tags=("landmark",))
 
     def fairy_ring(c, f):                # a ring of pale mushrooms in the grass
         import math
@@ -348,7 +358,7 @@ def board_icon():
 if __name__ == "__main__":
     decor()
     eggs()
-    supplies()
+    school_seeds()
     landmarks()
     spirit_well()
     board_icon()

@@ -256,7 +256,7 @@ export class ForestView {
       const def = this.app.content.items[sp.itemID];
       if (!def) continue;
       // How it shows depends on the tile: buried (loose soil), hidden in tall grass (a rustling clump),
-      // a geode exposed on rock (the bare stone), or on the surface (geodes half-sunk in a dirt mound).
+      // a geode exposed on rock (the bare crystal), or on the surface (geodes half-sunk in a dirt mound).
       const view = g.spawnView(sp, now, field.statsAt(sp.tile.x, sp.tile.y));
       const sprite = view === 'buried' ? 'spawn.buried.a' : view === 'hidden' ? 'spawn.rustle.a' : view === 'exposed' ? def.sprite : (def.worldSprite || def.sprite);
       objs.push({ sprite, ...at(sp.tile), tile: sp.tile, kind: 'spawn', key: sp.id, still: view !== 'hidden' && view !== 'buried', rustle: view === 'hidden', dig: view === 'buried', view, phase: hash32(sp.tile.x, sp.tile.y) % 1000 / 100,
@@ -286,6 +286,11 @@ export class ForestView {
       objs.push({ sprite: 'egg.nest', ...pos, tile: n.tile, kind: 'nest', key: n.id + ':nest', phase: 0, still: true });
       if (egg) objs.push({ sprite: egg.sprite, x: pos.x, y: pos.y - 2, sortY: pos.y + 0.01, tile: n.tile, kind: 'nest', key: n.id, phase: hash32(n.tile.x, n.tile.y, 9) % 1000 / 250, dig: g.nestProgress(n, now) >= 1 });
       objs.push({ sprite: 'egg.nest.front', ...pos, sortY: pos.y + 0.02, tile: n.tile, kind: 'nest', key: n.id + ':front', phase: 0, still: true });
+    }
+    // Buried school seeds: a mound with a sprout in the school's colour.
+    for (const b of g.buriedSeeds()) {
+      const def = this.app.content.items[b.seed];
+      objs.push({ sprite: (def && def.marker) || 'seed.stage.planted', ...at(b.tile), tile: b.tile, kind: 'buriedSeed', key: b.id, phase: hash32(b.tile.x, b.tile.y, 11) % 1000 / 250 });
     }
     // Decor props from the Old Log (purely visual), in their chosen colour.
     for (const d of (s.decor && s.decor.placed) || []) {
@@ -774,7 +779,7 @@ export class ForestView {
   }
 
   /**
-   * Elevation (Stone up, Depth down; visuals.elevation): a raised tile casts a rock face onto the
+   * Elevation (Shimmer up, Spirit down; visuals.elevation): a raised tile casts a rock face onto the
    * tile below it and gets a lit lip where the ground in front of it is lower; a sunken tile gets a
    * shadowed back wall where the ground behind it is higher.
    */
@@ -815,7 +820,7 @@ export class ForestView {
     }
   }
 
-  /** Is this tile part of a pool (Damp + Depth combo)? */
+  /** Is this tile part of a pool (Spore + Spirit combo)? */
   poolAt(x, y) {
     const W = this.game.state.size.width;
     if (x < 0 || y < 0 || x >= W || y >= this.game.state.size.height || !this.game.inClearing({ x, y })) return false;
@@ -931,7 +936,7 @@ export class ForestView {
   }
 
   /**
-   * Where bugs sit over mossy banks (Stone + Damp + Verdure combo): each connected patch of moss gets
+   * Where bugs sit over mossy banks (Shimmer + Spore + Verdure combo): each connected patch of moss gets
    * one bug per tilesPerBug tiles (rounded, at least one), on tiles chosen by a stable hash.
    */
   bugTiles() {
@@ -1419,8 +1424,8 @@ export class ForestView {
 
 function overlayColor(stats) {
   const colors = {
-    damp: [50, 100, 255], glow: [100, 255, 255], bloom: [255, 115, 190],
-    verdure: [80, 230, 80], stone: [165, 165, 180], depth: [115, 50, 155],
+    spore: [50, 100, 255], glow: [100, 255, 255], bloom: [255, 115, 190],
+    verdure: [80, 230, 80], shimmer: [183, 164, 224], spirit: [122, 122, 208],
   };
   let r = 0, g = 0, b = 0, total = 0, max = 0;
   for (const k in colors) {

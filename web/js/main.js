@@ -220,7 +220,7 @@ class App {
   }
 
   /**
-   * Collect All: picks up every find in the clearing at once, including ones buried (dug up) and
+   * Collect All: picks up every find in the clearing at once, including veiled ones (buried spawns) and
    * hidden in tall grass. Items are summed into one toast; creatures found are shown one after another.
    */
   collectAll() {
@@ -239,7 +239,7 @@ class App {
       const name = this.content.items[sp.itemID]?.name || 'something';
       for (const r of results) {
         if (r.item) counts.set(r.item, (counts.get(r.item) || 0) + r.count);
-        else if (r.creature) creatures.push([r, view === 'buried' ? `a ${name}, dug up from the earth` : `a ${name}`]);
+        else if (r.creature) creatures.push([r, view === 'buried' ? `a ${name}, uncovered from the mist` : `a ${name}`]);
       }
     }
     const list = [...counts.entries()].sort((a, b) => b[1] - a[1]);
@@ -349,6 +349,8 @@ class App {
     }
     const nest = g.nestAt(tile);
     if (nest) { ui.selectedTile = null; ui.open('nest', nest.id); this.changed(false); return; }
+    const buried = g.buriedSeedAt(tile);
+    if (buried) { ui.selectedTile = null; ui.open('buriedSeed', buried.id); this.changed(false); return; }
     const decor = g.decorAt(tile);
     if (decor) { ui.selectedTile = null; ui.open('decor', decor.id); this.changed(false); return; }
     // Only tapping the creature itself opens it (it roams around its spot); its empty home tile doesn't.
@@ -380,7 +382,7 @@ class App {
       const results = this.attempt(() => g.collect(spawn.id, now));
       if (results) {
         if (view === 'buried') this.view.dustAt(spawn.tile);
-        this.present(results, view === 'buried' ? `a ${name}, dug up from the earth` : `a ${name}`);
+        this.present(results, view === 'buried' ? `a ${name}, uncovered from the mist` : `a ${name}`);
         this.changed();
       }
       return;
@@ -502,7 +504,7 @@ class App {
 
   beginUsing(itemID) {
     const def = this.content.items[itemID];
-    if (def?.use?.type !== 'soilBoost') {
+    if (def?.use?.type !== 'soilBoost' && def?.use?.type !== 'bury') {
       const msg = this.attempt(() => this.game.use(itemID, null, this.game.now()));
       if (msg) { this.ui.toast(msg, def?.sprite); this.changed(); }
       return;

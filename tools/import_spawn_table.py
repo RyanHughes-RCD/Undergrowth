@@ -10,7 +10,7 @@ blue cells), re-run this, and both the web and iOS versions pick up the change.
 
 - Creature special effects are free text in the sheet; their game rules live in
   design/creature_effects.json (merged in here, keyed by creature name).
-- Gem/material effects ("Crush into soil: +5 Stone on a tile for 24h") are parsed
+- Gem/material effects ("Crush into soil: +5 Shimmer on a tile for 24h") are parsed
   from the text.
 - Extra conditions recognised: "Night only", "Daytime only", "during rain",
   "only one per forest" / "only one ... at a time", "Planted during the day",
@@ -32,7 +32,7 @@ SHEET = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "design", "Unde
 CONTENT = os.path.join(ROOT, "Resources", "Content")
 EFFECTS = os.path.join(ROOT, "design", "creature_effects.json")
 
-STATS = ["damp", "glow", "bloom", "verdure", "stone", "depth"]
+STATS = ["spore", "glow", "bloom", "verdure", "shimmer", "spirit"]
 RARITY = {"common": "common", "uncommon": "uncommon", "rare": "rare", "very rare": "veryRare", "legendary": "legendary"}
 # Default spawn scaling (% per point above the minimum) by rarity, used when the sheet leaves it blank.
 RARITY_RATE = {"common": 1, "uncommon": 1.5, "rare": 2, "veryRare": 2.5, "legendary": 3}
@@ -79,7 +79,7 @@ def extra_flags(text):
 
 
 def parse_use(text):
-    """'Crush into soil: +5 Stone on a tile for 24h' → a soil-boost use."""
+    """'Crush into soil: +5 Shimmer on a tile for 24h' → a soil-boost use."""
     if not text:
         return None
     t = text.strip()
@@ -110,7 +110,7 @@ def main():
     ws = wb.worksheets[0]
     rows = [r for r in ws.iter_rows(values_only=True)]
     header = next(i for i, r in enumerate(rows) if r[0] == "Name")
-    # Optional spawn-scaling columns ("Damp scaling %/pt" ... "Depth scaling %/pt").
+    # Optional spawn-scaling columns ("Spore scaling %/pt" ... "Spirit scaling %/pt").
     scale_cols = {}
     for ci, title in enumerate(rows[header]):
         if isinstance(title, str) and "scaling" in title.lower():
