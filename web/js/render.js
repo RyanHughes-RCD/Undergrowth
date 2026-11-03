@@ -172,9 +172,70 @@ export class ForestView {
 
   /** A clearing tile's ground: its soil (plain = grass, a school = that school's ground tile). */
   ground(x, y) {
-    const school = this.game.soilAt ? this.game.soilAt({ x, y }) : null;
+    const g = this.game, school = g.soilAt ? g.soilAt({ x, y }) : null;
     const h = hash32(x, y, 0x5011);
-    return school ? `tile.${school}.3${h & 1 ? 'a' : 'b'}` : GRASS[h % GRASS.length];
+    if (!school) return GRASS[h % GRASS.length];
+    // Which corners blend into the ground around them: a corner fades unless a tile beside it (above or
+    // below, left or right of that corner) has the same soil. Encoded as a 4-letter mask (NW NE SE SW).
+    const same = (dx, dy) => { const t = { x: x + dx, y: y + dy }; return g.inClearing(t) && g.soilAt(t) === school; };
+    const n = same(0, -1), e = same(1, 0), so = same(0, 1), w = same(-1, 0);
+    const mask = [!n && !w, !n && !e, !so && !e, !so && !w].map((b) => (b ? '1' : '0')).join('');
+    // The faded corners show the ground most common around the tile (other soil, or grass).
+    const count = {};
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const t = { x: x + dx, y: y + dy }, o = g.inClearing(t) ? g.soilAt(t) || '' : '';
+      if (o !== school) count[o] = (count[o] || 0) + 1;
+    }
+    const around = Object.entries(count).sort((p, q) => q[1] - p[1] || (p[0] < q[0] ? -1 : 1))[0];
+    const under = around && around[0] ? `tile.${around[0]}.3${h & 2 ? 'a' : 'b'}` : GRASS[h % GRASS.length];
+    return `tile.${school}.3${h & 1 ? 'a' : 'b'}|${mask}|${under}`;
+  }
+
+  /** Draws a ground key from ground(): a plain tile, or soil over grass with its open corners faded. */
+  drawGround(key, x, y) {
+    const [id, mask, under] = key.split('|');
+    if (!mask) { this.blit(id, null, x, y, 0); return; }
+    this.blit(under, null, x, y, 0);
+    if (mask === '0000') { this.blit(id, null, x, y, 0); return; }
+    const a = this.sprites.anchor(id);
+    this.ctx.drawImage(this.softTile(id, mask), Math.round(x - a.x), Math.round(y - a.y));
+  }
+
+  /**
+   * A soil tile with some corners faded into the ground (mask: NW NE SE SW, '1' = fade). Each faded corner
+   * is rounded off with a soft edge: full soil inside a circle of radius `r` centred `r` in from the corner,
+   * fading to nothing over `soft` pixels beyond it, in a few steps so it stays crisp pixel art. Cached.
+   */
+  softTile(id, mask) {
+    const k = id + '|' + mask;
+    this.softCache = this.softCache || new Map();
+    let c = this.softCache.get(k);
+    if (c) return c;
+    const src = this.sprites.frames(id)[0];
+    c = document.createElement('canvas');
+    c.width = src.w; c.height = src.h;
+    const cx = c.getContext('2d');
+    cx.drawImage(src.canvas, 0, 0);
+    const img = cx.getImageData(0, 0, c.width, c.height), W = c.width, H = c.height;
+    const r = W / 2, soft = 5, steps = 4;
+    const corners = [[0, 0], [W, 0], [W, H], [0, H]];
+    for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+      let alpha = 1;
+      corners.forEach(([qx, qy], i) => {
+        if (mask[i] !== '1') return;
+        const ox = qx ? qx - r : r, oy = qy ? qy - r : r;                       // the rounding circle's centre
+        const inX = qx ? px + 0.5 > ox : px + 0.5 < ox, inY = qy ? py + 0.5 > oy : py + 0.5 < oy;
+        if (!inX || !inY) return;                                               // not in this corner's quarter
+        const d = Math.hypot(px + 0.5 - ox, py + 0.5 - oy);
+        const k2 = 1 - (d - (r - soft)) / soft;                                 // 1 inside, 0 at the corner side
+        alpha = Math.min(alpha, Math.max(0, Math.min(1, k2)));
+      });
+      if (alpha < 1) img.data[(py * W + px) * 4 + 3] *= Math.round(alpha * steps) / steps;
+    }
+    cx.putImageData(img, 0, 0);
+    this.softCache.set(k, c);
+    return c;
   }
 
   /** A tile outside the clearing: the treeline floor with a shrub (tuning.visuals.edge). */
@@ -312,8 +373,8 @@ export class ForestView {
         if (!prev || prev.ground !== ground) this.groundSince.set(k, { ground, from: prev ? prev.ground : null, at: prev ? nowMs : 0 });
         const gs = this.groundSince.get(k);
         const fade = fadeMs > 0 && gs.from ? Math.min(1, (nowMs - gs.at) / fadeMs) : 1;
-        if (fade < 1) { this.blit(gs.from, null, c.x, c.y, 0); ctx.globalAlpha = fade; }
-        this.blit(ground, null, c.x, c.y, 0);
+        if (fade < 1) { this.drawGround(gs.from, c.x, c.y); ctx.globalAlpha = fade; }
+        this.drawGround(ground, c.x, c.y);
         ctx.globalAlpha = 1;
       }
     }
