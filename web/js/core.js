@@ -127,6 +127,10 @@ export function varietySwap(palette, hue, leaves = false) {
 }
 
 export const SIDES = ['top', 'bottom', 'left', 'right'];
+/** Plant and blind-packet tiers, weakest first. */
+export const PLANT_TIERS = ['common', 'uncommon', 'rare'];
+/** A blind seed packet's id: seeds.<school>.<tier>. */
+export const blindPacketID = (school, tier) => `seeds.${school}.${tier}`;
 const sameTile = (a, b) => a.x === b.x && a.y === b.y;
 const key = (t) => t.x + ',' + t.y;
 const HOUR = 3600 * 1000;
@@ -447,19 +451,15 @@ export class Game {
     return { school, second, results: this.grant(this.starterSet(school, second)) };
   }
 
-  /** The tin's contents for a school and its runner-up. */
+  /** The tin's contents for a school and its runner-up: Common seeds of each and a little soil. */
   starterSet(school, second) {
     const cfg = (this.t.garden || {}).starterSet || {};
-    const starters = (s) => this.content.plantList.filter((p) => p.source === 'starter' && p.school === s);
     const out = [];
     const add = (item, count) => { if (count > 0 && this.content.items[item]) out.push({ item, count }); };
-    const [a, b] = starters(school);
-    if (a) add('packet.' + a.id, cfg.primaryPackets ?? 3);
-    if (b) add('packet.' + b.id, cfg.primarySecondPlant ?? 1);
-    const [c] = starters(second);
-    if (c) add('packet.' + c.id, cfg.secondPackets ?? 2);
-    add('amend.' + school, cfg.primaryAmendments ?? 4);
-    add('amend.' + second, cfg.secondAmendments ?? 2);
+    add(blindPacketID(school, 'common'), cfg.primaryPackets ?? 4);
+    add(blindPacketID(second, 'common'), cfg.secondPackets ?? 2);
+    add('amend.' + school, cfg.primaryAmendments ?? 2);
+    add('amend.' + second, cfg.secondAmendments ?? 1);
     return out;
   }
 
@@ -555,15 +555,22 @@ export class Game {
     return school === def.school ? (c.preferred ?? 1) : null;
   }
 
-  /** Whether a plant can go on a tile, and why not: { ok, factor, reason }. */
-  canPlant(plantID, tile) {
-    const def = this.plantDef(plantID);
-    if (!def) return { ok: false, reason: 'Unknown seeds.' };
+  /** Whether a seed packet can go on a tile (blind packets: by their school), and why not. */
+  canPlantPacket(packetID, tile) {
+    const pk = this.content.items[packetID];
+    if (!pk || pk.category !== 'packet') return { ok: false, reason: "That isn't a seed packet." };
+    return pk.blind ? this.canPlant(null, tile, pk.school, `${pk.name.replace(/ seeds$/, '')} seeds`) : this.canPlant(pk.plant, tile);
+  }
+
+  /** Whether a plant (or any plant of a school) can go on a tile, and why not: { ok, factor, reason }. */
+  canPlant(plantID, tile, school = null, label = null) {
+    const def = plantID ? this.plantDef(plantID) : { school, name: label };
+    if (!def || !def.school) return { ok: false, reason: 'Unknown seeds.' };
     if (!this.inBounds(tile) || !this.inClearing(tile)) return { ok: false, reason: "That's outside the clearing." };
     if (!this.isFree(tile) && !this.hostsPlant(tile)) return { ok: false, reason: 'Something is already there.' };
     const soil = this.soilAt(tile);
     const factor = this.soilFactor(def, soil);
-    if (factor == null) return { ok: false, reason: `${def.name} won't grow in ${schoolName(soil)} soil. It likes ${schoolName(def.school)} soil, or plain ground.` };
+    if (factor == null) return { ok: false, reason: `${def.name} won't grow in ${schoolName(soil)} soil. ${plantID ? 'It likes' : 'They like'} ${schoolName(def.school)} soil, or plain ground.` };
     return { ok: true, factor };
   }
   /** A tile with something on it that a plant can still go on: an empty raised bed. */
@@ -650,16 +657,21 @@ export class Game {
     for (const p of this.state.plants) p.rate = this.growthRate(p);
   }
 
-  /** Plant a seed packet on a tile. */
+  /**
+   * Plant a seed packet on a tile. A blind packet (Common, Uncommon or Rare seeds of a school) picks its
+   * plant now, by the packet's odds (tuning.garden.packets), and keeps it hidden until the bud shows.
+   */
   plant(packetID, tile, now) {
     const pk = this.content.items[packetID];
-    if (!pk || !pk.plant) throw new GameError("That isn't a seed packet.");
+    if (!pk || pk.category !== 'packet') throw new GameError("That isn't a seed packet.");
     if (!(this.state.inventory[packetID] > 0)) throw new GameError('You have no more of those seeds.');
-    const chk = this.canPlant(pk.plant, tile);
+    const chk = this.canPlantPacket(packetID, tile);
     if (!chk.ok) throw new GameError(chk.reason);
     this.rebase(now);
     this.consume(packetID);
-    const p = this.newPlant(pk.plant, tile, now);
+    const plantID = pk.blind ? this.pullPlant(pk.school, pk.blind) : pk.plant;
+    const p = this.newPlant(plantID, tile, now);
+    if (pk.blind) { p.blind = pk.school; p.from = pk.blind; }
     if (pk.variety) p.variety = pk.variety;
     this.rebase(now);
     this.bump('plant');
@@ -685,7 +697,24 @@ export class Game {
   /** The produce item a harvest gives (a colour variety has its own). */
   produceOf(p) { const v = p.variety && this.varietyDef(p.variety); return v ? v.produce : this.plantDef(p.plantID)?.item; }
   /** The seed packet a harvest returns (a variety breeds true). */
-  packetOf(p) { const v = p.variety && this.varietyDef(p.variety); return v ? v.packet : 'packet.' + p.plantID; }
+  packetOf(p) {
+    const v = p.variety && this.varietyDef(p.variety), def = this.plantDef(p.plantID);
+    if (v) return v.packet;
+    return def && def.source === 'seeds' ? blindPacketID(def.school, def.tier || 'common') : 'packet.' + p.plantID;
+  }
+  /** Still a mystery seedling (from a blind packet, before its bud shows)? */
+  isHidden(p, t) { return !!p.blind && ['seed', 'sprout'].includes(this.stageOf(p, t)); }
+
+  /** A blind pull: a tier by the packet's odds, then evenly among the school's seed plants of that tier. */
+  pullPlant(school, packetTier) {
+    const odds = ((this.gcfg.packets || {}).tiers || {})[packetTier]?.odds || { common: 1 };
+    const pool = (tier) => this.content.plantList.filter((p) => p.source === 'seeds' && p.school === school && (p.tier || 'common') === tier);
+    let r = this.rng.next() * Object.values(odds).reduce((a, b) => a + b, 0), tier = 'common';
+    for (const [k, w] of Object.entries(odds)) { if (r < w) { tier = k; break; } r -= w; }
+    for (let i = PLANT_TIERS.indexOf(tier); i >= 0; i--) { const list = pool(PLANT_TIERS[i]); if (list.length) return this.rng.pick(list).id; }
+    for (const t of PLANT_TIERS) { const list = pool(t); if (list.length) return this.rng.pick(list).id; }
+    throw new GameError('Nothing grows from those seeds.');
+  }
   varietyDef(id) { return this.content.varieties[id] || null; }
 
   /**
@@ -748,7 +777,7 @@ export class Game {
   afterHarvest(p, now) { this.checkCollection(this.plantDef(p.plantID)?.school, now); }
 
   // ---- Field Guide collections (tuning.garden.collections)
-  /** A school's set: its base plants (starter, Store and gift). */
+  /** A school's set: its seed plants and its gift plant. */
   collectionPlants(school) { return this.content.plantList.filter((p) => p.school === school); }
   collectionStatus(school) {
     const list = this.collectionPlants(school);
@@ -819,26 +848,43 @@ export class Game {
     this.state.coins -= n;
   }
 
-  /** Plants whose seed packets the Store sells, with what (if anything) still locks each. */
-  storePlants(now) {
-    return this.content.plantList.filter((p) => p.source !== 'gift').map((p) => ({ def: p, price: this.plantCfg(p.id).packet || 0, locks: this.plantLocks(p, now) }));
+  /** The Store's seed shelf: every school's Common, Uncommon and Rare seeds, with price and what locks a tier. */
+  storePackets() {
+    const tiers = (this.gcfg.packets || {}).tiers || {};
+    return SCHOOLS.flatMap((school) => PLANT_TIERS.filter((t) => tiers[t]).map((t) => ({ id: blindPacketID(school, t), school, tier: t, price: tiers[t].price || 0, locks: this.beautyLock(tiers[t].beauty || 0) })));
   }
-  buyPacket(plantID, now, n = 1) {
-    const row = this.storePlants(now).find((x) => x.def.id === plantID);
+  buyPacket(packetID, now, n = 1) {
+    const row = this.storePackets().find((x) => x.id === packetID);
     if (!row) throw new GameError("The Store doesn't sell those.");
-    if (row.locks.length) throw new GameError("Those seeds aren't in the Store yet.");
+    if (row.locks.length) throw new GameError("Those seeds aren't on the shelf yet.");
     this.spend(row.price * n);
-    return this.grant([{ item: 'packet.' + plantID, count: n }]);
+    return this.grant([{ item: packetID, count: n }]);
   }
   amendmentPrice(itemID) {
     const def = this.content.items[itemID], c = this.gcfg.amendments || {};
-    return def && def.category === 'amendment' ? (def.amend ? c.price ?? 6 : c.plainPrice ?? 2) : 0;
+    return def && def.category === 'amendment' ? (def.amend ? c.price ?? 20 : c.plainPrice ?? 2) : 0;
   }
-  buyAmendment(itemID, n = 1) {
-    const price = this.amendmentPrice(itemID);
-    if (!price) throw new GameError("The Store doesn't sell that.");
-    this.spend(price * n);
-    return this.grant([{ item: itemID, count: n }]);
+  /**
+   * Today's soil stock: perDay school amendments (one bag each), chosen from the garden seed and the
+   * local day, plus Garden loam, which is always there. Returns [{ id, price, soldOut }].
+   */
+  soilStock(now) {
+    const day = Game.dayNumber(now), c = this.gcfg.amendments || {};
+    let st = this.state.soilShop;
+    if (!st || st.day !== day) {
+      const order = SCHOOLS.slice().sort((a, b) => hash32(this.state.seed, day, hashStr(a)) - hash32(this.state.seed, day, hashStr(b)));
+      st = this.state.soilShop = { day, offers: order.slice(0, c.perDay ?? 2).map((s) => 'amend.' + s), bought: [] };
+    }
+    const plain = (this.content.amendmentList.find((a) => !a.school) || {}).id;
+    return [...st.offers.map((id) => ({ id, price: this.amendmentPrice(id), soldOut: st.bought.includes(id) })), ...(plain ? [{ id: plain, price: this.amendmentPrice(plain), soldOut: false }] : [])];
+  }
+  buyAmendment(itemID, now = this.state.lastUpdated) {
+    const row = this.soilStock(now).find((x) => x.id === itemID);
+    if (!row) throw new GameError("That isn't in stock today.");
+    if (row.soldOut) throw new GameError('Sold out until tomorrow.');
+    this.spend(row.price);
+    if (this.content.items[itemID].amend) this.state.soilShop.bought.push(itemID);
+    return this.grant([{ item: itemID, count: 1 }]);
   }
 
   // ---- the morning check
@@ -1200,13 +1246,12 @@ export class Game {
   /** Store items that a beauty tier in (from, to] puts on the shelf: plant names and listing names. */
   opensAtBeauty(from, to) {
     const out = [];
-    for (const p of this.content.plantList) { const b = this.plantCfg(p.id).beauty; if (p.source === 'store' && b > from && b <= to) out.push(`${p.name} seeds`); }
+    for (const [t, c] of Object.entries((this.gcfg.packets || {}).tiers || {})) { const b = c.beauty || 0; if (b > from && b <= to) out.push(`${t.charAt(0).toUpperCase() + t.slice(1)} seeds`); }
     for (const r of this.content.requests || []) { const b = (r.requires || {}).beauty; if (r.kind === 'shop' && b > from && b <= to) out.push(this.decorDef(r.reward.id)?.name || r.name); }
     return out;
   }
   beautyLock(need) { return need > this.beautyBest ? [{ type: 'beauty', need, name: (this.beautyTiers[need] || {}).name || `tier ${need}` }] : []; }
   extraLocks(req) { return this.beautyLock((req.requires || {}).beauty || 0); }
-  plantLocks(p) { return p.source === 'store' ? this.beautyLock(this.plantCfg(p.id).beauty || 0) : []; }
 
   // ---- naming
   get generatedName() {
@@ -1275,7 +1320,7 @@ export class Game {
   }
   devGiveOrnaments() { for (const r of this.content.relicList) this.state.decor.owned[r.id] = (this.state.decor.owned[r.id] || 0) + 1; return this.content.relicList.length; }
   devSetBeautyBest(i) { this.state.beautyBest = i; }
-  devGivePackets(n = 5) { for (const p of this.content.plantList) this.grant([{ item: 'packet.' + p.id, count: n }]); return this.content.plantList.length; }
+  devGivePackets(n = 5) { const ids = this.content.itemList.filter((i) => i.blind).map((i) => i.id); for (const id of ids) this.grant([{ item: id, count: n }]); return ids.length; }
   devGiveAmendments(n = 5) { for (const a of this.content.amendmentList) this.grant([{ item: a.id, count: n }]); return this.content.amendmentList.length; }
   devForageNow(now) {
     const f = this.state.forage;
@@ -1329,6 +1374,12 @@ export class Content {
         this.addItem({ id: def.packet, category: 'packet', name: `${v.name} seeds`, rarity: item.rarity, sprite: 'packet.' + p.id, variant: { swap: { 7: rgbHex(r, gg, b), 8: rgbHex(r2, g2, b2) } },
           plant: p.id, variety: v.id, school: p.school, text: `${p.packet || ''} A rare colour.`.trim(), inGuide: false });
       }
+    }
+    // Blind seed packets: Common, Uncommon and Rare seeds of each school (tuning.garden.packets).
+    for (const school of SCHOOLS) for (const tier of PLANT_TIERS) {
+      const S = schoolName(school), T = tier.charAt(0).toUpperCase() + tier.slice(1);
+      this.addItem({ id: blindPacketID(school, tier), category: 'packet', name: `${T} ${S} seeds`, rarity: tier, sprite: `packet.${school}.${tier}`, school, blind: tier, inGuide: false,
+        text: { common: `${S} seeds. Mostly common plants, now and then something better.`, uncommon: `${S} seeds with better odds of something special.`, rare: `${S} seeds with good odds of a rare plant. Never a sure thing.` }[tier] });
     }
     // Soil amendments (amendments.json): Bag items that change a tile's soil.
     // Relics (relics.json) are decor ornaments: kind "ornament", with their school.

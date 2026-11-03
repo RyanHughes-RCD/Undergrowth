@@ -109,7 +109,7 @@ export class UI {
   aName(name) { return `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name}`; }
   /** Exact timer for the developer plant inspector. */
   timer(ms) { return duration(Math.max(0, ms) / 1000); }
-  plantName(p) { const v = p.variety && this.game.varietyDef ? this.game.varietyDef(p.variety) : null; return v ? v.name : (this.game.plantDef(p.plantID)?.name || 'Plant'); }
+  plantName(p, now = this.game.now()) { if (this.game.isHidden(p, now)) return `${schoolName(p.blind)} seedling`; const v = p.variety && this.game.varietyDef ? this.game.varietyDef(p.variety) : null; return v ? v.name : (this.game.plantDef(p.plantID)?.name || 'Plant'); }
   stageName(stage) { return { seed: 'Just planted', sprout: 'Sprouting', bud: 'In bud', bloom: 'Blooming', ready: 'Ready to harvest' }[stage] || stage; }
   growHoursText(plantID) {
     const c = this.game.plantCfg(plantID);
@@ -156,20 +156,21 @@ export class UI {
     const p = g.plantAt(tile);
     const soil = g.soilAt(tile);
     if (p) {
-      const stage = g.stageOf(p, now), def = g.plantDef(p.plantID);
+      const stage = g.stageOf(p, now), def = g.plantDef(p.plantID), hidden = g.isHidden(p, now);
       const slow = !soil;
       return [
         h('div', { class: 'row gap' }, h('div', { class: 'thumb small' }, this.sprites.element(this.app.view.plantSprite(p, now), this.app.view.plantVariant(p), 2)),
           h('div', { class: 'grow' }, h('b', {}, this.stageName(stage)),
-            h('div', { class: 'sub' }, stage === 'ready' ? 'Tap it to harvest.' : `Ready ${this.roughly(g.readyAt(p) - now)}.`))),
-        slow ? h('p', { class: 'sub' }, `Growing slowly on plain soil. ${def.name} likes ${schoolName(def.school)} soil.`) : null,
-        ...this.plantNotes(p, now),
+            h('div', { class: 'sub' }, stage === 'ready' ? 'Tap it to harvest.' : hidden ? `It buds ${this.roughly(g.stageAt(p, g.gcfg.stages.bud ?? 0.45) - now)}.` : `Ready ${this.roughly(g.readyAt(p) - now)}.`))),
+        hidden ? h('p', { class: 'sub' }, `What will it be? You'll know when it buds.`) : null,
+        slow ? h('p', { class: 'sub' }, `Growing slowly on plain soil. ${hidden ? 'It' : def.name} likes ${schoolName(def.school)} soil.`) : null,
+        ...(hidden ? [] : this.plantNotes(p, now)),
         this.app.devMode && this.plantInspector ? this.inspectPlant(p, now) : null,
         h('div', { class: 'row end gap' }, stage === 'ready' ? h('button', { class: 'btn green small', onclick: () => a.harvestAt(tile) }, 'Harvest')
-          : h('button', { class: 'btn grey small', onclick: () => { this.ask(`Dig up the ${def.name}?`, 'It will be lost.', 'Dig it up', () => a.clearPlant(p.id)); } }, 'Dig up')),
+          : h('button', { class: 'btn grey small', onclick: () => { this.ask(`Dig up the ${hidden ? 'seedling' : def.name}?`, 'It will be lost.', 'Dig it up', () => a.clearPlant(p.id)); } }, 'Dig up')),
       ];
     }
-    const packets = Object.keys(g.state.inventory).filter((id) => this.content.items[id]?.category === 'packet' && g.canPlant(this.content.items[id].plant, tile).ok);
+    const packets = Object.keys(g.state.inventory).filter((id) => this.content.items[id]?.category === 'packet' && g.canPlantPacket(id, tile).ok);
     const amends = Object.keys(g.state.inventory).filter((id) => this.content.items[id]?.category === 'amendment' && (this.content.items[id].amend || null) !== soil);
     const blocked = !g.isFree(tile) && !g.hostsPlant(tile);
     return [
@@ -197,6 +198,7 @@ export class UI {
     const g = this.game;
     const row = (k, v) => h('div', { class: 'inspect-kv' }, h('span', {}, k), h('b', {}, v));
     return h('div', { class: 'dev-note' },
+      row('Plant', `${g.plantDef(p.plantID)?.name}${p.blind ? ` (from ${p.from} ${p.blind} seeds)` : ''}`),
       row('Progress', `${(g.progress(p, now) * 100).toFixed(1)}% (${g.stageOf(p, now)}, ${p.cycle})`),
       row('Rate', `×${p.rate.toFixed(3)}`),
       row('Ready in', g.isReady(p, now) ? 'ready' : this.timer(g.readyAt(p) - now)),
@@ -331,6 +333,7 @@ export class UI {
   }
   /** The line under an item's name in the Bag. */
   bagLine(def) {
+    if (def.category === 'packet' && def.blind) return h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[def.school]}` }, `${schoolName(def.school)} soil`), ` · ${def.text.replace(/^\w+ seeds\.? ?/, '')}`);
     if (def.category === 'packet') return h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[def.school]}` }, `${schoolName(def.school)} soil`), ` · ${this.growHoursText(def.plant)}`);
     if (def.category === 'amendment') return h('div', { class: 'sub' }, def.text);
     return def.rarity ? h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, rarityName(def.rarity)) : null;
@@ -440,11 +443,22 @@ export class UI {
     const grow = board.filter((st) => st.req.reward.type === 'unlock' && st.req.reward.id === 'expansion');
     const sellable = Object.entries(g.state.inventory).filter(([id, n]) => n > 0 && g.sellPrice(id)).map(([id, n]) => ({ def: this.content.items[id], n, price: g.sellPrice(id) }));
     return [
-      ['seeds', 'Seeds', () => [h('p', { class: 'sub' }, 'Seed packets. Each grows best in its own soil.'),
-        ...g.storePlants(now).map((x) => this.buyRow('packet.' + x.def.id, `${x.def.name} seeds`,
-          h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[x.def.school]}` }, `${schoolName(x.def.school)}`), ` · ${this.growHoursText(x.def.id)}`), x.price, () => a.buyPacket(x.def.id), x.locks))]],
-      ['soil', 'Soil', () => [h('p', { class: 'sub' }, 'Spread on a tile to change its soil. It stays that way until you change it.'),
-        ...(this.content.amendmentList || []).map((am) => this.buyRow(am.id, am.name, h('div', { class: 'sub' }, am.text), g.amendmentPrice(am.id), () => a.buyAmendment(am.id)))]],
+      ['seeds', 'Seeds', () => {
+        const rows = g.storePackets();
+        return [h('p', { class: 'sub' }, "Every packet is a surprise: you won't know what it is until it buds. Better seeds have better odds of something rare, but nothing is certain."),
+          ...SCHOOLS.map((school) => h('div', { class: 'list-row seed-row' },
+            h('div', { class: 'thumb' }, this.sprites.element(`packet.${school}.common`, null, 3)),
+            h('div', { class: 'grow' }, h('b', { style: `color:${SCHOOL_COLORS[school]}` }, `${schoolName(school)} seeds`),
+              h('div', { class: 'seed-tiers' }, rows.filter((x) => x.school === school).map((x) => x.locks.length
+                ? h('button', { class: 'btn small grey', disabled: true, title: `Opens with ${this.lockText(x.locks)}` }, ic('lock', 1), ` ${cap(x.tier)}`)
+                : h('button', { class: 'btn small ' + (g.state.coins >= x.price ? 'green' : 'grey'), disabled: g.state.coins < x.price, onclick: () => a.buyPacket(x.id) },
+                  this.sprites.element(`packet.${school}.${x.tier}`, null, 1), ` ${cap(x.tier)} `, ic('coin', 1), ` ${x.price}`))))))];
+      }],
+      ['soil', 'Soil', () => [h('p', { class: 'sub' }, "Soil that changes a tile for good is hard to come by: the Store has a little each day. Room to grow sometimes uncovers some too."),
+        ...g.soilStock(now).map((x) => { const am = this.content.items[x.id];
+          return x.soldOut ? h('div', { class: 'list-row locked' }, h('div', { class: 'thumb' }, this.sprites.element(am.sprite, null, 3)), h('div', { class: 'grow' }, h('b', {}, am.name), h('div', { class: 'sub' }, 'Sold out until tomorrow.')))
+            : this.buyRow(am.sprite, am.name, h('div', { class: 'sub' }, am.text), x.price, () => a.buyAmendment(x.id)); }),
+        h('p', { class: 'sub' }, 'New soil comes in every morning.')]],
       ['decor', 'Decor', () => [h('p', { class: 'sub' }, 'Things to set out in your garden. Find them in your Bag under Decor.'),
         ...decor.map((st) => { const d = g.decorDef(st.req.reward.id) || {}; return this.buyRow(d.sprite || 'ui.icon.board', d.name || st.req.name, h('div', { class: 'sub' }, d.text || st.req.text || ''), st.coins, () => a.deliverRequest(st.req.id), st.locks); })]],
       ['sell', 'Sell', () => [h('p', { class: 'sub' }, 'The Store buys what you grow and find.'),
@@ -514,9 +528,10 @@ export class UI {
     const g = this.game;
     const garden = () => this.content.plantList.map((p) => {
       const item = this.content.items[p.item], c = g.plantCfg(p.id);
-      return { key: 'plant:' + p.id, name: p.name, sprite: item.sprite, school: p.school, text: item.guideText,
-        hint: `${schoolName(p.school)} soil. Grow it and harvest it to learn more.`,
-        extra: [h('p', { class: 'sub center' }, `${p.kind === 'fungus' ? 'A fungus' : p.kind === 'leafy' ? 'A leafy plant' : 'A flower'}${p.perennial ? ' that grows back after harvest' : ''}. ${this.growHoursText(p.id)}. Sells for ${c.sell} coins.`),
+      const from = p.source === 'gift' ? 'Only a friend of the forest can bring its seeds.' : `It comes up from ${schoolName(p.school)} seeds${p.tier === 'common' ? '' : `, ${p.tier === 'rare' ? 'rarely' : 'now and then'}`}.`;
+      return { key: 'plant:' + p.id, name: p.name, sprite: item.sprite, school: p.school, text: item.guideText, rarity: p.tier,
+        hint: `${schoolName(p.school)} soil. ${from}`,
+        extra: [h('p', { class: 'sub center' }, `${p.kind === 'fungus' ? 'A fungus' : p.kind === 'leafy' ? 'A leafy plant' : 'A flower'}${p.perennial ? ' that grows back after harvest' : ''}. ${this.growHoursText(p.id)}. Sells for ${c.sell} coins. ${from}`),
           ...this.plantGuideExtra(p)] };
     });
     return [
@@ -675,7 +690,9 @@ export class UI {
     const cats = [...new Set(this.content.itemList.map((i) => i.category))];
     const itemSel = h('select', { class: 'select' }, cats.map((cat) => h('optgroup', { label: cap(cat) }, this.content.itemList.filter((i) => i.category === cat).map((i) => h('option', { value: i.id }, i.name)))));
     const decorSel = h('select', { class: 'select' }, (this.content.cosmetics || []).map((c) => h('option', { value: c.id }, c.name)));
-    const packetSel = h('select', { class: 'select' }, this.content.plantList.map((p) => h('option', { value: 'packet.' + p.id }, `${p.name} seeds`)));
+    const packetSel = h('select', { class: 'select' }, [
+      h('optgroup', { label: 'Blind packets' }, this.content.itemList.filter((i) => i.blind).map((i) => h('option', { value: i.id }, i.name))),
+      h('optgroup', { label: 'Named packets (any plant)' }, this.content.plantList.map((p) => h('option', { value: 'packet.' + p.id }, `${p.name} seeds`)))]);
     const amendSel = h('select', { class: 'select' }, (this.content.amendmentList || []).map((x) => h('option', { value: x.id }, x.name)));
     return [
       ['Garden', [

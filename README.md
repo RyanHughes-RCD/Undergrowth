@@ -46,9 +46,8 @@ The garden is a new game, so older forests aren't carried over:
   - The clearing is a little grotto: mossy rocks, ferns and roots along its edge (`start.scenery`, visual only).
   - An old seed tin waits by the log (`start.tin`). Tapping it shows the words on its lid, then five quiet questions with four answers each (`Content/opening.json`). No answer names a school or a mechanic. Each answer adds weight to one or two schools.
   - The highest total chooses the garden's starting school, and the runner-up adds a little. The tin holds a starter set (`garden.starterSet`):
-    - 3 packets of that school's first starter plant, plus 1 of its second if it has one;
-    - 2 packets of the runner-up school's first starter;
-    - 4 amendments of the school and 2 of the runner-up.
+    - 4 Common seeds of that school and 2 Common seeds of the runner-up;
+    - 2 amendments of the school and 1 of the runner-up.
   - A new garden also starts with 20 coins (`garden.startCoins`).
   - `python3 tools/check_opening.py` checks the weights: every school can be chosen, and over every possible set of answers the shares are 13–19%.
 - **The foraging patch** (`tuning.json` → `forage`, on by default): plain finds turn up by chance on the clearing's outer ring, by the treeline. They are Brown Button Cap, Clover, Sorrel and Meadow Daisy.
@@ -77,6 +76,8 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
 - **Soil:** every clearing tile has one soil: plain, or one of the six schools (saved as `state.soil`; plain isn't stored).
   - You change a tile's soil on purpose with an amendment from the Bag: Spore compost, Glow dust, Bloom mulch, Verdure leaf mould, Shimmer crystal dust or Spirit mist. Garden loam turns it back to plain (`Content/amendments.json`).
   - One bag does one tile, and the soil stays until you change it. A tile with a plant on it can't be changed.
+  - **Soil is scarce** (`garden.amendments`). Each morning the Store stocks two school amendments, chosen from the garden seed and the day: one bag each, at 20 coins. Garden loam is always there at 2.
+  - The other sources are the opening's tin and the soil patches Room to grow uncovers.
   - The tile shows its soil: plain is grass, and a school's soil is its ground tile (`tile.<school>.3a/b`).
 - **Growing well:**
   - On its own school's soil a plant grows at normal speed (`soil.preferred` 1).
@@ -95,7 +96,7 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
   - The first harvest of each plant adds it to the Field Guide's **Garden** tab.
 - **Coins:** the one currency.
   - The Store's **Sell** tab buys produce (each plant's `sell` price) and anything foraged (`garden.sellByRarity`), one at a time or everything at once.
-  - Coins buy seed packets (**Seeds** tab), amendments (**Soil**, 6 coins, loam 2), decor (**Decor**) and **Room to grow**.
+  - Coins buy seed packets (**Seeds**), the day's soil (**Soil**), decor (**Decor**) and **Room to grow**.
 - **The morning check:** on opening after 4 hours or more of real time away (`garden.morning.minAwayHours`), a short card names everything ready to harvest and when the next plant will be. Ready plants are highlighted.
   - At most one small surprise per local day (`surpriseChance` 0.7), chosen from the garden seed and the day, among what's possible right now.
   - **A self-seeded seedling:** a blooming plant seeds a neighbouring open tile it can grow in, and a sprout appears there.
@@ -104,43 +105,39 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
   - The weights are 3, 4 and 2 (`morning.weights`).
   - Developer time skips don't trigger the card; **Come back after…** does.
 
-### The starter plants
+### Seeds are blind pulls
 
-Eight plants from the catalogue, at least one per school, fungi and flowers mixed. Grow times are staggered so something is ready most mornings.
+Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon Shimmer seeds", "Rare Spirit seeds" (`seeds.<school>.<tier>`, `garden.packets`).
 
-| Plant | School | Kind | Grows (own soil) | Regrows | Yield | Seeds back | Sells | Packet |
-|---|---|---|---|---|---|---|---|---|
-| Ink Cap | Spore | fungus | 6h | | 3 | 1 + 50% | 3 | 4 |
-| Marigold | Bloom | flower | 8h | | 3 | 1 + 50% | 4 | 5 |
-| Wood Sorrel | Verdure | leafy, perennial | 10h | 8h | 2 | 25% | 4 | 8 |
-| Foxfire Button | Glow | fungus | 12h | | 3 | 1 + 50% | 5 | 7 |
-| Jewelweed | Shimmer | flower | 14h | | 3 | 1 + 50% | 6 | 8 |
-| Wisp Cap | Spirit | fungus | 16h | | 3 | 1 + 50% | 7 | 9 |
-| Cornflower | Bloom | flower | 20h | | 4 | 1 + 50% | 7 | 10 |
-| Lantern Flower | Glow | flower, perennial | 24h | 18h | 3 | 25% | 9 | 14 |
+- **Planting rolls the plant.**
+  - First a tier is drawn by the packet's odds, then a plant evenly among that school's seed plants of that tier. A tier with none steps down.
+  - Better packets have better odds, never a sure thing.
+  - The seedling stays a mystery ("Bloom seedling, what will it be?") until its bud shows. Its card gives only when it buds, since the ready time would give it away.
 
-- **Why these numbers:**
-  - Every plant earns about 1.3–1.5 coins per tile-hour on its own soil, so none is simply best.
-  - Quick plants suit players who check often. Slow ones pay more per visit for players who check once a day: a Cornflower pays 28 a morning, an Ink Cap 9.
-  - Annuals return 1.5 packets on average, so a patch slowly grows itself.
-  - Perennials don't need replanting, so they return fewer seeds.
-  - An amendment costs about two packets, since it lasts.
-- **The first morning:** the starter set fills about 5 tiles. The first harvest sells for about 30–60 coins, which pays for the next round of seeds and a little soil.
+  | Packet | Price | On the shelf | Common | Uncommon | Rare |
+  |---|---|---|---|---|---|
+  | Common | 5 | from the start | 80% | 17% | 3% |
+  | Uncommon | 12 | Tended | 40% | 48% | 12% |
+  | Rare | 28 | Pleasant | 15% | 45% | 40% |
 
-### Store plants
+- **Harvests return seeds of the plant's own school and tier.** A rare plant gives Rare seeds, so lucky pulls compound slowly.
+- **Not in any packet:** gift plants (from visitors) and colour varieties keep their own named packets, which only friends and cross-pollination give.
+- **The plants**, by school and tier (`plants.json` `tier`):
 
-Six more plants, one per school. Their packets come into the Store as the garden's beauty reaches a tier (`garden.plants.<id>.beauty`).
+  | School | Common | Uncommon | Rare |
+  |---|---|---|---|
+  | Spore | Ink Cap (6h) | Velvet Shank (10h) | Morel (20h) |
+  | Glow | Foxfire Button (12h), Honey Mushroom (12h) | Lantern Flower (24h, perennial) | Glowcap (20h) |
+  | Bloom | Marigold (8h), Cornflower (20h) | Lavender (16h, perennial) | Anemone (18h) |
+  | Verdure | Wood Sorrel (10h, perennial) | Hosta (18h, perennial) | Hellebore (22h, perennial) |
+  | Shimmer | Jewelweed (14h) | Glassbell (14h) | Prism Rose (20h) |
+  | Spirit | Wisp Cap (16h) | Mistbell (18h) | Ancestor's Lace (20h) |
 
-| Plant | School | Kind | Grows | Regrows | Yield | Sells | Packet | Opens at |
-|---|---|---|---|---|---|---|---|---|
-| Velvet Shank | Spore | fungus | 10h | | 3 | 6 | 9 | Tended |
-| Lavender | Bloom | flower, perennial | 16h | 12h | 3 | 8 | 18 | Tended |
-| Hosta | Verdure | leafy, perennial | 18h | 14h | 2 | 11 | 20 | Pleasant |
-| Glassbell | Shimmer | flower | 14h | | 3 | 8 | 12 | Pleasant |
-| Honey Mushroom | Glow | fungus | 12h | | 4 | 6 | 12 | Lovely |
-| Mistbell | Spirit | flower | 18h | | 3 | 10 | 15 | Lovely |
-
-They pay a little more per tile-hour than the starters (about 1.5–1.8), which is the reward for a lovelier garden.
+  - Grow times are on the plant's own soil.
+  - Commons sell for 3–7 coins, uncommons for 6–11 and rares for 13–16.
+  - Annual commons return 1 seed plus a 50% chance of another; rares return a 50% chance of one; perennials 25%.
+  - Every plant's numbers are in `tuning.json` → `garden.plants`.
+- **The first morning:** the tin's 6 packets fill 6 tiles. The first harvests sell for about 30–60 coins, enough for the next round of Common seeds or a bag of the day's soil.
 
 ## Companions, decor and beauty (web)
 
@@ -169,19 +166,19 @@ They pay a little more per tile-hour than the starters (about 1.5–1.8), which 
 - **Garden beauty** (`garden.beauty`): 3 × each distinct plant growing + 1 × each plant in bloom or ready + every placed decor's beauty.
   - It's never shown as a number: the HUD shows a named tier with a leaf meter. The tiers are Bare, Tended (8), Pleasant (20), Lovely (36), Charming (56) and Enchanting (80).
   - The best tier ever reached is kept (`state.beautyBest`) and never relocks.
-  - Reaching a tier shows a gentle card naming what it put in the Store. Tiers open Store plants and some decor ('Needs beauty tier' in the Offerings sheet): Flower planter and Wind chime at Tended, Birdbath and Mushroom lamp at Pleasant, Fairy ring and Crystal lamp at Lovely, Root arch at Charming.
+  - Reaching a tier shows a gentle card naming what it put in the Store. Tiers open better seed packets (Uncommon at Tended, Rare at Pleasant) and some decor ('Needs beauty tier' in the Offerings sheet): Flower planter and Wind chime at Tended, Birdbath and Mushroom lamp at Pleasant, Fairy ring and Crystal lamp at Lovely, Root arch at Charming.
   - Locked items show in the Store as silhouettes ("Opens with a lovely garden").
   - A first bed of two or three kinds with a bench reaches Tended on day one. Pleasant takes about five kinds or a few pieces of decor, Lovely most of the clearing, and Charming or Enchanting need Room to grow.
 
 ## Long-term goals (web)
 
-- **Field Guide collections:** each school's set is its starter, Store and gift plants (Spore 3, Glow 4, Bloom 4, Verdure 3, Shimmer 3, Spirit 3).
+- **Field Guide collections:** each school's set is its seed plants and its gift plant (Spore 4, Glow 5, Bloom 5, Verdure 4, Shimmer 4, Spirit 4).
   - Harvest every plant in a set once to complete it. The reward is that school's relic ornament (the only way to earn one) and 150 coins (`garden.collections`).
   - The Garden tab of the Field Guide opens with each set's progress and the relic as a silhouette until earned.
 - **Cross-pollination and colour varieties** (`plants.json` varieties, `garden.varieties`):
   - Harvest a plant while a blooming plant of the same family is in one of its 8 neighbours. The same kind counts, and the families are caps, daisies, bells, clovers, spikes and willows.
   - With a hidden chance (12%) you get a seed packet of one of its colour varieties, one not yet found first.
-  - There are 14 varieties, one per starter and Store plant: Lemon Marigold, Pink Cornflower, Lavender Ink Cap, Golden Hosta and so on.
+  - There are 14 varieties, one per common and uncommon plant: Lemon Marigold, Pink Cornflower, Lavender Ink Cap, Golden Hosta and so on.
   - A variety grows like its plant and breeds true. Its produce sells for twice as much and has its own entry in the Field Guide's **Colours** tab (a hint shows until found).
   - Variety colours are palette swaps computed at load: every vivid, non-green colour of the plant's sprite takes the variety's hue, and the greens too for leafy varieties (`varietySwap` in `core.js`), so no extra art is needed.
   - In a simulation, a bed of seven Marigolds harvested daily gave a Lemon Marigold packet on about 1 in 9 harvests.
@@ -259,7 +256,7 @@ A separate test garden for trying anything without touching your real save.
   - Entering developer mode saves the real garden and keeps a backup copy (`undergrowth.forest.v1.backup`).
   - Test gardens are marked (`state.dev`), and saving one over the real garden is refused.
 - **Tools:**
-  - **Garden:** grow all plants now; +100 or +1000 coins; give any seed packet or amendment, or 5 of each.
+  - **Garden:** grow all plants now; +100 or +1000 coins; give any blind or named seed packet or amendment, or 5 of each.
   - **Plant timers:** tap a plant to see its exact progress, rate, time to ready and stage times.
   - The six relic ornaments; see the beauty score and set the best beauty tier reached.
   - **Visitors:** set a visitor's interest stage, lay its tracks now, or bring it into the garden now. Also give 2 of every colour variety packet.
@@ -314,7 +311,7 @@ tools/
 - **Missing sprite ids** render as a magenta "?" instead of crashing.
 - **Placeholder art:** `python3 tools/gen_placeholders.py` regenerates every placeholder sprite. Re-running it reproduces the committed sprites exactly.
   - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
-  - Seed packets (`packet.<plant>`: a paper packet banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
+  - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed or gold) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
   - Catalogue items and their bud stages (`plant.bud.<key>`; fungi get a small closed button) come from `gen_content_sprites.py`.
   - School soil tiles (`tile.<school>.3a/b`) come from `gen_terrain.py`.
   - Grass, the treeline floor and shrubs come from `gen_topdown.py`.
@@ -325,7 +322,7 @@ tools/
 | File | What it holds |
 |---|---|
 | `items.json` | The Plant & Fungi Catalogue (from the spreadsheet): id, category, name, rarity, sprite, school, description. |
-| `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`starter`, `store`, `gift`), perennial, packet text. Numbers: `tuning.json` → `garden.plants`. Each also gets a seed packet item (`packet.<id>`). |
+| `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`seeds`: comes from blind packets; `gift`: only from visitors), tier (common, uncommon, rare), perennial, companions, varieties. Numbers: `tuning.json` → `garden.plants`. Blind packets (`seeds.<school>.<tier>`) are built from the schools; each plant also has a named packet (`packet.<id>`), used for gifts. |
 | `amendments.json` | Soil amendments (kept by hand): id, school (null = plain loam), name, text. |
 | `landmarks.json` | The Old Log. |
 | `opening.json` | The seed tin's card, the questions and their school weights, and what each school's tin holds. |

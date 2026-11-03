@@ -30,7 +30,7 @@
   }
  },
  "garden": {
-  "_about": "The garden. Plants (Content/plants.json) grow through stages (seed, sprout, bud, bloom, ready) over growHours on their own school's soil, timed from timestamps so time away counts. soil: growth speed on the plant's own soil (preferred), on plain soil (plain); on another school's soil it can't be planted at all. stages: the share of growth at which sprout, bud and bloom begin; ready at 1. A perennial regrows from the bud stage in regrowHours after each harvest. Per plant (plants): growHours, regrowHours (perennials), yield (produce per harvest), seeds [packets always returned, chance of one more], sell (coins per produce), packet (coins per seed packet in the Store), beauty (Store plants: the beauty tier that puts their packets on the shelf). amendments: Store price per bag (plain loam is cheaper). sellByRarity: the price of anything else in the Bag that can be sold (foraged finds). startCoins: coins in a new garden. starterSet: what the opening's tin holds: packets of the chosen school's first starter plant (and one of its second, if it has one), packets of the runner-up school's first starter, and amendments of each. morning: after minAwayHours of real time away a card sums up what's ready; at most one surprise per local day, with surpriseChance, chosen by weight among the kinds possible right now.",
+  "_about": "The garden. Plants (Content/plants.json) grow through stages (seed, sprout, bud, bloom, ready) over growHours on their own school's soil, timed from timestamps so time away counts. soil: growth speed on the plant's own soil (preferred), on plain soil (plain); on another school's soil it can't be planted at all. stages: the share of growth at which sprout, bud and bloom begin; ready at 1. A perennial regrows from the bud stage in regrowHours after each harvest. Per plant (plants): growHours, regrowHours (perennials), yield (produce per harvest), seeds [packets always returned, chance of one more], sell (coins per produce). Seed packets and their odds: packets. amendments: the Store's daily soil stock. sellByRarity: the price of anything else in the Bag that can be sold (foraged finds). startCoins: coins in a new garden. starterSet: what the opening's tin holds: Common seeds of the chosen school and of the runner-up, and a few amendments of each. morning: after minAwayHours of real time away a card sums up what's ready; at most one surprise per local day, with surpriseChance, chosen by weight among the kinds possible right now.",
   "startCoins": 20,
   "soil": {
    "preferred": 1,
@@ -42,8 +42,10 @@
    "bloom": 0.75
   },
   "amendments": {
-   "price": 6,
-   "plainPrice": 2
+   "_about": "Soil amendments are scarce: the Store stocks perDay school amendments each local day (one bag each, chosen from the garden seed and the day) at `price`; Garden loam (back to plain) is always there at plainPrice. Other sources: the opening's tin, and the soil patches Room to grow uncovers.",
+   "price": 20,
+   "plainPrice": 2,
+   "perDay": 2
   },
   "sellByRarity": {
    "common": 2,
@@ -53,11 +55,10 @@
    "legendary": 30
   },
   "starterSet": {
-   "primaryPackets": 3,
-   "primarySecondPlant": 1,
+   "primaryPackets": 4,
    "secondPackets": 2,
-   "primaryAmendments": 4,
-   "secondAmendments": 2
+   "primaryAmendments": 2,
+   "secondAmendments": 1
   },
   "morning": {
    "minAwayHours": 4,
@@ -77,8 +78,7 @@
      1,
      0.5
     ],
-    "sell": 3,
-    "packet": 4
+    "sell": 3
    },
    "marigold": {
     "growHours": 8,
@@ -87,8 +87,7 @@
      1,
      0.5
     ],
-    "sell": 4,
-    "packet": 5
+    "sell": 4
    },
    "wood-sorrel": {
     "growHours": 10,
@@ -98,8 +97,7 @@
      0,
      0.25
     ],
-    "sell": 4,
-    "packet": 8
+    "sell": 4
    },
    "foxfire-button": {
     "growHours": 12,
@@ -108,8 +106,7 @@
      1,
      0.5
     ],
-    "sell": 5,
-    "packet": 7
+    "sell": 5
    },
    "jewelweed": {
     "growHours": 14,
@@ -118,8 +115,7 @@
      1,
      0.5
     ],
-    "sell": 6,
-    "packet": 8
+    "sell": 6
    },
    "wisp-cap": {
     "growHours": 16,
@@ -128,8 +124,7 @@
      1,
      0.5
     ],
-    "sell": 7,
-    "packet": 9
+    "sell": 7
    },
    "cornflower": {
     "growHours": 20,
@@ -138,8 +133,7 @@
      1,
      0.5
     ],
-    "sell": 7,
-    "packet": 10
+    "sell": 7
    },
    "lantern-flower": {
     "growHours": 24,
@@ -149,8 +143,7 @@
      0,
      0.25
     ],
-    "sell": 9,
-    "packet": 14
+    "sell": 9
    },
    "velvet-shank": {
     "growHours": 10,
@@ -159,9 +152,7 @@
      1,
      0.5
     ],
-    "sell": 6,
-    "packet": 9,
-    "beauty": 1
+    "sell": 6
    },
    "lavender": {
     "growHours": 16,
@@ -171,9 +162,7 @@
      0,
      0.25
     ],
-    "sell": 8,
-    "packet": 18,
-    "beauty": 1
+    "sell": 8
    },
    "hosta": {
     "growHours": 18,
@@ -183,9 +172,7 @@
      0,
      0.25
     ],
-    "sell": 11,
-    "packet": 20,
-    "beauty": 2
+    "sell": 11
    },
    "glassbell": {
     "growHours": 14,
@@ -194,9 +181,7 @@
      1,
      0.5
     ],
-    "sell": 8,
-    "packet": 12,
-    "beauty": 2
+    "sell": 8
    },
    "honey-mushroom": {
     "growHours": 12,
@@ -205,9 +190,7 @@
      1,
      0.5
     ],
-    "sell": 6,
-    "packet": 12,
-    "beauty": 3
+    "sell": 6
    },
    "mistbell": {
     "growHours": 18,
@@ -216,39 +199,34 @@
      1,
      0.5
     ],
-    "sell": 10,
-    "packet": 15,
-    "beauty": 3
+    "sell": 10
    },
    "spore-lantern": {
     "growHours": 20,
     "yield": 3,
     "seeds": [
      1,
-     0.5
+     0.25
     ],
-    "sell": 13,
-    "packet": 0
+    "sell": 13
    },
    "moonpetal": {
     "growHours": 22,
     "yield": 3,
     "seeds": [
      1,
-     0.5
+     0.25
     ],
-    "sell": 14,
-    "packet": 0
+    "sell": 14
    },
    "foxglove": {
     "growHours": 20,
     "yield": 3,
     "seeds": [
      1,
-     0.5
+     0.25
     ],
-    "sell": 13,
-    "packet": 0
+    "sell": 13
    },
    "canopy-bells": {
     "growHours": 22,
@@ -258,18 +236,16 @@
      0,
      0.25
     ],
-    "sell": 14,
-    "packet": 0
+    "sell": 14
    },
    "prismbell": {
     "growHours": 22,
     "yield": 3,
     "seeds": [
      1,
-     0.5
+     0.25
     ],
-    "sell": 14,
-    "packet": 0
+    "sell": 14
    },
    "wispwillow": {
     "growHours": 24,
@@ -279,8 +255,62 @@
      0,
      0.25
     ],
-    "sell": 16,
-    "packet": 0
+    "sell": 16
+   },
+   "morel": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.5
+    ],
+    "sell": 14
+   },
+   "glowcap": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.5
+    ],
+    "sell": 14
+   },
+   "anemone": {
+    "growHours": 18,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.5
+    ],
+    "sell": 13
+   },
+   "hellebore": {
+    "growHours": 22,
+    "regrowHours": 16,
+    "yield": 2,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 16
+   },
+   "prism-rose": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.5
+    ],
+    "sell": 14
+   },
+   "ancestors-lace": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.5
+    ],
+    "sell": 14
    }
   },
   "companions": {
@@ -362,12 +392,44 @@
    "sellMult": 2
   },
   "collections": {
-   "_about": "Field Guide collections: harvest every base plant (starter, Store and gift) of a school once to complete it; the reward is that school's relic ornament (Content/relics.json) and `coins`.",
+   "_about": "Field Guide collections: harvest every plant of a school (its seed plants and its gift plant) once to complete it; the reward is that school's relic ornament (Content/relics.json) and `coins`.",
    "coins": 150
   },
   "orders": {
    "_about": "Daily orders at the Old Log (requests of kind 'order'): perDay of them each local day, picked (deterministically, from the garden seed and the day) from the orders whose produce comes from plants the player has already harvested.",
    "perDay": 2
+  },
+  "packets": {
+   "_about": "Seed packets are blind pulls: each school sells Common, Uncommon and Rare seeds. Planting one picks a plant from that school's seed plants (plants.json source 'seeds'): first a tier by the packet's `odds` (never a sure thing), then evenly among that school's plants of the tier (a tier with none steps down). The plant shows only as a seedling until it reaches its bud. Harvests return seeds of the plant's own school and tier (seeds per plant in plants), so rare plants give rare seeds. `price` in the Store; `beauty`: the beauty tier that puts that tier of seeds on the shelf. Gift plants and colour varieties keep their own named packets.",
+   "tiers": {
+    "common": {
+     "price": 5,
+     "beauty": 0,
+     "odds": {
+      "common": 80,
+      "uncommon": 17,
+      "rare": 3
+     }
+    },
+    "uncommon": {
+     "price": 12,
+     "beauty": 1,
+     "odds": {
+      "common": 40,
+      "uncommon": 48,
+      "rare": 12
+     }
+    },
+    "rare": {
+     "price": 28,
+     "beauty": 2,
+     "odds": {
+      "common": 15,
+      "uncommon": 45,
+      "rare": 40
+     }
+    }
+   }
   }
  },
  "forage": {

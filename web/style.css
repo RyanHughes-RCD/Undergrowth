@@ -286,3 +286,5 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .collection.done b { color: var(--gold); }
 .grow-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 260px; margin: 8px auto 0; align-items: center; }
 .grow-mid { display: flex; justify-content: center; }
+.seed-tiers { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.seed-row .grow { min-width: 0; }

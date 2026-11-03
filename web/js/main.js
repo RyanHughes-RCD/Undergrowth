@@ -300,9 +300,9 @@ class App {
     const g = this.game;
     const p = this.attempt(() => g.plant(itemID, tile, g.now()));
     if (!p) return null;
-    const def = g.plantDef(p.plantID);
+    const def = g.plantDef(p.plantID), name = p.blind ? 'It' : def.name;
     const slow = !g.soilAt(tile);
-    this.ui.toast(slow ? `Planted. ${def.name} grows slowly in plain soil; it likes ${def.school.charAt(0).toUpperCase() + def.school.slice(1)} soil.` : `Planted. It'll be ready ${this.ui.roughly(g.readyAt(p) - g.now())}.`, this.content.items[itemID]?.sprite);
+    this.ui.toast(slow ? `Planted. ${name} grows slowly in plain soil; it likes ${def.school.charAt(0).toUpperCase() + def.school.slice(1)} soil.` : `Planted. ${p.blind ? 'Watch for its bud.' : `It'll be ready ${this.ui.roughly(g.readyAt(p) - g.now())}.`}`, this.content.items[itemID]?.sprite);
     if (refresh) { this.ui.selectedTile = null; this.changed(); }
     return p;
   }
@@ -342,12 +342,12 @@ class App {
     for (const [id, n] of Object.entries(g.state.inventory)) if (n > 0 && g.sellPrice(id)) total += this.attempt(() => g.sell(id, n)) || 0;
     if (total) { this.ui.toast(`Sold everything for ${total} coins.`, 'ui.icon.coin'); this.changed(); }
   }
-  buyPacket(plantID) {
-    const r = this.attempt(() => this.game.buyPacket(plantID, this.game.now()));
+  buyPacket(packetID) {
+    const r = this.attempt(() => this.game.buyPacket(packetID, this.game.now()));
     if (r) { this.present(r); this.changed(); }
   }
   buyAmendment(itemID) {
-    const r = this.attempt(() => this.game.buyAmendment(itemID));
+    const r = this.attempt(() => this.game.buyAmendment(itemID, this.game.now()));
     if (r) { this.present(r); this.changed(); }
   }
 

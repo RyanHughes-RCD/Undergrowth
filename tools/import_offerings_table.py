@@ -116,10 +116,12 @@ def parse_colours(v):
 # ------------------------------------------------------------------ read
 
 def garden_item_ids():
-    """Seed packets (packet.<plant id>, from plants.json) and soil amendments (amendments.json): Bag items
+    """Seed packets (blind seeds.<school>.<tier>, and named packet.<plant id> from plants.json) and soil amendments (amendments.json): Bag items
     the game builds from their own files, which listings may give or ask for too."""
     plants = load("plants.json") or []
     out = ["packet." + p["id"] for p in plants] + [a["id"] for a in load("amendments.json") or []]
+    # Blind seed packets: seeds.<school>.<tier>.
+    out += ["seeds.%s.%s" % (s, t) for s in ("spore", "glow", "bloom", "verdure", "shimmer", "spirit") for t in ("common", "uncommon", "rare")]
     # Colour varieties: their seed packets (packet.<variety id>) and produce (<plant's item>.<variety>).
     for p in plants:
         for v in p.get("varieties", []):

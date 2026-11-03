@@ -394,7 +394,7 @@ export class ForestView {
     for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
       const t = { x, y };
       // Planting: its own soil glows brightly, plain ground faintly (it grows there, but slowly).
-      const chk = m.type === 'plant' ? g.canPlant(item.plant, t) : null;
+      const chk = m.type === 'plant' ? g.canPlantPacket(m.itemID, t) : null;
       const ok = m.type === 'plant' ? chk.ok : (!g.plantAt(t) && !g.landmarkAt(t) && !g.sceneryAt(t) && (item.amend || null) !== g.soilAt(t));
       if (!ok) continue;
       const k = chk && chk.factor < 1 ? 0.45 : 1;
