@@ -42,10 +42,10 @@
     "tickSeconds": 180,
     "attemptsPerTick": 3,
     "spawnChance": 0.25,
-    "maxTotal": 160,
+    "maxTotal": 320,
     "lifetimeSeconds": 172800, "wilting": {"_about": "Unpicked finds fade after this many hours by rarity (an item's own lifetimeHours wins), so the grove follows its terrain instead of clogging up. Starting finds never fade.", "common": 30, "uncommon": 60, "rare": 120, "veryRare": 168, "legendary": 168},
     "maxCatchUpTicks": 288,
-    "maxPerOpenTile": 0.08,
+    "maxPerOpenTile": 0.16,
     "minCap": 5,
     "scaling": {
       "minMultiplier": 0.25,
@@ -241,13 +241,12 @@
     "reveal": {"panSeconds": 1.2}
   },
   "schoolSeeds": {
-    "_about": "School seeds (Content/schoolSeeds.json): buried from the Bag on an open tile, a seed adds its school's stat around that tile with the creature falloff (strength at its own tile, radius like a creature's). It ramps in over rampHours, holds until durationHours after burying, then fades out over fadeHours. strength 12 / radius 1.5 makes a Low patch of about 5 tiles (about the patch two neighbouring commons make); Wide Spread adds radiusPerTier. At most maxBuried at once. Each pick of a find whose main need is a school (its highest stat minimum) drops that school's seed with dropChance. Buried seeds count as soil boosts: they are effects for where spawns land, form terrain and show in the spawn inspector.",
+    "_about": "School seeds (Content/schoolSeeds.json): buried from the Bag on an open tile, a seed adds its school's stat around that tile with the creature falloff (strength at its own tile, radius like a creature's). It ramps in over rampHours, holds until durationHours after burying, then fades out over fadeHours. strength 12 / radius 1.5 makes a Low patch of about 5 tiles (about the patch two neighbouring commons make); Wide Spread adds radiusPerTier. No limit on how many can be buried (set maxBuried to bring one back). Each pick of a find whose main need is a school (its highest stat minimum) drops that school's seed with dropChance. Buried seeds count as soil boosts: they are effects for where spawns land, form terrain and show in the spawn inspector.",
     "strength": 12,
     "radius": 1.5,
     "rampHours": 3,
     "durationHours": 72,
     "fadeHours": 6,
-    "maxBuried": 6,
     "dropChance": 0.04
   },
   "upgrades": {

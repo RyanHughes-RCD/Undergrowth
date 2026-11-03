@@ -86,11 +86,6 @@ export class UI {
     if (this.mode && this.mode.type === 'relic' && this.mode.tile) bottom.append(this.relicConfirmCard(this.mode.itemID, this.mode.tile));
     if (this.selectedTile) bottom.append(this.tileCard(this.selectedTile));
     const invCount = Object.values(g.state.inventory).reduce((a, b) => a + b, 0);
-    const finds = g.state.spawns.filter((sp) => !sp.opening).length;
-    if (finds >= 2 && !this.mode) {
-      bottom.append(h('div', { class: 'collect-row' },
-        h('button', { class: 'btn green collect-all', onclick: () => this.app.collectAll() }, ic('bag', 1), ` Collect all (${finds})`)));
-    }
     bottom.append(h('div', { class: 'nav' },
       g.creaturesOn ? this.navButton('creatures', 'Creatures', g.state.creatures.length, () => this.open('creatures')) : null,
       this.navButton('bag', 'Bag', invCount, () => this.open('bag')),

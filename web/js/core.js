@@ -1395,8 +1395,9 @@ export class Game {
     if (!(this.state.inventory[itemID] > 0)) throw new GameError("You don't have that.");
     if (!tile || !this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
-    const max = cfg.maxBuried ?? 6;
-    if (this.buriedSeeds().length >= max) throw new GameError(`Only ${max} seeds can be buried at once. Wait for one to fade.`);
+    // No limit unless tuning.schoolSeeds.maxBuried is set.
+    const max = cfg.maxBuried;
+    if (max != null && this.buriedSeeds().length >= max) throw new GameError(`Only ${max} seeds can be buried at once. Wait for one to fade.`);
     this.consume(itemID);
     this.bump('bury');
     const hour = 3600 * 1000;
