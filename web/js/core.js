@@ -193,8 +193,10 @@ export class StatEngine {
   /** How far a creature reaches: its radius plus padding (so radius 1 still touches neighbours). */
   reach(radius) { return radius + (this.t.falloff.radiusPadding || 0); }
 
-  falloff(d, radius) {
-    const f = this.t.falloff;
+  /** Strength 0..1 at distance d from a source. `shape` (a source's own falloff, e.g. relics') overrides
+   *  tuning.falloff's curve and innerRadiusFraction; the reach (radius + padding) is the same. */
+  falloff(d, radius, shape = null) {
+    const f = shape ? { ...this.t.falloff, ...shape } : this.t.falloff;
     const reach = this.reach(radius);
     if (reach <= 0 || d >= reach) return 0;
     const inner = reach * Math.max(0, Math.min(1, f.innerRadiusFraction));
@@ -231,7 +233,7 @@ export class StatEngine {
     const out = {};
     for (const k of CORE_STATS) out[k] = 0;
     for (const p of placements) {
-      const f = this.falloff(dist(tile, p.tile), p.radius);
+      const f = this.falloff(dist(tile, p.tile), p.radius, p.falloff);
       if (f <= 0) continue;
       for (const k in p.contributions) {
         const lv = this.level(p, now, p.removedAt == null ? null : k);
@@ -256,7 +258,7 @@ export class StatEngine {
       const r = Math.ceil(this.reach(p.radius));
       for (let y = Math.max(0, p.tile.y - r); y <= Math.min(size.height - 1, p.tile.y + r); y++) {
         for (let x = Math.max(0, p.tile.x - r); x <= Math.min(size.width - 1, p.tile.x + r); x++) {
-          const f = this.falloff(Math.hypot(x - p.tile.x, y - p.tile.y), p.radius);
+          const f = this.falloff(Math.hypot(x - p.tile.x, y - p.tile.y), p.radius, p.falloff);
           if (f <= 0) continue;
           const o = (y * size.width + x) * K;
           for (const [ki, v] of contribs) values[o + ki] += v * f;
@@ -1020,7 +1022,7 @@ export class Game {
       const tier = this.relicTier(r.tier);
       const spread = (tier.spreadHours ?? this.t.influenceSpreadHours ?? 0) * 3600 * 1000;
       const frac = spread > 0 ? Math.min(1, Math.max(0, (now - r.buriedAt) / spread)) : 1;
-      out.push({ id: r.id, relic: r.relicID, tile: r.tile, contributions: { [r.school]: tier.strength }, radius: min + (tier.radius - min) * frac,
+      out.push({ id: r.id, relic: r.relicID, tile: r.tile, contributions: { [r.school]: tier.strength }, radius: min + (tier.radius - min) * frac, falloff: this.relicCfg.falloff || null,
         placedAt: r.buriedAt, startLevel: 0, removedAt: null, rampSeconds: Math.max(1, (tier.rampHours ?? 1) * 3600) });
     }
     return out;
@@ -1872,7 +1874,7 @@ export class Game {
       const m = this.revealFactor(t.x, t.y, now);
       let n = 0;
       for (const p of active) {
-        const f = this.stats.falloff(dist(t, p.tile), p.radius);
+        const f = this.stats.falloff(dist(t, p.tile), p.radius, p.falloff);
         if (f <= 0) continue;
         const amount = Object.values(p.contributions).reduce((a, v) => a + Math.max(0, v), 0) * this.stats.level(p, now) * f * m;
         if (amount >= minEach) n++;
@@ -1962,6 +1964,11 @@ export class Game {
     const cap = Math.min(st.maxTotal, Math.max(st.minCap || 3, Math.round(area * (st.maxPerOpenTile || 0.1))));
     let loc = null, field = null;
     const shared = () => field || (field = this.statField(t));
+    // Bare ground (no school there) may hold only blankCapShare of the cap, so as the clearing develops
+    // the finds gather on school ground instead of spilling onto bare grass.
+    const bareMax = st.blankCapShare != null ? Math.round(cap * st.blankCapShare) : Infinity;
+    const isBare = (tile) => { const v = shared().statsAt(tile.x, tile.y); for (const k of CORE_STATS) if ((v[k] || 0) > 0) return false; return true; };
+    let bare = Number.isFinite(bareMax) ? this.state.spawns.filter((sp) => isBare(sp.tile)).length : 0;
     for (let i = 0; i < st.attemptsPerTick; i++) {
       if (this.state.spawns.length >= cap) break;
       if (!this.rng.chance(Math.min(1, st.spawnChance * this.buffMult('lively', t)))) continue;
@@ -1972,12 +1979,14 @@ export class Game {
       const picked = weightedPick(loc.tiles.map((x) => [x, x.weight]), this.rng);
       if (!picked || !this.isFree(picked.tile)) continue;
       const tile = picked.tile;
-      // Untouched ground is quieter: only some attempts there produce anything.
-      if (!(picked.effects > 0) && !this.rng.chance(st.blankTileSpawnChance ?? 1)) continue;
+      // Untouched ground is quieter: only some attempts there produce anything, and only up to its share.
+      const onBare = !(picked.effects > 0);
+      if (onBare && (bare >= bareMax || !this.rng.chance(st.blankTileSpawnChance ?? 1))) continue;
       const item = this.pickSpawn(tile, t);
       if (item) {
         this.state.spawns.push(this.newSpawn(item, tile, t));
         made++;
+        if (onBare) bare++;
       }
     }
     made += this.growthBonuses(t, cap, shared());
@@ -2076,7 +2085,8 @@ export class Game {
     const bloomF = this.bloomFactor(t), gc = this.terrain.glowCycle || {}, night = this.isNight(t);
     const gN = gc.nightFactor ?? 1.6, gD = gc.dayFactor ?? 0.4, gFull = Math.max(1, gc.spiritForFullGlow ?? 40);
     const glowAt = (spirit) => (night ? gN : gD + (gN - gD) * Math.min(1, spirit / gFull));
-    const comboReqs = on ? Object.entries(this.t.combos || {}).filter(([id]) => !id.startsWith('_'))
+    // Only real combo entries, and none while combos are switched off (tuning.combos.enabled).
+    const comboReqs = on && this.combosOn ? Object.entries(this.t.combos || {}).filter(([id, cb]) => !id.startsWith('_') && cb && typeof cb === 'object')
       .map(([id, cb]) => [id, Object.entries(cb.requires || {}).map(([k, b]) => [field.keys.indexOf(k), b])]) : [];
     const terReqs = on ? this.terrainDefs.map((d) => [d, Object.entries(d.requires).map(([k, b]) => [field.keys.indexOf(k), b])]) : [];
     for (let y = c.y0; y <= c.y1; y++) {

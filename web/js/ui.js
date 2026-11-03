@@ -1264,7 +1264,7 @@ export class UI {
           row('Bloom cycle', `×${bf.toFixed(2)}`),
           row('Spawns here', `${surface}; geodes ${geode}; Spirit items veiled`),
           ...g.guestDefs().map((d) => { const st = g.guest(d.id); return row(`Visitor: ${d.name}`, `interest ${st.interest.toFixed(1)} · ${g.guestStage(d.id, now)}${st.befriended ? ' · befriended' : ''} · clues ${st.known.length}/${g.guestPrefKeys(d).length} · ${g.guestTiles(d, g.field(now)).length} tiles suit it${st.present ? ` · present until ${new Date(st.present.until).toLocaleTimeString()}` : ''}`); }),
-          ...g.relicSources(now).map((p) => [p, g.stats.falloff(Math.hypot(p.tile.x - tile.x, p.tile.y - tile.y), p.radius)]).filter(([, w]) => w > 0).map(([p, w]) => {
+          ...g.relicSources(now).map((p) => [p, g.stats.falloff(Math.hypot(p.tile.x - tile.x, p.tile.y - tile.y), p.radius, p.falloff)]).filter(([, w]) => w > 0).map(([p, w]) => {
             const r = g.state.relics.find((x) => x.id === p.id), lv = g.stats.level(p, now), k = Object.keys(p.contributions)[0];
             return row(`Relic: ${(this.content.items[r.relicID] || {}).name || r.relicID} (${r.tile.x}, ${r.tile.y})`,
               `+${(p.contributions[k] * w * lv).toFixed(1)} ${cap(k)} (falloff ×${w.toFixed(2)}, level ×${lv.toFixed(2)}, reach ${p.radius.toFixed(1)} of ${g.relicTier(r.tier).radius})`);

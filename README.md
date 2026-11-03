@@ -139,12 +139,13 @@ python3 tools/gen_placeholders.py
   - **Category first:** each spawn first picks mushroom, plant or geode (among categories that have something qualifying on that tile), then an item within it by effective weight.
   - **Category tilt:** a category's weight is `spawns.categoryWeights` × a multiplier from the tile's own-family stats (`spawns.categoryScaling`, % per point, clamped to 0.25..6). Mushrooms tilt +10%/pt with Spore, +6% with Glow and −12% with Bloom; plants +10% with Bloom, +8% with Verdure and −12% with Spore (geodes +10% with Shimmer/Spirit); clamped to 0.05..6. So Spore ground grows only fungi and Bloom ground only flowers (see School flora), while the plain Brown Button Cap and Clover fade away on them. So an area full of Geode Critters turns up mostly geodes: one Common critter nearby gives about 50% geodes and 25% each of the others.
   - **Where spawns land (effect-driven):** each spawn attempt picks a free tile by weight (`spawns.locationWeighting`):
-    - `weight = base × general`, capped at `maxWeight` (24).
+    - `weight = base × general`, capped at `maxWeight` (64).
     - `general = generalByEffectCount[effects] × (1 + min(maxIntensityBonus, perStatPoint × tile stat total))`.
     - `effects` counts: creatures whose influence reaches the tile, active soil boosts, special-effect areas, and combo tiles.
-    - Defaults: by effect count 0 / 1 / 2 / 3+ = ×1 / ×3 / ×5 / ×7; `perStatPoint` 0.05; `maxIntensityBonus` 3.
+    - Defaults: by effect count 0 / 1 / 2 / 3+ = ×1 / ×8 / ×12 / ×16 (raised from ×3 / ×5 / ×7 to skew finds toward school ground); `perStatPoint` 0.05; `maxIntensityBonus` 3.
     - The general bonus applies to every category. Which category spawns there still comes from the tile's own stats (`spawns.categoryScaling`, combos), so specialised tiles keep their identity.
-    - Blank tiles weigh 1, and a spawn that lands on one only goes ahead `spawns.blankTileSpawnChance` of the time (0.35). Spawns never add effects, so there's no runaway.
+    - Blank tiles (no school at or above the influence floor) weigh 1, and a spawn that lands on one only goes ahead `spawns.blankTileSpawnChance` of the time (0.1, was 0.35). Bare ground may also hold only `spawns.blankCapShare` of the spawn cap (0.25), so as the clearing develops the finds gather on school ground instead of spilling onto bare grass. With one common relic in the starting clearing (18% of it school ground), 95% of new finds land on school ground. Spawns never add effects, so there's no runaway.
+    - (Fixed: switching combos off had made every tile count as a combo, so bare ground was weighted like developed ground.)
     - It's rebuilt from saved state (creatures, boosts, stats), so it's identical after a reload, and it follows effects as they ramp, fade, move or expire.
     - Occupied tiles, landmarks and the treeline are never candidates, and the overall spawn rate is unchanged. Arriving wanderers use the same weights.
   - **Terrain affinity (what spawns on developed ground)** (`spawns.terrainAffinity`) makes a forest you've shaped look shaped:
@@ -586,13 +587,13 @@ Relics are the only way to change the land for good. A buried relic is a permane
 
   | Tier | Strength | Radius | Ramp | Spread | Full footprint (Low+ / Moderate+ tiles) |
   |---|---|---|---|---|---|
-  | Common | 22 | 2.5 | 30 min | 1h | 21 / 5 |
-  | Uncommon | 30 | 3.5 | 1h | 2h | 37 / 13 |
-  | Rare | 42 | 5 | 2h | 3h | 69 / 37 |
-  | Very rare | 56 | 6.5 | 3h | 4h | 109 / 69 |
-  | Legendary | 75 | 8 | 4h | 6h | 177 / 121 |
+  | Common | 22 | 2.5 | 30 min | 1h | 21 / 13 |
+  | Uncommon | 30 | 3.5 | 1h | 2h | 45 / 25 |
+  | Rare | 42 | 5 | 2h | 3h | 81 / 61 |
+  | Very rare | 56 | 6.5 | 3h | 4h | 137 / 101 |
+  | Legendary | 75 | 8 | 4h | 6h | 193 / 169 |
 
-  A common relic makes a Low-to-Moderate patch out to about 2 tiles within the hour. Earned landmarks (16+ of two stats over a 3×3) need uncommon or better relics; legendary triples (30+ of three stats) need rare ones.
+  Relics have their own, flatter drop-off (`relics.falloff`: full strength out to 35% of their reach, then easing out), so a common relic covers its whole 3×3 at Moderate (the weakest tile there gets 21.6) and reaches Moderate on 13 tiles within the hour. School seeds keep the general drop-off. Earned landmarks (one school at 36+ over a 3×3) need a rare relic or two uncommon ones close together.
 - **The tile answers at once:** the moment a relic goes in, its tile reacts for `reactionSeconds` (8): Spore tiny caps, Glow a faint pulse, Bloom buds opening, Verdure blades rising, Shimmer a humming glint, Spirit a curl of mist (shorter and still with reduced motion). The game has no audio, so there's no sound cue. The surrounding tiles then change through the normal intensity stages as the influence spreads.
 - **Where relics come from:**
   - Old Log shop: a common relic of each school (`shop-relic-<school>`, from 8 Field Guide entries, paid in no-need commons and that school's common gem) and an uncommon one (`shop-relic-<school>-2`, from 14 entries, paid in that school's own finds).
@@ -660,13 +661,13 @@ One seed per school: Spore, Glow, Bloom, Verdure, Shimmer and Spirit Seeds (`see
 
 ## Earned landmarks (web)
 
-Landmarks aren't placed on the map; they're earned. Each belongs to one school: when that school reaches Moderate+ (26) on **every tile of a 3×3 patch**, the landmark forms there and stays for good. That takes a rare relic, or two uncommon ones close together; a single uncommon relic isn't quite enough. (They used to need two schools at 16 each; that changed when mixed terrain was switched off. Singing Crystals was removed, and an older save that had one simply loses it from the map.)
+Landmarks aren't placed on the map; they're earned. Each belongs to one school: when that school reaches Medium (36) on **every tile of a 3×3 patch**, the landmark forms there and stays for good. That takes a rare relic, or two uncommon ones close together; a single uncommon relic isn't quite enough. (The threshold rose from 26 to 36 when relics got their flatter drop-off.) (They used to need two schools at 16 each; that changed when mixed terrain was switched off. Singing Crystals was removed, and an older save that had one simply loses it from the map.)
 - Definitions live in `Resources/Content/landmarks.json` (`earned.requires`, `earned.size`, `earned.max`, `aura`, `effect`, `purpose`).
 - Each forms once, with a celebration and a highlight of its patch.
 - Before it has formed, the Field Guide's Landmarks tab shows it as a silhouette with how it forms.
 - Tap a landmark to see what it does and, for producers, when the next thing comes.
 
-| Landmark | School (26+ over 3×3) | Aura | Purpose |
+| Landmark | School (36+ over 3×3) | Aura | Purpose |
 |---|---|---|---|
 | Crystal Grotto | Shimmer | Shimmer 8 (radius 2) | Something shimmering grows at its mouth every 8h: Pebble Cap, Glassbell, Earthstar or (rarely) Crystal Cap. One waits at a time. (It made geodes before geodes were switched off.) |
 | Fruit Tree | Bloom | Bloom 8 (radius 2) | Bears **Forest Fruit** every 6h, a trade good for the Store and traders. |
