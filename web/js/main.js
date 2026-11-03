@@ -365,7 +365,7 @@ class App {
     const landmark = g.landmarkAt(tile);
     if (landmark) {
       const def = (this.content.landmarks || []).find((l) => l.id === landmark.id);
-      // The Old Log is where wandering visitors stop by to trade (the Store has its own tab).
+      // The Old Log is where traders stop by (the Store has its own tab).
       if (landmark.id === 'landmark.old-log' && (this.content.requests || []).length) { ui.selectedTile = null; ui.open('offerings'); this.changed(false); return; }
       if (landmark.id === 'landmark.spirit-well') { ui.selectedTile = null; this.openWishing(); return; }
       if (def && def.earned) { ui.selectedTile = null; ui.open('landmark', def.id); this.changed(false); return; }

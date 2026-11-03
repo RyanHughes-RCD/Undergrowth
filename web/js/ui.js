@@ -587,7 +587,7 @@ export class UI {
     })];
   }
 
-  /** The Old Log: where wandering visitors stop by to trade. Buying things is in the Store tab. */
+  /** The Old Log: where traders stop by (requests of kind "visitor"). Buying things is in the Store tab. */
   offeringsBody() {
     const visitors = this.visitorSection();
     return [
@@ -595,7 +595,7 @@ export class UI {
       h('div', { class: 'row space compost-row' }, h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Old Log', sprite: 'landmark.old-log', variant: null, text: this.content.story?.guide?.landmarks?.['landmark.old-log'] }) }, 'About the log'),
         h('button', { class: 'btn small green', onclick: () => this.open('store') }, ic('store', 1), ' Open the Store')),
       ...visitors,
-      visitors.length ? null : h('p', { class: 'sub center' }, 'No visitors at the log right now. Wanderers stop by each day.'),
+      visitors.length ? null : h('p', { class: 'sub center' }, 'No traders at the log right now. Traders stop by each day.'),
     ];
   }
 
@@ -633,7 +633,7 @@ export class UI {
   /** The Store: everything you can trade your finds for, in tabs (Decor, Trades, Eggs, Upgrades). */
   storeBody() {
     const g = this.game, now = g.now();
-    const tabs = [['decor', 'Decor'], ['trades', 'Trades'], ['eggs', 'Eggs'], ['upgrades', 'Upgrades']];
+    const tabs = [['decor', 'Decor'], ['trades', 'Trades'], ...(g.eggsOn ? [['eggs', 'Eggs']] : []), ['upgrades', 'Upgrades']];   // no Eggs tab while eggs are off
     if (!tabs.some(([id]) => id === this.storeTab)) this.storeTab = 'decor';
     const ready = this.storeReady(now);
     const all = g.requestBoard(now);
@@ -665,7 +665,7 @@ export class UI {
       ];
     } else if (this.storeTab === 'trades') {
       body = [
-        h('p', { class: 'sub' }, 'Trade your finds for seeds, soil and other things to use. These can be bought again whenever you like.'),
+        h('p', { class: 'sub' }, 'Trade your finds for relics, school seeds and other things to use. Most can be bought again whenever you like; relics from requests come once.'),
         ...repeatCards(), ...onceCards(null),
         !mine.length ? h('p', { class: 'sub' }, 'Nothing to trade for yet.') : null,
       ];

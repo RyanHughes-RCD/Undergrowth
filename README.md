@@ -355,13 +355,13 @@ Every tile stat looks and plays differently, even within a creature pair. Each o
 Mushrooms, plants and geodes now pay for things. The **Store** tab in the bottom bar lists everything you can trade for, in four tabs:
 
 - **Decor:** listings that give a decoration (reward `cosmetic`), plus the Compost heap when compost is on.
-- **Trades:** repeatable listings for seeds, soil packs and other things to use (kind `shop`, not eggs).
-- **Eggs:** anything that gives an egg: the repeatable common eggs, then the one-off special eggs.
+- **Trades:** repeatable listings for relics, school seeds and other things to use (kind `shop`, not eggs), plus the one-off relic requests (kind `relic`).
+- **Eggs:** anything that gives an egg: the repeatable common eggs, then the one-off special eggs. Hidden while the egg system is off (`eggs.enabled: false`), as are their listings.
 - **Upgrades:** upgrade lines (Quick Roots, Warm Nest, Keen Eye, Wide Spread, Room to grow) and unlocks (the trowel, extra nests).
 
 Each tab, and the Store button, shows how many one-off listings you could get right now. Repeatable trades aren't counted. The tab a listing goes in comes from its reward (`storeTabOf` in `web/js/ui.js`), so new spreadsheet rows sort themselves.
 
-Tapping the **Old Log** now shows only today's visitors (see Visitors below), with a button to the Store.
+Tapping the **Old Log** now shows only today's traders (see Traders below), with a button to the Store.
 
 - **Requests** (`Resources/Content/requests.json`) each ask for specific items, usually from two or three kinds of ground. Items are recipes for terrain (their stat minimums), so a request means building several terrains.
   - Each card shows the items with have/need and the reward, plus a Deliver button.
