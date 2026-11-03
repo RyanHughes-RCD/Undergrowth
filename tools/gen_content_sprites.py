@@ -114,10 +114,30 @@ MUSHROOMS = {
     "velvet-shank": ("flat", "#b8743a", "#5a3a22", "#e0a060"),
     "ember-cap": ("dome", "#d86a2a", "#f0e0c8", "#ffc070"),
     "veil-cap": ("bell", "#c8c8f0", "#e8e8ff", "#9a9ad0"),
+    # Plant & Fungi Catalogue (fungi)
+    "mirrorcap": ("dome", "#c8ccd8", "#eef0f4", "#ffffff"),
+    "glimmerlace": ("coral", "#d8d0f0", None, "#b0f0f0"),
+    "opaline-shelf": ("shelf", "#e0c8e8", "#f4e8f8", "#9ae8e0"),
+    "honey-mushroom": ("dome", "#d8a040", "#f0e0b0", "#f8d070"),
+    "jack-o-lantern-mushroom": ("trumpet", "#f08a20", "#f8b050", "#ffd070"),
+    "bluebell-glowcap": ("bell", "#5a8ae8", "#d8e4ff", "#a8d0ff"),
+    "nightlight-bracket": ("shelf", "#4a6a5a", "#d8f0e0", "#9ff4c8"),
+    "starspore": ("puff", "#e8f0ff", None, "#7cf2ff"),
+    "veil-shank": ("cone", "#d0d0ec", "#eeeeff", "#a8a8d8"),
+    "wisp-puff": ("puff", "#e8e8f8", None, "#c8c8f4"),
+    "shaggy-inkcap": ("shaggy", "#f4f0e8", None, "#2a2a34"),
+    "fly-agaric": ("toad", "#e03020", "#f4ecdc", "#ffffff"),
+    "dead-mans-fingers": ("coral", "#2a2a2a", None, "#5a5a5a"),
+    "violet-webcap": ("dome", "#8a4ad0", "#c8a8e8", "#d8b8ff"),
+    "stinkhorn": ("cone", "#6a5a2a", "#f0ead8", "#3a3018"),
+    "morel": ("morel", "#a07850", "#efe2c8", "#c8a070"),
+    "spore-lantern": ("puff", "#d8c090", None, "#fff0b0"),
+    "crown-puffball": ("crown", "#efe6d0", "#f8f4e8", "#d8c8a0"),
+    "green-elf-cup": ("trumpet", "#3aa84a", "#7ad86a", "#a8f0a0"),
     "ring-morel": ("morel", "#c8a070", "#efe2c8", "#fff0d0"),
     "wisp-cap": ("bell", "#dcdcf4", "#f0f0ff", "#b0b0e8"),
 }
-GLOWING = {"foxfire-button", "ember-cap", "wisp-cap", "glowcap", "crystal-cap", "moonlight-morel", "ghost-fungus", "starlight-bonnet", "ancient-sporecrown"}
+GLOWING = {"bluebell-glowcap", "nightlight-bracket", "starspore", "jack-o-lantern-mushroom", "spore-lantern", "foxfire-button", "ember-cap", "wisp-cap", "glowcap", "crystal-cap", "moonlight-morel", "ghost-fungus", "starlight-bonnet", "ancient-sporecrown"}
 
 
 def draw_mushroom(shape, cap, stem, accent):
@@ -246,6 +266,38 @@ PLANTS = {
     "columbine": ("columbine", "#4f8a2c", "#9a5ad8", "#f8e8a0"),
     "bleeding-heart": ("bleedingheart", "#5a9a3a", "#ff6aa8", "#ffffff"),
     "meadow-daisy": ("flower", "#5fbf4a", "#f8f8f0", "#ffd84a"),
+    # Plant & Fungi Catalogue (flora)
+    "silver-ragwort": ("rosette", "#a8b0b8", "#e8e8f0", "#ffffff"),
+    "jewelweed": ("trumpet", "#4f9440", "#f0a030", "#ffd84a"),
+    "pearlroot": ("rosette", "#c8d0d8", "#f4f0ff", "#ffffff"),
+    "glassreed": ("reeds", "#b8d8e0", "#e8f8ff", "#ffffff"),
+    "prismbell": ("bells", "#6a8a7a", "#d8f0ff", "#ffc8f0"),
+    "opal-fern": ("fern", "#b8c8d8", None, None),
+    "rainbow-eucalyptus": ("sapling", "#c8783a", "#7ac0a0", "#c8a0f0"),
+    "cornflower": ("flower", "#4f8a2c", "#4a7aff", "#2a3a8a"),
+    "cosmos": ("daisies", "#5fbf4a", "#ff7ab8", "#ffd84a"),
+    "lupine": ("foxglove", "#4f8a2c", "#8a6ae8", "#d8c8ff"),
+    "anemone": ("poppy", "#4f8a2c", "#e83060", "#1b1420"),
+    "mooncup-blossom": ("tulip", "#4f7a5a", "#f0f0e8", "#c8e0ff"),
+    "stargrass": ("tuft", "#3f7a4a", "#e8f8ff", "#7cf2ff"),
+    "lantern-lily": ("lantern", "#3f6a4a", "#ffd070", "#fff8d0"),
+    "moonpetal": ("lily", "#3f6a5a", "#a8c8ff", "#e8f4ff"),
+    "foxfire-orchid": ("orchid", "#5a8a6a", "#e8fff0", "#9ff4c8"),
+    "moonwort": ("fern", "#6a8a6a", None, None),
+    "ghostpipe": ("snowdrop", "#e8e8f0", "#f8f8ff", "#c8c8d8"),
+    "white-sage": ("rosette", "#a8b8a8", "#e8f0e8", "#ffffff"),
+    "ancestors-lace": ("daisies", "#5a7a6a", "#f4f4f8", "#e8e0c8"),
+    "wispwillow": ("sapling", "#6a6a8a", "#a8b8d8", "#d8e0ff"),
+    "corpse-flower": ("tulip", "#4a5a3a", "#8a2030", "#e0c0a0"),
+    "wood-sorrel": ("cloverpatch", "#5fbf4a", "#f8f0f4", "#ffd84a"),
+    "wild-ginger": ("rosette", "#3f8a3a", "#7a3a2a", "#a05a3a"),
+    "hosta": ("rosette", "#3fa04a", "#c8e8a0", "#e8f8d0"),
+    "maidenhair-fern": ("fern", "#4fae3a", None, None),
+    "ostrich-fern": ("fern", "#2f8a2a", None, None),
+    "solomons-seal": ("bells", "#4f9440", "#f0f4e0", "#c8e0a0"),
+    "hellebore": ("trillium", "#3f7a3a", "#d8a8c8", "#f0e0a0"),
+    "canopy-bells": ("bells", "#2f8a2a", "#a8e070", "#d8f8a0"),
+    "heartleaf-canopy": ("sapling", "#5a4a30", "#3fae3a", "#8ad46b"),
     "lantern-flower": ("lantern", "#3f6a4a", "#7cf2ff", "#e8ffff"),
     "starwort": ("lily", "#3f6a4a", "#e8f0ff", "#7cf2ff"),
     "buttercup": ("rose", "#5fbf4a", "#ffd84a", "#fff3c4"),
@@ -259,7 +311,7 @@ PLANTS = {
     "feather-fern": ("fern", "#4f9440", None, None),
     "glassbell": ("snowdrop", "#7a9a9a", "#d8ccf8", "#f4f0ff"),
 }
-PLANT_GLOW = {"lantern-flower", "starwort", "prism-rose", "glassbell", "glowbloom", "moonflower", "deeproot-lantern", "crystal-thistle"}
+PLANT_GLOW = {"stargrass", "lantern-lily", "moonpetal", "foxfire-orchid", "prismbell", "opal-fern", "lantern-flower", "starwort", "prism-rose", "glassbell", "glowbloom", "moonflower", "deeproot-lantern", "crystal-thistle"}
 
 
 def draw_plant(shape, leaf, petal, centre):

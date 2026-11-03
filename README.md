@@ -52,8 +52,8 @@ Then open <http://localhost:8000>.
   - The moment it's buried, its tile answers (see Relics). One quiet line follows: "The grotto will need time." (`story.json` → `messages.firstRelic`). Nothing else pushes the player on, so the first session comes to a natural end.
 - **Older saves:** forests from before this opening keep what they have; their placed creatures became relics (see Relics).
 - **Seeds grow flowers, never weeds:** Mystery Seeds only grow **seed flowers**, items whose spreadsheet row says "Grows from a Mystery Seed" (`spawn.seedOnly`). These never spawn wild:
-  - Wildflower, Violet, Bluebell, Foxglove, Trillium, Moss Rose, Stonecrop, Wild Strawberry, Sunpetal, Glowbloom, Moonflower, Crystal Thistle, Cave Lily, Ghost Orchid and Dandelion.
-  - Six garden flowers: Primrose, Forget-me-not, Poppy, Snowdrop, Columbine and Bleeding Heart. Each leans toward one stat.
+  - Wildflower, Violet, Bluebell, Trillium, Moss Rose, Stonecrop, Wild Strawberry, Sunpetal, Glowbloom, Moonflower, Crystal Thistle, Cave Lily and Dandelion (Foxglove, Bleeding Heart and Ghost Orchid are wild finds now; see School flora).
+  - Five garden flowers: Primrose, Forget-me-not, Poppy, Snowdrop and Columbine. Each leans toward one school.
 
   Common and uncommon seed flowers grow anywhere (`seeds.softNeedsUpTo`): their stat needs only make them likelier on matching ground. Rarer ones need their terrain, and the terrain pull (rarity weighting, named terrains' home finds) favours them strongly on the right ground.
   - In simulation: on plain ground 15 different flowers, 3–12% each. On Glow + Bloom ground, Moonflower and Glowbloom 76%. On Spore + Bloom ground, Violet and Trillium 58%.
@@ -556,22 +556,23 @@ The game is narrowed down while the core loop settles. Everything below is switc
 
 ## School flora (web)
 
-Every school has its own set of finds; each one needs only its own school (single-school needs in the spawn spreadsheet). Spore is all fungi, Bloom all flowers, and the other four a mix. Brown Button Cap and Clover stay as plain-ground finds that need nothing. New finds are in italics.
+Every school has its own set of finds; each one needs only its own school (single-school needs in the spawn spreadsheet). Spore is all fungi, Bloom all flowers, and the other four a mix of both. Brown Button Cap and Clover are plain-ground finds that need nothing (Clover leans to Bloom). The sets include the **Plant & Fungi Catalogue** (`terrain_school_ecosystem_catalogue_expanded.xlsx`): its 50 new finds are in italics, and the 10 it shares with the game took the catalogue's school and description (Earthstar and Turkey Tail moved to Spore, Amethyst Deceiver to Spirit, Ghost Fungus to Glow; Foxglove, Bleeding Heart and Ghost Orchid became wild finds instead of Mystery Seed flowers). The catalogue gives no rarities, so each new find's rarity and minimum were chosen to spread every school from Low to Very High.
 
 | School | Common | Uncommon | Rare | Very rare | Legendary |
 |---|---|---|---|---|---|
-| **Spore** (fungi) | Ink Cap 10, Red Toadstool 20, Oyster Mushroom 30 | Velvet Shank 12, Bloom Bonnet 25, Shelf Fungus 35, Lion's Mane 40 | Coral Fungus 50 | *Ring Morel* 65 | Ancient Sporecrown 85 |
-| **Glow** (mostly fungi) | Foxfire Button 10, *Lantern Flower* 20 | Ember Cap 12, Blue Stain Cap 30 | Glowcap 45, *Starwort* 50 (night) | Moonlight Morel 65, Starlight Bonnet 70 (night) | |
-| **Bloom** (flowers) | Meadow Daisy 10, *Buttercup* 20 | Honeybell 12, *Wild Rose* 30 | *Sun Lily* 45 (day) | *Dawn Peony* 65 | |
-| **Verdure** (mostly plants) | Sorrel 10, Moss Tuft 15, Fern 20, Turkey Tail 20, Chanterelle 25 | Feather Fern 12, Puffball 30 | Pitcher Plant 45 | *Greenheart Vine* 65 | Heartwood Sapling 85 |
-| **Shimmer** (mixed) | Pebble Cap 10, Pebblewort 20 | Glassbell 12, Earthstar 30 | *Prism Rose* 45, Crystal Cap 50 | Amethyst Deceiver 65 | |
-| **Spirit** (mixed) | Hollow Root 10, *Wisp Cap* 20 | Veil Cap 12, *Mistbell* 30 | Ghost Fungus 45 (night), Cave Truffle 55 | Deeproot Lantern 65 | |
+| **Spore** (all fungi) | Ink Cap 10, *Shaggy Inkcap* 15, Red Toadstool 20, Turkey Tail 20, *Fly Agaric* 25, Oyster Mushroom 30 | Velvet Shank 12, *Dead Man's Fingers* 20, Bloom Bonnet 25, Earthstar 30, *Violet Webcap* 30, Shelf Fungus 35, *Stinkhorn* 35, Lion's Mane 40 | *Morel* 40, Coral Fungus 50, *Spore Lantern* 55 | *Crown Puffball* 60, Ring Morel 65 | Ancient Sporecrown 85 (night) |
+| **Bloom** (all flowers) | Meadow Daisy 10, *Cornflower* 15, Buttercup 20, *Cosmos* 25 | Honeybell 12, Bleeding Heart 25, Wild Rose 30, *Lupine* 30, Foxglove 35 | *Anemone* 40, Sun Lily 45 (day), *Mooncup Blossom* 50 (night) | Dawn Peony 65 |  |
+| **Glow** (mostly fungi) | Foxfire Button 10, *Stargrass* 15, Lantern Flower 20, *Honey Mushroom* 20 | Ember Cap 12, *Jack-o'-Lantern Mushroom* 25, Blue Stain Cap 30, *Lantern Lily* 30, *Bluebell Glowcap* 35 | Glowcap 45, Ghost Fungus 45 (night), *Moonpetal* 45 (night), Starwort 50 (night), *Foxfire Orchid* 50 (night), *Nightlight Bracket* 55 (night) | *Starspore* 60, Moonlight Morel 65 (night), Starlight Bonnet 70 (night) |  |
+| **Verdure** (mostly plants) | Sorrel 10, Moss Tuft 15, *Wood Sorrel* 15, Fern 20, *Wild Ginger* 20, Chanterelle 25, *Hosta* 25 | Feather Fern 12, *Maidenhair Fern* 20, *Green Elf Cup* 25, Puffball 30, *Ostrich Fern* 30, *Solomon's Seal* 35 | *Hellebore* 40, Pitcher Plant 45, *Canopy Bells* 50 | *Heartleaf Canopy* 60, Greenheart Vine 65 | Heartwood Sapling 85 |
+| **Shimmer** (mixed) | Pebble Cap 10, *Silver Ragwort* 15, *Mirrorcap* 15, Pebblewort 20, *Jewelweed* 20 | Glassbell 12, *Pearlroot* 25, *Glassreed* 30, *Glimmerlace* 30 | *Prismbell* 40, Prism Rose 45, Crystal Cap 50, *Opal Fern* 50 | *Opaline Shelf* 60, *Rainbow Eucalyptus* 65 |  |
+| **Spirit** (mixed) | Hollow Root 10, *Moonwort* 15, Wisp Cap 20, *Ghostpipe* 20 | Veil Cap 12, *White Sage* 25, *Veil Shank* 25, Mistbell 30, *Wisp Puff* 30 | *Ancestor's Lace* 45, Cave Truffle 55, *Wispwillow* 55 | Amethyst Deceiver 60, Ghost Orchid 65, Deeproot Lantern 65, *Corpse Flower* 70 |  |
 
-The numbers are each find's minimum for its school. Glow's night finds (Starwort, Moonlight Morel, Starlight Bonnet, Ghost Fungus) still only come at night, Sun Lily only by day, and the Sporecrown only on rainy nights.
+The numbers are each find's minimum for its school. Fungi and flowers per school: Spore 20 fungi; Bloom 13 flowers; Glow 12 fungi and 6 flowers; Verdure 3 fungi and 16 plants; Shimmer 5 fungi and 10 flowers; Spirit 6 fungi and 10 flowers.
 
-- **Mystery Seed flowers** lean to one school too: Wildflower, Dandelion, Violet, Bluebell, Sunpetal and Forget-me-not to Bloom; Foxglove, Wild Strawberry and Primrose to Verdure; Moss Rose, Stonecrop, Crystal Thistle and Snowdrop to Shimmer; Glowbloom, Moonflower and Columbine to Glow; Trillium, Cave Lily, Ghost Orchid and Bleeding Heart to Spirit. None lean to Spore, so it stays all fungi.
-- **Keeping each school's character:** the category tilt (see Spawn table) makes Spore ground pick fungi and Bloom ground pick flowers. In a simulation with one rare relic, Spore's ground grew only fungi and Bloom's ground only flowers; the mixed schools grew both (Glow about 3 fungi to 1 flower, Verdure about 3 plants to 1 fungus, Shimmer and Spirit about even). Bare ground around a relic still grows the plain finds.
-- **Art:** the new finds have generated placeholder sprites (`tools/gen_content_sprites.py`).
+- **Mystery Seed flowers** (18) lean to one school too: Wildflower, Dandelion, Violet, Bluebell, Sunpetal and Forget-me-not to Bloom; Wild Strawberry and Primrose to Verdure; Moss Rose, Stonecrop, Crystal Thistle and Snowdrop to Shimmer; Glowbloom, Moonflower and Columbine to Glow; Trillium and Cave Lily to Spirit. None lean to Spore, so it stays all fungi.
+- **Keeping each school's character:** the category tilt (see Spawn table) makes Spore ground pick fungi and Bloom ground pick flowers. In a simulation with one rare relic, Spore's ground grew only fungi and Bloom's ground only flowers; the mixed schools grew both (Glow about 2 fungi to 1 flower, Verdure about 4 plants to 1 fungus, Shimmer and Spirit about even). Bare ground around a relic still grows the plain finds. Every school still gets its guaranteed uncommon on the first return.
+- **Art:** every new find has a generated placeholder sprite (`tools/gen_content_sprites.py`, shape and colours per find).
+- **Animal Visitors** from the same catalogue are noted for later in `design/animal_visitors_notes.md` (not in the game yet).
 
 ## Relics (web)
 
