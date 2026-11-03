@@ -118,7 +118,13 @@ def parse_colours(v):
 def garden_item_ids():
     """Seed packets (packet.<plant id>, from plants.json) and soil amendments (amendments.json): Bag items
     the game builds from their own files, which listings may give or ask for too."""
-    return ["packet." + p["id"] for p in load("plants.json") or []] + [a["id"] for a in load("amendments.json") or []]
+    plants = load("plants.json") or []
+    out = ["packet." + p["id"] for p in plants] + [a["id"] for a in load("amendments.json") or []]
+    # Colour varieties: their seed packets (packet.<variety id>) and produce (<plant's item>.<variety>).
+    for p in plants:
+        for v in p.get("varieties", []):
+            out += ["packet." + v["id"], p["item"] + "." + v["id"].split(".", 1)[1]]
+    return out
 
 
 def read(wb, errors):

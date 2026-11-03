@@ -62,8 +62,11 @@
    "minAwayHours": 4,
    "surpriseChance": 0.7,
    "weights": {
-    "selfSeed": 3
-   }
+    "selfSeed": 3,
+    "gift": 4,
+    "rareColour": 2
+   },
+   "_kinds": "selfSeed: a seedling next to a blooming plant. gift: a befriended visitor leaves its gift seeds in the Bag. rareColour: a ready plant with a colour variety turns out to be that variety (its harvest gives the variety's produce and seeds)."
   },
   "plants": {
    "ink-cap": {
@@ -215,6 +218,68 @@
     "sell": 10,
     "packet": 15,
     "beauty": 3
+   },
+   "spore-lantern": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 13,
+    "packet": 0
+   },
+   "moonpetal": {
+    "growHours": 22,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 14,
+    "packet": 0
+   },
+   "foxglove": {
+    "growHours": 20,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 13,
+    "packet": 0
+   },
+   "canopy-bells": {
+    "growHours": 22,
+    "regrowHours": 16,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 14,
+    "packet": 0
+   },
+   "prismbell": {
+    "growHours": 22,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 14,
+    "packet": 0
+   },
+   "wispwillow": {
+    "growHours": 24,
+    "regrowHours": 18,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 16,
+    "packet": 0
    }
   },
   "companions": {
@@ -289,6 +354,19 @@
      "at": 80
     }
    ]
+  },
+  "varieties": {
+   "_about": "Colour varieties (plants.json varieties: a hue, and leaves to recolour the greens too). Cross-pollination: harvesting a plant while a plant of the same family (the same kind counts) blooms in one of its 8 neighbours gives, with `chance`, one seed packet of one of its varieties (one not yet found first). Kept hidden from the player. A variety grows like its plant and breeds true; its produce sells for sellMult times as much and has its own Field Guide entry.",
+   "chance": 0.12,
+   "sellMult": 2
+  },
+  "collections": {
+   "_about": "Field Guide collections: harvest every base plant (starter, Store and gift) of a school once to complete it; the reward is that school's relic ornament (Content/relics.json) and `coins`.",
+   "coins": 150
+  },
+  "orders": {
+   "_about": "Daily orders at the Old Log (requests of kind 'order'): perDay of them each local day, picked (deterministically, from the garden seed and the day) from the orders whose produce comes from plants the player has already harvested.",
+   "perDay": 2
   }
  },
  "forage": {
@@ -314,14 +392,12 @@
   "recolorCost": 0
  },
  "visitors": {
-  "_about": "Visitors (Content/visitors.json): forest animals that come to the grotto, mostly while the player is away. Separate from the Old Log's traders. Every checkMinutes of game time (offline catch-up included, up to maxCatchUpDays) each visitor's interest rises by interest.gain while the grotto meets its preferences (its school at its min intensity on at least minTiles tiles, or its named terrain there; and its liked find growing unpicked on that ground, if it has one; x rainMult in rain if it likes rain), and falls by interest.decay when it doesn't. Stages: signs (tracks appear on its ground during its time window, chance tracks.chance per check, fading after tracks.hours), clues (tapping tracks reads a clue that names a preference the player doesn't know yet; a liked find gets nibbled), present (in its time window, and in rain if it likes rain, it comes with presence.chance per check for presence.minutes, at most presence.perDay a day). Tapping a present visitor befriends it; befriended ones come more often (befriended*) and leave a gift (a liked find or a school seed) with gift.chance. firstVisitor: on the first return after the first relic, the visitor of that relic's school gets this much interest and its tracks circle the relic, one clue ready.",
+  "_about": "Visitors (Content/visitors.json): forest animals drawn by particular plants blooming in the garden, in their time window. Every checkMinutes of game time (offline catch-up included, up to maxCatchUpDays) each visitor's interest rises by interest.gain while every plant it likes is blooming (in bloom or ready) somewhere in the garden, and falls by interest.decay when not. Stages: signs (in its time window, tracks appear beside the plants it likes, chance tracks.chance per check, fading after tracks.hours), clues (tapping tracks reads a clue naming one of its preferences the player doesn't know yet, recorded on its Field Guide page), present (in its window it comes with presence.chance per check, staying presence.minutes, at most presence.perDay a day). Tapping a present visitor befriends it: it leaves its gift seeds at once, comes more often (befriended*), and now and then leaves more on a morning (the morning card's gift surprise). Each check's random choices are seeded from the garden, the visitor and the check's time, so it's deterministic.",
   "checkMinutes": 30,
   "maxCatchUpDays": 7,
-  "minTiles": 2,
   "interest": {
    "gain": 1.5,
-   "decay": 1,
-   "rainMult": 2,
+   "decay": 0.5,
    "max": 100
   },
   "stages": {
@@ -337,19 +413,15 @@
   "presence": {
    "chance": 0.35,
    "minutes": [
-    20,
-    40
+    60,
+    150
    ],
    "perDay": 1,
    "befriendedPerDay": 2,
    "befriendedChanceMult": 2
   },
   "gift": {
-   "chance": 0.5
-  },
-  "firstVisitor": {
-   "interest": 22,
-   "tracks": 3
+   "count": 2
   }
  },
  "naming": {

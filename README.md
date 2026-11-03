@@ -2,7 +2,12 @@
 
 A cozy top-down pixel-art garden in a forest clearing, framed by a shrub treeline around an old log. The design for the garden (plant, grow overnight, harvest) is in `design/garden_rework.md`.
 
-> **Work in progress:** the rework is being built in phases. Phase 1 removed the old systems (creatures, geodes, relic fields, wild spawning, the Spirit Well). Phase 2 added the core loop: soil, seed packets, growth, harvest, coins and the morning check. Phase 3 (this commit) adds companions, decor that does something, relic ornaments and garden beauty. Long-term goals come in phase 4.
+The rework was built in phases:
+
+1. Removed the old systems: creatures, geodes, relic fields, wild spawning and the Spirit Well.
+2. Added the core loop: soil, seed packets, growth, harvest, coins and the morning check.
+3. Added companions, decor that does something, relic ornaments and garden beauty.
+4. Added long-term goals: collections, cross-pollinated colours, commissions and daily orders, visitors drawn by plants, and Room to grow for coins.
 
 ## Running it
 
@@ -68,7 +73,6 @@ The garden is a new game, so older forests aren't carried over:
 - **Decor:** props bought in the Store go in the Bag under Decor. Place one on an open tile, then tap it to move it, recolour it or put it away.
 - **Room to grow:** a line of Store upgrades. Each pushes the treeline back `expansion.ringTiles` (2) on each side.
 - **Field Guide:** tabs for Mushrooms, Plants (the Plant & Fungi Catalogue) and Visitors. Unfound entries are silhouettes.
-- **Visitors** (`Content/visitors.json`) are kept as data and Field Guide entries. Their old preferences were school ground, which no longer exists, so they don't visit until phase 4 reworks them around plants.
 - **Time:** the real local clock (`tuning.json` → `clock`). Everything runs on timestamps, so the garden catches up when the game reopens.
 
 ## Growing things (web)
@@ -102,7 +106,10 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
   - Coins buy seed packets (**Seeds** tab), amendments (**Soil**, 6 coins, loam 2), decor (**Decor**) and **Room to grow**.
 - **The morning check:** on opening after 4 hours or more of real time away (`garden.morning.minAwayHours`), a short card names everything ready to harvest and when the next plant will be. Ready plants are highlighted.
   - At most one small surprise per local day (`surpriseChance` 0.7), chosen from the garden seed and the day, among what's possible right now.
-  - For now that's a self-seeded seedling: a blooming plant seeds a neighbouring open tile it can grow in, and a sprout appears there.
+  - **A self-seeded seedling:** a blooming plant seeds a neighbouring open tile it can grow in, and a sprout appears there.
+  - **A visitor's gift:** a befriended visitor leaves its gift seeds in the Bag.
+  - **A rare colour:** a ready plant turns out to be one of its colour varieties, just this once.
+  - The weights are 3, 4 and 2 (`morning.weights`).
   - Developer time skips don't trigger the card; **Come back after…** does.
 
 ### The starter plants
@@ -174,6 +181,52 @@ They pay a little more per tile-hour than the starters (about 1.5–1.8), which 
   - Locked items show in the Store as silhouettes ("Opens with a lovely garden").
   - A first bed of two or three kinds with a bench reaches Tended on day one. Pleasant takes about five kinds or a few pieces of decor, Lovely most of the clearing, and Charming or Enchanting need Room to grow.
 
+## Long-term goals (web)
+
+- **Field Guide collections:** each school's set is its starter, Store and gift plants (Spore 3, Glow 4, Bloom 4, Verdure 3, Shimmer 3, Spirit 3).
+  - Harvest every plant in a set once to complete it. The reward is that school's relic ornament (the only way to earn one) and 150 coins (`garden.collections`).
+  - The Garden tab of the Field Guide opens with each set's progress and the relic as a silhouette until earned.
+- **Cross-pollination and colour varieties** (`plants.json` varieties, `garden.varieties`):
+  - Harvest a plant while a blooming plant of the same family is in one of its 8 neighbours. The same kind counts, and the families are caps, daisies, bells, clovers, spikes and willows.
+  - With a hidden chance (12%) you get a seed packet of one of its colour varieties, one not yet found first.
+  - There are 14 varieties, one per starter and Store plant: Lemon Marigold, Pink Cornflower, Lavender Ink Cap, Golden Hosta and so on.
+  - A variety grows like its plant and breeds true. Its produce sells for twice as much and has its own entry in the Field Guide's **Colours** tab (a hint shows until found).
+  - Variety colours are palette swaps computed at load: every vivid, non-green colour of the plant's sprite takes the variety's hue, and the greens too for leafy varieties (`varietySwap` in `core.js`), so no extra art is needed.
+  - In a simulation, a bed of seven Marigolds harvested daily gave a Lemon Marigold packet on about 1 in 9 harvests.
+- **The Old Log** has two kinds of request (Offerings sheet). It sparkles when something there can be delivered.
+  - **Commissions** (`commission`) are ten one-off requests for things you grow, paying 40–300 coins. Some open Store items: "A basket for the log" opens the Raised bed, "Something blue" the Birdbath, "Lantern-light" the Glow lantern. Later ones need a beauty tier, colour varieties or gift plants.
+  - **Daily orders** (`order`) are two small orders each local day, at about 1.5× the sell price. They're chosen from the garden seed and the day among orders for produce you've already harvested (`garden.orders.perDay`).
+- **Visitors drawn by plants** (`Content/visitors.json`, `tuning.visitors`): twelve animals from `design/animal_visitors_notes.md`, two per school.
+  - Each likes particular plants blooming in the garden, in a time window.
+  - While every plant it likes is in bloom (or ready), its interest rises by 1.5 every 30 minutes of game time (time away counts). Otherwise it falls by 0.5.
+  - At 10 interest, little tracks appear beside those plants during its window. From 20, tapping tracks reads a clue that names one of its preferences, kept on its Field Guide page.
+  - From 60 it visits in its window (35% per half hour, staying 1–2.5 hours, once a day). It drifts shyly near the plants it likes. Tap it to befriend it.
+  - Everything is seeded from the garden, the visitor and the time, so it's deterministic.
+  - **Befriended visitors bring seeds you can't buy.** At once they leave 2 packets of their gift, and later the occasional morning gift. One of each school's pair brings a gift-only plant (Spore Lantern, Moonpetal, Foxglove, Canopy Bells, Prismbell, Wispwillow); the other brings a colour variety's seeds.
+  - In a simulation, a Marigold and a Cornflower left blooming brought the Bumblebee about 39 hours later.
+
+  | Visitor | School | Likes blooming | Time | Gift |
+  |---|---|---|---|---|
+  | Woodlouse | Spore | Ink Cap | day | Lavender Ink Cap seeds |
+  | Cave Salamander | Spore | Velvet Shank, Ink Cap | night | Spore Lantern seeds |
+  | Firefly | Glow | Foxfire Button | dusk | Azure Foxfire seeds |
+  | Glowmoth | Glow | Lantern Flower, Honey Mushroom | night | Moonpetal seeds |
+  | Bumblebee | Bloom | Marigold, Cornflower | day | Lemon Marigold seeds |
+  | Ruby-throated Hummingbird | Bloom | Lavender | dawn | Foxglove seeds |
+  | Mossback Hare | Verdure | Wood Sorrel | dawn | Purple Wood Sorrel seeds |
+  | Red Squirrel | Verdure | Hosta, Wood Sorrel | day | Canopy Bells seeds |
+  | Glasswing Butterfly | Shimmer | Jewelweed | day | Sapphire Jewelweed seeds |
+  | Prism Moth | Shimmer | Glassbell, Jewelweed | dusk | Prismbell seeds |
+  | Will-o'-Wisp Fox | Spirit | Wisp Cap | dawn | Rose Wisp Cap seeds |
+  | Barn Owl | Spirit | Mistbell, Wisp Cap | night | Wispwillow seeds |
+
+  - The notes' clue ideas became the clue lines.
+  - The old Lantern Moth, Honey Bumble, Fern Rabbit and Mist Fox became the Glowmoth, Bumblebee, Mossback Hare and Will-o'-Wisp Fox, keeping their ids.
+  - The Mossback Hedgehog, Prism Beetle, Foxfire Newt and Petal Stag are gone.
+  - Their sprites are placeholders from `tools/gen_visitor_sprites.py`.
+- **Gift plants** (only from visitors, never in the Store): they grow 20–24h and sell for 13–16. Canopy Bells and Wispwillow are perennials.
+- **Room to grow** is bought with coins in the Store (150, 250, 400 … 3000), each tier pushing the treeline back 2 tiles on every side.
+
 ## The Plant & Fungi Catalogue
 
 `design/Undergrowth_Catalogue.xlsx` lists every plant and fungus: name, category (Mushroom or Plant), rarity, school (blank = plain ground) and a Field Guide description. It replaces the old spawn table, whose creatures, geodes, gems and spawn rules were removed.
@@ -217,6 +270,7 @@ A separate test garden for trying anything without touching your real save.
   - **Garden:** grow all plants now; +100 or +1000 coins; give any seed packet or amendment, or 5 of each.
   - **Plant timers:** tap a plant to see its exact progress, rate, time to ready and stage times.
   - The six relic ornaments; see the beauty score and set the best beauty tier reached.
+  - **Visitors:** set a visitor's interest stage, lay its tracks now, or bring it into the garden now. Also give 2 of every colour variety packet.
   - Fill the Field Guide; open the whole forest; give any item or decor.
   - Complete or reset Store listings; open the seed tin as any school.
   - Grow forage finds now; save and load named setups.
@@ -269,6 +323,7 @@ App/, Packages/UndergrowthCore/ the older iOS port (see above)
 - **`anchor`** is measured in pixel-edge coordinates from the top-left. Objects anchor at their feet; ground tiles at their centre.
 - **Missing sprite ids** render as a magenta "?" instead of crashing.
 - **Placeholder art:** `python3 tools/gen_placeholders.py` regenerates every placeholder sprite. Re-running it reproduces the committed sprites exactly.
+  - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
   - Seed packets (`packet.<plant>`: a paper packet banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
   - Catalogue items and their bud stages (`plant.bud.<key>`; fungi get a small closed button) come from `gen_content_sprites.py`.
   - School soil tiles (`tile.<school>.3a/b`) come from `gen_terrain.py`.
@@ -284,7 +339,7 @@ App/, Packages/UndergrowthCore/ the older iOS port (see above)
 | `amendments.json` | Soil amendments (kept by hand): id, school (null = plain loam), name, text. |
 | `landmarks.json` | The Old Log. |
 | `opening.json` | The seed tin's card, the questions and their school weights, and what each school's tin holds. |
-| `visitors.json` | Forest animals: name, sprite, preferences, clues, Field Guide text, gift. |
+| `visitors.json` | Twelve forest animals: name, sprite, school, likes (`plants` that must be blooming, `time` window), a clue per preference (`plant:<id>`, `time`), Field Guide text and gift (a seed packet id). |
 | `relics.json` | One relic per school (kept by hand), for the relic ornaments. |
 | `requests.json`, `cosmetics.json` | Store listings, Old Log requests and decor (from the Offerings spreadsheet). |
 | `story.json` | Story and hint text. |

@@ -280,3 +280,7 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .pip.leaf { --c: #8fc860; box-shadow: inset 0 0 0 1px #4f7a3a; }
 .pip.leaf.on { background: #8fc860; box-shadow: inset 0 0 0 1px rgba(0,0,0,.45); }
 .companion { color: #ffc8d8; display: flex; align-items: center; gap: 4px; }
+.collections { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; margin: 6px 0; }
+.collection { display: flex; align-items: center; gap: 6px; font-size: var(--t-small); }
+.collection .progress { flex: 1; height: 6px; min-width: 30px; }
+.collection.done b { color: var(--gold); }

@@ -400,7 +400,21 @@ export class UI {
       ...this.oldLogSections(),
     ];
   }
-  oldLogSections() { return []; }
+  /** Today's orders and the commissions: requests for things you grow, paying coins (and opening Store items). */
+  oldLogSections() {
+    const g = this.game, b = g.oldLogBoard(g.now());
+    const open = b.commissions.filter((st) => !st.done && !st.locks.length);
+    const locked = b.commissions.filter((st) => !st.done && st.locks.length);
+    const done = b.commissions.filter((st) => st.done);
+    return [
+      h('div', { class: 'section' }, "Today's orders"),
+      b.orders.length ? b.orders.map((st) => this.offerCard(st, st.done ? 'Done' : 'Send')) : h('p', { class: 'sub' }, 'No orders yet. Neighbours order things you have grown before; new orders come each day.'),
+      h('div', { class: 'section' }, 'Commissions'),
+      open.length ? open.map((st) => this.offerCard(st, 'Deliver')) : h('p', { class: 'sub' }, 'No open commissions right now.'),
+      locked.length ? [h('div', { class: 'section' }, 'Coming later'), ...locked.map((st) => this.offerCard(st))] : null,
+      done.length ? [h('div', { class: 'section' }, `Done (${done.length})`), h('p', { class: 'sub' }, done.map((st) => st.req.name).join(' · '))] : null,
+    ];
+  }
 
   /** Store tabs: [id, label, body()]. */
   storeTabs() {
@@ -490,6 +504,11 @@ export class UI {
     });
     return [
       ['garden', 'Garden', garden],
+      ['varieties', 'Colours', () => Object.values(this.content.varieties).map((v) => {
+        const it = this.content.items[v.produce];
+        return { key: 'item:' + v.produce, name: v.name, sprite: it.sprite, variant: v.variant, school: it.school, text: it.guideText,
+          hint: `A rare colour of ${g.plantDef(v.plantID)?.name}. Some say it comes from good neighbours.` };
+      })],
       ['mushroom', 'Mushrooms', () => items('mushroom')],
       ['plant', 'Plants', () => items('plant')],
       ['visitors', 'Visitors', () => (this.content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, visitor: v }))],
@@ -516,7 +535,20 @@ export class UI {
       })),
     ]];
   }
-  guideHeader() { return []; }
+  /** The Garden tab opens with each school's collection: plants grown of its set, and its reward. */
+  guideHeader(tab) {
+    if (tab !== 'garden') return [];
+    const g = this.game;
+    return [h('div', { class: 'collections' }, SCHOOLS.map((school) => {
+      const st = g.collectionStatus(school);
+      const relic = this.content.relicList.find((r) => r.school === school);
+      return h('div', { class: 'collection' + (st.claimed ? ' done' : '') },
+        relic ? this.sprites.element(relic.sprite, st.claimed ? null : SIL, 2) : null,
+        h('span', { style: `color:${SCHOOL_COLORS[school]}` }, schoolName(school)),
+        h('span', { class: 'progress' }, h('span', { style: `width:${Math.round(st.have / Math.max(1, st.total) * 100)}%` })),
+        h('b', {}, `${st.have}/${st.total}`));
+    })), h('p', { class: 'sub' }, "Grow and harvest every plant of a school to complete its set. Something old is waiting for whoever does.")];
+  }
   /** More on a garden plant's Field Guide page: its companions (unknown ones stay hidden until found). */
   plantGuideExtra(p) {
     const g = this.game;
@@ -553,7 +585,27 @@ export class UI {
       clues.length ? h('ul', { class: 'clues' }, clues.map((c) => h('li', {}, c))) : h('p', { class: 'sub' }, S.noClues || 'No signs of it yet.'),
     ]];
   }
-  visitorClues() { return []; }
+  visitorClues(def) { const g = this.game.guest(def.id); return this.game.guestPrefKeys(def).filter((k) => g.known.includes(k)).map((k) => def.clues[k]).filter(Boolean); }
+
+  /** The gentle moment of befriending a visitor, and the seeds it leaves. */
+  befriendCard(r) {
+    const S = this.content.story?.visitors || {};
+    const gift = (r.results || []).map((x) => { const d = this.content.items[x.item]; return d ? h('div', { class: 'reward-item' }, this.sprites.element(d.sprite, d.variant || null, 2), ` ${x.count} × ${d.name}`) : null; });
+    this.showCard((done) => h('div', { class: 'reveal-card pop' },
+      h('div', { class: 'rays-wrap' }, this.burst('#ffe8a0'), this.sprites.element(r.def.sprite, null, 7, 'grow-in', true)),
+      h('h2', {}, r.def.name), h('p', { class: 'sub' }, r.again ? (S.befriendAgain || 'It knows you now.') : (S.befriend || '')),
+      r.again ? null : h('p', { class: 'sub' }, r.def.text || ''),
+      gift.length ? [h('p', { class: 'sub' }, 'It leaves you a gift:'), h('div', { class: 'gifts' }, gift)] : null,
+      h('button', { class: 'btn green', onclick: done }, 'Lovely')));
+  }
+
+  collectionCard(e) {
+    const relic = this.content.relicList.find((r) => r.id === e.relic);
+    this.celebrate(`The ${schoolName(e.school)} set is complete`, h('div', {},
+      relic ? h('p', { class: 'inscription' }, relic.inscription) : null,
+      h('p', { class: 'sub' }, `${relic ? `The ${relic.name} is in your Bag, under Decor. Set it among ${schoolName(e.school)} plants and they grow faster. ` : ''}And ${e.coins} coins.`)),
+      relic ? this.sprites.element(relic.sprite, null, 5, 'grow-in') : null);
+  }
 
   // -------------------------------------------------------------- rename, debug, developer mode
 
@@ -623,6 +675,16 @@ export class UI {
           b('5 of every packet', () => a.dev((gm) => gm.devGivePackets(5), (n) => `+5 of ${n} packets.`))),
         h('div', { class: 'row gap wrap' }, amendSel, b('+1', () => a.debugGive(amendSel.value, 1)), b('+5', () => a.debugGive(amendSel.value, 5)),
           b('5 of every soil', () => a.dev((gm) => gm.devGiveAmendments(5), (n) => `+5 of ${n} amendments.`)))]],
+      ['Visitors', [
+        h('p', { class: 'sub' }, 'Set a visitor\'s interest, leave its tracks by the plants it likes, or bring it into the garden now.'),
+        (() => {
+          const sel = h('select', { class: 'select' }, this.content.visitorList.map((v) => h('option', { value: v.id }, `${v.name} (${v.likes.plants.join(', ')}, ${v.likes.time})`)));
+          return h('div', { class: 'row gap wrap' }, sel,
+            ...[['signs', 'Signs'], ['clues', 'Clues'], ['ready', 'Ready'], ['none', 'Reset']].map(([st, label]) => b(label, () => a.dev((gm) => gm.devGuestStage(sel.value, st), `${label}.`))),
+            b('Tracks now', () => a.dev((gm, t) => gm.devTracks(sel.value, t), 'Tracks laid.')),
+            b('Present now', () => { this.sheet = null; this.close(); a.dev((gm, t) => gm.devGuestPresent(sel.value, t), 'It has come to the garden.'); }));
+        })(),
+        h('div', { class: 'row gap wrap' }, b('2 of every colour variety', () => a.dev((gm) => gm.devGiveVarieties(2), (n) => `+2 of ${n} variety packets.`)))]],
       ['Unlock', [h('div', { class: 'row gap wrap' },
         b('Fill Field Guide', () => a.dev((gm) => gm.devFillGuide(), 'Field Guide complete.')),
         b('Whole forest open', () => a.dev((gm, t) => gm.devOpenForest(t), 'The clearing now covers the whole forest.')))]],
@@ -747,6 +809,11 @@ export class UI {
   surpriseLine(s) {
     const g = this.game;
     if (s.type === 'selfSeed') return h('p', { class: 'surprise' }, ic('sparkle', 1), ` ${this.aName(g.plantDef(s.plantID)?.name || 'seedling')} has seeded itself nearby.`);
+    if (s.type === 'gift') {
+      const d = g.guestDef(s.visitor), it = this.content.items[s.item];
+      return h('p', { class: 'surprise' }, ic('heart', 1), ` The ${d ? d.name : 'visitor'} left you ${it ? it.name : 'seeds'}.`);
+    }
+    if (s.type === 'rareColour') return h('p', { class: 'surprise' }, ic('sparkle', 1), ` One of your ${g.plantDef(s.plantID)?.name}s has come up ${g.varietyDef(s.variety)?.name.split(' ')[0].toLowerCase()}.`);
     return null;
   }
 

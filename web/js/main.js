@@ -166,6 +166,11 @@ class App {
     const ui = this.ui;
     if (e.type === 'freshGarden') ui.freshGardenCard(e);
     else if (e.type === 'beautyTier') ui.beautyCard(e);
+    else if (e.type === 'collection') ui.collectionCard(e);
+    else if (e.type === 'crossPollinated') {
+      const v = this.game.varietyDef(e.variety);
+      ui.toast(`Something new among the seeds: ${v ? v.name : 'a new colour'}.`, v ? this.content.items[v.packet]?.sprite : null);
+    }
     else if (e.type === 'companionFound') {
       const g = this.game;
       ui.toast(`The ${g.plantDef(e.plantID)?.name} did well beside the ${g.plantDef(e.with)?.name}. It's in your Field Guide.`, 'ui.icon.heart');
@@ -243,6 +248,12 @@ class App {
     }
     const plant = g.plantAt(tile);
     if (plant && g.isReady(plant, now) && !(ui.selectedTile && ui.selectedTile.x === tile.x && ui.selectedTile.y === tile.y && ui.plantInspector)) { this.harvestAt(tile); return true; }
+    // A visitor in the garden: tapping it befriends it.
+    if (tile.hitKind === 'guest') {
+      const r = this.attempt(() => g.befriendGuest(tile.hitKey, now));
+      if (r) { ui.befriendCard(r); this.changed(); }
+      return true;
+    }
     const decor = g.decorAt(tile);
     if (decor && !plant) { ui.selectedTile = null; ui.open('decor', decor.id); this.changed(false); return true; }
     return false;
@@ -253,6 +264,13 @@ class App {
     if (!g.inBounds(tile)) return;
     if (ui.mode) { const fn = this.modeHandlers[ui.mode.type]; if (fn) fn(tile); return; }
     if (this.tapThing(tile)) return;
+    // Tracks: reading them gives a clue (kept on the visitor's Field Guide page).
+    const track = g.trackAt(tile);
+    if (track && !g.plantAt(tile)) {
+      const text = this.attempt(() => g.readTrack(track.id));
+      if (text) { ui.toast(text); this.changed(); }
+      return;
+    }
     ui.selectedTile = ui.selectedTile && ui.selectedTile.x === tile.x && ui.selectedTile.y === tile.y ? null : tile;
     this.changed(false);
   }

@@ -97,6 +97,35 @@ export function gardenName(parts, counts, seed) {
   return `${adjective} ${place}`.trim();
 }
 
+/** HSL (0-1) → [r, g, b] (0-255). */
+export function hslToRgb(h, s, l) {
+  const f = (n) => { const k = (n + h * 12) % 12, a = s * Math.min(l, 1 - l); return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); };
+  return [f(0), f(8), f(4)];
+}
+const rgbHex = (r, g, b) => '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+/**
+ * A colour variety's palette swap: every vivid, non-green colour in the sprite (greens too with `leaves`)
+ * takes the variety's hue, keeping its lightness, so shading and outlines stay.
+ */
+export function varietySwap(palette, hue, leaves = false) {
+  const swap = {};
+  (palette || []).forEach((c, i) => {
+    const rgb = parseHex(c);
+    if (!rgb || rgb[3] === 0 || i < 2) return;
+    const [r, g, b] = rgb.map((v) => v / 255), max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+    if (l < 0.14) return;
+    const d = max - min, sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    let h = 0;
+    if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = ((h * 60) + 360) % 360;
+    const green = sat > 0.15 && h > 70 && h < 170;
+    if (green && !leaves) return;
+    const [nr, ng, nb] = hslToRgb(hue / 360, Math.max(sat, 0.45), l);
+    swap[i] = rgbHex(nr, ng, nb);
+  });
+  return Object.keys(swap).length ? { swap } : null;
+}
+
 const sameTile = (a, b) => a.x === b.x && a.y === b.y;
 const key = (t) => t.x + ',' + t.y;
 const HOUR = 3600 * 1000;
@@ -143,6 +172,9 @@ export class Game {
     s.plants = s.plants || [];
     s.coins = s.coins || 0;
     s.morning = s.morning || { lastSurpriseDay: null };
+    s.guests = s.guests || {};             // visitors: interest, clues known, presence, befriended
+    s.guestTracks = s.guestTracks || [];
+    s.collections = s.collections || {};   // school -> time completed
   }
 
   /** A fresh garden. `discovered` carries Field Guide entries over (from an archived older save). */
@@ -209,6 +241,7 @@ export class Game {
   /** Brings the garden up to `now`. Returns a small report for the UI. */
   advance(now) {
     const report = { forage: this.forageTick(now) };
+    this.visitorTick(now);
     this.updateBeauty(now);
     this.state.lastUpdated = Math.max(this.state.lastUpdated || 0, now);
     return report;
@@ -576,6 +609,7 @@ export class Game {
     this.rebase(now);
     this.consume(packetID);
     const p = this.newPlant(pk.plant, tile, now);
+    if (pk.variety) p.variety = pk.variety;
     this.rebase(now);
     this.bump('plant');
     return p;
@@ -598,7 +632,10 @@ export class Game {
     return n;
   }
   /** The produce item a harvest gives (a colour variety has its own). */
-  produceOf(p) { return this.plantDef(p.plantID)?.item; }
+  produceOf(p) { const v = p.variety && this.varietyDef(p.variety); return v ? v.produce : this.plantDef(p.plantID)?.item; }
+  /** The seed packet a harvest returns (a variety breeds true). */
+  packetOf(p) { const v = p.variety && this.varietyDef(p.variety); return v ? v.packet : 'packet.' + p.plantID; }
+  varietyDef(id) { return this.content.varieties[id] || null; }
 
   /**
    * Harvest a ready plant: its produce and (usually) seeds back. An annual leaves the tile empty; a
@@ -615,7 +652,7 @@ export class Game {
     const pending = [{ item: this.produceOf(p), count: this.harvestYield(p) }];
     const [always, chance] = cfg.seeds || [1, 0.5];
     const seeds = (always || 0) + (this.rng.chance(chance || 0) ? 1 : 0);
-    if (seeds > 0) pending.push({ item: 'packet.' + p.plantID, count: seeds });
+    if (seeds > 0) pending.push({ item: this.packetOf(p), count: seeds });
     for (const x of extras) pending.push(x);
     const results = this.grant(pending.filter((x) => x.item && x.count > 0));
     const firstHarvest = this.discover('plant:' + p.plantID);
@@ -631,7 +668,7 @@ export class Game {
       p.need = cfg.regrowHours * HOUR / (1 - bud);
       p.grown = p.need * bud;
       p.since = now;
-      delete p.variety;
+      if (p.rareColour) { delete p.variety; delete p.rareColour; }   // a one-off colour; seed-grown varieties stay
       regrows = true;
     } else {
       this.state.plants = this.state.plants.filter((x) => x !== p);
@@ -641,9 +678,45 @@ export class Game {
     this.afterHarvest(p, now, results);
     return { results, plant: p, regrows, firstHarvest };
   }
-  /** Extra things a harvest gives (later systems: cross-pollinated seeds). */
-  harvestExtras() { return []; }
-  afterHarvest() {}
+  /**
+   * Cross-pollination: harvesting a plant while a plant of the same family (the same kind counts) blooms
+   * next to it gives, with varieties.chance (kept hidden), a seed packet of one of its colour varieties,
+   * one not yet found first.
+   */
+  harvestExtras(p, now) {
+    const def = this.plantDef(p.plantID);
+    const vars = (def && def.varieties) || [];
+    if (!vars.length) return [];
+    const partner = this.neighbours(p.tile).some((q) => q !== p && this.plantDef(q.plantID)?.family === def.family && this.isBlooming(q, now));
+    if (!partner || !this.rng.chance((this.gcfg.varieties || {}).chance ?? 0.12)) return [];
+    const fresh = vars.filter((v) => !this.discovered.has('item:' + this.varietyDef(v.id).produce));
+    const v = this.rng.pick(fresh.length ? fresh : vars);
+    this.events.push({ type: 'crossPollinated', plantID: p.plantID, variety: v.id, tile: p.tile });
+    return [{ item: this.varietyDef(v.id).packet, count: 1 }];
+  }
+  afterHarvest(p, now) { this.checkCollection(this.plantDef(p.plantID)?.school, now); }
+
+  // ---- Field Guide collections (tuning.garden.collections)
+  /** A school's set: its base plants (starter, Store and gift). */
+  collectionPlants(school) { return this.content.plantList.filter((p) => p.school === school); }
+  collectionStatus(school) {
+    const list = this.collectionPlants(school);
+    const have = list.filter((p) => this.discovered.has('plant:' + p.id)).length;
+    return { school, have, total: list.length, done: list.length > 0 && have === list.length, claimed: !!this.state.collections[school] };
+  }
+  /** Completing a school's set (every plant harvested once) gives its relic ornament and coins, once. */
+  checkCollection(school, now) {
+    if (!school) return null;
+    const st = this.collectionStatus(school);
+    if (!st.done || st.claimed) return null;
+    this.state.collections[school] = now;
+    const relic = this.content.relicList.find((r) => r.school === school);
+    if (relic) { this.state.decor.owned[relic.id] = (this.state.decor.owned[relic.id] || 0) + 1; this.discover('decor:' + relic.id); }
+    const coins = (this.gcfg.collections || {}).coins ?? 150;
+    this.state.coins += coins;
+    this.events.push({ type: 'collection', school, relic: relic && relic.id, coins });
+    return st;
+  }
 
   /** Dig up a growing plant (it's lost; the tile is free again). */
   clearPlant(plantRef, now) {
@@ -751,6 +824,22 @@ export class Game {
       this.rebase(now);
       return { type: 'selfSeed', plantID: p.plantID, tile: p.tile, from: seedling.from };
     }]);
+    // A befriended visitor leaves its gift seeds.
+    const friends = this.guestDefs().filter((d) => this.guest(d.id).befriended && this.content.items[d.gift]).sort((a, b) => (a.id < b.id ? -1 : 1));
+    if (friends.length) out.push(['gift', w.gift ?? 4, () => {
+      const d = friends[hash32(this.state.seed, day, 0x9f7) % friends.length];
+      const results = this.grant([{ item: d.gift, count: 1 }]);
+      return { type: 'gift', visitor: d.id, item: d.gift, results };
+    }]);
+    // A rare colour: a ready plant turns out to be one of its varieties.
+    const ready = this.state.plants.filter((p) => !p.variety && this.isReady(p, now) && (this.plantDef(p.plantID)?.varieties || []).length).sort((a, b) => (a.id < b.id ? -1 : 1));
+    if (ready.length) out.push(['rareColour', w.rareColour ?? 2, () => {
+      const p = ready[hash32(this.state.seed, day, 0xc010) % ready.length];
+      const vars = this.plantDef(p.plantID).varieties;
+      p.variety = vars[hash32(this.state.seed, day, 0xc011) % vars.length].id;
+      p.rareColour = true;
+      return { type: 'rareColour', plantID: p.plantID, variety: p.variety, tile: p.tile };
+    }]);
     return out;
   }
   rollSurprise(now, day) {
@@ -792,7 +881,7 @@ export class Game {
   requestStatus(req, now) {
     const locks = this.requestLocks(req, now);
     const items = req.items.map((x) => ({ item: x.item, count: x.count, owned: this.state.inventory[x.item] || 0 }));
-    const done = req.kind === 'shop' ? false : this.isDelivered(req.id);
+    const done = req.kind === 'shop' ? false : req.kind === 'order' ? this.ordersToday(now).done.includes(req.id) : this.isDelivered(req.id);
     const coins = req.coins || 0;
     return { req, done, locks, items, coins, ready: !done && !locks.length && items.every((x) => x.owned >= x.count) && this.state.coins >= coins };
   }
@@ -811,7 +900,10 @@ export class Game {
     if (!st.ready) throw new GameError('You need more of the things it asks for.');
     for (const x of req.items) this.consume(x.item, x.count);
     if (st.coins) this.spend(st.coins);
-    if (req.kind === 'shop') { const b = this.state.offerings.bought; b[id] = (b[id] || 0) + 1; } else this.state.offerings.delivered[id] = now;
+    if (req.kind === 'order' && !this.ordersToday(now).offers.includes(id)) throw new GameError("That order isn't on the log today.");
+    if (req.kind === 'shop') { const b = this.state.offerings.bought; b[id] = (b[id] || 0) + 1; }
+    else if (req.kind === 'order') this.ordersToday(now).done.push(id);
+    else this.state.offerings.delivered[id] = now;
     this.bump('deliver');
     return this.grantReward(req.reward, now);
   }
@@ -829,6 +921,29 @@ export class Game {
     return out;
   }
   get expansionTier() { return this.state.unlocks.expansions || 0; }
+
+  /**
+   * Today's orders at the Old Log (requests of kind "order"): perDay of them each local day, picked
+   * from the garden seed and the day among orders for produce the player has already grown.
+   */
+  ordersToday(now) {
+    const day = Game.dayNumber(now);
+    let o = this.state.orders;
+    if (!o || o.day !== day) {
+      o = this.state.orders = { day, offers: [], done: [] };
+      const grown = (req) => req.items.every((x) => { const pl = this.content.items[x.item]?.plant; return pl && this.discovered.has('plant:' + pl); });
+      const pool = (this.content.requests || []).filter((r) => r.kind === 'order' && grown(r) && !this.requestLocks(r, now).length);
+      for (let i = 0; i < ((this.gcfg.orders || {}).perDay ?? 2) && pool.length; i++) o.offers.push(pool.splice(hash32(this.state.seed, day, i) % pool.length, 1)[0].id);
+    }
+    return o;
+  }
+  /** The Old Log: one-off commissions (open, locked, done) and today's orders. */
+  oldLogBoard(now) {
+    const orders = this.ordersToday(now).offers.map((id) => this.requestStatus(this.requestDef(id), now));
+    return { orders, commissions: this.requestBoard(now, ['commission']) };
+  }
+  /** Anything at the Old Log that could be delivered right now. */
+  oldLogReady(now) { const b = this.oldLogBoard(now); return [...b.orders, ...b.commissions].filter((st) => st.ready).length; }
 
   // ---- decor (Content/cosmetics.json, and relic ornaments from relics.json)
   decorDef(id) { return this.content.decorByID[id] || null; }
@@ -876,6 +991,129 @@ export class Game {
     return d;
   }
 
+  // ---- visitors (Content/visitors.json, tuning.visitors): animals drawn by particular plants blooming
+  get guestCfg() { return this.t.visitors || {}; }
+  guestDefs() { return this.content.visitorList || []; }
+  guestDef(id) { return this.guestDefs().find((v) => v.id === id) || null; }
+  guest(id) { return (this.state.guests[id] = this.state.guests[id] || { interest: 0, known: [], befriended: false, present: null, presDay: -1, presCount: 0 }); }
+  /** Its preferences in the order clues reveal them: each liked plant, then the time of day. */
+  guestPrefKeys(def) { return [...def.likes.plants.map((p) => 'plant:' + p), 'time']; }
+  /** Plants it likes that are blooming at t (in bloom or ready). */
+  likedBlooming(def, t) { return this.state.plants.filter((p) => def.likes.plants.includes(p.plantID) && t >= p.plantedAt && this.isBlooming(p, t)); }
+  /** Every plant it likes is blooming somewhere in the garden. */
+  guestLikes(def, t) { const b = this.likedBlooming(def, t); return def.likes.plants.every((id) => b.some((p) => p.plantID === id)); }
+  /** Its stage: none, signs, clues, ready (interested enough to come) or present. */
+  guestStage(id, now) {
+    const g = this.guest(id), st = this.guestCfg.stages || {};
+    if (g.present && now >= g.present.from && now < g.present.until) return 'present';
+    if (g.interest >= (st.present ?? 60)) return 'ready';
+    if (g.interest >= (st.clues ?? 20)) return 'clues';
+    if (g.interest >= (st.signs ?? 10)) return 'signs';
+    return 'none';
+  }
+  presentGuests(now) { return this.guestDefs().filter((d) => this.guestStage(d.id, now) === 'present').map((d) => ({ def: d, g: this.guest(d.id) })); }
+  trackAt(t) { return this.state.guestTracks.find((x) => sameTile(x.tile, t)) || null; }
+
+  /**
+   * Interest checks every checkMinutes of game time, catching up time away (up to maxCatchUpDays). The
+   * plants don't change between player actions (advance runs before each one), so reading them per check
+   * is exact. Each check's random choices are seeded from the garden, the visitor and the check's time.
+   */
+  visitorTick(now) {
+    const cfg = this.guestCfg, defs = this.guestDefs();
+    if (!defs.length || !cfg.checkMinutes) return;
+    const step = cfg.checkMinutes * 60000;
+    if (this.state.guestsAt == null) { this.state.guestsAt = Math.floor(now / step) * step; return; }
+    let k0 = Math.floor(this.state.guestsAt / step) + 1;
+    const k1 = Math.floor(now / step);
+    if (k1 < k0) return;
+    k0 = Math.max(k0, k1 - Math.ceil((cfg.maxCatchUpDays ?? 7) * DAY / step));
+    const saved = this.rng;
+    try {
+      for (let k = k0; k <= k1; k++) {
+        const t = k * step, life = ((cfg.tracks || {}).hours ?? 24) * HOUR;
+        this.state.guestTracks = this.state.guestTracks.filter((x) => t - x.at < life && !this.plantAt(x.tile));
+        defs.forEach((d, i) => { this.rng = new RNG({ rng: hash32(this.state.seed, i + 1, k) }); this.guestCheck(d, t); });
+      }
+    } finally { this.rng = saved; }
+    this.state.guestsAt = k1 * step;
+  }
+
+  guestCheck(def, t) {
+    const cfg = this.guestCfg, g = this.guest(def.id), I = cfg.interest || {}, S = cfg.stages || {};
+    const met = this.guestLikes(def, t);
+    g.interest = Math.max(0, Math.min(I.max ?? 100, g.interest + (met ? (I.gain ?? 1.5) : -(I.decay ?? 0.5))));
+    if (g.present && t >= g.present.until) g.present = null;
+    if (!met || this.dayPhase(t) !== def.likes.time) return;
+    // Signs: tracks beside the plants it likes, laid only while it's here (so the time clue is true).
+    const tr = cfg.tracks || {};
+    if (g.interest >= (S.signs ?? 10) && this.state.guestTracks.filter((x) => x.visitorID === def.id).length < (tr.maxPerVisitor ?? 3) && this.rng.chance(tr.chance ?? 0.35)) this.layTrack(def, t);
+    const pr = cfg.presence || {}, day = Game.dayNumber(t);
+    if (g.presDay !== day) { g.presDay = day; g.presCount = 0; }
+    const perDay = g.befriended ? (pr.befriendedPerDay ?? 2) : (pr.perDay ?? 1);
+    const chance = (pr.chance ?? 0.35) * (g.befriended ? (pr.befriendedChanceMult ?? 2) : 1);
+    if (!g.present && g.interest >= (S.present ?? 60) && g.presCount < perDay && this.rng.chance(chance)) this.startPresence(def, t);
+  }
+
+  /** Open tiles next to the plants it likes (where its tracks and its visits go). */
+  guestSpots(def, t) {
+    const out = [];
+    for (const p of this.likedBlooming(def, t)) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const x = { x: p.tile.x + dx, y: p.tile.y + dy };
+      if ((dx || dy) && this.isFree(x) && !out.some((o) => sameTile(o, x))) out.push(x);
+    }
+    return out;
+  }
+
+  layTrack(def, t) {
+    const g = this.guest(def.id), S = this.guestCfg.stages || {};
+    const spots = this.guestSpots(def, t).filter((x) => !this.trackAt(x));
+    if (!spots.length) return;
+    let clue = null;
+    if (g.interest >= (S.clues ?? 20)) {
+      const keys = this.guestPrefKeys(def), fresh = keys.filter((k) => !g.known.includes(k));
+      const pool = fresh.length ? fresh : keys;
+      clue = pool[this.rng.int(0, pool.length - 1)];
+    }
+    this.state.guestTracks.push({ id: this.rng.uuid(), visitorID: def.id, tile: { ...this.rng.pick(spots) }, at: t, clue });
+  }
+
+  startPresence(def, t) {
+    const g = this.guest(def.id), pr = this.guestCfg.presence || {};
+    const spots = this.guestSpots(def, t);
+    if (!spots.length) return;
+    const [lo, hi] = pr.minutes || [60, 150];
+    g.present = { from: t, until: t + (lo + this.rng.next() * (hi - lo)) * 60000, tile: { ...this.rng.pick(spots) } };
+    g.presCount++;
+    g.visits = (g.visits || 0) + 1;
+  }
+
+  /** Reading tracks: the clue goes onto the visitor's Field Guide page. Returns the text. */
+  readTrack(trackID) {
+    const tr = this.state.guestTracks.find((x) => x.id === trackID);
+    if (!tr) throw new GameError('The tracks have faded.');
+    const def = this.guestDef(tr.visitorID);
+    if (!def) return '';
+    if (!tr.clue) return (this.content.story?.visitors || {}).faint || 'Small tracks, too faint to read yet.';
+    const g = this.guest(def.id);
+    if (!g.known.includes(tr.clue)) { g.known.push(tr.clue); this.bump('clue'); }
+    return def.clues[tr.clue] || '';
+  }
+
+  /** Tapping a present visitor befriends it: its Field Guide page fills in, and it leaves its gift seeds. */
+  befriendGuest(id, now) {
+    const def = this.guestDef(id);
+    if (!def || this.guestStage(id, now) !== 'present') throw new GameError('It has gone.');
+    const g = this.guest(id);
+    if (g.befriended) return { def, again: true, results: [] };
+    g.befriended = now;
+    for (const k of this.guestPrefKeys(def)) if (!g.known.includes(k)) g.known.push(k);
+    this.discover('visitor:' + id.replace(/^visitor\./, ''));
+    this.bump('befriend');
+    const results = this.content.items[def.gift] ? this.grant([{ item: def.gift, count: (this.guestCfg.gift || {}).count ?? 2 }]) : [];
+    return { def, again: false, results };
+  }
+
   // ---- beauty (tuning.garden.beauty): never shown as a number
   /** variety × distinct plants + blooming × plants in bloom or ready + every placed decor's beauty. */
   beautyScore(now) {
@@ -910,7 +1148,7 @@ export class Game {
   opensAtBeauty(from, to) {
     const out = [];
     for (const p of this.content.plantList) { const b = this.plantCfg(p.id).beauty; if (p.source === 'store' && b > from && b <= to) out.push(`${p.name} seeds`); }
-    for (const r of this.content.requests || []) { const b = (r.requires || {}).beauty; if (b > from && b <= to) out.push(this.decorDef(r.reward.id)?.name || r.name); }
+    for (const r of this.content.requests || []) { const b = (r.requires || {}).beauty; if (r.kind === 'shop' && b > from && b <= to) out.push(this.decorDef(r.reward.id)?.name || r.name); }
     return out;
   }
   beautyLock(need) { return need > this.beautyBest ? [{ type: 'beauty', need, name: (this.beautyTiers[need] || {}).name || `tier ${need}` }] : []; }
@@ -932,6 +1170,7 @@ export class Game {
   devFillGuide() {
     for (const i of this.content.itemList) if (i.inGuide !== false) this.discover('item:' + i.id);
     for (const v of this.content.visitorList || []) this.discover('visitor:' + v.id.replace(/^visitor\./, ''));
+    for (const p of this.content.plantList) this.discover('plant:' + p.id);
     for (const c of this.content.cosmetics || []) this.discover('decor:' + c.id);
   }
   devOpenForest(now) {
@@ -960,6 +1199,27 @@ export class Game {
     return this.state.plants.length;
   }
   devGiveCoins(n) { this.state.coins += n; }
+  devGiveVarieties(n = 2) { const v = Object.values(this.content.varieties); for (const x of v) this.grant([{ item: x.packet, count: n }]); return v.length; }
+  devGuestStage(id, stage) {
+    const g = this.guest(id), S = this.guestCfg.stages || {};
+    g.interest = { none: 0, signs: S.signs ?? 10, clues: S.clues ?? 20, ready: S.present ?? 60 }[stage] ?? 0;
+    if (stage === 'none') { g.known = []; g.befriended = false; g.present = null; }
+  }
+  /** Bring a visitor into the garden now (next to a plant it likes, or anywhere open). */
+  devGuestPresent(id, now) {
+    const def = this.guestDef(id), g = this.guest(id);
+    const spots = this.guestSpots(def, now);
+    const tile = spots[0] || this.freeNear(this.state.landmarks[0].tile);
+    g.interest = Math.max(g.interest, (this.guestCfg.stages || {}).present ?? 60);
+    g.present = { from: now, until: now + 30 * 60000, tile };
+  }
+  devTracks(id, now) {
+    const def = this.guestDef(id), g = this.guest(id);
+    g.interest = Math.max(g.interest, (this.guestCfg.stages || {}).clues ?? 20);
+    const spots = this.guestSpots(def, now).length ? this.guestSpots(def, now) : [this.freeNear(this.state.landmarks[0].tile)];
+    const keys = this.guestPrefKeys(def);
+    spots.slice(0, 2).forEach((t, i) => this.state.guestTracks.push({ id: this.rng.uuid(), visitorID: id, tile: { ...t }, at: now, clue: keys[i % keys.length] }));
+  }
   devGiveOrnaments() { for (const r of this.content.relicList) this.state.decor.owned[r.id] = (this.state.decor.owned[r.id] || 0) + 1; return this.content.relicList.length; }
   devSetBeautyBest(i) { this.state.beautyBest = i; }
   devGivePackets(n = 5) { for (const p of this.content.plantList) this.grant([{ item: 'packet.' + p.id, count: n }]); return this.content.plantList.length; }
@@ -998,6 +1258,24 @@ export class Content {
       if (g[p.id] && g[p.id].sell != null) item.sell = g[p.id].sell;
       item.plant = p.id;
       this.addItem({ id: 'packet.' + p.id, category: 'packet', name: `${p.name} seeds`, rarity: item.rarity, sprite: 'packet.' + p.id, plant: p.id, school: p.school, text: p.packet, inGuide: false });
+    }
+    // Colour varieties (plants.json varieties): their own produce (with a palette swap) and seed packets.
+    this.varieties = {};
+    const spritePal = Object.fromEntries((bundle.sprites || []).map((x) => [x.id, x.palette || []]));
+    const mult = ((bundle.tuning.garden || {}).varieties || {}).sellMult ?? 2;
+    for (const p of this.plantList) {
+      const item = this.items[p.item];
+      for (const v of p.varieties || []) {
+        const suffix = v.id.split('.').slice(1).join('.');
+        const variant = varietySwap(spritePal[item.sprite], v.hue, v.leaves);
+        const [r, gg, b] = hslToRgb(v.hue / 360, 0.65, 0.6), [r2, g2, b2] = hslToRgb(v.hue / 360, 0.5, 0.82);
+        const def = { ...v, plantID: p.id, produce: `${item.id}.${suffix}`, packet: 'packet.' + v.id, variant };
+        this.varieties[v.id] = def;
+        this.addItem({ id: def.produce, category: item.category, name: v.name, rarity: item.rarity, sprite: item.sprite, variant, school: p.school, plant: p.id, variety: v.id,
+          sell: item.sell != null ? item.sell * mult : undefined, guideText: `A colour of ${p.name} that only cross-pollination brings.` });
+        this.addItem({ id: def.packet, category: 'packet', name: `${v.name} seeds`, rarity: item.rarity, sprite: 'packet.' + p.id, variant: { swap: { 7: rgbHex(r, gg, b), 8: rgbHex(r2, g2, b2) } },
+          plant: p.id, variety: v.id, school: p.school, text: `${p.packet || ''} A rare colour.`.trim(), inGuide: false });
+      }
     }
     // Soil amendments (amendments.json): Bag items that change a tile's soil.
     // Relics (relics.json) are decor ornaments: kind "ornament", with their school.
