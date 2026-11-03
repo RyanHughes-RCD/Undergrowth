@@ -87,8 +87,14 @@ export class UI {
     if (this.sheet && withSheet) this.renderSheet();
   }
 
-  /** Extra bits under the garden name: coins. */
-  hudExtras() { return [' · ', ic('coin', 1), ` ${this.game.state.coins}`]; }
+  /** Extra bits under the garden name: coins and the beauty meter (a named tier and leaf pips, never a number). */
+  hudExtras(now) { return [' · ', ic('coin', 1), ` ${this.game.state.coins}`, ' · ', this.beautyMeter(now)]; }
+  beautyMeter(now) {
+    const t = this.game.beautyTier(now), n = this.game.beautyTiers.length - 1;
+    const pips = [];
+    for (let i = 1; i <= n; i++) pips.push(h('i', { class: 'pip leaf' + (i <= t.index ? ' on' : i === t.index + 1 && t.frac >= 0.5 ? ' part' : '') }));
+    return h('span', { class: 'beauty', title: 'How lovely the garden is' }, h('span', { class: 'pips mini' }, pips), ` ${t.name}`);
+  }
 
   /** "about 3 hours", "less than an hour", "by tomorrow" for a time ahead (never exact for players). */
   roughly(ms) {
@@ -175,8 +181,17 @@ export class UI {
         this.sprites.element(this.content.items[id].sprite, null, 1)))),
     ];
   }
-  /** Extra lines on a growing plant's card (later systems: companions, relics). */
-  plantNotes() { return []; }
+  /** Extra lines on a growing plant's card: its companions (named once discovered) and a relic close by. */
+  plantNotes(p) {
+    const g = this.game, out = [];
+    for (const c of g.activeCompanions(p)) {
+      const known = g.discovered.has(g.companionKey(p.plantID, c.index));
+      const partner = g.plantDef(c.rule.with)?.name || 'its neighbour';
+      out.push(h('p', { class: 'sub companion' }, ic('heart', 1), known ? ` ${c.rule.effect === 'speed' ? 'Growing faster' : 'Will give more'} beside the ${partner}.` : ' It seems happy here.'));
+    }
+    if (g.ornamentFactor(p) > 1) out.push(h('p', { class: 'sub companion' }, ic('sparkle', 1), ' A relic nearby hums to it.'));
+    return out;
+  }
   /** Developer plant inspector: exact timers and rates. */
   inspectPlant(p, now) {
     const g = this.game;
@@ -344,7 +359,8 @@ export class UI {
 
   lockText(locks) {
     return locks.map((l) => (l.type === 'guide' ? `${l.need} Field Guide entries (${l.have} so far)` : l.type === 'request' ? `“${l.name}” first`
-      : l.type === 'full' ? 'nothing: the whole forest is open' : l.type === 'day' ? `garden day ${l.need}` : (l.text || ''))).join(', ');
+      : l.type === 'full' ? 'nothing: the whole forest is open' : l.type === 'day' ? `garden day ${l.need}`
+        : l.type === 'beauty' ? `a ${l.name.toLowerCase()} garden` : (l.text || ''))).join(', ');
   }
 
   offerCard(st, label = 'Deliver') {
@@ -446,7 +462,16 @@ export class UI {
         h('button', { class: 'btn grey', onclick: () => a.removeDecor(d.id) }, 'Put away')),
     ]];
   }
-  decorExtra() { return []; }
+  /** What a decor piece does, in words, and (for a raised bed) its planting buttons. */
+  decorExtra(def, d) {
+    const g = this.game, k = g.decorKind(def), out = [];
+    const does = def.kind === 'ornament' ? `${schoolName(def.school)} plants growing around it grow faster.`
+      : k.holdsPlant ? 'Plant something in it: it gives a little more at harvest.'
+        : k.glow ? 'It glows softly at dusk and through the night.' : k.ground ? 'A path to walk between the beds.' : null;
+    if (does) out.push(h('p', { class: 'sub center' }, does));
+    if (k.holdsPlant && !g.plantAt(d.tile)) out.push(this.tileBody(d.tile));
+    return out;
+  }
 
   // -------------------------------------------------------------- Field Guide
 
@@ -492,8 +517,16 @@ export class UI {
     ]];
   }
   guideHeader() { return []; }
-  /** More on a garden plant's Field Guide page (later systems: companions, varieties). */
-  plantGuideExtra() { return []; }
+  /** More on a garden plant's Field Guide page: its companions (unknown ones stay hidden until found). */
+  plantGuideExtra(p) {
+    const g = this.game;
+    const rules = (p.companions || []).map((rule, i) => {
+      const known = g.discovered.has(g.companionKey(p.id, i));
+      const partner = g.plantDef(rule.with);
+      return h('li', {}, known ? `Beside the ${partner ? partner.name : rule.with}: ${rule.effect === 'speed' ? 'grows faster' : 'gives more'}.` : 'A neighbour it likes: not found yet.');
+    });
+    return rules.length ? [h('div', { class: 'section' }, 'Good neighbours'), h('ul', { class: 'clues' }, rules)] : [];
+  }
 
   entryBody(e) {
     return [
@@ -581,8 +614,11 @@ export class UI {
           b('Grow all plants now', () => a.dev((gm, t) => gm.devGrowAll(t), (n) => `${n} plant(s) ready.`), 'orange'),
           b('+100 coins', () => a.dev((gm) => gm.devGiveCoins(100), '+100 coins.')),
           b('+1000 coins', () => a.dev((gm) => gm.devGiveCoins(1000), '+1000 coins.')),
+          b('Relic ornaments', () => a.dev((gm) => gm.devGiveOrnaments(), (n) => `+${n} relic ornaments (Bag, Decor).`)),
           b(this.plantInspector ? 'Plant timers: ON' : 'Plant timers: off', () => { this.plantInspector = !this.plantInspector; this.renderSheet(); a.changed(false); }, this.plantInspector ? 'orange' : '')),
         h('p', { class: 'sub' }, 'Plant timers: tap a plant to see its exact progress, rate and stage times.'),
+        h('div', { class: 'row gap wrap' }, h('span', { class: 'sub' }, `Beauty: score ${g.beautyScore(g.now())}, best tier ${g.beautyBest}. Unlock tier:`),
+          ...g.beautyTiers.map((t, i) => b(String(i), () => a.dev((gm) => gm.devSetBeautyBest(i), `Best beauty tier: ${t.name}.`)))),
         h('div', { class: 'row gap wrap' }, packetSel, b('+1', () => a.debugGive(packetSel.value, 1)), b('+5', () => a.debugGive(packetSel.value, 5)),
           b('5 of every packet', () => a.dev((gm) => gm.devGivePackets(5), (n) => `+5 of ${n} packets.`))),
         h('div', { class: 'row gap wrap' }, amendSel, b('+1', () => a.debugGive(amendSel.value, 1)), b('+5', () => a.debugGive(amendSel.value, 5)),
@@ -712,6 +748,12 @@ export class UI {
     const g = this.game;
     if (s.type === 'selfSeed') return h('p', { class: 'surprise' }, ic('sparkle', 1), ` ${this.aName(g.plantDef(s.plantID)?.name || 'seedling')} has seeded itself nearby.`);
     return null;
+  }
+
+  /** A new beauty tier: a gentle card, and what it put in the Store. */
+  beautyCard(e) {
+    const list = e.opens.length ? h('p', { class: 'sub' }, `New in the Store: ${e.opens.join(', ')}.`) : null;
+    this.celebrate(`The garden feels ${e.name.toLowerCase()}`, h('div', {}, h('p', { class: 'sub' }, 'More kinds of plants, flowers in bloom and things to sit by make it lovelier still.'), list));
   }
 
   /** After an older save was archived: a fresh garden, with the Field Guide kept. */

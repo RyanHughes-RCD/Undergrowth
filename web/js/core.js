@@ -209,6 +209,7 @@ export class Game {
   /** Brings the garden up to `now`. Returns a small report for the UI. */
   advance(now) {
     const report = { forage: this.forageTick(now) };
+    this.updateBeauty(now);
     this.state.lastUpdated = Math.max(this.state.lastUpdated || 0, now);
     return report;
   }
@@ -481,13 +482,54 @@ export class Game {
     if (factor == null) return { ok: false, reason: `${def.name} won't grow in ${schoolName(soil)} soil. It likes ${schoolName(def.school)} soil, or plain ground.` };
     return { ok: true, factor };
   }
-  /** A tile with something on it that a plant can still go on (a raised bed: see decor). */
-  hostsPlant() { return false; }
+  /** A tile with something on it that a plant can still go on: an empty raised bed. */
+  hostsPlant(t) {
+    const d = this.decorAt(t);
+    return !!d && !!this.decorKind(this.decorDef(d.decorID)).holdsPlant && !this.plantAt(t) && !this.landmarkAt(t) && !this.sceneryAt(t) && !this.forageAt(t);
+  }
 
-  /** Growth speed right now, as a multiple of the plant's normal speed. Later systems multiply in theirs. */
+  /**
+   * Growth speed right now, as a multiple of the plant's normal speed: its soil, then its companions
+   * (speed rules, up to companions.maxSpeed) and any relic ornament of its school close by.
+   */
   growthRate(p) {
     const def = this.plantDef(p.plantID);
-    return def ? (this.soilFactor(def, this.soilAt(p.tile)) ?? this.gcfg.soil?.plain ?? 0.6) : 0;
+    if (!def) return 0;
+    let r = this.soilFactor(def, this.soilAt(p.tile)) ?? this.gcfg.soil?.plain ?? 0.6;
+    const c = this.gcfg.companions || {};
+    const speeds = this.activeCompanions(p).filter((x) => x.rule.effect === 'speed').length;
+    if (speeds) r *= Math.min(c.maxSpeed ?? 1.5, Math.pow(c.speed ?? 1.25, speeds));
+    r *= this.ornamentFactor(p);
+    return r;
+  }
+
+  /** Plants in the 8 tiles around a tile. */
+  neighbours(t) {
+    return this.state.plants.filter((q) => !sameTile(q.tile, t) && Math.abs(q.tile.x - t.x) <= 1 && Math.abs(q.tile.y - t.y) <= 1);
+  }
+  /** A plant's companion rules that hold right now: [{ rule, index, partner }]. */
+  activeCompanions(p) {
+    const def = this.plantDef(p.plantID);
+    if (!def || !(def.companions || []).length) return [];
+    const near = this.neighbours(p.tile);
+    const out = [];
+    def.companions.forEach((rule, index) => {
+      const partner = near.find((q) => q.plantID === rule.with && q !== p);
+      if (partner) out.push({ rule, index, partner });
+    });
+    return out;
+  }
+  companionKey(plantID, index) { return `companion:${plantID}:${index}`; }
+
+  /** Relic ornaments: plants of the relic's school within its radius (a 3x3) grow faster. */
+  ornamentFactor(p) {
+    const def = this.plantDef(p.plantID), k = (this.gcfg.decor?.kinds || {}).ornament || {};
+    const r = k.radius ?? 1;
+    const near = this.state.decor.placed.some((d) => {
+      const dd = this.decorDef(d.decorID);
+      return dd && dd.kind === 'ornament' && dd.school === def.school && Math.abs(d.tile.x - p.tile.x) <= r && Math.abs(d.tile.y - p.tile.y) <= r;
+    });
+    return near ? (k.schoolSpeed ?? 1.2) : 1;
   }
   /** Growth needed for the current cycle (ms of normal-speed growth). */
   growNeed(p) { return p.need || Math.max(1, (this.plantCfg(p.plantID).growHours || 8) * HOUR); }
@@ -547,8 +589,14 @@ export class Game {
     return p;
   }
 
-  /** What a harvest gives (before seeds): the produce count. Later systems add bonuses. */
-  harvestYield(p) { return this.plantCfg(p.plantID).yield || 1; }
+  /** What a harvest gives (before seeds): the produce count, plus companions' and a raised bed's extra. */
+  harvestYield(p) {
+    let n = this.plantCfg(p.plantID).yield || 1;
+    n += this.activeCompanions(p).filter((x) => x.rule.effect === 'yield').length * ((this.gcfg.companions || {}).yield ?? 1);
+    const d = this.decorAt(p.tile);
+    if (d) n += this.decorKind(this.decorDef(d.decorID)).yield || 0;
+    return n;
+  }
   /** The produce item a harvest gives (a colour variety has its own). */
   produceOf(p) { return this.plantDef(p.plantID)?.item; }
 
@@ -563,6 +611,7 @@ export class Game {
     this.rebase(now);
     const def = this.plantDef(p.plantID), cfg = this.plantCfg(p.plantID);
     const extras = this.harvestExtras(p, now);
+    const companions = this.activeCompanions(p);
     const pending = [{ item: this.produceOf(p), count: this.harvestYield(p) }];
     const [always, chance] = cfg.seeds || [1, 0.5];
     const seeds = (always || 0) + (this.rng.chance(chance || 0) ? 1 : 0);
@@ -570,6 +619,10 @@ export class Game {
     for (const x of extras) pending.push(x);
     const results = this.grant(pending.filter((x) => x.item && x.count > 0));
     const firstHarvest = this.discover('plant:' + p.plantID);
+    // Companion rules active at this harvest are discovered (shown on the plant's Field Guide page).
+    for (const c of companions) {
+      if (this.discover(this.companionKey(p.plantID, c.index))) this.events.push({ type: 'companionFound', plantID: p.plantID, with: c.rule.with, effect: c.rule.effect, tile: p.tile });
+    }
     p.harvests++;
     let regrows = false;
     if (def.perennial && cfg.regrowHours) {
@@ -646,8 +699,6 @@ export class Game {
   storePlants(now) {
     return this.content.plantList.filter((p) => p.source !== 'gift').map((p) => ({ def: p, price: this.plantCfg(p.id).packet || 0, locks: this.plantLocks(p, now) }));
   }
-  /** What keeps a plant's packets off the shelf (later systems: beauty tiers, commissions). */
-  plantLocks() { return []; }
   buyPacket(plantID, now, n = 1) {
     const row = this.storePlants(now).find((x) => x.def.id === plantID);
     if (!row) throw new GameError("The Store doesn't sell those.");
@@ -737,7 +788,6 @@ export class Game {
     return locks.concat(this.extraLocks(req, now));
   }
   /** Locks from later systems (beauty tiers). */
-  extraLocks() { return []; }
   /** A listing or request right now: its price and items (have / need), what still locks it, and whether it can be done. */
   requestStatus(req, now) {
     const locks = this.requestLocks(req, now);
@@ -780,8 +830,12 @@ export class Game {
   }
   get expansionTier() { return this.state.unlocks.expansions || 0; }
 
-  // ---- decor (Content/cosmetics.json)
-  decorDef(id) { return (this.content.cosmetics || []).find((c) => c.id === id) || null; }
+  // ---- decor (Content/cosmetics.json, and relic ornaments from relics.json)
+  decorDef(id) { return this.content.decorByID[id] || null; }
+  /** What a decor's kind does (tuning.garden.decor.kinds): beauty, ground, holdsPlant, yield, glow... */
+  decorKind(def) { return (def && ((this.gcfg.decor || {}).kinds || {})[def.kind]) || {}; }
+  /** A raised bed with a plant in it can't be moved or put away until the plant is harvested or dug up. */
+  decorBusy(d) { return !!this.decorKind(this.decorDef(d.decorID)).holdsPlant && !!this.plantAt(d.tile); }
   placeDecor(id, tile) {
     if (!(this.state.decor.owned[id] > 0)) throw new GameError("You don't have that.");
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
@@ -797,6 +851,7 @@ export class Game {
     const d = this.state.decor.placed.find((x) => x.id === placedID);
     if (!d) throw new GameError('Unknown decoration.');
     if (sameTile(d.tile, tile)) return d;
+    if (this.decorBusy(d)) throw new GameError('Something is growing in it. Harvest it first.');
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
     d.tile = { ...tile };
@@ -806,6 +861,7 @@ export class Game {
   removeDecor(placedID) {
     const i = this.state.decor.placed.findIndex((x) => x.id === placedID);
     if (i < 0) throw new GameError('Unknown decoration.');
+    if (this.decorBusy(this.state.decor.placed[i])) throw new GameError('Something is growing in it. Harvest it first.');
     const [d] = this.state.decor.placed.splice(i, 1);
     this.state.decor.owned[d.decorID] = (this.state.decor.owned[d.decorID] || 0) + 1;
     this.rebase(this.state.lastUpdated);
@@ -819,6 +875,47 @@ export class Game {
     d.color = ((d.color || 0) + 1) % n;
     return d;
   }
+
+  // ---- beauty (tuning.garden.beauty): never shown as a number
+  /** variety × distinct plants + blooming × plants in bloom or ready + every placed decor's beauty. */
+  beautyScore(now) {
+    const b = this.gcfg.beauty || {};
+    const kinds = new Set(this.state.plants.map((p) => p.plantID)).size;
+    const blooming = this.state.plants.filter((p) => this.isBlooming(p, now)).length;
+    const decor = this.state.decor.placed.reduce((a, d) => a + (this.decorKind(this.decorDef(d.decorID)).beauty || 0), 0);
+    return kinds * (b.variety ?? 3) + blooming * (b.blooming ?? 1) + decor;
+  }
+  get beautyTiers() { return (this.gcfg.beauty || {}).tiers || [{ name: 'Bare', at: 0 }]; }
+  /** The tier now: { index, name, frac } (frac = how far toward the next tier, for the meter). */
+  beautyTier(now) {
+    const tiers = this.beautyTiers, sc = this.beautyScore(now);
+    let i = 0;
+    while (i + 1 < tiers.length && sc >= tiers[i + 1].at) i++;
+    const next = tiers[i + 1];
+    return { index: i, name: tiers[i].name, frac: next ? (sc - tiers[i].at) / (next.at - tiers[i].at) : 1 };
+  }
+  get beautyBest() { return this.state.beautyBest || 0; }
+  /** Records the best tier reached (it never relocks) and announces a new one. */
+  updateBeauty(now) {
+    const t = this.beautyTier(now);
+    if (t.index > this.beautyBest) {
+      const from = this.beautyBest;
+      this.state.beautyBest = t.index;
+      this.discover('beauty:' + t.index);
+      this.events.push({ type: 'beautyTier', index: t.index, name: t.name, from, opens: this.opensAtBeauty(from, t.index) });
+    }
+    return t;
+  }
+  /** Store items that a beauty tier in (from, to] puts on the shelf: plant names and listing names. */
+  opensAtBeauty(from, to) {
+    const out = [];
+    for (const p of this.content.plantList) { const b = this.plantCfg(p.id).beauty; if (p.source === 'store' && b > from && b <= to) out.push(`${p.name} seeds`); }
+    for (const r of this.content.requests || []) { const b = (r.requires || {}).beauty; if (b > from && b <= to) out.push(this.decorDef(r.reward.id)?.name || r.name); }
+    return out;
+  }
+  beautyLock(need) { return need > this.beautyBest ? [{ type: 'beauty', need, name: (this.beautyTiers[need] || {}).name || `tier ${need}` }] : []; }
+  extraLocks(req) { return this.beautyLock((req.requires || {}).beauty || 0); }
+  plantLocks(p) { return p.source === 'store' ? this.beautyLock(this.plantCfg(p.id).beauty || 0) : []; }
 
   // ---- naming
   get generatedName() {
@@ -863,6 +960,8 @@ export class Game {
     return this.state.plants.length;
   }
   devGiveCoins(n) { this.state.coins += n; }
+  devGiveOrnaments() { for (const r of this.content.relicList) this.state.decor.owned[r.id] = (this.state.decor.owned[r.id] || 0) + 1; return this.content.relicList.length; }
+  devSetBeautyBest(i) { this.state.beautyBest = i; }
   devGivePackets(n = 5) { for (const p of this.content.plantList) this.grant([{ item: 'packet.' + p.id, count: n }]); return this.content.plantList.length; }
   devGiveAmendments(n = 5) { for (const a of this.content.amendmentList) this.grant([{ item: a.id, count: n }]); return this.content.amendmentList.length; }
   devForageNow(now) {
@@ -901,6 +1000,9 @@ export class Content {
       this.addItem({ id: 'packet.' + p.id, category: 'packet', name: `${p.name} seeds`, rarity: item.rarity, sprite: 'packet.' + p.id, plant: p.id, school: p.school, text: p.packet, inGuide: false });
     }
     // Soil amendments (amendments.json): Bag items that change a tile's soil.
+    // Relics (relics.json) are decor ornaments: kind "ornament", with their school.
+    for (const r of this.relicList) this.cosmetics.push({ id: r.id, name: r.name, sprite: r.sprite, size: [1, 1], kind: 'ornament', school: r.school, text: r.inscription });
+    this.decorByID = Object.fromEntries(this.cosmetics.map((c) => [c.id, c]));
     this.amendmentList = bundle.amendments || [];
     for (const a of this.amendmentList) this.addItem({ id: a.id, category: 'amendment', name: a.name, rarity: 'common', sprite: a.id, amend: a.school, text: a.text, inGuide: false });
   }

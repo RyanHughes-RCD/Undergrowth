@@ -58,6 +58,29 @@ def decor():
             c.set(int(x + rx * 0.4), int(y + 0.5), 2)
     sprite("decor.stepping-stones", STONE, stones)
 
+    # Ground-level pieces (raised bed, gravel path) fill their tile and are drawn under what stands on them.
+    def raised_bed(c, f):
+        c.rect(1, 4, 14, 14, 3)                       # plank frame
+        c.rect(1, 4, 14, 4, 4); c.rect(1, 14, 14, 14, 2)
+        c.rect(3, 6, 12, 12, 5)                       # deep soil
+        for (x, y) in ((4, 7), (9, 8), (6, 11), (11, 10)):
+            c.set(x, y, 6)
+        c.set(1, 9, 2); c.set(14, 9, 2)
+    sprite("decor.raised-bed", WOOD + ["#3e2b22", "#5a3c30"], raised_bed, anchor=(8, 13))
+
+    def gravel(c, f):
+        import random
+        rng = random.Random(7)
+        c.ellipse(8, 8, 7.4, 6.6, 3)                  # a soft, irregular patch of gravel
+        for (x, y) in ((1, 4), (14, 11), (3, 14), (12, 2)):
+            c.set(x, y, 0)
+        for _ in range(26):
+            x, y = rng.randint(1, 14), rng.randint(1, 14)
+            c.set(x, y, rng.choice((2, 4)))
+        for (x, y) in ((4, 5), (11, 9), (7, 12)):
+            c.rect(x, y, x + 1, y, 5); c.set(x, y - 1, 4)
+    sprite("decor.gravel-path", ["#857a68", "#a89c88", "#c8bca8", "#6e6e78"], gravel, anchor=(8, 13))
+
     def planter(c, f):
         c.rect(3, 9, 12, 14, 3)
         c.rect(3, 9, 12, 9, 4)

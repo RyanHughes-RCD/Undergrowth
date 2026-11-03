@@ -29,7 +29,7 @@
   }
  },
  "garden": {
-  "_about": "The garden. Plants (Content/plants.json) grow through stages (seed, sprout, bud, bloom, ready) over growHours on their own school's soil, timed from timestamps so time away counts. soil: growth speed on the plant's own soil (preferred), on plain soil (plain); on another school's soil it can't be planted at all. stages: the share of growth at which sprout, bud and bloom begin; ready at 1. A perennial regrows from the bud stage in regrowHours after each harvest. Per plant (plants): growHours, regrowHours (perennials), yield (produce per harvest), seeds [packets always returned, chance of one more], sell (coins per produce), packet (coins per seed packet in the Store). amendments: Store price per bag (plain loam is cheaper). sellByRarity: the price of anything else in the Bag that can be sold (foraged finds). startCoins: coins in a new garden. starterSet: what the opening's tin holds: packets of the chosen school's first starter plant (and one of its second, if it has one), packets of the runner-up school's first starter, and amendments of each. morning: after minAwayHours of real time away a card sums up what's ready; at most one surprise per local day, with surpriseChance, chosen by weight among the kinds possible right now.",
+  "_about": "The garden. Plants (Content/plants.json) grow through stages (seed, sprout, bud, bloom, ready) over growHours on their own school's soil, timed from timestamps so time away counts. soil: growth speed on the plant's own soil (preferred), on plain soil (plain); on another school's soil it can't be planted at all. stages: the share of growth at which sprout, bud and bloom begin; ready at 1. A perennial regrows from the bud stage in regrowHours after each harvest. Per plant (plants): growHours, regrowHours (perennials), yield (produce per harvest), seeds [packets always returned, chance of one more], sell (coins per produce), packet (coins per seed packet in the Store), beauty (Store plants: the beauty tier that puts their packets on the shelf). amendments: Store price per bag (plain loam is cheaper). sellByRarity: the price of anything else in the Bag that can be sold (foraged finds). startCoins: coins in a new garden. starterSet: what the opening's tin holds: packets of the chosen school's first starter plant (and one of its second, if it has one), packets of the runner-up school's first starter, and amendments of each. morning: after minAwayHours of real time away a card sums up what's ready; at most one surprise per local day, with surpriseChance, chosen by weight among the kinds possible right now.",
   "startCoins": 20,
   "soil": {
    "preferred": 1,
@@ -147,7 +147,148 @@
     ],
     "sell": 9,
     "packet": 14
+   },
+   "velvet-shank": {
+    "growHours": 10,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 6,
+    "packet": 9,
+    "beauty": 1
+   },
+   "lavender": {
+    "growHours": 16,
+    "regrowHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 8,
+    "packet": 18,
+    "beauty": 1
+   },
+   "hosta": {
+    "growHours": 18,
+    "regrowHours": 14,
+    "yield": 2,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 11,
+    "packet": 20,
+    "beauty": 2
+   },
+   "glassbell": {
+    "growHours": 14,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 8,
+    "packet": 12,
+    "beauty": 2
+   },
+   "honey-mushroom": {
+    "growHours": 12,
+    "yield": 4,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 6,
+    "packet": 12,
+    "beauty": 3
+   },
+   "mistbell": {
+    "growHours": 18,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 10,
+    "packet": 15,
+    "beauty": 3
    }
+  },
+  "companions": {
+   "_about": "Each plant has a few neighbour rules (Content/plants.json companions): when a named plant grows in one of its 8 neighbouring tiles (at any stage), a speed rule makes it grow speed times as fast and a yield rule adds `yield` produce to its harvest. Several speed rules don't stack beyond maxSpeed. A rule is discovered (and shown on the plant's Field Guide page) the first time it is active at a harvest.",
+   "speed": 1.25,
+   "yield": 1,
+   "maxSpeed": 1.5
+  },
+  "decor": {
+   "_about": "What decor does, by kind (Content/cosmetics.json kind; relic ornaments are kind ornament). beauty: added to the garden's beauty while placed. ground: drawn flat under everything (paths). holdsPlant: a plant can be planted on it (a raised bed), and gets `yield` extra produce. glow: lights up at dusk and night. Ornaments (Content/relics.json): plants of the relic's school within `radius` tiles (a 3x3) grow schoolSpeed times as fast.",
+   "kinds": {
+    "path": {
+     "beauty": 1,
+     "ground": true
+    },
+    "fence": {
+     "beauty": 1
+    },
+    "bed": {
+     "beauty": 2,
+     "holdsPlant": true,
+     "yield": 1,
+     "ground": true
+    },
+    "planter": {
+     "beauty": 3
+    },
+    "lantern": {
+     "beauty": 2,
+     "glow": true
+    },
+    "bench": {
+     "beauty": 2
+    },
+    "feature": {
+     "beauty": 3
+    },
+    "ornament": {
+     "beauty": 4,
+     "schoolSpeed": 1.2,
+     "radius": 1
+    }
+   }
+  },
+  "beauty": {
+   "_about": "Garden beauty, never shown as a number: variety x each distinct plant growing in the garden, blooming x each plant in bloom or ready, plus every placed decor's beauty (decor.kinds). It shows as a named tier with a leaf meter. The best tier ever reached opens Store items (plants' `beauty`, listings' 'Needs beauty tier') and never relocks.",
+   "variety": 3,
+   "blooming": 1,
+   "tiers": [
+    {
+     "name": "Bare",
+     "at": 0
+    },
+    {
+     "name": "Tended",
+     "at": 8
+    },
+    {
+     "name": "Pleasant",
+     "at": 20
+    },
+    {
+     "name": "Lovely",
+     "at": 36
+    },
+    {
+     "name": "Charming",
+     "at": 56
+    },
+    {
+     "name": "Enchanting",
+     "at": 80
+    }
+   ]
   }
  },
  "forage": {

@@ -2,7 +2,7 @@
 
 A cozy top-down pixel-art garden in a forest clearing, framed by a shrub treeline around an old log. The design for the garden (plant, grow overnight, harvest) is in `design/garden_rework.md`.
 
-> **Work in progress:** the rework is being built in phases. Phase 1 removed the old systems (creatures, geodes, relic fields, wild spawning, the Spirit Well). Phase 2 (this commit) adds the core loop: soil, seed packets, growth, harvest, coins and the morning check. Companions, decor effects and beauty come in phase 3, and long-term goals in phase 4.
+> **Work in progress:** the rework is being built in phases. Phase 1 removed the old systems (creatures, geodes, relic fields, wild spawning, the Spirit Well). Phase 2 added the core loop: soil, seed packets, growth, harvest, coins and the morning check. Phase 3 (this commit) adds companions, decor that does something, relic ornaments and garden beauty. Long-term goals come in phase 4.
 
 ## Running it
 
@@ -128,6 +128,52 @@ Eight plants from the catalogue, at least one per school, fungi and flowers mixe
   - An amendment costs about two packets, since it lasts.
 - **The first morning:** the starter set fills about 5 tiles. The first harvest sells for about 30–60 coins, which pays for the next round of seeds and a little soil.
 
+### Store plants
+
+Six more plants, one per school. Their packets come into the Store as the garden's beauty reaches a tier (`garden.plants.<id>.beauty`).
+
+| Plant | School | Kind | Grows | Regrows | Yield | Sells | Packet | Opens at |
+|---|---|---|---|---|---|---|---|---|
+| Velvet Shank | Spore | fungus | 10h | | 3 | 6 | 9 | Tended |
+| Lavender | Bloom | flower, perennial | 16h | 12h | 3 | 8 | 18 | Tended |
+| Hosta | Verdure | leafy, perennial | 18h | 14h | 2 | 11 | 20 | Pleasant |
+| Glassbell | Shimmer | flower | 14h | | 3 | 8 | 12 | Pleasant |
+| Honey Mushroom | Glow | fungus | 12h | | 4 | 6 | 12 | Lovely |
+| Mistbell | Spirit | flower | 18h | | 3 | 10 | 15 | Lovely |
+
+They pay a little more per tile-hour than the starters (about 1.5–1.8), which is the reward for a lovelier garden.
+
+## Companions, decor and beauty (web)
+
+- **Companion planting:** each plant has two neighbour rules (`companions` in `plants.json`). When the named plant grows in one of its 8 neighbouring tiles, at any stage:
+  - a **speed** rule makes it grow ×1.25 (`garden.companions.speed`; several stack, up to ×1.5);
+  - a **yield** rule adds 1 produce at harvest.
+  - Rules pair plants across schools on purpose (Marigold and Cornflower, Ink Cap and Wisp Cap, Lantern Flower and Foxfire Button…), so planning a mixed bed pays.
+  - **Discovery:** a rule is found the first time it's active at a harvest. A toast says so, and the plant's Field Guide page then lists it under "Good neighbours"; unfound rules stay hidden there.
+  - Before that, a plant's card only says "It seems happy here."
+- **Decor does something** (by kind, `garden.decor.kinds`; the kind is a column in the Offerings sheet):
+
+  | Kind | Pieces | Beauty | What else |
+  |---|---|---|---|
+  | path | Stepping stones, Gravel path | 1 | lies flat; things are drawn over it |
+  | fence | Twig fence | 1 | |
+  | bed | Raised bed | 2 | holds a plant (plant in it like a tile; its soil is the tile's) and gives +1 produce |
+  | planter | Flower planter | 3 | |
+  | lantern | Glow lantern, Crystal lamp, Mushroom lamp | 2 | glows at dusk and through the night |
+  | bench | Mossy bench, Log stool | 2 | |
+  | feature | Birdbath, Fairy ring, Wind chime, Root arch, Pebble cairn | 3 | |
+  | ornament | the six relics | 4 | plants of its school in the 3×3 around it grow ×1.2 |
+
+  - Decor is placed, moved and put away by hand. A raised bed with a plant in it stays put until it's harvested or dug up.
+  - Tapping a placed piece says what it does.
+- **Relics are ornaments now:** the six relics (`Content/relics.json`, one per school) are decor of kind `ornament`. They're earned by completing a school's collection (phase 4); developer mode can give them.
+- **Garden beauty** (`garden.beauty`): 3 × each distinct plant growing + 1 × each plant in bloom or ready + every placed decor's beauty.
+  - It's never shown as a number: the HUD shows a named tier with a leaf meter. The tiers are Bare, Tended (8), Pleasant (20), Lovely (36), Charming (56) and Enchanting (80).
+  - The best tier ever reached is kept (`state.beautyBest`) and never relocks.
+  - Reaching a tier shows a gentle card naming what it put in the Store. Tiers open Store plants and some decor ('Needs beauty tier' in the Offerings sheet): Flower planter and Wind chime at Tended, Birdbath and Mushroom lamp at Pleasant, Fairy ring and Crystal lamp at Lovely, Root arch at Charming.
+  - Locked items show in the Store as silhouettes ("Opens with a lovely garden").
+  - A first bed of two or three kinds with a bench reaches Tended on day one. Pleasant takes about five kinds or a few pieces of decor, Lovely most of the clearing, and Charming or Enchanting need Room to grow.
+
 ## The Plant & Fungi Catalogue
 
 `design/Undergrowth_Catalogue.xlsx` lists every plant and fungus: name, category (Mushroom or Plant), rarity, school (blank = plain ground) and a Field Guide description. It replaces the old spawn table, whose creatures, geodes, gems and spawn rules were removed.
@@ -170,6 +216,7 @@ A separate test garden for trying anything without touching your real save.
 - **Tools:**
   - **Garden:** grow all plants now; +100 or +1000 coins; give any seed packet or amendment, or 5 of each.
   - **Plant timers:** tap a plant to see its exact progress, rate, time to ready and stage times.
+  - The six relic ornaments; see the beauty score and set the best beauty tier reached.
   - Fill the Field Guide; open the whole forest; give any item or decor.
   - Complete or reset Store listings; open the seed tin as any school.
   - Grow forage finds now; save and load named setups.

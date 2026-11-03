@@ -165,11 +165,17 @@ class App {
   onEvent(e) {
     const ui = this.ui;
     if (e.type === 'freshGarden') ui.freshGardenCard(e);
+    else if (e.type === 'beautyTier') ui.beautyCard(e);
+    else if (e.type === 'companionFound') {
+      const g = this.game;
+      ui.toast(`The ${g.plantDef(e.plantID)?.name} did well beside the ${g.plantDef(e.with)?.name}. It's in your Field Guide.`, 'ui.icon.heart');
+    }
     else if (e.type === 'expansion') { this.view.highlight(e.tiles, 4, '170,255,150'); ui.toast(ui.story('messages.expansion')); }
   }
 
   /** Call after any change. `persist=false` for pure UI changes. */
   changed(persist = true) {
+    this.game.updateBeauty(this.game.now());
     this.view.sync();
     this.ui.render();
     this.processEvents();

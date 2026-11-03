@@ -211,7 +211,7 @@ export class ForestView {
     for (const d of s.decor.placed) {
       const def = g.decorDef(d.decorID);
       if (!def) continue;
-      objs.push({ sprite: def.sprite, variant: decorVariant(def, d.color), ...at(d.tile), tile: d.tile, kind: 'decor', key: d.id, phase: hash32(d.tile.x, d.tile.y, 5) % 1000 / 250, sortY: def.ground ? at(d.tile).y - TS : undefined });
+      objs.push({ sprite: def.sprite, variant: decorVariant(def, d.color), ...at(d.tile), tile: d.tile, kind: 'decor', key: d.id, phase: hash32(d.tile.x, d.tile.y, 5) % 1000 / 250, sortY: g.decorKind(def).ground ? at(d.tile).y - TS : undefined });
     }
     for (const f of s.forage.finds) {
       const def = this.app.content.items[f.itemID];
@@ -395,7 +395,27 @@ export class ForestView {
       ctx.strokeRect(x * TS + 1.5, y * TS + 1.5, TS - 3, TS - 3);
     }
   }
-  drawOverlay() {}
+  /** Over the lit scene: lanterns glow at dusk and night (decor kinds with glow). */
+  drawOverlay(ctx, view, t) {
+    const g = this.game, phase = g.dayPhase(g.now());
+    if (phase !== 'dusk' && phase !== 'night') return;
+    const strength = phase === 'night' ? 1 : 0.6;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const d of g.state.decor.placed) {
+      const def = g.decorDef(d.decorID);
+      if (!def || !g.decorKind(def).glow) continue;
+      const c = centre(d.tile.x, d.tile.y), y = c.y - 4;
+      if (c.x < view.minX - 40 || c.x > view.maxX + 40 || y < view.minY - 40 || y > view.maxY + 40) continue;
+      const flicker = 0.9 + 0.1 * Math.sin(t * 3 + d.tile.x);
+      const grad = ctx.createRadialGradient(c.x, y, 1, c.x, y, 26);
+      grad.addColorStop(0, `rgba(255,214,140,${0.35 * strength * flicker})`);
+      grad.addColorStop(1, 'rgba(255,214,140,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(c.x - 26, y - 26, 52, 52);
+    }
+    ctx.restore();
+  }
 
   dustAt(tile) { (this.dust = this.dust || []).push({ x: tile.x * TS + TS / 2, y: tile.y * TS + TS / 2 + FOOT, start: performance.now() }); }
 
