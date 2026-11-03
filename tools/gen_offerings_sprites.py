@@ -149,8 +149,7 @@ SCHOOLS = {   # school: (colour, light) for the relic ornaments
 }
 
 def relics():
-    """Relics (Resources/Content/relics.json): one carved pebble per school in its colour
-    (relic.<school>.common), and the unknown relic of the opening (relic.unknown)."""
+    """Relics (Resources/Content/relics.json): one carved pebble per school in its colour (relic.<school>.common)."""
     STONE_P = ["#5a5468", "#8a8498", "#bcb6c8"]
 
     def pebble(c, f):                       # common: a smooth pebble with a carved mark
@@ -160,11 +159,6 @@ def relics():
     for school, (col, light) in SCHOOLS.items():
         sprite(f"relic.{school}.common", STONE_P + [col, light], pebble, tags=("relic",))
 
-    def unknown(c, f):                      # the starter relic before its school is chosen
-        c.ellipse(8, 10, 5, 4.4, 3); c.ellipse(7, 9, 3, 2.2, 4)
-        c.set(8, 10, 5); c.set(7, 9, 5)
-        c.set(12 - f * 6, 5 + f, 6); c.set(3 + f * 9, 12 - f * 3, 6)
-    sprite("relic.unknown", STONE_P + ["#d8d0f0", "#ffffff"], unknown, frames=2, durations=[0.8, 0.8], tags=("relic",))
 
 
 def board_icon():

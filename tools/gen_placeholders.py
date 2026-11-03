@@ -352,6 +352,8 @@ if __name__ == "__main__":
     gen_content_sprites.main()
     import gen_ui  # pixel-art UI icons and effects
     gen_ui.main()
+    import gen_garden_sprites  # seed packets, soil amendments, the seed tin, the coin
+    gen_garden_sprites.main()
     import gen_terrain  # one soil tile pair per garden school
     gen_terrain.main()
     count = sum(len(files) for _, _, files in os.walk(OUT))

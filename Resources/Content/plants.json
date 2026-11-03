@@ -1,0 +1,18 @@
+[
+  {"id": "ink-cap", "item": "mushroom.ink-cap", "school": "spore", "kind": "fungus", "family": "cap", "source": "starter",
+   "packet": "Quick little caps that come up overnight in rich, dark soil."},
+  {"id": "marigold", "item": "plant.marigold", "school": "bloom", "kind": "flower", "family": "daisy", "source": "starter",
+   "packet": "Cheerful orange pom-poms. Easy, bright and quick."},
+  {"id": "wood-sorrel", "item": "plant.wood-sorrel", "school": "verdure", "kind": "leafy", "family": "clover", "source": "starter", "perennial": true,
+   "packet": "Clover-like leaves that grow back after every picking."},
+  {"id": "foxfire-button", "item": "mushroom.foxfire-button", "school": "glow", "kind": "fungus", "family": "cap", "source": "starter",
+   "packet": "Small caps that glow green at night."},
+  {"id": "jewelweed", "item": "plant.jewelweed", "school": "shimmer", "kind": "flower", "family": "bell", "source": "starter",
+   "packet": "Jewel-bright blooms that catch the light."},
+  {"id": "wisp-cap", "item": "mushroom.wisp-cap", "school": "spirit", "kind": "fungus", "family": "cap", "source": "starter",
+   "packet": "A pale little cap that trails a thread of mist."},
+  {"id": "cornflower", "item": "plant.cornflower", "school": "bloom", "kind": "flower", "family": "daisy", "source": "starter",
+   "packet": "Bright blue flowers. Slow to bloom, lovely to sell."},
+  {"id": "lantern-flower", "item": "plant.lantern-flower", "school": "glow", "kind": "flower", "family": "bell", "source": "starter", "perennial": true,
+   "packet": "A bell of light that sways in the dark, and blooms again after picking."}
+]

@@ -1,6 +1,8 @@
 // DOM user interface: HUD, sheets (Bag, Store, Old Log, Field Guide, developer tools), cards and toasts.
 import { SCHOOLS, RARITY_NAMES, rarityIndex, decorVariant, schoolName } from './core.js';
 
+const HOUR = 3600 * 1000;
+
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -85,8 +87,28 @@ export class UI {
     if (this.sheet && withSheet) this.renderSheet();
   }
 
-  /** Extra bits under the garden name (later systems add to it). */
-  hudExtras() { return [' · tap to rename']; }
+  /** Extra bits under the garden name: coins. */
+  hudExtras() { return [' · ', ic('coin', 1), ` ${this.game.state.coins}`]; }
+
+  /** "about 3 hours", "less than an hour", "by tomorrow" for a time ahead (never exact for players). */
+  roughly(ms) {
+    const hrs = ms / HOUR;
+    if (hrs <= 0) return 'now';
+    if (hrs < 1) return 'within the hour';
+    if (hrs < 1.5) return 'in about an hour';
+    if (hrs < 20) return `in about ${Math.round(hrs)} hours`;
+    return hrs < 36 ? 'in about a day' : `in about ${Math.round(hrs / 24)} days`;
+  }
+  /** "A Marigold", "An Ink Cap". */
+  aName(name) { return `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name}`; }
+  /** Exact timer for the developer plant inspector. */
+  timer(ms) { return duration(Math.max(0, ms) / 1000); }
+  plantName(p) { const v = p.variety && this.game.varietyDef ? this.game.varietyDef(p.variety) : null; return v ? v.name : (this.game.plantDef(p.plantID)?.name || 'Plant'); }
+  stageName(stage) { return { seed: 'Just planted', sprout: 'Sprouting', bud: 'In bud', bloom: 'Blooming', ready: 'Ready to harvest' }[stage] || stage; }
+  growHoursText(plantID) {
+    const c = this.game.plantCfg(plantID);
+    return `${c.growHours}h on its own soil${c.regrowHours ? `, regrows in ${c.regrowHours}h` : ''}`;
+  }
 
   navButton(icon, label, badge, onclick) {
     return h('button', { class: 'nav-btn', onclick }, ic(icon, 2), h('span', {}, label), badge > 0 ? h('span', { class: 'badge' }, badge) : null);
@@ -94,9 +116,12 @@ export class UI {
 
   modeBanner() {
     const m = this.mode;
+    const g = this.game, left = (id) => g.state.inventory[id] || 0;
     const text = {
-      decor: () => `Tap an open tile to place the ${this.game.decorDef(m.decorID)?.name || 'decoration'}`,
+      decor: () => `Tap an open tile to place the ${g.decorDef(m.decorID)?.name || 'decoration'}`,
       decorMove: () => 'Tap an open tile to move it there',
+      plant: () => `Tap a lit tile to plant ${this.content.items[m.itemID]?.name || 'seeds'} (${left(m.itemID)} left)`,
+      amend: () => `Tap a tile to spread ${this.content.items[m.itemID]?.name || 'it'} (${left(m.itemID)} left)`,
     }[m.type];
     return h('div', { class: 'banner' }, h('span', {}, text ? text() : this.modeText(m)),
       h('button', { class: 'btn small grey', onclick: () => { this.mode = null; this.app.changed(false); } }, m.done ? 'Done' : 'Cancel'));
@@ -111,8 +136,58 @@ export class UI {
         h('button', { class: 'x', onclick: () => { this.selectedTile = null; this.app.changed(false); } }, ic('close', 1))),
       this.tileBody(tile));
   }
-  tileTitle(tile) { return this.game.inClearing(tile) ? 'Open ground' : 'The treeline'; }
-  tileBody(tile) { return this.game.inClearing(tile) ? h('p', { class: 'sub' }, 'Soft, open ground.') : h('p', { class: 'sub' }, 'Dense shrubs. Room to grow opens more of the clearing.'); }
+  tileTitle(tile) {
+    const g = this.game;
+    if (!g.inClearing(tile)) return 'The treeline';
+    const p = g.plantAt(tile);
+    if (p) return this.plantName(p);
+    const soil = g.soilAt(tile);
+    return soil ? `${schoolName(soil)} soil` : 'Plain soil';
+  }
+  tileBody(tile) {
+    const g = this.game, now = g.now(), a = this.app;
+    if (!g.inClearing(tile)) return h('p', { class: 'sub' }, 'Dense shrubs. Room to grow (in the Store) opens more of the clearing.');
+    const p = g.plantAt(tile);
+    const soil = g.soilAt(tile);
+    if (p) {
+      const stage = g.stageOf(p, now), def = g.plantDef(p.plantID);
+      const slow = !soil;
+      return [
+        h('div', { class: 'row gap' }, h('div', { class: 'thumb small' }, this.sprites.element(this.app.view.plantSprite(p, now), this.app.view.plantVariant(p), 2)),
+          h('div', { class: 'grow' }, h('b', {}, this.stageName(stage)),
+            h('div', { class: 'sub' }, stage === 'ready' ? 'Tap it to harvest.' : `Ready ${this.roughly(g.readyAt(p) - now)}.`))),
+        slow ? h('p', { class: 'sub' }, `Growing slowly on plain soil. ${def.name} likes ${schoolName(def.school)} soil.`) : null,
+        ...this.plantNotes(p, now),
+        this.app.devMode && this.plantInspector ? this.inspectPlant(p, now) : null,
+        h('div', { class: 'row end gap' }, stage === 'ready' ? h('button', { class: 'btn green small', onclick: () => a.harvestAt(tile) }, 'Harvest')
+          : h('button', { class: 'btn grey small', onclick: () => { if (confirm(`Dig up the ${def.name}? It will be lost.`)) a.clearPlant(p.id); } }, 'Dig up')),
+      ];
+    }
+    const packets = Object.keys(g.state.inventory).filter((id) => this.content.items[id]?.category === 'packet' && g.canPlant(this.content.items[id].plant, tile).ok);
+    const amends = Object.keys(g.state.inventory).filter((id) => this.content.items[id]?.category === 'amendment' && (this.content.items[id].amend || null) !== soil);
+    const blocked = !g.isFree(tile) && !g.hostsPlant(tile);
+    return [
+      h('p', { class: 'sub' }, soil ? `${schoolName(soil)} plants grow well here. Other plants won't take.` : 'Anything grows here, but slowly. Plants grow best in their own soil.'),
+      blocked ? null : packets.length ? h('div', { class: 'row gap wrap' }, packets.map((id) => h('button', { class: 'btn green small', title: this.content.items[id].name, onclick: () => a.plantAt(id, tile) },
+        this.sprites.element(this.content.items[id].sprite, null, 1), ' ', this.content.items[id].name.replace(/ seeds$/, ''))))
+        : h('p', { class: 'sub' }, 'No seeds in your Bag that grow in this soil.'),
+      blocked || !amends.length ? null : h('div', { class: 'row gap wrap' }, h('span', { class: 'sub' }, 'Change the soil: '), amends.map((id) => h('button', { class: 'btn small', title: this.content.items[id].name, onclick: () => a.amendAt(id, tile) },
+        this.sprites.element(this.content.items[id].sprite, null, 1)))),
+    ];
+  }
+  /** Extra lines on a growing plant's card (later systems: companions, relics). */
+  plantNotes() { return []; }
+  /** Developer plant inspector: exact timers and rates. */
+  inspectPlant(p, now) {
+    const g = this.game;
+    const row = (k, v) => h('div', { class: 'inspect-kv' }, h('span', {}, k), h('b', {}, v));
+    return h('div', { class: 'dev-note' },
+      row('Progress', `${(g.progress(p, now) * 100).toFixed(1)}% (${g.stageOf(p, now)}, ${p.cycle})`),
+      row('Rate', `×${p.rate.toFixed(3)}`),
+      row('Ready in', g.isReady(p, now) ? 'ready' : this.timer(g.readyAt(p) - now)),
+      ...['sprout', 'bud', 'bloom'].map((st) => row(`${st} at`, g.stageAt(p, g.gcfg.stages[st]) <= now ? 'passed' : this.timer(g.stageAt(p, g.gcfg.stages[st]) - now))),
+      row('Planted', new Date(p.plantedAt).toLocaleString()), row('Harvests', String(p.harvests)));
+  }
 
   toast(text, sprite) {
     // A message that just appeared gets its turn: later ones wait (a few at most) instead of replacing it.
@@ -201,11 +276,17 @@ export class UI {
 
   // -------------------------------------------------------------- Bag
 
-  /** Bag sections, in order. Later systems add theirs in front. */
-  bagSections() { return ['plant', 'mushroom']; }
-  bagSectionTitle(cat) { return { plant: 'Plants and flowers', mushroom: 'Mushrooms' }[cat] || cap(cat); }
-  /** Buttons for one Bag row (later systems add Plant, Use, Sell...). */
-  bagActions() { return []; }
+  /** Bag sections, in order. */
+  bagSections() { return ['packet', 'amendment', 'plant', 'mushroom']; }
+  bagSectionTitle(cat) { return { packet: 'Seed packets', amendment: 'Soil', plant: 'Plants and flowers', mushroom: 'Mushrooms' }[cat] || cap(cat); }
+  /** Buttons for one Bag row: plant seeds, spread soil, sell produce. */
+  bagActions(def, n) {
+    const a = this.app, g = this.game;
+    if (def.category === 'packet') return [h('button', { class: 'btn green small', onclick: () => a.beginPlanting(def.id) }, 'Plant')];
+    if (def.category === 'amendment') return [h('button', { class: 'btn small', onclick: () => a.beginAmend(def.id) }, 'Use')];
+    const price = g.sellPrice(def.id);
+    return price ? [h('button', { class: 'btn small', title: `Sell one for ${price} coins`, onclick: () => a.sellItem(def.id, 1) }, ic('coin', 1), ` ${price}`)] : [];
+  }
 
   bagBody() {
     const g = this.game;
@@ -234,7 +315,11 @@ export class UI {
     return out;
   }
   /** The line under an item's name in the Bag. */
-  bagLine(def) { return def.rarity ? h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, rarityName(def.rarity)) : null; }
+  bagLine(def) {
+    if (def.category === 'packet') return h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[def.school]}` }, `${schoolName(def.school)} soil`), ` · ${this.growHoursText(def.plant)}`);
+    if (def.category === 'amendment') return h('div', { class: 'sub' }, def.text);
+    return def.rarity ? h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, rarityName(def.rarity)) : null;
+  }
 
   // -------------------------------------------------------------- the Old Log and the Store
 
@@ -250,6 +335,7 @@ export class UI {
 
   rewardText(r) {
     const g = this.game;
+    if (r.type === 'coins') return [ic('coin', 1), ` ${r.count} coins`];
     if (r.type === 'cosmetic') return [this.sprites.element(g.decorDef(r.id)?.sprite || 'ui.icon.board', null, 2), ` ${g.decorDef(r.id)?.name || r.id}`];
     if (r.type === 'item') { const d = this.content.items[r.id]; return d ? [this.sprites.element(d.sprite, null, 2), ` ${d.name}${(r.count || 1) > 1 ? ' ×' + r.count : ''}`] : r.id; }
     if (r.type === 'unlock' && r.id === 'expansion') return 'The treeline steps back';
@@ -270,10 +356,23 @@ export class UI {
       st.locks.length ? null : h('div', { class: 'row end' },
         h('button', { class: 'btn ' + (st.ready ? 'green' : 'grey'), disabled: !st.ready, onclick: () => this.app.deliverRequest(r.id) }, label)));
   }
-  priceRows(st) { return st.items.map((x) => this.offerItemRow(x)); }
+  priceRows(st) {
+    return [st.coins ? h('div', { class: 'offer-item' + (this.game.state.coins >= st.coins ? ' met' : '') }, h('div', { class: 'thumb small' }, ic('coin', 2)),
+      h('div', { class: 'grow' }, h('b', {}, `${st.coins} coins`)), h('b', { class: 'count' }, `${Math.min(this.game.state.coins, st.coins)}/${st.coins}`)) : null,
+    ...st.items.map((x) => this.offerItemRow(x))];
+  }
 
-  /** Store listings the player could get right now (a badge on the nav). */
-  storeBadge(now) { return this.game.requestBoard(now).filter((st) => st.ready).length; }
+  /** The Old Log's badge: commissions you could deliver now (later). */
+  storeBadge() { return 0; }
+
+  /** One row in the Store: art, name, a line, and a Buy button with its price. */
+  buyRow(sprite, name, line, price, onBuy, locks = [], variant = null) {
+    const can = !locks.length && this.game.state.coins >= price;
+    return h('div', { class: 'list-row' + (locks.length ? ' locked' : '') },
+      h('div', { class: 'thumb' }, this.sprites.element(sprite, locks.length ? SIL : variant, 3)),
+      h('div', { class: 'grow' }, h('b', {}, locks.length ? '???' : name), locks.length ? h('div', { class: 'sub lock' }, ic('lock', 1), ` Opens with ${this.lockText(locks)}.`) : line),
+      locks.length ? null : h('button', { class: 'btn small ' + (can ? 'green' : 'grey'), disabled: !can, onclick: onBuy }, ic('coin', 1), ` ${price}`));
+  }
 
   /** The Old Log: notes and requests from neighbours, and the way into the Store. */
   oldLogBody() {
@@ -289,14 +388,27 @@ export class UI {
 
   /** Store tabs: [id, label, body()]. */
   storeTabs() {
-    const g = this.game, now = g.now();
-    const board = g.requestBoard(now);
+    const g = this.game, now = g.now(), a = this.app;
+    const board = g.requestBoard(now, ['shop', 'upgrade']);
     const decor = board.filter((st) => st.req.reward.type === 'cosmetic');
     const grow = board.filter((st) => st.req.reward.type === 'unlock' && st.req.reward.id === 'expansion');
+    const sellable = Object.entries(g.state.inventory).filter(([id, n]) => n > 0 && g.sellPrice(id)).map(([id, n]) => ({ def: this.content.items[id], n, price: g.sellPrice(id) }));
     return [
+      ['seeds', 'Seeds', () => [h('p', { class: 'sub' }, 'Seed packets. Each grows best in its own soil.'),
+        ...g.storePlants(now).map((x) => this.buyRow('packet.' + x.def.id, `${x.def.name} seeds`,
+          h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[x.def.school]}` }, `${schoolName(x.def.school)}`), ` · ${this.growHoursText(x.def.id)}`), x.price, () => a.buyPacket(x.def.id), x.locks))]],
+      ['soil', 'Soil', () => [h('p', { class: 'sub' }, 'Spread on a tile to change its soil. It stays that way until you change it.'),
+        ...(this.content.amendmentList || []).map((am) => this.buyRow(am.id, am.name, h('div', { class: 'sub' }, am.text), g.amendmentPrice(am.id), () => a.buyAmendment(am.id)))]],
       ['decor', 'Decor', () => [h('p', { class: 'sub' }, 'Things to set out in your garden. Find them in your Bag under Decor.'),
-        ...decor.filter((st) => !st.done).map((st) => this.offerCard(st, 'Get it')),
-        decor.some((st) => st.done) ? [h('div', { class: 'section' }, 'Owned'), h('p', { class: 'sub' }, decor.filter((st) => st.done).map((st) => st.req.name).join(' · '))] : null]],
+        ...decor.map((st) => { const d = g.decorDef(st.req.reward.id) || {}; return this.buyRow(d.sprite || 'ui.icon.board', d.name || st.req.name, h('div', { class: 'sub' }, d.text || st.req.text || ''), st.coins, () => a.deliverRequest(st.req.id), st.locks); })]],
+      ['sell', 'Sell', () => [h('p', { class: 'sub' }, 'The Store buys what you grow and find.'),
+        sellable.length ? h('div', { class: 'row end' }, h('button', { class: 'btn green small', onclick: () => a.sellAll() }, `Sell everything (${sellable.reduce((t, x) => t + x.n * x.price, 0)} coins)`)) : h('p', { class: 'sub' }, 'Nothing to sell yet. Harvest your plants, then come back.'),
+        ...sellable.map(({ def, n, price }) => h('div', { class: 'list-row' },
+          h('div', { class: 'thumb' }, this.sprites.element(def.sprite, def.variant || null, 3)),
+          h('div', { class: 'grow' }, h('b', {}, def.name), h('div', { class: 'sub' }, [ic('coin', 1), ` ${price} each`])),
+          h('b', {}, `×${n}`),
+          h('button', { class: 'btn small', onclick: () => a.sellItem(def.id, 1) }, 'Sell 1'),
+          n > 1 ? h('button', { class: 'btn small', onclick: () => a.sellItem(def.id, n) }, `All ${n}`) : null))]],
       ['grow', 'Room to grow', () => {
         const next = grow.find((st) => !st.done);
         return [h('p', { class: 'sub' }, 'The treeline steps back a little each time.'), next ? this.offerCard(next, 'Clear it') : h('p', { class: 'sub' }, 'The whole forest is open.')];
@@ -314,7 +426,7 @@ export class UI {
       ...this.storeHeader(), ...body(),
     ];
   }
-  storeHeader() { return []; }
+  storeHeader() { return [h('div', { class: 'row space coins-row' }, h('b', {}, ic('coin', 2), ` ${this.game.state.coins} coins`))]; }
 
   /** A placed decoration: move it, recolour it, or put it back in the Bag. */
   decorBody(placedID) {
@@ -343,7 +455,16 @@ export class UI {
     const items = (cat) => this.content.itemList.filter((i) => i.inGuide !== false && i.category === cat)
       .map((i, idx) => ({ i, idx })).sort((a, b) => rarityIndex(a.i.rarity) - rarityIndex(b.i.rarity) || a.idx - b.idx)
       .map(({ i }) => ({ key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: i.variant || null, rarity: i.rarity, text: i.guideText, school: i.school }));
+    const g = this.game;
+    const garden = () => this.content.plantList.map((p) => {
+      const item = this.content.items[p.item], c = g.plantCfg(p.id);
+      return { key: 'plant:' + p.id, name: p.name, sprite: item.sprite, school: p.school, text: item.guideText,
+        hint: `${schoolName(p.school)} soil. Grow it and harvest it to learn more.`,
+        extra: [h('p', { class: 'sub center' }, `${p.kind === 'fungus' ? 'A fungus' : p.kind === 'leafy' ? 'A leafy plant' : 'A flower'}${p.perennial ? ' that grows back after harvest' : ''}. ${this.growHoursText(p.id)}. Sells for ${c.sell} coins.`),
+          ...this.plantGuideExtra(p)] };
+    });
     return [
+      ['garden', 'Garden', garden],
       ['mushroom', 'Mushrooms', () => items('mushroom')],
       ['plant', 'Plants', () => items('plant')],
       ['visitors', 'Visitors', () => (this.content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, visitor: v }))],
@@ -371,6 +492,8 @@ export class UI {
     ]];
   }
   guideHeader() { return []; }
+  /** More on a garden plant's Field Guide page (later systems: companions, varieties). */
+  plantGuideExtra() { return []; }
 
   entryBody(e) {
     return [
@@ -450,7 +573,20 @@ export class UI {
     const cats = [...new Set(this.content.itemList.map((i) => i.category))];
     const itemSel = h('select', { class: 'select' }, cats.map((cat) => h('optgroup', { label: cap(cat) }, this.content.itemList.filter((i) => i.category === cat).map((i) => h('option', { value: i.id }, i.name)))));
     const decorSel = h('select', { class: 'select' }, (this.content.cosmetics || []).map((c) => h('option', { value: c.id }, c.name)));
+    const packetSel = h('select', { class: 'select' }, this.content.plantList.map((p) => h('option', { value: 'packet.' + p.id }, `${p.name} seeds`)));
+    const amendSel = h('select', { class: 'select' }, (this.content.amendmentList || []).map((x) => h('option', { value: x.id }, x.name)));
     return [
+      ['Garden', [
+        h('div', { class: 'row gap wrap' },
+          b('Grow all plants now', () => a.dev((gm, t) => gm.devGrowAll(t), (n) => `${n} plant(s) ready.`), 'orange'),
+          b('+100 coins', () => a.dev((gm) => gm.devGiveCoins(100), '+100 coins.')),
+          b('+1000 coins', () => a.dev((gm) => gm.devGiveCoins(1000), '+1000 coins.')),
+          b(this.plantInspector ? 'Plant timers: ON' : 'Plant timers: off', () => { this.plantInspector = !this.plantInspector; this.renderSheet(); a.changed(false); }, this.plantInspector ? 'orange' : '')),
+        h('p', { class: 'sub' }, 'Plant timers: tap a plant to see its exact progress, rate and stage times.'),
+        h('div', { class: 'row gap wrap' }, packetSel, b('+1', () => a.debugGive(packetSel.value, 1)), b('+5', () => a.debugGive(packetSel.value, 5)),
+          b('5 of every packet', () => a.dev((gm) => gm.devGivePackets(5), (n) => `+5 of ${n} packets.`))),
+        h('div', { class: 'row gap wrap' }, amendSel, b('+1', () => a.debugGive(amendSel.value, 1)), b('+5', () => a.debugGive(amendSel.value, 5)),
+          b('5 of every soil', () => a.dev((gm) => gm.devGiveAmendments(5), (n) => `+5 of ${n} amendments.`)))]],
       ['Unlock', [h('div', { class: 'row gap wrap' },
         b('Fill Field Guide', () => a.dev((gm) => gm.devFillGuide(), 'Field Guide complete.')),
         b('Whole forest open', () => a.dev((gm, t) => gm.devOpenForest(t), 'The clearing now covers the whole forest.')))]],
@@ -554,6 +690,28 @@ export class UI {
   openingGifts(r) {
     const list = (r.results || []).map((x) => { const d = this.content.items[x.item]; return d ? h('div', { class: 'reward-item' }, this.sprites.element(d.sprite, d.variant || null, 2), ` ${x.count} × ${d.name}`) : null; });
     return list.length ? [h('div', { class: 'gifts' }, list)] : [h('p', { class: 'sub' }, this.story('messages.openingDone'))];
+  }
+
+  /** The morning check: what's ready, what's still growing, and the night's surprise, if any. */
+  morningCard(m, away) {
+    const g = this.game, now = g.now();
+    const phase = g.dayPhase(now);
+    const title = { dawn: 'Good morning', day: 'Welcome back', dusk: 'Good evening', night: 'A quiet night' }[phase];
+    const rows = m.ready.map((r) => {
+      const def = this.game.plantDef(r.plantID), item = this.content.items[def.item];
+      const v = r.variety && g.varietyDef ? g.varietyDef(r.variety) : null;
+      return h('div', { class: 'reward-item' }, this.sprites.element(item.sprite, v ? v.variant : null, 2), ` ${v ? v.name : def.name}${r.count > 1 ? ` ×${r.count}` : ''}, ready to harvest`);
+    });
+    const body = h('div', { class: 'morning' },
+      rows.length ? h('div', { class: 'gifts' }, rows) : h('p', { class: 'sub' }, g.state.plants.length ? 'Nothing is ready yet.' : 'The garden is waiting for seeds.'),
+      m.growing ? h('p', { class: 'sub' }, `${m.growing} still growing. The next is ready ${this.roughly(m.next - now)}.`) : null,
+      m.surprise ? this.surpriseLine(m.surprise) : null);
+    this.celebrate(title, body, null, rows.length ? 'Lovely' : 'OK');
+  }
+  surpriseLine(s) {
+    const g = this.game;
+    if (s.type === 'selfSeed') return h('p', { class: 'surprise' }, ic('sparkle', 1), ` ${this.aName(g.plantDef(s.plantID)?.name || 'seedling')} has seeded itself nearby.`);
+    return null;
   }
 
   /** After an older save was archived: a fresh garden, with the Field Guide kept. */

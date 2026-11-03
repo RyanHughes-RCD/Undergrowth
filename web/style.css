@@ -264,3 +264,15 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .opening .btn.answer { width: 100%; text-align: left; white-space: normal; line-height: 1.35; }
 .clues { margin: 4px 0 0 16px; padding: 0; color: #e6dcc0; line-height: 1.5; }
 .clues li { margin-bottom: 4px; }
+
+/* ---------- garden ---------- */
+.gifts { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 4px 0; }
+.gifts .reward-item { font-size: var(--t-small); }
+.surprise { color: var(--gold); font-size: var(--t-small); display: flex; align-items: center; justify-content: center; gap: 4px; }
+.morning { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.coins-row { margin: 2px 0 8px; }
+.coins-row b { display: inline-flex; align-items: center; gap: 4px; color: var(--gold); }
+.list-row.locked .grow b { color: var(--dim); }
+.inspect-kv { display: flex; justify-content: space-between; gap: 10px; font-size: var(--t-tiny); padding: 1px 0; }
+.inspect-kv b { text-align: right; }
+.dev-note .inspect-kv { color: #ffd8a8; }

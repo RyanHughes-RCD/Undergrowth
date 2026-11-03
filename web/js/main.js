@@ -126,8 +126,24 @@ class App {
     return seen ? Math.max(0, (real - seen) / 3600000) : 0;
   }
 
-  /** Called after the game opens or comes back to the front. Later systems hook the morning card here. */
-  returned() {}
+  /**
+   * After the game opens or comes back to the front: if it was away long enough (real time,
+   * tuning.garden.morning.minAwayHours), the morning card sums up what's ready (and the night's surprise).
+   */
+  returned(awayHours) {
+    const cfg = (this.content.tuning.garden || {}).morning || {};
+    if (!(awayHours >= (cfg.minAwayHours ?? 4))) return;
+    const g = this.game, now = g.now();
+    if (this.game.state.tin) return;               // the first session ends on the tin, not a summary
+    const m = g.morning(now);
+    if (!m.ready.length && !m.surprise && !m.growing) return;
+    const tiles = m.ready.flatMap((r) => r.tiles);
+    if (m.surprise && m.surprise.tile) tiles.push(m.surprise.tile);
+    if (tiles.length) this.view.highlight(tiles, 5, '255,236,140');
+    if (m.surprise && m.surprise.tile) this.view.panTo(m.surprise.tile, 1.2);
+    this.ui.morningCard(m, awayHours);
+    this.changed();
+  }
 
   // ---------------------------------------------------------------- state
 
@@ -194,6 +210,16 @@ class App {
         }
       },
       decorMove: (tile) => { if (this.attempt(() => g.moveDecor(ui.mode.placedID, tile))) { ui.mode = null; this.changed(); } },
+      plant: (tile) => {
+        const id = ui.mode.itemID;
+        if (this.plantAt(id, tile, false) && !(g.state.inventory[id] > 0)) ui.mode = null;
+        this.changed();
+      },
+      amend: (tile) => {
+        const id = ui.mode.itemID;
+        if (this.amendAt(id, tile, false) && !(g.state.inventory[id] > 0)) ui.mode = null;
+        this.changed();
+      },
     };
   }
 
@@ -209,8 +235,10 @@ class App {
       if (r) { this.present(r); this.changed(); }
       return true;
     }
+    const plant = g.plantAt(tile);
+    if (plant && g.isReady(plant, now) && !(ui.selectedTile && ui.selectedTile.x === tile.x && ui.selectedTile.y === tile.y && ui.plantInspector)) { this.harvestAt(tile); return true; }
     const decor = g.decorAt(tile);
-    if (decor) { ui.selectedTile = null; ui.open('decor', decor.id); this.changed(false); return true; }
+    if (decor && !plant) { ui.selectedTile = null; ui.open('decor', decor.id); this.changed(false); return true; }
     return false;
   }
 
@@ -221,6 +249,65 @@ class App {
     if (this.tapThing(tile)) return;
     ui.selectedTile = ui.selectedTile && ui.selectedTile.x === tile.x && ui.selectedTile.y === tile.y ? null : tile;
     this.changed(false);
+  }
+
+  beginPlanting(itemID) { this.beginMode({ type: 'plant', itemID }); }
+  beginAmend(itemID) { this.beginMode({ type: 'amend', itemID }); }
+
+  /** Plant a seed packet on a tile (from planting mode or a tile's card). */
+  plantAt(itemID, tile, refresh = true) {
+    const g = this.game;
+    const p = this.attempt(() => g.plant(itemID, tile, g.now()));
+    if (!p) return null;
+    const def = g.plantDef(p.plantID);
+    const slow = !g.soilAt(tile);
+    this.ui.toast(slow ? `Planted. ${def.name} grows slowly in plain soil; it likes ${def.school.charAt(0).toUpperCase() + def.school.slice(1)} soil.` : `Planted. It'll be ready ${this.ui.roughly(g.readyAt(p) - g.now())}.`, this.content.items[itemID]?.sprite);
+    if (refresh) { this.ui.selectedTile = null; this.changed(); }
+    return p;
+  }
+
+  /** Spread a soil amendment on a tile. */
+  amendAt(itemID, tile, refresh = true) {
+    const g = this.game;
+    const r = this.attempt(() => ({ soil: g.amend(itemID, tile, g.now()) }));
+    if (!r) return null;
+    this.ui.toast(r.soil ? `${r.soil.charAt(0).toUpperCase() + r.soil.slice(1)} soil now.` : 'Plain soil again.', this.content.items[itemID]?.sprite);
+    if (refresh) this.changed();
+    return r;
+  }
+
+  harvestAt(tile) {
+    const g = this.game, p = g.plantAt(tile);
+    if (!p) return;
+    const r = this.attempt(() => g.harvest(p.id, g.now()));
+    if (!r) return;
+    this.view.dustAt(tile);
+    this.present(r.results);
+    if (this.ui.selectedTile && this.ui.selectedTile.x === tile.x && this.ui.selectedTile.y === tile.y && !r.regrows) this.ui.selectedTile = null;
+    this.changed();
+  }
+
+  clearPlant(plantID) {
+    if (this.attempt(() => { this.game.clearPlant(plantID, this.game.now()); return true; })) { this.ui.selectedTile = null; this.changed(); }
+  }
+
+  sellItem(itemID, n) {
+    const coins = this.attempt(() => this.game.sell(itemID, n));
+    if (coins) { this.ui.toast(`Sold for ${coins} coins.`, 'ui.icon.coin'); this.changed(); }
+  }
+  sellAll() {
+    const g = this.game;
+    let total = 0;
+    for (const [id, n] of Object.entries(g.state.inventory)) if (n > 0 && g.sellPrice(id)) total += this.attempt(() => g.sell(id, n)) || 0;
+    if (total) { this.ui.toast(`Sold everything for ${total} coins.`, 'ui.icon.coin'); this.changed(); }
+  }
+  buyPacket(plantID) {
+    const r = this.attempt(() => this.game.buyPacket(plantID, this.game.now()));
+    if (r) { this.present(r); this.changed(); }
+  }
+  buyAmendment(itemID) {
+    const r = this.attempt(() => this.game.buyAmendment(itemID));
+    if (r) { this.present(r); this.changed(); }
   }
 
   beginMode(mode) { this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = mode; this.changed(false); }
@@ -239,12 +326,12 @@ class App {
     const r = this.attempt(() => g.deliver(id, g.now()));
     if (!r) return;
     const req = g.requestDef(id);
-    const what = r.type === 'cosmetic' ? `${g.decorDef(r.id)?.name || r.id} (in your Bag, under Decor)`
+    const what = r.type === 'coins' ? `${r.count} coins` : r.type === 'cosmetic' ? `${g.decorDef(r.id)?.name || r.id} (in your Bag, under Decor)`
       : r.type === 'item' ? `${(r.count || 1) > 1 ? r.count + ' × ' : ''}${this.content.items[r.id]?.name || r.id}`
         : r.type === 'unlock' && r.id === 'expansion' ? 'more room: the treeline stepped back' : r.id;
     const sprite = r.type === 'cosmetic' ? g.decorDef(r.id)?.sprite : r.type === 'item' ? this.content.items[r.id]?.sprite : 'ui.icon.store';
-    this.ui.toast(`${req.name}: done! You got ${what}.`, sprite);
-    if (first) this.ui.celebrate('Your first trade', this.ui.story('messages.firstDelivery'));
+    this.ui.toast(req.kind === 'shop' ? `${what.charAt(0).toUpperCase() + what.slice(1)}.` : `${req.name}: done! You got ${what}.`, sprite);
+    if (first && req.kind !== 'shop') this.ui.celebrate('Your first trade', this.ui.story('messages.firstDelivery'));
     this.changed();
   }
 

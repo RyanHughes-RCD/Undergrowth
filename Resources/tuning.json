@@ -11,7 +11,7 @@
  "start": {
   "_about": "A new garden opens on a little grotto around the old log: scenery along its edge (visual only), and the opening's seed tin (Content/opening.json) on a free tile within tin.near of the old log.",
   "tin": {
-   "sprite": "relic.unknown",
+   "sprite": "garden.tin",
    "near": 2
   },
   "scenery": {
@@ -26,6 +26,128 @@
     "deco.lichen.a",
     "deco.roots.a"
    ]
+  }
+ },
+ "garden": {
+  "_about": "The garden. Plants (Content/plants.json) grow through stages (seed, sprout, bud, bloom, ready) over growHours on their own school's soil, timed from timestamps so time away counts. soil: growth speed on the plant's own soil (preferred), on plain soil (plain); on another school's soil it can't be planted at all. stages: the share of growth at which sprout, bud and bloom begin; ready at 1. A perennial regrows from the bud stage in regrowHours after each harvest. Per plant (plants): growHours, regrowHours (perennials), yield (produce per harvest), seeds [packets always returned, chance of one more], sell (coins per produce), packet (coins per seed packet in the Store). amendments: Store price per bag (plain loam is cheaper). sellByRarity: the price of anything else in the Bag that can be sold (foraged finds). startCoins: coins in a new garden. starterSet: what the opening's tin holds: packets of the chosen school's first starter plant (and one of its second, if it has one), packets of the runner-up school's first starter, and amendments of each. morning: after minAwayHours of real time away a card sums up what's ready; at most one surprise per local day, with surpriseChance, chosen by weight among the kinds possible right now.",
+  "startCoins": 20,
+  "soil": {
+   "preferred": 1,
+   "plain": 0.6
+  },
+  "stages": {
+   "sprout": 0.15,
+   "bud": 0.45,
+   "bloom": 0.75
+  },
+  "amendments": {
+   "price": 6,
+   "plainPrice": 2
+  },
+  "sellByRarity": {
+   "common": 2,
+   "uncommon": 4,
+   "rare": 8,
+   "veryRare": 15,
+   "legendary": 30
+  },
+  "starterSet": {
+   "primaryPackets": 3,
+   "primarySecondPlant": 1,
+   "secondPackets": 2,
+   "primaryAmendments": 4,
+   "secondAmendments": 2
+  },
+  "morning": {
+   "minAwayHours": 4,
+   "surpriseChance": 0.7,
+   "weights": {
+    "selfSeed": 3
+   }
+  },
+  "plants": {
+   "ink-cap": {
+    "growHours": 6,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 3,
+    "packet": 4
+   },
+   "marigold": {
+    "growHours": 8,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 4,
+    "packet": 5
+   },
+   "wood-sorrel": {
+    "growHours": 10,
+    "regrowHours": 8,
+    "yield": 2,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 4,
+    "packet": 8
+   },
+   "foxfire-button": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 5,
+    "packet": 7
+   },
+   "jewelweed": {
+    "growHours": 14,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 6,
+    "packet": 8
+   },
+   "wisp-cap": {
+    "growHours": 16,
+    "yield": 3,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 7,
+    "packet": 9
+   },
+   "cornflower": {
+    "growHours": 20,
+    "yield": 4,
+    "seeds": [
+     1,
+     0.5
+    ],
+    "sell": 7,
+    "packet": 10
+   },
+   "lantern-flower": {
+    "growHours": 24,
+    "regrowHours": 18,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.25
+    ],
+    "sell": 9,
+    "packet": 14
+   }
   }
  },
  "forage": {

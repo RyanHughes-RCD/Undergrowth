@@ -225,8 +225,29 @@ export class ForestView {
     this.objects = objs;
   }
 
-  /** Hook for later systems (plants, visitors) to add objects. */
-  extraObjects() { return []; }
+  /** Plants (by growth stage) and anything later systems add. */
+  extraObjects(now, at) {
+    const g = this.game, out = [];
+    for (const p of g.state.plants) {
+      const stage = g.stageOf(p, now), ready = stage === 'ready';
+      out.push({ sprite: this.plantSprite(p, now), variant: stage === 'bloom' || ready ? this.plantVariant(p) : null, ...at(p.tile), tile: p.tile, kind: 'plant', key: p.id,
+        still: !ready, glimmer: ready, bob: ready, phase: hash32(p.tile.x, p.tile.y, 7) % 1000 / 250 });
+    }
+    return out.concat(this.moreObjects(now, at));
+  }
+  moreObjects() { return []; }
+
+  /** A plant's sprite for its stage: seed and sprout (shared), its own bud, then the plant itself. */
+  plantSprite(p, now) {
+    const g = this.game, def = g.plantDef(p.plantID), item = def && this.app.content.items[def.item];
+    const stage = g.stageOf(p, now);
+    if (stage === 'seed') return 'seed.stage.planted';
+    if (stage === 'sprout') return 'seed.stage.sprout';
+    if (stage === 'bud') return 'plant.bud.' + (def ? def.item.split('.')[1] : '');
+    return item ? item.sprite : '__missing';
+  }
+  /** A colour variety's palette swap (later), else none. */
+  plantVariant(p) { const v = p.variety && this.game.varietyDef ? this.game.varietyDef(p.variety) : null; return v ? v.variant : null; }
 
   // ---------------------------------------------------------- drawing
 
@@ -350,8 +371,30 @@ export class ForestView {
     }
   }
 
-  /** Hooks for later systems: drawn on the ground under objects, and over the lit scene. */
-  drawUnderlay() {}
+  /**
+   * Under objects: while planting or spreading soil, the tiles that would take it glow softly, so the
+   * soil rules show themselves (a seed only lights its own soil and plain ground).
+   */
+  drawUnderlay(ctx) {
+    const m = this.app.ui.mode, g = this.game;
+    if (!m || (m.type !== 'plant' && m.type !== 'amend')) return;
+    const item = this.app.content.items[m.itemID];
+    if (!item) return;
+    const pulse = 0.55 + 0.25 * Math.sin(performance.now() / 300);
+    const c = g.clearing;
+    for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
+      const t = { x, y };
+      // Planting: its own soil glows brightly, plain ground faintly (it grows there, but slowly).
+      const chk = m.type === 'plant' ? g.canPlant(item.plant, t) : null;
+      const ok = m.type === 'plant' ? chk.ok : (!g.plantAt(t) && !g.landmarkAt(t) && !g.sceneryAt(t) && (item.amend || null) !== g.soilAt(t));
+      if (!ok) continue;
+      const k = chk && chk.factor < 1 ? 0.45 : 1;
+      ctx.fillStyle = `rgba(255,246,190,${0.12 * pulse * k})`;
+      ctx.fillRect(x * TS, y * TS, TS, TS);
+      ctx.strokeStyle = `rgba(255,246,190,${0.7 * pulse * k})`;
+      ctx.strokeRect(x * TS + 1.5, y * TS + 1.5, TS - 3, TS - 3);
+    }
+  }
   drawOverlay() {}
 
   dustAt(tile) { (this.dust = this.dust || []).push({ x: tile.x * TS + TS / 2, y: tile.y * TS + TS / 2 + FOOT, start: performance.now() }); }

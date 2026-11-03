@@ -23,13 +23,16 @@ SHEET = os.path.join(ROOT, "design", "Undergrowth_Offerings.xlsx")
 CONTENT = os.path.join(ROOT, "Resources", "Content")
 SPRITES = os.path.join(ROOT, "Resources", "Sprites")
 
-REQ_HEADERS = ["Status", "ID", "Name", "Kind", "Item 1", "Count 1", "Item 2", "Count 2", "Item 3", "Count 3", "Item 4", "Count 4",
-               "Reward type", "Reward id", "Reward count", "Needs Field Guide entries", "Needs request done", "Needs forest day",
-               "Text", "Art notes", "Check"]
-COS_HEADERS = ["Status", "ID", "Name", "Sprite", "Size", "Price", "Colours", "Text", "Art notes", "Check"]
+REQ_HEADERS = ["Status", "ID", "Name", "Kind", "Coins", "Item 1", "Count 1", "Item 2", "Count 2", "Item 3", "Count 3", "Item 4", "Count 4",
+               "Reward type", "Reward id", "Reward count", "Needs Field Guide entries", "Needs request done", "Needs beauty tier",
+               "Needs garden day", "Text", "Art notes", "Check"]
+COS_HEADERS = ["Status", "ID", "Name", "Sprite", "Size", "Kind", "Colours", "Text", "Art notes", "Check"]
 UNLOCKS = ["expansion"]
-KINDS = ["cosmetic", "upgrade"]
-REWARDS = ["cosmetic", "unlock", "item"]
+# shop: bought with coins, again and again. upgrade: bought once, in a chain (Room to grow).
+# commission: a one-off request at the Old Log. order: the pool of small daily orders at the Old Log.
+KINDS = ["shop", "upgrade", "commission", "order"]
+REWARDS = ["cosmetic", "unlock", "item", "coins"]
+DECOR_KINDS = ["path", "fence", "bed", "planter", "lantern", "bench", "ornament", "feature"]
 
 
 def L(i):
@@ -40,22 +43,24 @@ def L(i):
 
 def request_check_formula(r):
     parts = []
-    for col in ("E", "G", "I", "K"):
+    for col in ("F", "H", "J", "L"):
         parts.append(f'IF(AND({col}{r}<>"",COUNTIF(Lists!$A:$A,{col}{r})=0),"Unknown item "&{col}{r}&". ","")')
-    for col, cnt in (("E", "F"), ("G", "H"), ("I", "J"), ("K", "L")):
+    for col, cnt in (("F", "G"), ("H", "I"), ("J", "K"), ("L", "M")):
         parts.append(f'IF(AND({col}{r}<>"",N({cnt}{r})<1),"{cnt}{r} needs a count. ","")')
-    parts.append(f'IF(M{r}="cosmetic",IF(COUNTIF(Cosmetics!$B:$B,N{r})=0,"Unknown decor "&N{r}&". ",""),"")')
-    parts.append(f'IF(M{r}="unlock",IF(COUNTIF(Lists!$D:$D,N{r})=0,"Unknown unlock "&N{r}&". ",""),"")')
-    parts.append(f'IF(M{r}="item",IF(COUNTIF(Lists!$A:$A,N{r})=0,"Unknown item "&N{r}&". ",""),"")')
-    parts.append(f'IF(AND(Q{r}<>"",COUNTIF($B:$B,Q{r})=0),"Unknown request "&Q{r}&". ","")')
+    parts.append(f'IF(AND(F{r}="",N(E{r})<1),"Needs coins or items. ","")')
+    parts.append(f'IF(N{r}="cosmetic",IF(COUNTIF(Cosmetics!$B:$B,O{r})=0,"Unknown decor "&O{r}&". ",""),"")')
+    parts.append(f'IF(N{r}="unlock",IF(COUNTIF(Lists!$D:$D,O{r})=0,"Unknown unlock "&O{r}&". ",""),"")')
+    parts.append(f'IF(N{r}="item",IF(COUNTIF(Lists!$A:$A,O{r})=0,"Unknown item "&O{r}&". ",""),"")')
+    parts.append(f'IF(AND(R{r}<>"",COUNTIF($B:$B,R{r})=0),"Unknown request "&R{r}&". ","")')
     parts.append(f'IF(COUNTIF($B:$B,B{r})>1,"Duplicate id. ","")')
     s = "&".join(parts)
     return f'=IF(OR(B{r}="",A{r}="Off"),"",IF({s}="","OK",{s}))'
 
 
 def cosmetic_check_formula(r):
+    kinds = ",".join(f'F{r}="{k}"' for k in DECOR_KINDS)
     return (f'=IF(OR(B{r}="",A{r}="Off"),"",IF(COUNTIF(Lists!$C:$C,D{r})=0,"Missing sprite "&D{r}&" (import with --stubs)",'
-            f'IF(COUNTIF($B:$B,B{r})>1,"Duplicate id","OK")))')
+            f'IF(NOT(OR({kinds})),"Unknown kind "&F{r},IF(COUNTIF($B:$B,B{r})>1,"Duplicate id","OK"))))')
 
 
 # ------------------------------------------------------------------ helpers
@@ -110,14 +115,22 @@ def parse_colours(v):
 
 # ------------------------------------------------------------------ read
 
+def garden_item_ids():
+    """Seed packets (packet.<plant id>, from plants.json) and soil amendments (amendments.json): Bag items
+    the game builds from their own files, which listings may give or ask for too."""
+    return ["packet." + p["id"] for p in load("plants.json") or []] + [a["id"] for a in load("amendments.json") or []]
+
+
 def read(wb, errors):
-    items = {i["id"] for i in load("items.json")}
+    items = {i["id"] for i in load("items.json")} | set(garden_item_ids())
     cosmetics = []
     for r, v in rows(wb["Cosmetics"], len(COS_HEADERS)):
         if text(v[0]) != "In game":
             continue
         size = (text(v[4]) or "1x1").lower().split("x")
-        c = {"id": text(v[1]), "name": text(v[2]), "sprite": text(v[3]), "size": [int(size[0]), int(size[1])]}
+        c = {"id": text(v[1]), "name": text(v[2]), "sprite": text(v[3]), "size": [int(size[0]), int(size[1])], "kind": text(v[5]) or "feature"}
+        if c["kind"] not in DECOR_KINDS:
+            errors.append(f"Cosmetics row {r}: kind must be one of {', '.join(DECOR_KINDS)}")
         try:
             cols = parse_colours(v[6])
         except ValueError as e:
@@ -138,9 +151,10 @@ def read(wb, errors):
         rid, kind = text(v[1]), text(v[3])
         if kind not in KINDS:
             errors.append(f"Requests row {r} ({rid}): kind must be one of {', '.join(KINDS)}")
+        coins = num(v[4]) or 0
         its = []
         for k in range(4):
-            iid, cnt = text(v[4 + 2 * k]), num(v[5 + 2 * k])
+            iid, cnt = text(v[5 + 2 * k]), num(v[6 + 2 * k])
             if not iid:
                 continue
             if iid not in items:
@@ -148,9 +162,9 @@ def read(wb, errors):
             if not cnt or cnt < 1:
                 errors.append(f"Requests row {r} ({rid}): {iid} needs a count of at least 1")
             its.append({"item": iid, "count": cnt})
-        if not its:
-            errors.append(f"Requests row {r} ({rid}): needs at least one item")
-        rtype, rref, rcount = text(v[12]), text(v[13]), num(v[14]) or 1
+        if not its and coins < 1:
+            errors.append(f"Requests row {r} ({rid}): needs coins or at least one item")
+        rtype, rref, rcount = text(v[13]), text(v[14]), num(v[15]) or 1
         if rtype not in REWARDS:
             errors.append(f"Requests row {r} ({rid}): reward type must be one of {', '.join(REWARDS)}")
         if rtype == "cosmetic" and rref not in cos_ids:
@@ -160,23 +174,29 @@ def read(wb, errors):
         if rtype == "item" and rref not in items:
             errors.append(f"Requests row {r} ({rid}): unknown item {rref!r}")
         reward = {"type": rtype}
-        if rref:
+        if rref and rtype != "coins":
             reward["id"] = rref
         reward["count"] = rcount
         req = {}
-        if num(v[15]) is not None:
-            req["guide"] = num(v[15])
-        if text(v[16]):
-            if text(v[16]) not in all_ids:
-                errors.append(f"Requests row {r} ({rid}): unknown request {text(v[16])!r}")
-            req["request"] = text(v[16])
-        if num(v[17]) is not None:
-            req["day"] = num(v[17])
-        out = {"id": rid, "name": text(v[2]), "kind": kind, "items": its, "reward": reward}
+        if num(v[16]) is not None:
+            req["guide"] = num(v[16])
+        if text(v[17]):
+            if text(v[17]) not in all_ids:
+                errors.append(f"Requests row {r} ({rid}): unknown request {text(v[17])!r}")
+            req["request"] = text(v[17])
+        if num(v[18]) is not None:
+            req["beauty"] = num(v[18])
+        if num(v[19]) is not None:
+            req["day"] = num(v[19])
+        out = {"id": rid, "name": text(v[2]), "kind": kind}
+        if coins:
+            out["coins"] = coins
+        out["items"] = its
+        out["reward"] = reward
         if req:
             out["requires"] = req
-        if text(v[18]):
-            out["text"] = text(v[18])
+        if text(v[20]):
+            out["text"] = text(v[20])
         requests.append(out)
     if len({x["id"] for x in requests}) != len(requests):
         errors.append("Requests: duplicate ids")
@@ -189,7 +209,7 @@ def refresh_lists(wb):
     """Rebuilds the Lists sheet (valid ids for the Check formulas) and every row's Check formula.
     Returns True if anything in the workbook changed."""
     items = load("items.json")
-    cols = [("Item ids", [i["id"] for i in items]), ("Item names", [i["name"] for i in items]),
+    cols = [("Item ids", [i["id"] for i in items] + garden_item_ids()), ("Item names", [i["name"] for i in items]),
             ("Sprite ids", sorted(sprite_ids())), ("Unlock ids", UNLOCKS)]
     changed = False
     for name, ncol, fn in (("Requests", len(REQ_HEADERS), request_check_formula), ("Cosmetics", len(COS_HEADERS), cosmetic_check_formula)):
@@ -217,9 +237,12 @@ def refresh_lists(wb):
 HOW_TO = [
     ("What this is", "The Store's listings and the Old Log's requests (what they ask for and what they give), and the decor props."),
     ("Edit", "Blue text on yellow cells. Add a row to add a listing or prop; set Status to 'Off' to take one out without deleting it, or 'Idea' for drafts."),
-    ("Requests", "Up to four items (item ids from the Lists sheet) with counts. Reward type: cosmetic (a prop id from Cosmetics), unlock (expansion) or item (an item id). "
-                 "Gating: a Field Guide count, another request done first, and/or a forest day."),
-    ("Cosmetics", "Placeable decor. Sprite: a sprite id (new ones get placeholders with --stubs). Colours: 'Name #hex' pairs; the first is the natural colour."),
+    ("Requests", "Kind: shop (bought with coins, again and again), upgrade (bought once, chained with 'Needs request done': Room to grow), commission (a one-off request "
+                 "at the Old Log) or order (the pool of daily orders at the Old Log). Coins: the price, if any. Up to four items (ids from the Lists sheet, seed "
+                 "packets and amendments included) with counts. Reward type: cosmetic (a prop id from Cosmetics), item (an item id), unlock (expansion) or coins "
+                 "(Reward count = how many). Gating: a Field Guide count, another request done first, a beauty tier (0-5) and/or a garden day."),
+    ("Cosmetics", "Placeable decor. Sprite: a sprite id (new ones get placeholders with --stubs). Kind: path, fence, bed, planter, lantern, bench, ornament or feature "
+                  "(what it does is in tuning.json garden.decor). Colours: 'Name #hex' pairs; the first is the natural colour."),
     ("Check column", "Formulas: OK, or what's wrong (unknown item, decor, unlock or request id, missing count, missing sprite, duplicate id)."),
     ("Import", "python3 tools/import_offerings_table.py (add --check to preview, --stubs for placeholder sprites). It rewrites Resources/Content/requests.json and cosmetics.json, then python3 tools/build_web.py bundles them."),
 ]

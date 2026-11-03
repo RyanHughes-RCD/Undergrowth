@@ -1,9 +1,10 @@
 // Undergrowth web game — game logic (no DOM). Times are epoch milliseconds.
 //
-// A gardening game in a forest clearing. This file holds the garden state and its rules: the clearing and
-// treeline, the Old Log, the opening's seed tin, the foraging patch, the Bag, the Field Guide's
-// discoveries, the Store/Old Log board and decor. Everything is computed from timestamps, so the garden
-// catches up when the game reopens.
+// A gardening game in a forest clearing: choose a seed packet, plant it on a tile, watch it grow through
+// its stages in real time, harvest it, sell the produce, and plant again. This file holds the garden state
+// and its rules: soil and plants, the clearing and treeline, the Old Log, the opening's seed tin, the
+// foraging patch, the Bag, the Field Guide's discoveries, the Store/Old Log board and decor. Growth is
+// computed from timestamps (see rebase), so time away counts and nothing needs catching up.
 
 export const SCHOOLS = ['spore', 'glow', 'bloom', 'verdure', 'shimmer', 'spirit'];
 export const RARITIES = ['common', 'uncommon', 'rare', 'veryRare', 'legendary'];
@@ -138,6 +139,10 @@ export class Game {
     s.counters = s.counters || {};
     s.opening = s.opening || { done: false };
     s.debugTimeOffset = s.debugTimeOffset || 0;
+    s.soil = s.soil || {};                 // "x,y" -> school; plain soil isn't stored
+    s.plants = s.plants || [];
+    s.coins = s.coins || 0;
+    s.morning = s.morning || { lastSurpriseDay: null };
   }
 
   /** A fresh garden. `discovered` carries Field Guide entries over (from an archived older save). */
@@ -153,6 +158,7 @@ export class Game {
       createdAt: now, lastUpdated: now, lastRealSeen: Date.now(), customName: null,
       clearing: { x0, y0, x1: x0 + cw - 1, y1: y0 + ch - 1 },
       inventory: {}, discovered: [...new Set(discovered)], debugTimeOffset: 0,
+      coins: (t.garden && t.garden.startCoins) || 0,
     };
     const g = new Game(content, state);
     state.forestID = g.rng.uuid();
@@ -264,9 +270,9 @@ export class Game {
   forageAt(t) { return this.state.forage.finds.find((f) => sameTile(f.tile, t)) || null; }
   tinAt(t) { return this.state.tin && sameTile(this.state.tin.tile, t) ? this.state.tin : null; }
 
-  /** Nothing on the tile: no landmark, scenery, decor, find or the seed tin. */
+  /** Nothing on the tile: no landmark, scenery, decor, plant, find or the seed tin. */
   isFree(t) {
-    return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.sceneryAt(t) && !this.decorAt(t) && !this.forageAt(t) && !this.tinAt(t);
+    return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.sceneryAt(t) && !this.decorAt(t) && !this.plantAt(t) && !this.forageAt(t) && !this.tinAt(t);
   }
 
   /** Nearest free clearing tile to `t` (ring search). */
@@ -341,7 +347,11 @@ export class Game {
     return SCHOOLS.map((s) => [s, tot[s], this.rng.next()]).sort((a, b) => b[1] - a[1] || a[2] - b[2]).map((x) => x[0]);
   }
 
-  /** Opens the seed tin: records the school the answers chose. Returns { school, second, results }. */
+  /**
+   * Opens the seed tin: the answers choose a school, and the tin holds that school's starter seed packets
+   * and soil amendments, plus a few of the runner-up school's (tuning.garden.starterSet).
+   * Returns { school, second, results }.
+   */
   openTin(answers, now, forceSchool = null) {
     if (!this.state.tin) throw new GameError('The tin has already been opened.');
     const rank = this.openingRanking(answers || []);
@@ -349,7 +359,23 @@ export class Game {
     const second = rank.find((s) => s !== school);
     this.state.tin = null;
     this.state.opening = { done: true, school, second, answers: forceSchool ? null : answers, at: now };
-    return { school, second, results: [] };
+    return { school, second, results: this.grant(this.starterSet(school, second)) };
+  }
+
+  /** The tin's contents for a school and its runner-up. */
+  starterSet(school, second) {
+    const cfg = (this.t.garden || {}).starterSet || {};
+    const starters = (s) => this.content.plantList.filter((p) => p.source === 'starter' && p.school === s);
+    const out = [];
+    const add = (item, count) => { if (count > 0 && this.content.items[item]) out.push({ item, count }); };
+    const [a, b] = starters(school);
+    if (a) add('packet.' + a.id, cfg.primaryPackets ?? 3);
+    if (b) add('packet.' + b.id, cfg.primarySecondPlant ?? 1);
+    const [c] = starters(second);
+    if (c) add('packet.' + c.id, cfg.secondPackets ?? 2);
+    add('amend.' + school, cfg.primaryAmendments ?? 4);
+    add('amend.' + second, cfg.secondAmendments ?? 2);
+    return out;
   }
 
   // ---- the foraging patch (tuning.forage)
@@ -421,6 +447,283 @@ export class Game {
   /** Field Guide entries found, for request gating. */
   get guideCount() { return [...this.discovered].filter((k) => k.startsWith('item:')).length; }
 
+  // ---- the garden: soil, plants, growth, harvest (Content/plants.json, tuning.garden)
+  get gcfg() { return this.t.garden || {}; }
+  soilAt(t) { return this.state.soil[key(t)] || null; }
+  get soilCounts() {
+    const out = {};
+    for (const s of Object.values(this.state.soil)) out[s] = (out[s] || 0) + 1;
+    return out;
+  }
+  plantDef(id) { return this.content.plants[id] || null; }
+  plantCfg(id) { return (this.gcfg.plants || {})[id] || {}; }
+  plantAt(t) { return this.state.plants.find((p) => sameTile(p.tile, t)) || null; }
+  plantByID(id) { return this.state.plants.find((p) => p.id === id) || null; }
+
+  /**
+   * How fast a plant grows on a soil: its own school's soil ×soil.preferred (1), plain soil ×soil.plain
+   * (0.6). Another school's soil: null (it can't be planted there).
+   */
+  soilFactor(def, school) {
+    const c = this.gcfg.soil || {};
+    if (!school) return c.plain ?? 0.6;
+    return school === def.school ? (c.preferred ?? 1) : null;
+  }
+
+  /** Whether a plant can go on a tile, and why not: { ok, factor, reason }. */
+  canPlant(plantID, tile) {
+    const def = this.plantDef(plantID);
+    if (!def) return { ok: false, reason: 'Unknown seeds.' };
+    if (!this.inBounds(tile) || !this.inClearing(tile)) return { ok: false, reason: "That's outside the clearing." };
+    if (!this.isFree(tile) && !this.hostsPlant(tile)) return { ok: false, reason: 'Something is already there.' };
+    const soil = this.soilAt(tile);
+    const factor = this.soilFactor(def, soil);
+    if (factor == null) return { ok: false, reason: `${def.name} won't grow in ${schoolName(soil)} soil. It likes ${schoolName(def.school)} soil, or plain ground.` };
+    return { ok: true, factor };
+  }
+  /** A tile with something on it that a plant can still go on (a raised bed: see decor). */
+  hostsPlant() { return false; }
+
+  /** Growth speed right now, as a multiple of the plant's normal speed. Later systems multiply in theirs. */
+  growthRate(p) {
+    const def = this.plantDef(p.plantID);
+    return def ? (this.soilFactor(def, this.soilAt(p.tile)) ?? this.gcfg.soil?.plain ?? 0.6) : 0;
+  }
+  /** Growth needed for the current cycle (ms of normal-speed growth). */
+  growNeed(p) { return p.need || Math.max(1, (this.plantCfg(p.plantID).growHours || 8) * HOUR); }
+  /** Growth done by time t: banked growth plus time since at the current rate, capped at the need. */
+  grownAt(p, t) { return Math.min(this.growNeed(p), p.grown + Math.max(0, t - p.since) * p.rate); }
+  progress(p, t) { return this.grownAt(p, t) / this.growNeed(p); }
+  /** seed, sprout, bud, bloom or ready (tuning.garden.stages). */
+  stageOf(p, t) {
+    const k = this.progress(p, t), st = this.gcfg.stages || {};
+    if (k >= 1) return 'ready';
+    if (k >= (st.bloom ?? 0.75)) return 'bloom';
+    if (k >= (st.bud ?? 0.45)) return 'bud';
+    if (k >= (st.sprout ?? 0.15)) return 'sprout';
+    return 'seed';
+  }
+  isReady(p, t) { return this.progress(p, t) >= 1; }
+  isBlooming(p, t) { const s = this.stageOf(p, t); return s === 'bloom' || s === 'ready'; }
+  /** When the plant will be ready at its current rate (it's deterministic: only player actions change rates). */
+  readyAt(p) { return p.rate > 0 ? p.since + Math.max(0, this.growNeed(p) - p.grown) / p.rate : Infinity; }
+  /** When it reaches a stage (a share of its growth). */
+  stageAt(p, share) { const need = this.growNeed(p) * share; return p.grown >= need ? p.since : p.since + (need - p.grown) / Math.max(1e-9, p.rate); }
+
+  /**
+   * Banks every plant's growth up to `now` and recomputes its rate. Called whenever something that can
+   * change a rate happens (planting, harvesting, soil, decor), so growth between actions is a straight
+   * line and time away needs no catching up.
+   */
+  rebase(now) {
+    for (const p of this.state.plants) {
+      if (now <= p.since) continue;         // already banked up to a later moment
+      p.grown = this.grownAt(p, now);
+      p.since = now;
+    }
+    for (const p of this.state.plants) p.rate = this.growthRate(p);
+  }
+
+  /** Plant a seed packet on a tile. */
+  plant(packetID, tile, now) {
+    const pk = this.content.items[packetID];
+    if (!pk || !pk.plant) throw new GameError("That isn't a seed packet.");
+    if (!(this.state.inventory[packetID] > 0)) throw new GameError('You have no more of those seeds.');
+    const chk = this.canPlant(pk.plant, tile);
+    if (!chk.ok) throw new GameError(chk.reason);
+    this.rebase(now);
+    this.consume(packetID);
+    const p = this.newPlant(pk.plant, tile, now);
+    this.rebase(now);
+    this.bump('plant');
+    return p;
+  }
+
+  newPlant(plantID, tile, now, grownShare = 0) {
+    const p = { id: this.rng.uuid(), plantID, tile: { ...tile }, plantedAt: now, since: now, grown: 0, rate: 0, harvests: 0, cycle: 'grow' };
+    p.grown = this.growNeed(p) * grownShare;
+    this.state.plants.push(p);
+    p.rate = this.growthRate(p);
+    return p;
+  }
+
+  /** What a harvest gives (before seeds): the produce count. Later systems add bonuses. */
+  harvestYield(p) { return this.plantCfg(p.plantID).yield || 1; }
+  /** The produce item a harvest gives (a colour variety has its own). */
+  produceOf(p) { return this.plantDef(p.plantID)?.item; }
+
+  /**
+   * Harvest a ready plant: its produce and (usually) seeds back. An annual leaves the tile empty; a
+   * perennial drops back to its bud stage and regrows in regrowHours. Returns { results, plant, regrows }.
+   */
+  harvest(plantRef, now) {
+    const p = this.plantByID(plantRef);
+    if (!p) throw new GameError("It's gone.");
+    if (!this.isReady(p, now)) throw new GameError("It isn't ready yet.");
+    this.rebase(now);
+    const def = this.plantDef(p.plantID), cfg = this.plantCfg(p.plantID);
+    const extras = this.harvestExtras(p, now);
+    const pending = [{ item: this.produceOf(p), count: this.harvestYield(p) }];
+    const [always, chance] = cfg.seeds || [1, 0.5];
+    const seeds = (always || 0) + (this.rng.chance(chance || 0) ? 1 : 0);
+    if (seeds > 0) pending.push({ item: 'packet.' + p.plantID, count: seeds });
+    for (const x of extras) pending.push(x);
+    const results = this.grant(pending.filter((x) => x.item && x.count > 0));
+    const firstHarvest = this.discover('plant:' + p.plantID);
+    p.harvests++;
+    let regrows = false;
+    if (def.perennial && cfg.regrowHours) {
+      const bud = (this.gcfg.stages || {}).bud ?? 0.45;
+      p.cycle = 'regrow';
+      p.need = cfg.regrowHours * HOUR / (1 - bud);
+      p.grown = p.need * bud;
+      p.since = now;
+      delete p.variety;
+      regrows = true;
+    } else {
+      this.state.plants = this.state.plants.filter((x) => x !== p);
+    }
+    this.rebase(now);
+    this.bump('harvest');
+    this.afterHarvest(p, now, results);
+    return { results, plant: p, regrows, firstHarvest };
+  }
+  /** Extra things a harvest gives (later systems: cross-pollinated seeds). */
+  harvestExtras() { return []; }
+  afterHarvest() {}
+
+  /** Dig up a growing plant (it's lost; the tile is free again). */
+  clearPlant(plantRef, now) {
+    const p = this.plantByID(plantRef);
+    if (!p) throw new GameError("It's gone.");
+    this.rebase(now);
+    this.state.plants = this.state.plants.filter((x) => x !== p);
+    this.rebase(now);
+  }
+
+  /** Use a soil amendment on a tile: its soil becomes that school (or plain) until changed again. */
+  amend(itemID, tile, now) {
+    const def = this.content.items[itemID];
+    if (!def || def.category !== 'amendment') throw new GameError("That isn't a soil amendment.");
+    if (!(this.state.inventory[itemID] > 0)) throw new GameError('You have none left.');
+    if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
+    if (this.plantAt(tile)) throw new GameError('Something is growing there. Change the soil once the tile is empty.');
+    if (this.landmarkAt(tile) || this.sceneryAt(tile)) throw new GameError("That ground can't be dug.");
+    const cur = this.soilAt(tile);
+    if ((def.amend || null) === cur) throw new GameError(`It's already ${schoolName(cur)} soil.`);
+    this.consume(itemID);
+    if (def.amend) this.state.soil[key(tile)] = def.amend; else delete this.state.soil[key(tile)];
+    this.discover('soil:' + (def.amend || 'plain'));
+    this.bump('amend');
+    return def.amend || null;
+  }
+
+  // ---- coins, selling and the Store
+  /** Coins for one of an item, or 0 if it can't be sold. Garden produce: its plant's sell price. */
+  sellPrice(itemID) {
+    const def = this.content.items[itemID];
+    if (!def || (def.category !== 'plant' && def.category !== 'mushroom')) return 0;
+    if (def.sell != null) return def.sell;
+    return (this.gcfg.sellByRarity || {})[def.rarity || 'common'] || 0;
+  }
+  sell(itemID, n = 1) {
+    const price = this.sellPrice(itemID);
+    if (!price) throw new GameError("The Store doesn't buy that.");
+    const k = Math.min(n, this.state.inventory[itemID] || 0);
+    if (k < 1) throw new GameError("You don't have any.");
+    this.consume(itemID, k);
+    this.state.coins += price * k;
+    this.bump('sold', k);
+    this.bump('earned', price * k);
+    return price * k;
+  }
+  spend(n) {
+    if (this.state.coins < n) throw new GameError(`That costs ${n} coins (you have ${this.state.coins}).`);
+    this.state.coins -= n;
+  }
+
+  /** Plants whose seed packets the Store sells, with what (if anything) still locks each. */
+  storePlants(now) {
+    return this.content.plantList.filter((p) => p.source !== 'gift').map((p) => ({ def: p, price: this.plantCfg(p.id).packet || 0, locks: this.plantLocks(p, now) }));
+  }
+  /** What keeps a plant's packets off the shelf (later systems: beauty tiers, commissions). */
+  plantLocks() { return []; }
+  buyPacket(plantID, now, n = 1) {
+    const row = this.storePlants(now).find((x) => x.def.id === plantID);
+    if (!row) throw new GameError("The Store doesn't sell those.");
+    if (row.locks.length) throw new GameError("Those seeds aren't in the Store yet.");
+    this.spend(row.price * n);
+    return this.grant([{ item: 'packet.' + plantID, count: n }]);
+  }
+  amendmentPrice(itemID) {
+    const def = this.content.items[itemID], c = this.gcfg.amendments || {};
+    return def && def.category === 'amendment' ? (def.amend ? c.price ?? 6 : c.plainPrice ?? 2) : 0;
+  }
+  buyAmendment(itemID, n = 1) {
+    const price = this.amendmentPrice(itemID);
+    if (!price) throw new GameError("The Store doesn't sell that.");
+    this.spend(price * n);
+    return this.grant([{ item: itemID, count: n }]);
+  }
+
+  // ---- the morning check
+  /**
+   * What's waiting after time away: ready plants by kind, how many are still growing and the next one to
+   * be ready, and at most one small surprise per local day (tuning.garden.morning). The surprise is
+   * chosen deterministically from the garden seed and the day, among the kinds possible right now.
+   */
+  morning(now) {
+    this.rebase(now);
+    const ready = {}, growing = [];
+    for (const p of this.state.plants) {
+      if (this.isReady(p, now)) { const k = p.variety || p.plantID; ready[k] = ready[k] || { plantID: p.plantID, variety: p.variety || null, count: 0, tiles: [] }; ready[k].count++; ready[k].tiles.push(p.tile); } else growing.push(p);
+    }
+    const next = growing.length ? Math.min(...growing.map((p) => this.readyAt(p))) : null;
+    const day = Game.dayNumber(now);
+    let surprise = null;
+    const m = this.state.morning, cfg = this.gcfg.morning || {};
+    if (m.lastSurpriseDay !== day) {
+      m.lastSurpriseDay = day;
+      if (hashUnit(this.state.seed, day, 0x5a7e) < (cfg.surpriseChance ?? 0.7)) surprise = this.rollSurprise(now, day);
+    }
+    return { ready: Object.values(ready), growing: growing.length, next, surprise };
+  }
+
+  /** Surprise kinds possible right now: [kind, weight, apply()] (later systems add gifts and rare colours). */
+  surpriseKinds(now, day) {
+    const w = (this.gcfg.morning || {}).weights || {};
+    const out = [];
+    const seedling = this.selfSeedSpot(now, day);
+    if (seedling) out.push(['selfSeed', w.selfSeed ?? 3, () => {
+      const p = this.newPlant(seedling.plantID, seedling.tile, now, (this.gcfg.stages || {}).sprout ?? 0.15);
+      p.selfSeeded = true;
+      this.rebase(now);
+      return { type: 'selfSeed', plantID: p.plantID, tile: p.tile, from: seedling.from };
+    }]);
+    return out;
+  }
+  rollSurprise(now, day) {
+    const kinds = this.surpriseKinds(now, day).filter((k) => k[1] > 0);
+    const total = kinds.reduce((a, k) => a + k[1], 0);
+    if (!total) return null;
+    let r = hashUnit(this.state.seed, day, 0x5b1d) * total;
+    for (const [, w, apply] of kinds) { if (r < w) return apply(); r -= w; }
+    return null;
+  }
+  /** A self-seeded seedling: next to a blooming plant, on an open tile with soil it can grow in. */
+  selfSeedSpot(now, day) {
+    const parents = this.state.plants.filter((p) => this.isBlooming(p, now)).sort((a, b) => (a.id < b.id ? -1 : 1));
+    if (!parents.length) return null;
+    const from = parents[hash32(this.state.seed, day, 0x5eed) % parents.length];
+    const spots = [];
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const t = { x: from.tile.x + dx, y: from.tile.y + dy };
+      if ((dx || dy) && this.isFree(t) && this.canPlant(from.plantID, t).ok) spots.push(t);
+    }
+    if (!spots.length) return null;
+    return { plantID: from.plantID, from: from.tile, tile: spots[hash32(this.state.seed, day, 0x5eef) % spots.length] };
+  }
+
   // ---- the Store and the Old Log board (Content/requests.json)
   requestDef(id) { return (this.content.requests || []).find((r) => r.id === id) || null; }
   isDelivered(id) { return !!this.state.offerings.delivered[id]; }
@@ -431,29 +734,34 @@ export class Game {
     if (need.request && !this.isDelivered(need.request)) locks.push({ type: 'request', id: need.request, name: this.requestDef(need.request)?.name || need.request });
     if (need.day && this.gardenDay(now) < need.day) locks.push({ type: 'day', need: need.day, have: this.gardenDay(now) });
     if (req.reward && req.reward.type === 'unlock' && req.reward.id === 'expansion' && this.fullyOpen) locks.push({ type: 'full' });
-    return locks;
+    return locks.concat(this.extraLocks(req, now));
   }
-  /** A request right now: what it needs (have / need), what still locks it, and whether it can be delivered. */
+  /** Locks from later systems (beauty tiers). */
+  extraLocks() { return []; }
+  /** A listing or request right now: its price and items (have / need), what still locks it, and whether it can be done. */
   requestStatus(req, now) {
     const locks = this.requestLocks(req, now);
     const items = req.items.map((x) => ({ item: x.item, count: x.count, owned: this.state.inventory[x.item] || 0 }));
-    const done = this.isDelivered(req.id);
-    return { req, done, locks, items, ready: !done && !locks.length && items.every((x) => x.owned >= x.count) };
+    const done = req.kind === 'shop' ? false : this.isDelivered(req.id);
+    const coins = req.coins || 0;
+    return { req, done, locks, items, coins, ready: !done && !locks.length && items.every((x) => x.owned >= x.count) && this.state.coins >= coins };
   }
-  /** Every request with its status: open ones first, then locked, then delivered. */
-  requestBoard(now) {
+  /** Every listing with its status: open ones first, then locked, then done. */
+  requestBoard(now, kinds = null) {
     const rank = (s) => (s.done ? 2 : s.locks.length ? 1 : 0);
-    return (this.content.requests || []).map((r) => this.requestStatus(r, now)).sort((a, b) => rank(a) - rank(b));
+    return (this.content.requests || []).filter((r) => !kinds || kinds.includes(r.kind)).map((r) => this.requestStatus(r, now)).sort((a, b) => rank(a) - rank(b));
   }
   deliver(id, now) {
     const req = this.requestDef(id);
-    if (!req) throw new GameError('Unknown request.');
+    if (!req) throw new GameError('Unknown listing.');
     const st = this.requestStatus(req, now);
     if (st.done) throw new GameError('Already done.');
     if (st.locks.length) throw new GameError("That isn't open yet.");
+    if (this.state.coins < st.coins) throw new GameError(`That costs ${st.coins} coins (you have ${this.state.coins}).`);
     if (!st.ready) throw new GameError('You need more of the things it asks for.');
     for (const x of req.items) this.consume(x.item, x.count);
-    this.state.offerings.delivered[id] = now;
+    if (st.coins) this.spend(st.coins);
+    if (req.kind === 'shop') { const b = this.state.offerings.bought; b[id] = (b[id] || 0) + 1; } else this.state.offerings.delivered[id] = now;
     this.bump('deliver');
     return this.grantReward(req.reward, now);
   }
@@ -462,6 +770,7 @@ export class Game {
     const out = { ...r };
     if (r.type === 'cosmetic') this.state.decor.owned[r.id] = (this.state.decor.owned[r.id] || 0) + (r.count || 1);
     else if (r.type === 'item') out.results = this.grant([{ item: r.id, count: r.count || 1 }]);
+    else if (r.type === 'coins') { this.state.coins += r.count || 0; this.bump('earned', r.count || 0); }
     else if (r.type === 'unlock' && r.id === 'expansion') {
       this.state.unlocks.expansions += r.count || 1;
       out.tiles = 0;
@@ -481,6 +790,7 @@ export class Game {
     const d = { id: this.rng.uuid(), decorID: id, tile: { ...tile }, color: 0 };
     this.state.decor.placed.push(d);
     this.discover('decor:' + id);
+    this.rebase(this.state.lastUpdated);
     return d;
   }
   moveDecor(placedID, tile) {
@@ -490,6 +800,7 @@ export class Game {
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
     if (!this.isFree(tile)) throw new GameError('Something is already there.');
     d.tile = { ...tile };
+    this.rebase(this.state.lastUpdated);
     return d;
   }
   removeDecor(placedID) {
@@ -497,6 +808,7 @@ export class Game {
     if (i < 0) throw new GameError('Unknown decoration.');
     const [d] = this.state.decor.placed.splice(i, 1);
     this.state.decor.owned[d.decorID] = (this.state.decor.owned[d.decorID] || 0) + 1;
+    this.rebase(this.state.lastUpdated);
   }
   /** Next colour for a placed prop (cosmetics.json "colors"). */
   recolorDecor(placedID) {
@@ -509,7 +821,6 @@ export class Game {
   }
 
   // ---- naming
-  get soilCounts() { return {}; }
   get generatedName() {
     const counts = this.soilCounts;
     const min = (this.t.naming || {}).minSoilTiles ?? 3;
@@ -544,6 +855,16 @@ export class Game {
   }
   devResetRequests() { this.state.offerings.delivered = {}; }
   devGrantDecor() { for (const c of this.content.cosmetics || []) this.state.decor.owned[c.id] = (this.state.decor.owned[c.id] || 0) + 1; return (this.content.cosmetics || []).length; }
+  /** Every plant ready now. */
+  devGrowAll(now) {
+    this.rebase(now);
+    for (const p of this.state.plants) p.grown = this.growNeed(p);
+    this.rebase(now);
+    return this.state.plants.length;
+  }
+  devGiveCoins(n) { this.state.coins += n; }
+  devGivePackets(n = 5) { for (const p of this.content.plantList) this.grant([{ item: 'packet.' + p.id, count: n }]); return this.content.plantList.length; }
+  devGiveAmendments(n = 5) { for (const a of this.content.amendmentList) this.grant([{ item: a.id, count: n }]); return this.content.amendmentList.length; }
   devForageNow(now) {
     const f = this.state.forage;
     f.slot = this.forageSlot(now) - (this.forageCfg.maxCatchUpSlots ?? 48);
@@ -567,6 +888,21 @@ export class Content {
     this.opening = bundle.opening || null;
     this.visitorList = bundle.visitors || [];
     this.relicList = bundle.relics || [];
+    // Garden plants (plants.json): each yields a catalogue item, and has a seed packet in the Bag.
+    this.plantList = (bundle.plants || []).filter((p) => this.items[p.item]);
+    this.plants = {};
+    const g = (bundle.tuning.garden || {}).plants || {};
+    for (const p of this.plantList) {
+      const item = this.items[p.item];
+      p.name = p.name || item.name;
+      this.plants[p.id] = p;
+      if (g[p.id] && g[p.id].sell != null) item.sell = g[p.id].sell;
+      item.plant = p.id;
+      this.addItem({ id: 'packet.' + p.id, category: 'packet', name: `${p.name} seeds`, rarity: item.rarity, sprite: 'packet.' + p.id, plant: p.id, school: p.school, text: p.packet, inGuide: false });
+    }
+    // Soil amendments (amendments.json): Bag items that change a tile's soil.
+    this.amendmentList = bundle.amendments || [];
+    for (const a of this.amendmentList) this.addItem({ id: a.id, category: 'amendment', name: a.name, rarity: 'common', sprite: a.id, amend: a.school, text: a.text, inGuide: false });
   }
   addItem(it) {
     if (this.items[it.id]) return this.items[it.id];

@@ -20,7 +20,7 @@ SCHOOL_GROUND = {   # school: (grass hue it moves toward, motif colours)
     "shimmer": ("#8a84b8", ["#f4f0ff", "#c8b4f4"]),
     "spirit": ("#4a4c8a", ["#c8c8f4", "#9a9ad0"]),
 }
-GROUND_LEVELS = [(3, 0.52, 3)]   # (level, how far the greens move, motif specks): one look per soil
+GROUND_LEVELS = [(3, 0.64, 5)]   # (level, how far the greens move, motif specks): one look per soil, clearly unlike grass
 GRASS_SLOTS = ("grass", "grass_l", "grass_d", "grass_ll")
 MOTIF_SLOTS = ("pink", "white")                                             # flower slots the grass tile never uses
 
