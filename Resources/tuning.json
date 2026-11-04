@@ -1016,11 +1016,11 @@
   ]
  },
  "tides": {
-  "_about": "Every six hours (local 00:00, 06:00, 12:00, 18:00) the tide turns and soil spreads from the banks (tiles touching water). The day's power = weather power + moon power sets the water level; the spread uses power + basePower, so even a still day moves a little. Each bank tile with soil may spread it along the bank to a neighbouring bank tile (chance alongBank x (power + basePower)) and inland to any open neighbour (chance inland x (power + basePower)), both capped at cap. Soil never spreads through the water: a corner step is only allowed when neither tile beside it is water. At a High or Flood level (water.levels: cross) it may also carry across the stream to the far bank. A tile resists by its maturity, and more with a plant growing on it: it holds with chance resist / (resist + hold), where resist = maturity (0 for plain) + plantHold. Each tile that held its soil through a tide matures a level with matureChance, up to the max (about one level every 12 hours). Catch-up covers at most maxTides.",
+  "_about": "Every six hours (local 00:00, 06:00, 12:00, 18:00) the tide turns and soil spreads from every patch that touches the water: a patch is soil of one school joined side by side or corner to corner (never across water), and if any of its tiles is on a bank (touching water), every tile of it can spread. A patch with no tile on a bank (an island) stays its size. The day's power = weather power + moon power sets the water level; the spread uses power + basePower, so even a still day moves a little. Each tile of such a patch may spread to an open neighbour that isn't already its soil (chance inland x (power + basePower)), and its bank tiles also along the bank to a neighbouring bank tile (chance alongBank x (power + basePower)), both capped at cap. Soil never spreads through the water: a corner step is only allowed when neither tile beside it is water. At a High or Flood level (water.levels: cross) it may also carry across the stream to the far bank. A tile resists by its maturity, and more with a plant growing on it: it holds with chance resist / (resist + hold), where resist = maturity (0 for plain) + plantHold. Each tile that held its soil through a tide matures a level with matureChance, up to the max (about one level every 12 hours). Catch-up covers at most maxTides.",
   "alongBank": 0.55,
   "inland": 0.2,
   "cap": 0.8,
-  "hold": 1.2,
+  "hold": 1.6,
   "plantHold": 1.5,
   "basePower": 0.6,
   "matureChance": 0.5,

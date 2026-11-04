@@ -183,7 +183,7 @@ export class UI {
   tileBody(tile) {
     const g = this.game, now = g.now(), a = this.app;
     if (!g.inClearing(tile)) return h('p', { class: 'sub' }, 'Dense shrubs. Room to grow (in the Store) opens more of the clearing.');
-    if (g.isWet(tile)) return [h('p', { class: 'sub' }, `${g.isPool(tile) ? 'Clear water welling up from somewhere deep under the clearing. The streams run from here' : 'Water from the pool'}, running ${g.waterLevelOn(Game.dayNumber(now)).name.toLowerCase()} today. Soil spreads along the banks but not across the water, unless it runs high. When the treeline steps back, a stream follows it out to the new edge.`),
+    if (g.isWet(tile)) return [h('p', { class: 'sub' }, `${g.isPool(tile) ? 'Clear water welling up from somewhere deep under the clearing. The streams run from here' : 'Water from the pool'}, running ${g.waterLevelOn(Game.dayNumber(now)).name.toLowerCase()} today. Soil spreads from any patch that touches it, but not across the water, unless it runs high. When the treeline steps back, a stream follows it out to the new edge.`),
       h('div', { class: 'row end' }, h('button', { class: 'btn small', onclick: () => this.forecastCard() }, ic(this.game.weatherOn(Game.dayNumber(now)).icon, 1), ' Forecast'))];
     if (g.debrisAt(tile)) return [h('p', { class: 'sub' }, 'Left over from the wild grotto. Clear it away to free the ground.'),
       ...this.bankNotes(tile),
@@ -1020,7 +1020,7 @@ export class UI {
   waterWords(power) {
     const lv = this.game.waterLevel(power);
     const note = power <= 0.05 ? 'still; soil creeps slowly' : lv.cross > 0.15 ? 'soil spreads fast and crosses the stream'
-      : lv.cross > 0 ? 'soil may cross the stream' : power < 0.6 ? 'soil barely spreads' : 'soil spreads along the banks';
+      : lv.cross > 0 ? 'soil may cross the stream' : power < 0.6 ? 'soil barely spreads' : 'soil spreads from the water';
     return { name: lv.name, note };
   }
   forecastRows(now, compact = false) {
@@ -1036,7 +1036,7 @@ export class UI {
     this.showCard((done) => h('div', { class: 'reveal-card pop' },
       h('h2', {}, 'The sky'),
       this.forecastRows(this.game.now()),
-      h('p', { class: 'sub' }, 'Rain swells the pool and its streams, and so does the moon: the water rises from Low to Normal, High and Flood. Every six hours the tide turns: soil on the banks spreads along them and inland, but never through the water, unless it runs High or floods and carries soil to the far bank. Deep soil, and soil with roots in it, holds better.'),
+      h('p', { class: 'sub' }, 'Rain swells the pool and its streams, and so does the moon: the water rises from Low to Normal, High and Flood. Every six hours the tide turns: any patch of soil that touches the water can spread, from any of its tiles, but never through the water, unless it runs High or floods and carries soil to the far bank. A patch that doesn't touch the water stays as it is. Deep soil, and soil with roots in it, holds better.'),
       h('button', { class: 'btn green', onclick: done }, 'OK')));
   }
   /** What the tides did while you were away, for the return card. */

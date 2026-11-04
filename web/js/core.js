@@ -683,6 +683,30 @@ export class Game {
     }
     return out;
   }
+  /**
+   * Soil tiles that can spread at a tide: every tile of a patch (tiles of one school joined side by side or
+   * corner to corner, never across water) with at least one tile on a bank.
+   */
+  wateredSoilTiles() {
+    const seen = new Set(), out = [];
+    for (const k of Object.keys(this.state.soil)) {
+      if (seen.has(k)) continue;
+      const [x, y] = k.split(',').map(Number), school = this.state.soil[k];
+      const comp = [{ x, y }];
+      seen.add(k);
+      let watered = false;
+      for (let i = 0; i < comp.length; i++) {
+        const t = comp[i];
+        if (!watered && this.isBank(t)) watered = true;
+        for (const n of this.landNeighbours(t)) {
+          const nk = key(n);
+          if (!seen.has(nk) && this.state.soil[nk] === school && this.inClearing(n)) { seen.add(nk); comp.push(n); }
+        }
+      }
+      if (watered) out.push(...comp);
+    }
+    return out;
+  }
   /** The local six-hour block a time falls in (0 = 00:00-06:00 on local day 0). A tide turns at each one's start. */
   static tideNumber(t) { return Math.floor((t - new Date(t).getTimezoneOffset() * 60000) / (6 * HOUR)); }
   static tideStart(n) { return Game.dayStart(Math.floor(n / 4)) + (n % 4) * 6 * HOUR; }
@@ -738,19 +762,22 @@ export class Game {
       this.setSoil(t, school, 1);
       changed.add(key(t));
     };
-    // Soil spreads from the banks: along the bank (to a neighbouring bank tile), inland (to any open
-    // neighbour), never through the water. Only high water carries soil across to the other side.
-    const snapshot = this.bankTiles().map((t) => ({ t, school: this.soilAt(t) })).filter((x) => x.school);
+    // Soil spreads from every patch that touches the water: each of its tiles may spread to an open
+    // neighbour, and its bank tiles also along the bank. A patch with no tile on a bank (an island) stays
+    // as it is. Never through the water; only high water carries soil across to the other side.
+    const snapshot = this.wateredSoilTiles().map((t) => ({ t, school: this.soilAt(t) }));
     const level = this.waterLevel(power);
     const open = (t) => this.inClearing(t) && !this.isWet(t) && !this.landmarkAt(t) && !this.sceneryAt(t);
     const pAlong = Math.min(T.cap ?? 0.8, (T.alongBank ?? 0.25) * push), pIn = Math.min(T.cap ?? 0.8, (T.inland ?? 0.06) * push);
     let crossed = 0;
     for (const x of snapshot) {
-      const near = this.landNeighbours(x.t).filter(open);
-      const along = near.filter((t) => this.isBank(t));
+      // Only neighbours that aren't already this soil are worth a try (inside a patch, nothing changes).
+      const near = this.landNeighbours(x.t).filter((t) => open(t) && this.soilAt(t) !== x.school);
+      const bank = this.isBank(x.t);
+      const along = bank ? near.filter((t) => this.isBank(t)) : [];
       if (along.length && rng.next() < pAlong) tryTake(along[rng.int(0, along.length - 1)], x.school);
       if (near.length && rng.next() < pIn) tryTake(near[rng.int(0, near.length - 1)], x.school);
-      if (level.cross > 0 && rng.next() < level.cross) {
+      if (bank && level.cross > 0 && rng.next() < level.cross) {
         const across = this.acrossWater(x.t).filter(open);
         if (across.length) { const before = taken.length; tryTake(across[rng.int(0, across.length - 1)], x.school); if (taken.length > before) { taken[taken.length - 1].crossed = true; crossed++; } }
       }
