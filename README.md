@@ -1,6 +1,6 @@
 # Undergrowth (working title)
 
-A cozy top-down pixel-art garden in a forest clearing, framed by a shrub treeline around an old log. The design for the garden (plant, grow overnight, harvest) is in `design/garden_rework.md`.
+A cozy top-down pixel-art garden in a forest clearing, framed by a shrub treeline around a spring. The design for the garden (plant, grow overnight, harvest) is in `design/garden_rework.md`.
 
 The rework was built in phases:
 
@@ -8,6 +8,7 @@ The rework was built in phases:
 2. Added the core loop: soil, seed packets, growth, harvest, coins and the morning check.
 3. Added companions, decor that does something, relic ornaments and garden beauty.
 4. Added long-term goals: collections, cross-pollinated colours, commissions and daily orders, visitors drawn by plants, and Room to grow for coins.
+5. Replaced the Old Log with a spring and its streams, plus weather, the moon, nightly soil spread, soil maturity and digging channels.
 
 ## Running it
 
@@ -31,6 +32,7 @@ Then open <http://localhost:8000>.
 
 The garden is a new game, so older forests aren't carried over:
 
+- A version 7 garden is upgraded in place to version 8: the Old Log becomes the spring, streams are laid around it (only over open ground), and existing soil starts at level 2 (Settled).
 - When the game loads a save older than version 7, it copies it, untouched, to `undergrowth.forest.v1.archive.v<old version>` (for example `…archive.v6`) and starts a fresh garden.
 - The fresh garden keeps the old save's **Field Guide discoveries**. A card says so once ("A fresh garden").
 - Developer test saves do the same under their own key.
@@ -38,10 +40,19 @@ The garden is a new game, so older forests aren't carried over:
 
 ## The garden (web)
 
-- **The clearing:** a small 5×8 clearing in the middle of the 40×56 forest (`tuning.json` → `grid`, `clearing`). After the Old Log and the edge scenery that leaves about 30 open tiles, so the starter kit and the first few days of buying fill it and Room to grow matters.
+- **The clearing:** a small 5×8 clearing in the middle of the 40×56 forest (`tuning.json` → `grid`, `clearing`). After the spring, its streams and the edge scenery that leaves about 30 open tiles, so the starter kit and the first few days of buying fill it and Room to grow matters.
   - At full zoom-out the whole clearing and a thin treeline border fit the play area both ways (`visuals.viewBorderTiles`), at a crisp whole-pixel scale. Spare room shows more treeline.
   - Drag to look around; pinch to zoom in.
-- **The Old Log**, a mossy two-tile stump, sits at the centre (`Content/landmarks.json`). Tap it for the Old Log board and the Store.
+- **The spring** sits at the centre (`Content/landmarks.json`). Tap it for the sky: today's and tomorrow's weather and moon. The neighbours' board and the Store are under **Notes** in the bottom bar.
+- **Streams** (`tuning.json` → `water`): a new garden's spring sends out 6–7 water tiles in at least two distinct streams, either leaving in different directions or forking. They meander at random (deterministic from the garden seed) and never touch except where they fork. Water can't be planted, amended or decorated.
+- **Weather and the moon** (`weather`, `moon`): each local day is Clear, Cloudy, Rain or Storm, drawn from the garden seed (it tends to repeat yesterday's). The moon is the real moon's phase that day, one of eight. The **weather button** in the HUD and the spring both show the forecast: today and tomorrow, with the water's strength in words (from "lie still" to "run wild").
+- **Nightly tides** (`tides`): at local midnight the water moves soil. Its power is the day's weather power plus the moon's (a storm on a full moon is 3.7; a clear new-moon night is 0).
+  - Along the water, a bank tile (one touching water) may take a soil carried from another bank, chosen by the banks' maturity.
+  - Inland, soil on a bank may creep to one neighbouring tile.
+  - A tile resists by its maturity, and more with a plant on it. The morning card reports last night's weather, moon and how many tiles changed.
+  - A plant whose tile changed school keeps growing, slowly (`garden.soil.wrong`, 35%).
+- **Soil maturity** (`garden.soil.levels`): soil is Fresh, Settled, Rich or Deep (levels 1–4). A tile that keeps its soil through a night goes up a level. On a plant's own soil each level above 1 adds 6% growth speed, and from Rich it gives +1 produce. Higher levels look more strongly of their school. A tile card shows the level.
+- **Digging channels** (`water.dig`): tap an empty tile beside the water and choose *Dig a channel*. It becomes water and its soil is lost. It costs 15 coins, then 5 more for each channel dug before. New banks let the tides reach new ground.
 - **The opening** (no guided tutorial, no instructions):
   - The clearing is a little grotto: mossy rocks, ferns and roots along its edge (`start.scenery`, visual only).
   - An old seed tin waits by the log (`start.tin`). Tapping it shows the words on its lid, then five quiet questions with four answers each (`Content/opening.json`). No answer names a school or a mechanic. Each answer adds weight to one or two schools.
@@ -182,7 +193,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - A variety grows like its plant and breeds true. Its produce sells for twice as much and has its own entry in the Field Guide's **Colours** tab (a hint shows until found).
   - Variety colours are palette swaps computed at load: every vivid, non-green colour of the plant's sprite takes the variety's hue, and the greens too for leafy varieties (`varietySwap` in `core.js`), so no extra art is needed.
   - In a simulation, a bed of seven Marigolds harvested daily gave a Lemon Marigold packet on about 1 in 9 harvests.
-- **The Old Log** has two kinds of request (Offerings sheet). It sparkles when something there can be delivered.
+- **The Notes board** (the old Old Log board) has two kinds of request (Offerings sheet). Its button sparkles when something there can be delivered.
   - **Commissions** (`commission`) are ten one-off requests for things you grow, paying 40–300 coins. Some open Store items: "A basket for the log" opens the Raised bed, "Something blue" the Birdbath, "Lantern-light" the Glow lantern. Later ones need a beauty tier, colour varieties or gift plants.
   - **Daily orders** (`order`) are two small orders each local day, at about 1.5× the sell price. They're chosen from the garden seed and the day among orders for produce you've already harvested (`garden.orders.perDay`).
 - **Visitors drawn by plants** (`Content/visitors.json`, `tuning.visitors`): twelve animals from `design/animal_visitors_notes.md`, two per school.
@@ -285,8 +296,8 @@ tools/
   import_offerings_table.py     Offerings → requests.json, cosmetics.json
   check_opening.py              checks the opening questions' weights
   gen_placeholders.py           regenerates the placeholder art (calls gen_topdown, gen_content_sprites,
-                                gen_ui and gen_terrain); gen_offerings_sprites.py and gen_landmark_art.py
-                                for decor, relics and the Old Log; gen_canopy.py, gen_app_icon.py,
+                                gen_ui and gen_terrain); gen_offerings_sprites.py
+                                for decor and relics; gen_canopy.py, gen_app_icon.py,
                                 gen_numeral_font.py for the canopy, icons and number font
 ```
 
@@ -313,7 +324,7 @@ tools/
   - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
   - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed or gold) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
   - Catalogue items and their bud stages (`plant.bud.<key>`; fungi get a small closed button) come from `gen_content_sprites.py`.
-  - School soil tiles (`tile.<school>.3a/b`) come from `gen_terrain.py`.
+  - School soil tiles (`tile.<school>.<1–4>a/b`), water and the spring come from `gen_terrain.py`.
   - Grass, the treeline floor and shrubs come from `gen_topdown.py`.
   - UI icons come from `gen_ui.py`.
 
@@ -324,7 +335,7 @@ tools/
 | `items.json` | The Plant & Fungi Catalogue (from the spreadsheet): id, category, name, rarity, sprite, school, description. |
 | `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`seeds`: comes from blind packets; `gift`: only from visitors), tier (common, uncommon, rare), perennial, companions, varieties. Numbers: `tuning.json` → `garden.plants`. Blind packets (`seeds.<school>.<tier>`) are built from the schools; each plant also has a named packet (`packet.<id>`), used for gifts. |
 | `amendments.json` | Soil amendments (kept by hand): id, school (null = plain loam), name, text. |
-| `landmarks.json` | The Old Log. |
+| `landmarks.json` | The spring. |
 | `opening.json` | The seed tin's card, the questions and their school weights, and what each school's tin holds. |
 | `visitors.json` | Twelve forest animals: name, sprite, school, likes (`plants` that must be blooming, `time` window), a clue per preference (`plant:<id>`, `time`), Field Guide text and gift (a seed packet id). |
 | `relics.json` | One relic per school (kept by hand), for the relic ornaments. |
@@ -339,8 +350,8 @@ tools/
 - **Pixel frames:** panels, buttons, tabs and cards use stepped, notched-corner frames built from box-shadows. There are no rounded corners or blur effects.
 - **Icons:** pixel sprites in the registry (`ui.icon.*`, `ui.burst`), drawn by `tools/gen_ui.py`. There are no emoji.
 - **Treeline:** the edge bushes and the ground under them use deep, shadowed greens (`tools/gen_topdown.py`), so the clearing has a clear dark border.
-- **Old Log art:** `tools/gen_landmark_art.py` turns `design/landmark_old_log.jpg` (pixel art on a 20 px grid) into the sprite, with the picture's own colours and a clean dark outline.
-- **Soil:** each school's soil is the grass tile with its greens moved toward the school's colour plus a few motif specks (`tile.<school>.3a/b`). A soil change fades in over `visuals.overlayFadeSeconds`.
+- **The spring and water:** the spring (`landmark.spring`, two frames) and water tiles (`tile.water.a/b`) come from `tools/gen_terrain.py`; banks get a rippled edge. Weather and moon icons (`ui.icon.sun/cloud/rain/storm`, `ui.icon.moon.0–7`) come from `gen_ui.py`, and rain or a storm draws falling rain over the garden.
+- **Soil:** each school's soil is the grass tile with its greens moved toward the school's colour plus a few motif specks at four strengths, one per maturity level (`tile.<school>.<level>a/b`; level 3 is the old look). A soil change fades in over `visuals.overlayFadeSeconds`.
   - **Clipped corners:** a soil tile's corner is clipped a little unless the tile above or below or the tile beside that corner has the same soil. Edges between matching tiles stay solid, so patches join up with slightly rounded outer corners.
   - A clipped corner shows the ground most common around the tile, whether grass or another soil.
   - The rounding has a 4-pixel radius and softens over its last 2 pixels in two alpha steps (`visuals.softCorners`; `ForestView.softTile` in `render.js`, cached per tile and corner mask).

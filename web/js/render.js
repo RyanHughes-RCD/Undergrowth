@@ -5,7 +5,7 @@
 // hedge. Pinch to zoom in; pan is clamped to the clearing. Each garden tile shows its soil (grass for
 // plain, the school's ground tile otherwise); objects (the Old Log, scenery, decor, finds, plants) are
 // drawn sorted by their feet; then the time-of-day light, tree shadows and fireflies.
-import { hash32, decorVariant } from './core.js';
+import { Game, hash32, decorVariant } from './core.js';
 
 export const TS = 16;
 const FOOT = 5; // objects stand a little below the tile centre
@@ -171,25 +171,31 @@ export class ForestView {
   }
 
   /** A clearing tile's ground: its soil (plain = grass, a school = that school's ground tile). */
+  /**
+   * A clearing tile's ground key for drawGround: its sprite (grass, a school's soil at its maturity level, or
+   * water), which corners are clipped (NW NE SE SW: a corner clips unless a tile beside it is the same kind
+   * of ground), and what shows through the clipped corners (the ground most common around it).
+   */
   ground(x, y) {
-    const g = this.game, school = g.soilAt ? g.soilAt({ x, y }) : null;
-    const h = hash32(x, y, 0x5011);
-    if (!school) return GRASS[h % GRASS.length];
-    // Which corners blend into the ground around them: a corner fades unless a tile beside it (above or
-    // below, left or right of that corner) has the same soil. Encoded as a 4-letter mask (NW NE SE SW).
-    const same = (dx, dy) => { const t = { x: x + dx, y: y + dy }; return g.inClearing(t) && g.soilAt(t) === school; };
+    const g = this.game, h = hash32(x, y, 0x5011);
+    const kindAt = (t) => (!g.inClearing(t) ? '' : g.isWet(t) ? 'water' : g.soilAt(t) || '');
+    const spriteFor = (k, t, hh) => (k === 'water' ? `tile.water.${hh & 1 ? 'a' : 'b'}` : k ? `tile.${k}.${Math.max(1, g.soilLevel(t))}${hh & 1 ? 'a' : 'b'}` : GRASS[hh % GRASS.length]);
+    const me = kindAt({ x, y });
+    if (!me) return GRASS[h % GRASS.length];
+    const same = (dx, dy) => kindAt({ x: x + dx, y: y + dy }) === me;
     const n = same(0, -1), e = same(1, 0), so = same(0, 1), w = same(-1, 0);
     const mask = [!n && !w, !n && !e, !so && !e, !so && !w].map((b) => (b ? '1' : '0')).join('');
-    // The faded corners show the ground most common around the tile (other soil, or grass).
     const count = {};
+    let pick = null;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       if (!dx && !dy) continue;
-      const t = { x: x + dx, y: y + dy }, o = g.inClearing(t) ? g.soilAt(t) || '' : '';
-      if (o !== school) count[o] = (count[o] || 0) + 1;
+      const t = { x: x + dx, y: y + dy }, o = kindAt(t);
+      if (o === me) continue;
+      count[o] = (count[o] || 0) + 1;
+      if (!pick || count[o] > count[pick.k] || (count[o] === count[pick.k] && o < pick.k)) pick = { k: o, t };
     }
-    const around = Object.entries(count).sort((p, q) => q[1] - p[1] || (p[0] < q[0] ? -1 : 1))[0];
-    const under = around && around[0] ? `tile.${around[0]}.3${h & 2 ? 'a' : 'b'}` : GRASS[h % GRASS.length];
-    return `tile.${school}.3${h & 1 ? 'a' : 'b'}|${mask}|${under}`;
+    const under = pick ? spriteFor(pick.k, pick.t, h >> 1) : GRASS[h % GRASS.length];
+    return `${spriteFor(me, { x, y }, h)}|${mask}|${under}`;
   }
 
   /** Draws a ground key from ground(): a plain tile, or soil over grass with its open corners faded. */
@@ -268,7 +274,7 @@ export class ForestView {
       if (!def) continue;
       const [fw, fh] = g.landmarkFootprint(l);
       const pos = at({ x: l.tile.x, y: l.tile.y + fh - 1 });
-      objs.push({ sprite: def.sprite, x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: l.tile, kind: 'landmark', key: l.id, still: true, glimmer: g.oldLogReady(now) > 0 });
+      objs.push({ sprite: def.sprite, x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: l.tile, kind: 'landmark', key: l.id, still: true, sortY: pos.y - TS });
     }
     for (const d of s.scenery || []) objs.push({ sprite: d.sprite, ...at(d.tile), tile: d.tile, kind: 'scenery', key: 'sc' + d.tile.x + ',' + d.tile.y, flip: d.flip, still: true });
     for (const d of s.decor.placed) {
@@ -466,6 +472,24 @@ export class ForestView {
       ctx.strokeRect(x * TS + 1.5, y * TS + 1.5, TS - 3, TS - 3);
     }
   }
+  /** Rain falling on rainy and stormy days: short slanted streaks, more and faster in a storm. Still with reduced motion. */
+  drawRain(ctx, view, t) {
+    const g = this.game, w = g.weatherOn(Game.dayNumber(g.now()));
+    if (w.id !== 'rain' && w.id !== 'storm') return;
+    const storm = w.id === 'storm', n = storm ? 140 : 70, still = reducedMotion();
+    const W = view.maxX - view.minX, H = view.maxY - view.minY;
+    ctx.save();
+    ctx.globalAlpha = storm ? 0.45 : 0.3;
+    ctx.fillStyle = '#c8dcf4';
+    for (let i = 0; i < n; i++) {
+      const hx = hash32(i, 77) / 4294967296, hy = hash32(i, 78) / 4294967296;
+      const fall = still ? 0 : (t * (storm ? 160 : 110) + hy * H) % H;
+      const x = Math.round(view.minX + ((hx * W + fall * 0.35) % W)), y = Math.round(view.minY + (still ? hy * H : fall));
+      ctx.fillRect(x, y, 1, 3); ctx.fillRect(x - 1, y + 3, 1, 2);
+    }
+    ctx.restore();
+  }
+
   /** Visitor signs: little footprints by the plants a visitor likes, fading over tuning.visitors.tracks.hours. */
   drawTracks(ctx) {
     const g = this.game, now = g.now(), life = ((this.app.content.tuning.visitors || {}).tracks || {}).hours ?? 24;
@@ -482,8 +506,9 @@ export class ForestView {
     ctx.globalAlpha = 1;
   }
 
-  /** Over the lit scene: lanterns glow at dusk and night (decor kinds with glow). */
+  /** Over the lit scene: rain on rainy days, and lanterns glowing at dusk and night (decor kinds with glow). */
   drawOverlay(ctx, view, t) {
+    this.drawRain(ctx, view, t);
     const g = this.game, phase = g.dayPhase(g.now());
     if (phase !== 'dusk' && phase !== 'night') return;
     const strength = phase === 'night' ? 1 : 0.6;

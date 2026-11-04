@@ -16,7 +16,7 @@ export const schoolName = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '
  * Save versions. 7 = the garden: everything before it (creatures, relic fields, wild spawns) is archived
  * on load and a fresh garden starts, keeping the Field Guide's discoveries (see Game.fromSave).
  */
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 /** Where an older save is kept when a fresh garden replaces it: <save key>.archive.v<version>. */
 export const archiveKey = (saveKey, version) => `${saveKey}.archive.v${version}`;
 
@@ -180,6 +180,9 @@ export class Game {
     s.guests = s.guests || {};             // visitors: interest, clues known, presence, befriended
     s.guestTracks = s.guestTracks || [];
     s.collections = s.collections || {};   // school -> time completed
+    s.water = s.water || [];               // "x,y" of every water tile (the spring is a landmark)
+    s.soilLevel = s.soilLevel || {};       // "x,y" -> maturity 1..max of a school soil tile
+    s.dug = s.dug || 0;
   }
 
   /** A fresh garden. `discovered` carries Field Guide entries over (from an archived older save). */
@@ -199,6 +202,8 @@ export class Game {
     };
     const g = new Game(content, state);
     state.forestID = g.rng.uuid();
+    g.generateStreams();
+    g.state.nightDay = Game.dayNumber(now);
     g.placeScenery();
     g.placeTin();
     g.state.forage.slot = g.forageSlot(now);
@@ -213,6 +218,7 @@ export class Game {
    */
   static fromSave(content, saved, now) {
     if (!saved || typeof saved.version !== 'number') return { game: Game.newGarden(content, now), archived: null };
+    if (saved.version === 7) return { game: Game.migrate7(content, saved, now), archived: null };
     if (saved.version < SAVE_VERSION) {
       const g = Game.newGarden(content, now, null, saved.discovered || []);
       if (saved.dev) g.state.dev = { ...saved.dev };
@@ -221,6 +227,21 @@ export class Game {
       return { game: g, archived: saved };
     }
     return { game: new Game(content, saved), archived: null };
+  }
+
+  /**
+   * Version 7 gardens had the Old Log at the centre. The spring takes its place and its streams are cut
+   * around what's already there; soil already laid counts as Settled (level 2).
+   */
+  static migrate7(content, saved, now) {
+    saved.version = SAVE_VERSION;
+    saved.landmarks = (saved.landmarks || []).filter((l) => l.id !== 'landmark.old-log');
+    const g = new Game(content, saved);
+    for (const k of Object.keys(g.state.soil)) g.state.soilLevel[k] = g.state.soilLevel[k] || 2;
+    g.generateStreams();
+    g.state.nightDay = Game.dayNumber(now);
+    if (!g.state.opening.done && !g.state.tin) g.placeTin();
+    return g;
   }
 
   toJSON() { return { ...this.state, discovered: [...this.discovered] }; }
@@ -245,7 +266,7 @@ export class Game {
 
   /** Brings the garden up to `now`. Returns a small report for the UI. */
   advance(now) {
-    const report = { forage: this.forageTick(now) };
+    const report = { forage: this.forageTick(now), nights: this.nightTick(now) };
     this.visitorTick(now);
     this.updateBeauty(now);
     this.state.lastUpdated = Math.max(this.state.lastUpdated || 0, now);
@@ -286,8 +307,10 @@ export class Game {
   }
   landmarkAt(t) { return this.state.landmarks.find((l) => this.landmarkTiles(l).some((u) => sameTile(u, t))) || null; }
 
-  /** Puts data-defined landmarks (the Old Log) on the map, once, and keeps their tiles clear. */
+  /** Puts data-defined landmarks (the spring) on the map, once, and keeps their tiles clear. */
   placeLandmarks() {
+    const ids = new Set((this.content.landmarks || []).map((d) => d.id));
+    this.state.landmarks = this.state.landmarks.filter((l) => ids.has(l.id));
     for (const def of this.content.landmarks || []) {
       if (this.state.landmarks.some((l) => l.id === def.id)) continue;
       const c = this.state.clearing;
@@ -300,6 +323,8 @@ export class Game {
       const on = (x) => this.landmarkTiles(l).some((u) => sameTile(u, x.tile));
       s.scenery = s.scenery.filter((x) => !on(x));
       s.forage.finds = s.forage.finds.filter((x) => !on(x));
+      s.plants = s.plants.filter((x) => !on(x));
+      for (const t of this.landmarkTiles(l)) { delete s.soil[key(t)]; delete s.soilLevel[key(t)]; }
       for (const d of s.decor.placed) if (on(d)) { const t = this.freeNear(l.tile); if (t) d.tile = t; }
     }
   }
@@ -309,9 +334,212 @@ export class Game {
   forageAt(t) { return this.state.forage.finds.find((f) => sameTile(f.tile, t)) || null; }
   tinAt(t) { return this.state.tin && sameTile(this.state.tin.tile, t) ? this.state.tin : null; }
 
-  /** Nothing on the tile: no landmark, scenery, decor, plant, find or the seed tin. */
+  /** Nothing on the tile: no water, landmark, scenery, decor, plant, find or the seed tin. */
   isFree(t) {
-    return this.inBounds(t) && this.inClearing(t) && !this.landmarkAt(t) && !this.sceneryAt(t) && !this.decorAt(t) && !this.plantAt(t) && !this.forageAt(t) && !this.tinAt(t);
+    return this.inBounds(t) && this.inClearing(t) && !this.waterAt(t) && !this.landmarkAt(t) && !this.sceneryAt(t) && !this.decorAt(t) && !this.plantAt(t) && !this.forageAt(t) && !this.tinAt(t);
+  }
+
+  // ---- the spring and its streams (tuning.water)
+  get spring() { return this.state.landmarks.find((l) => l.id === 'landmark.spring') || null; }
+  waterAt(t) {
+    if (this._waterKey !== this.state.water.length) { this._waterSet = new Set(this.state.water); this._waterKey = this.state.water.length; }
+    return this._waterSet.has(key(t));
+  }
+  /** Water or the spring: what streams and banks are measured from. */
+  isWet(t) { return this.waterAt(t) || (!!this.spring && sameTile(this.spring.tile, t)); }
+  /** A tile touching water (side by side): its soil can be carried off, or carried in. */
+  isBank(t) {
+    if (this.isWet(t) || !this.inClearing(t) || this.landmarkAt(t)) return false;
+    return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => this.isWet({ x: t.x + dx, y: t.y + dy }));
+  }
+  bankTiles() { return this.clearingTiles().filter((t) => this.isBank(t)); }
+
+  /**
+   * Cuts the spring's streams: riverTiles water tiles in at least minStreams streams, which either leave the
+   * spring in different directions or fork, meandering at random. Streams never touch except where they
+   * join, so they stay distinct. Deterministic from the garden seed. Avoids anything already on the ground, soil included.
+   */
+  generateStreams() {
+    const sp = this.spring, cfg = this.t.water || {};
+    if (!sp || this.state.water.length) return;
+    const rng = new RNG({ rng: hash32(this.state.seed, 0x5791) });
+    const [lo, hi] = cfg.riverTiles || [6, 7];
+    const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    const ok = (t, water, from) => this.inClearing(t) && this.isFree(t) && !this.state.soil[key(t)] && !water.has(key(t)) && !sameTile(t, sp.tile)
+      && DIRS.every(([dx, dy]) => { const n = { x: t.x + dx, y: t.y + dy }; return sameTile(n, from) || (!water.has(key(n)) && !sameTile(n, sp.tile)); });
+    const walk = (start, dir, len, water, out) => {
+      let pos = start, d = dir;
+      for (let i = 0; i < len; i++) {
+        const opts = [[d, cfg.keepDirection ?? 0.55], [(d + 1) % 4, (1 - (cfg.keepDirection ?? 0.55)) / 2], [(d + 3) % 4, (1 - (cfg.keepDirection ?? 0.55)) / 2]];
+        let r = rng.next(), pick = null;
+        const valid = opts.filter(([dd]) => ok({ x: pos.x + DIRS[dd][0], y: pos.y + DIRS[dd][1] }, water, pos));
+        const tot = valid.reduce((a, [, w]) => a + w, 0);
+        for (const [dd, w] of valid) { if (r * tot < w) { pick = dd; break; } r -= w / tot; }
+        if (pick == null) pick = valid.length ? valid[valid.length - 1][0] : null;
+        if (pick == null) return false;
+        d = pick;
+        const next = { x: pos.x + DIRS[d][0], y: pos.y + DIRS[d][1] };
+        water.add(key(next)); out.push({ tile: next, dir: d });
+        pos = next;
+      }
+      return true;
+    };
+    let best = null;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const total = rng.int(lo, hi), water = new Set(), first = [], second = [];
+      const fork = rng.chance(0.5);
+      const a = rng.int(2, total - 2);
+      const dirs = [0, 1, 2, 3].sort(() => rng.next() - 0.5);
+      let good = walk(sp.tile, dirs[0], fork ? a : a, water, first);
+      if (good) {
+        if (fork) {
+          const at = first[rng.int(0, Math.max(0, first.length - 2))];
+          const side = rng.chance(0.5) ? (at.dir + 1) % 4 : (at.dir + 3) % 4;
+          good = walk(at.tile, side, total - a, water, second);
+        } else good = walk(sp.tile, dirs[1], total - a, water, second);
+      }
+      if (good && water.size === total) { best = water; break; }
+      if (!best || water.size > best.size) best = water;
+    }
+    this.state.water = [...best];
+    for (const k of this.state.water) { delete this.state.soil[k]; delete this.state.soilLevel[k]; }
+  }
+
+  /** What digging the next tile costs. */
+  digCost() { const d = (this.t.water || {}).dig || {}; return (d.cost ?? 15) + (d.step ?? 5) * (this.state.dug || 0); }
+  /** Whether a tile can be dug into water, and why not. */
+  canDig(t) {
+    if (!this.inBounds(t) || !this.inClearing(t)) return { ok: false, reason: "That's outside the clearing." };
+    if (this.isWet(t)) return { ok: false, reason: "It's already water." };
+    if (!this.isFree(t)) return { ok: false, reason: 'Clear the tile first.' };
+    if (!this.isBank(t)) return { ok: false, reason: 'Water can only be led from the water next to it.' };
+    return { ok: true, cost: this.digCost() };
+  }
+  /** Dig a tile beside the water: its soil is lost, and water takes its place. */
+  dig(t, now) {
+    const chk = this.canDig(t);
+    if (!chk.ok) throw new GameError(chk.reason);
+    this.spend(chk.cost);
+    this.rebase(now);
+    delete this.state.soil[key(t)]; delete this.state.soilLevel[key(t)];
+    this.state.water.push(key(t));
+    this.state.dug = (this.state.dug || 0) + 1;
+    this.state.guestTracks = this.state.guestTracks.filter((x) => !sameTile(x.tile, t));
+    this.rebase(now);
+    this.bump('dig');
+    return chk.cost;
+  }
+
+  // ---- weather and the moon (tuning.weather, tuning.moon)
+  /** The weather on a local day: { id, name, icon, power }. It tends to last (persistence). Deterministic. */
+  weatherOn(day) {
+    const W = this.t.weather || {}, types = W.types || { clear: { name: 'Clear', icon: 'sun', weight: 1, power: 0 } };
+    this._weather = this._weather || new Map();
+    if (this._weather.has(day)) return this._weather.get(day);
+    const ids = Object.keys(types);
+    const draw = (d, salt) => {
+      let r = hashUnit(this.state.seed, d, salt) * ids.reduce((a, k) => a + (types[k].weight || 0), 0);
+      for (const k of ids) { if (r < (types[k].weight || 0)) return k; r -= types[k].weight || 0; }
+      return ids[0];
+    };
+    // Walk forward from a few weeks back, so each day's weather depends on the day before.
+    let id = draw(day - 30, 0x3e1);
+    for (let d = day - 29; d <= day; d++) id = hashUnit(this.state.seed, d, 0x3e2) < (W.persistence ?? 0.45) ? id : draw(d, 0x3e3);
+    const out = { id, ...types[id] };
+    this._weather.set(day, out);
+    return out;
+  }
+  /** The moon's phase on a local day (the real one): { index 0-7, name, power }, 0 = new, 4 = full. */
+  moonOn(day) {
+    const phases = (this.t.moon || {}).phases || [];
+    const noon = Game.dayStart(day) + 12 * HOUR;
+    const frac = (((noon - 947182440000) / 2551442877) % 1 + 1) % 1;   // a new moon: 2000-01-06 18:14 UTC
+    const index = Math.floor(frac * 8 + 0.5) % 8;
+    return { index, ...(phases[index] || { name: 'Moon', power: 0 }) };
+  }
+  static dayStart(day) { let t = day * DAY; t += new Date(t).getTimezoneOffset() * 60000; return t; }
+  /** Today and tomorrow: weather, moon and how hard the water will run that night. */
+  forecast(now) {
+    const day = Game.dayNumber(now);
+    return [day, day + 1].map((d) => { const w = this.weatherOn(d), m = this.moonOn(d); return { day: d, weather: w, moon: m, power: (w.power || 0) + (m.power || 0) }; });
+  }
+
+  // ---- the night: water moves soil, soil matures (tuning.tides)
+  soilLevel(t) { return this.soilAt(t) ? (this.state.soilLevel[key(t)] || 1) : 0; }
+  setSoil(t, school, level = 1) {
+    if (school) { this.state.soil[key(t)] = school; this.state.soilLevel[key(t)] = level; } else { delete this.state.soil[key(t)]; delete this.state.soilLevel[key(t)]; }
+  }
+  /** Every local midnight since the last one processed. Returns how many nights passed. */
+  nightTick(now) {
+    const day = Game.dayNumber(now), s = this.state;
+    if (s.nightDay == null) { s.nightDay = day; return 0; }
+    if (day <= s.nightDay) return 0;
+    const from = Math.max(s.nightDay, day - ((this.t.tides || {}).maxNights ?? 14));
+    let n = 0;
+    for (let d = from; d < day; d++) { this.runNight(d); n++; }
+    s.nightDay = day;
+    return n;
+  }
+  /**
+   * The night after local day `d`. The water's power is that day's weather + moon. Along the water, bank tiles
+   * may take on a soil the water carries (weighted by where it's richest); inland, soil on the banks may creep
+   * one tile. Mature tiles and tiles with a plant hold more often. Tiles that held their soil mature a level.
+   * Deterministic from the garden seed and the day. Records state.lastNight for the morning card.
+   */
+  runNight(d, override = null) {
+    const T = this.t.tides || {}, maxLv = ((this.gcfg.soil || {}).levels || {}).max ?? 4;
+    const w = override?.weather ? { id: override.weather, ...((this.t.weather || {}).types || {})[override.weather] } : this.weatherOn(d);
+    const m = override?.moon != null ? { index: override.moon, ...(((this.t.moon || {}).phases || [])[override.moon] || {}) } : this.moonOn(d);
+    const power = (w.power || 0) + (m.power || 0);
+    const rng = new RNG({ rng: hash32(this.state.seed, d, 0x71de) });
+    const night = Game.dayStart(d + 1);
+    this.rebase(night);
+    const changed = new Set(), taken = [];
+    let held = 0;
+    const tryTake = (t, school) => {
+      const cur = this.soilAt(t);
+      if (cur === school || changed.has(key(t))) return;
+      const resist = this.soilLevel(t) + (this.plantAt(t) ? (T.plantHold ?? 1.5) : 0);
+      if (resist > 0 && rng.next() < resist / (resist + (T.hold ?? 1.2))) { held++; return; }
+      taken.push({ tile: { ...t }, from: cur, to: school, plant: !!this.plantAt(t) });
+      this.setSoil(t, school, 1);
+      changed.add(key(t));
+    };
+    const banks = this.bankTiles();
+    const snapshot = banks.map((t) => ({ t, school: this.soilAt(t), level: this.soilLevel(t) })).filter((x) => x.school);
+    if (power > 0 && snapshot.length) {
+      const weights = {};
+      for (const x of snapshot) weights[x.school] = (weights[x.school] || 0) + x.level;
+      const total = Object.values(weights).reduce((a, b) => a + b, 0);
+      const pAlong = Math.min(T.cap ?? 0.8, (T.alongWater ?? 0.1) * power);
+      for (const b of banks) {
+        if (rng.next() >= pAlong) continue;
+        let r = rng.next() * total, school = null;
+        for (const [k, v] of Object.entries(weights)) { if (r < v) { school = k; break; } r -= v; }
+        if (school) tryTake(b, school);
+      }
+      const pIn = Math.min(T.cap ?? 0.8, (T.inland ?? 0.08) * power);
+      for (const x of snapshot) {
+        if (rng.next() >= pIn) continue;
+        const near = [];
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const t = { x: x.t.x + dx, y: x.t.y + dy };
+          if ((dx || dy) && this.inClearing(t) && !this.isWet(t) && !this.landmarkAt(t) && !this.sceneryAt(t)) near.push(t);
+        }
+        if (near.length) tryTake(near[rng.int(0, near.length - 1)], x.school);
+      }
+    }
+    // Everything that held its soil tonight matures a level.
+    let matured = 0;
+    for (const k of Object.keys(this.state.soil)) {
+      if (changed.has(k)) continue;
+      const lv = this.state.soilLevel[k] || 1;
+      if (lv < maxLv) { this.state.soilLevel[k] = lv + 1; matured++; }
+    }
+    this.rebase(night);
+    this.state.lastNight = { day: d, weather: w.id, moon: m.index, power, taken, held, matured };
+    this.events.push({ type: 'night', ...this.state.lastNight });
+    return this.state.lastNight;
   }
 
   /** Nearest free clearing tile to `t` (ring search). */
@@ -374,7 +602,7 @@ export class Game {
     const near = inner.slice().sort((a, b) => (Math.abs(a.x - start.x) + Math.abs(a.y - start.y)) - (Math.abs(b.x - start.x) + Math.abs(b.y - start.y)));
     const n = cfg.wildSoilTiles ?? 4;
     const patch = near.slice(0, n);
-    for (const t of patch) this.state.soil[key(t)] = school;
+    for (const t of patch) this.setSoil(t, school, 1);
     this.discover('soil:' + school);
     let feature = null;
     const f = feats[school], spot = near[n];
@@ -586,7 +814,9 @@ export class Game {
   growthRate(p) {
     const def = this.plantDef(p.plantID);
     if (!def) return 0;
-    let r = this.soilFactor(def, this.soilAt(p.tile)) ?? this.gcfg.soil?.plain ?? 0.6;
+    const soil = this.soilAt(p.tile), sc = this.gcfg.soil || {};
+    let r = this.soilFactor(def, soil) ?? sc.wrong ?? 0.35;
+    if (soil && soil === def.school) r *= 1 + ((sc.levels || {}).speedPerLevel ?? 0.06) * (this.soilLevel(p.tile) - 1);
     const c = this.gcfg.companions || {};
     const speeds = this.activeCompanions(p).filter((x) => x.rule.effect === 'speed').length;
     if (speeds) r *= Math.min(c.maxSpeed ?? 1.5, Math.pow(c.speed ?? 1.25, speeds));
@@ -689,6 +919,8 @@ export class Game {
   /** What a harvest gives (before seeds): the produce count, plus companions' and a raised bed's extra. */
   harvestYield(p) {
     let n = this.plantCfg(p.plantID).yield || 1;
+    const def = this.plantDef(p.plantID), lv = (this.gcfg.soil || {}).levels || {};
+    if (def && this.soilAt(p.tile) === def.school && this.soilLevel(p.tile) >= (lv.yieldAt ?? 3)) n += 1;
     n += this.activeCompanions(p).filter((x) => x.rule.effect === 'yield').length * ((this.gcfg.companions || {}).yield ?? 1);
     const d = this.decorAt(p.tile);
     if (d) n += this.decorKind(this.decorDef(d.decorID)).yield || 0;
@@ -813,12 +1045,13 @@ export class Game {
     if (!def || def.category !== 'amendment') throw new GameError("That isn't a soil amendment.");
     if (!(this.state.inventory[itemID] > 0)) throw new GameError('You have none left.');
     if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
+    if (this.isWet(tile)) throw new GameError("You can't spread soil on water.");
     if (this.plantAt(tile)) throw new GameError('Something is growing there. Change the soil once the tile is empty.');
     if (this.landmarkAt(tile) || this.sceneryAt(tile)) throw new GameError("That ground can't be dug.");
     const cur = this.soilAt(tile);
     if ((def.amend || null) === cur) throw new GameError(`It's already ${schoolName(cur)} soil.`);
     this.consume(itemID);
-    if (def.amend) this.state.soil[key(tile)] = def.amend; else delete this.state.soil[key(tile)];
+    this.setSoil(tile, def.amend || null, 1);
     this.discover('soil:' + (def.amend || 'plain'));
     this.bump('amend');
     return def.amend || null;

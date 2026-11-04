@@ -129,6 +129,45 @@ def make_icons():
         c.set(4, 6, 6); c.set(7, 6, 6)                             # goods on the counter
     icon("store", ["#d8584a", "#f4ead0", "#8a6440", "#c49a6c", "#ffd84a"], stall)
 
+    # Weather (the forecast): cloud, rain, storm. 2 cloud, 3 cloud light, 4 cloud shade, 5 rain / bolt.
+    def cloud_shape(c, dark=False):
+        c.ellipse(4, 6, 2.6, 2.2, 4 if dark else 2); c.ellipse(7, 5, 3.2, 3, 4 if dark else 2); c.ellipse(9, 7, 2.2, 1.8, 4 if dark else 2)
+        c.rect(2, 7, 10, 8, 4 if dark else 2); c.ellipse(6, 4, 1.6, 1.2, 3)
+
+    def cloud(c, f):
+        cloud_shape(c)
+    icon("cloud", ["#c8d0dc", "#f4f8ff", "#7a8494", "#5a9cff"], cloud)
+
+    def rain(c, f):
+        cloud_shape(c)
+        for x in (3, 6, 9):
+            c.set(x, 10, 5); c.set(x - 1, 11, 5)
+    icon("rain", ["#c8d0dc", "#f4f8ff", "#7a8494", "#5a9cff"], rain)
+
+    def storm(c, f):
+        cloud_shape(c, dark=True)
+        c.set(7, 9, 5); c.set(6, 10, 5); c.set(7, 10, 5); c.set(6, 11, 5)
+        c.set(3, 10, 3); c.set(10, 10, 3)
+    icon("storm", ["#9aa4b4", "#c8d0dc", "#4a5464", "#ffd84a"], storm)
+
+    # The moon's eight phases (ui.icon.moon.0 = new ... 4 = full ... 7 = waning crescent). 2 lit, 3 dark side.
+    for i in range(8):
+        frac = i / 8.0
+
+        def phase(c, f, frac=frac):
+            cx, cy, r = 5.5, 5.5, 4.6
+            k = math.cos(2 * math.pi * frac)             # terminator position: 1 new, -1 full
+            for y in range(12):
+                for x in range(12):
+                    dx, dy = (x + 0.5 - cx) / r, (y + 0.5 - cy) / r
+                    if dx * dx + dy * dy > 1:
+                        continue
+                    half = math.sqrt(max(0.0, 1 - dy * dy))
+                    edge = k * half                        # lit part is beyond the terminator
+                    lit = dx > edge if frac <= 0.5 else dx < -edge
+                    c.set(x, y, 2 if lit else 3)
+        icon("moon.%d" % i, ["#f4ecc0", "#3a3a5a"], phase)
+
 
 def make_burst():
     """Stepped pixel rays for reveal moments (2 frames, alternate ray sets)."""

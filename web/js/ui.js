@@ -1,5 +1,5 @@
 // DOM user interface: HUD, sheets (Bag, Store, Old Log, Field Guide, developer tools), cards and toasts.
-import { SCHOOLS, RARITY_NAMES, rarityIndex, decorVariant, schoolName } from './core.js';
+import { Game, SCHOOLS, RARITY_NAMES, rarityIndex, decorVariant, schoolName } from './core.js';
 
 const HOUR = 3600 * 1000;
 
@@ -68,6 +68,7 @@ export class UI {
       h('button', { class: 'name-btn', onclick: () => this.open('rename') },
         h('div', { class: 'forest-name' }, g.forestName),
         h('div', { class: 'hint' }, ...clock, ...this.hudExtras(now))),
+      this.weatherButton(now),
       this.content.tuning.debugTools ? h('div', { class: 'dev' },
         h('button', { class: 'speed-btn' + (this.app.speed > 1 ? ' on' : ''), title: 'Time speed', onclick: () => this.app.cycleSpeed() },
           h('b', {}, ic('fast', 1), `${this.app.speed}×`),
@@ -82,6 +83,7 @@ export class UI {
     bottom.append(h('div', { class: 'nav' },
       this.navButton('bag', 'Bag', invCount, () => this.open('bag')),
       this.navButton('store', 'Store', this.storeBadge(now), () => this.open('store')),
+      this.navButton('board', 'Notes', g.oldLogReady(now), () => this.open('offerings')),
       this.navButton('guide', 'Guide', 0, () => this.open('guide'))));
     this.root.replaceChildren(top, bottom);
     if (this.sheet && withSheet) this.renderSheet();
@@ -145,14 +147,28 @@ export class UI {
   tileTitle(tile) {
     const g = this.game;
     if (!g.inClearing(tile)) return 'The treeline';
+    if (g.isWet(tile)) return g.waterAt(tile) ? 'The stream' : 'The spring';
     const p = g.plantAt(tile);
     if (p) return this.plantName(p);
     const soil = g.soilAt(tile);
-    return soil ? `${schoolName(soil)} soil` : 'Plain soil';
+    return soil ? `${this.levelName(tile)} ${schoolName(soil)} soil` : 'Plain soil';
+  }
+  /** Fresh, Settled, Rich, Deep (tuning.garden.soil.levels.names). */
+  levelName(tile) { const names = ((this.game.gcfg.soil || {}).levels || {}).names || []; return names[this.game.soilLevel(tile) - 1] || ''; }
+  /** Notes on how the water treats this tile, and the Dig button where it can be dug. */
+  bankNotes(tile) {
+    const g = this.game, a = this.app, out = [];
+    if (g.isBank(tile)) out.push(h('p', { class: 'sub bank' }, ic('rain', 1), g.soilAt(tile) ? ' On the bank: the water carries this soil, and can carry another in.' : ' On the bank: the water may carry soil here.'));
+    const dig = g.canDig(tile);
+    if (dig.ok) out.push(h('div', { class: 'row end' }, h('button', { class: 'btn small', disabled: g.state.coins < dig.cost,
+      onclick: () => this.ask('Dig a channel here?', `The soil here is lost, and the water takes its place. ${dig.cost} coins.`, 'Dig', () => a.digAt(tile)) }, ic('coin', 1), ` Dig a channel · ${dig.cost}`)));
+    return out;
   }
   tileBody(tile) {
     const g = this.game, now = g.now(), a = this.app;
     if (!g.inClearing(tile)) return h('p', { class: 'sub' }, 'Dense shrubs. Room to grow (in the Store) opens more of the clearing.');
+    if (g.isWet(tile)) return [h('p', { class: 'sub' }, g.waterAt(tile) ? 'Water from the spring. It carries the soil on its banks, most of all on rainy nights and when the moon is full.' : this.story('guide.landmarks.landmark.spring')),
+      h('div', { class: 'row end' }, h('button', { class: 'btn small', onclick: () => this.forecastCard() }, ic(this.game.weatherOn(Game.dayNumber(now)).icon, 1), ' Forecast'))];
     const p = g.plantAt(tile);
     const soil = g.soilAt(tile);
     if (p) {
@@ -165,6 +181,7 @@ export class UI {
         hidden ? h('p', { class: 'sub' }, `What will it be? You'll know when it buds.`) : null,
         slow ? h('p', { class: 'sub' }, `Growing slowly on plain soil. ${hidden ? 'It' : def.name} likes ${schoolName(def.school)} soil.`) : null,
         ...(hidden ? [] : this.plantNotes(p, now)),
+        ...this.bankNotes(tile),
         this.app.devMode && this.plantInspector ? this.inspectPlant(p, now) : null,
         h('div', { class: 'row end gap' }, stage === 'ready' ? h('button', { class: 'btn green small', onclick: () => a.harvestAt(tile) }, 'Harvest')
           : h('button', { class: 'btn grey small', onclick: () => { this.ask(`Dig up the ${hidden ? 'seedling' : def.name}?`, 'It will be lost.', 'Dig it up', () => a.clearPlant(p.id)); } }, 'Dig up')),
@@ -174,7 +191,8 @@ export class UI {
     const amends = Object.keys(g.state.inventory).filter((id) => this.content.items[id]?.category === 'amendment' && (this.content.items[id].amend || null) !== soil);
     const blocked = !g.isFree(tile) && !g.hostsPlant(tile);
     return [
-      h('p', { class: 'sub' }, soil ? `${schoolName(soil)} plants grow well here. Other plants won't take.` : 'Anything grows here, but slowly. Plants grow best in their own soil.'),
+      h('p', { class: 'sub' }, soil ? `${schoolName(soil)} plants grow well here${g.soilLevel(tile) > 1 ? ', and better the longer it holds' : ''}. Other plants won't take.` : 'Anything grows here, but slowly. Plants grow best in their own soil.'),
+      ...this.bankNotes(tile),
       blocked ? null : packets.length ? h('div', { class: 'row gap wrap' }, packets.map((id) => h('button', { class: 'btn green small', title: this.content.items[id].name, onclick: () => a.plantAt(id, tile) },
         this.sprites.element(this.content.items[id].sprite, null, 1), ' ', this.content.items[id].name.replace(/ seeds$/, ''))))
         : h('p', { class: 'sub' }, 'No seeds in your Bag that grow in this soil.'),
@@ -265,7 +283,7 @@ export class UI {
       rename: () => ['Rename garden', this.renameBody()],
       debug: () => [this.app.devMode ? 'Developer mode' : 'Debug', this.debugBody()],
       entry: () => [arg.name, this.entryBody(arg)],
-      offerings: () => ['The Old Log', this.oldLogBody()],
+      offerings: () => ['Notes', this.oldLogBody()],
       store: () => ['Store', this.storeBody()],
       decor: () => this.decorBody(arg),
       visitor: () => this.visitorBody(arg),
@@ -414,7 +432,7 @@ export class UI {
     return [
       h('p', { class: 'sub center' }, this.story('messages.offeringsIntro')),
       h('div', { class: 'row space' },
-        h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Old Log', sprite: 'landmark.old-log', variant: null, text: this.story('guide.landmarks.landmark.old-log') || this.content.story?.guide?.landmarks?.['landmark.old-log'] }) }, 'About the log'),
+        h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Spring', sprite: 'landmark.spring', variant: null, text: this.story('guide.landmarks.landmark.spring') }) }, 'About the spring'),
         h('button', { class: 'btn small green', onclick: () => this.open('store') }, ic('store', 1), ' Open the Store')),
       ...this.oldLogSections(),
     ];
@@ -695,6 +713,16 @@ export class UI {
       h('optgroup', { label: 'Named packets (any plant)' }, this.content.plantList.map((p) => h('option', { value: 'packet.' + p.id }, `${p.name} seeds`)))]);
     const amendSel = h('select', { class: 'select' }, (this.content.amendmentList || []).map((x) => h('option', { value: x.id }, x.name)));
     return [
+      ['Weather and water', [
+        (() => {
+          const ws = h('select', { class: 'select' }, Object.entries((this.content.tuning.weather || {}).types || {}).map(([k, v]) => h('option', { value: k }, v.name)));
+          const ms = h('select', { class: 'select' }, ((this.content.tuning.moon || {}).phases || []).map((p, i) => h('option', { value: String(i), selected: i === 4 }, p.name)));
+          return h('div', { class: 'row gap wrap' }, ws, ms, b('Run a night now', () => a.dev((gm, t) => { const r = gm.runNight(Game.dayNumber(t), { weather: ws.value, moon: Number(ms.value) }); return r.taken.length; }, (n) => `The night passes: soil carried onto ${n} tile(s).`), 'orange'));
+        })(),
+        h('div', { class: 'row gap wrap' },
+          b("Run tonight (today's sky)", () => a.dev((gm, t) => gm.runNight(Game.dayNumber(t)).taken.length, (n) => `The night passes: soil carried onto ${n} tile(s).`)),
+          b('+5 dug', () => a.dev((gm) => { gm.state.coins += 200; }, '+200 coins for digging.'))),
+        h('p', { class: 'sub' }, `Today ${g.forecast(g.now())[0].weather.name}, ${g.forecast(g.now())[0].moon.name}: power ${g.forecast(g.now())[0].power.toFixed(2)}. Tomorrow power ${g.forecast(g.now())[1].power.toFixed(2)}. Banks: ${g.bankTiles().length}, water tiles: ${g.state.water.length}.`)]],
       ['Garden', [
         h('div', { class: 'row gap wrap' },
           b('Grow all plants now', () => a.dev((gm, t) => gm.devGrowAll(t), (n) => `${n} plant(s) ready.`), 'orange'),
@@ -841,6 +869,42 @@ export class UI {
     return list.length ? [h('div', { class: 'gifts' }, list)] : [h('p', { class: 'sub' }, this.story('messages.openingDone'))];
   }
 
+  /** The weather-and-moon button in the HUD: today's weather and the moon; tap for the forecast. */
+  weatherButton(now) {
+    const f = this.game.forecast(now)[0];
+    return h('button', { class: 'weather-btn', title: `${f.weather.name}, ${f.moon.name}. Tap for the forecast.`, onclick: () => this.forecastCard() },
+      ic(f.weather.icon, 2), ic('moon.' + f.moon.index, 2));
+  }
+  /** How hard the water will run on a night of this power, in words. */
+  waterWords(power) {
+    if (power <= 0.05) return 'The water will lie still.';
+    if (power < 0.6) return 'The water will barely stir.';
+    if (power < 1.4) return 'The water will run steadily.';
+    if (power < 2.4) return 'The water will run high.';
+    return 'The water will run wild.';
+  }
+  forecastRows(now, compact = false) {
+    return h('div', { class: 'forecast' + (compact ? ' compact' : '') }, this.game.forecast(now).map((f, i) => h('div', { class: 'forecast-row' },
+      h('b', {}, i ? 'Tomorrow' : 'Today'),
+      h('span', { class: 'fc-icons' }, ic(f.weather.icon, 2), ic('moon.' + f.moon.index, 2)),
+      h('span', { class: 'grow' }, `${f.weather.name}, ${f.moon.name.toLowerCase()}. `, h('span', { class: 'sub' }, `${i ? 'Tomorrow night' : 'Tonight'}: ${this.waterWords(f.power).replace(/^The water will/, 'the water will')}`)))));
+  }
+  forecastCard() {
+    this.showCard((done) => h('div', { class: 'reveal-card pop' },
+      h('h2', {}, 'The sky'),
+      this.forecastRows(this.game.now()),
+      h('p', { class: 'sub' }, 'Rain swells the spring, and so does the moon. On the nights the water runs high it carries the soil on its banks further. Deep soil, and soil with roots in it, holds better.'),
+      h('button', { class: 'btn green', onclick: done }, 'OK')));
+  }
+  /** What last night's water did, for the morning card. */
+  nightLine(n) {
+    if (!n) return null;
+    const w = ((this.content.tuning.weather || {}).types || {})[n.weather] || {}, moon = (((this.content.tuning.moon || {}).phases || [])[n.moon] || {}).name || 'the moon';
+    const carried = n.taken.length, lost = n.taken.filter((x) => x.from).length;
+    const what = carried ? `the water carried soil onto ${carried} tile${carried === 1 ? '' : 's'}${lost ? ` (${lost} changed school)` : ''}` : 'the water left the soil where it was';
+    return h('p', { class: 'sub night' }, ic('moon.' + n.moon, 1), ` Last night (${(w.name || 'calm').toLowerCase()}, ${moon.toLowerCase()}): ${what}${n.held ? `; ${n.held} held firm` : ''}.`);
+  }
+
   /** The morning check: what's ready, what's still growing, and the night's surprise, if any. */
   morningCard(m, away) {
     const g = this.game, now = g.now();
@@ -854,7 +918,9 @@ export class UI {
     const body = h('div', { class: 'morning' },
       rows.length ? h('div', { class: 'gifts' }, rows) : h('p', { class: 'sub' }, g.state.plants.length ? 'Nothing is ready yet.' : 'The garden is waiting for seeds.'),
       m.growing ? h('p', { class: 'sub' }, `${m.growing} still growing. The next is ready ${this.roughly(m.next - now)}.`) : null,
-      m.surprise ? this.surpriseLine(m.surprise) : null);
+      m.surprise ? this.surpriseLine(m.surprise) : null,
+      this.nightLine(g.state.lastNight, now),
+      this.forecastRows(now, true));
     this.celebrate(title, body, null, rows.length ? 'Lovely' : 'OK');
   }
   surpriseLine(s) {

@@ -10,7 +10,7 @@
   "startHeight": 8
  },
  "start": {
-  "_about": "A new garden opens on a little grotto around the old log: scenery along its edge (visual only), and the opening's seed tin (Content/opening.json) on a free tile within tin.near of the old log.",
+  "_about": "A new garden opens on a little grotto around the spring: its streams, scenery along its edge (visual only), and the opening's seed tin (Content/opening.json) on a free tile within tin.near of the spring.",
   "tin": {
    "sprite": "garden.tin",
    "near": 2
@@ -34,7 +34,21 @@
   "startCoins": 20,
   "soil": {
    "preferred": 1,
-   "plain": 0.6
+   "plain": 0.6,
+   "wrong": 0.35,
+   "_wrong": "A plant whose tile was overtaken by another school's soil keeps growing, at this speed.",
+   "levels": {
+    "max": 4,
+    "speedPerLevel": 0.06,
+    "yieldAt": 3,
+    "names": [
+     "Fresh",
+     "Settled",
+     "Rich",
+     "Deep"
+    ],
+    "_about": "Soil matures one level each night it holds (tuning.tides), 1 to max. On a plant's own soil each level above 1 adds speedPerLevel to its speed, and from yieldAt it gives +1 produce. Higher levels look more strongly of their school."
+   }
   },
   "stages": {
    "sprout": 0.15,
@@ -709,5 +723,94 @@
    "steps": 2
   }
  },
- "debugTools": true
+ "debugTools": true,
+ "water": {
+  "_about": "The spring (centre of the clearing) and its streams. A new garden's streams take riverTiles water tiles (not counting the spring), in at least minStreams streams: either leaving the spring in different directions or forking, meandering at random (keepDirection: chance to carry straight on). Streams never touch each other except where they fork, so they stay distinct. dig: digging an empty tile next to water turns it into water (its soil is lost) for cost + step x tiles dug so far.",
+  "riverTiles": [
+   6,
+   7
+  ],
+  "minStreams": 2,
+  "keepDirection": 0.55,
+  "dig": {
+   "cost": 15,
+   "step": 5
+  }
+ },
+ "weather": {
+  "_about": "Each local day has weather, deterministic from the garden seed: it repeats yesterday's with `persistence`, otherwise it's drawn by `weight`. The forecast shows today and tomorrow. `power` is how hard that day's weather drives the water at night.",
+  "persistence": 0.45,
+  "types": {
+   "clear": {
+    "name": "Clear",
+    "icon": "sun",
+    "weight": 35,
+    "power": 0
+   },
+   "cloudy": {
+    "name": "Cloudy",
+    "icon": "cloud",
+    "weight": 30,
+    "power": 0.3
+   },
+   "rain": {
+    "name": "Rain",
+    "icon": "rain",
+    "weight": 25,
+    "power": 1.2
+   },
+   "storm": {
+    "name": "Storm",
+    "icon": "storm",
+    "weight": 10,
+    "power": 2.2
+   }
+  }
+ },
+ "moon": {
+  "_about": "The real moon's phase on each local day (synodic month from a known new moon). Its power adds to the weather's: the water runs highest when a storm meets a full moon.",
+  "phases": [
+   {
+    "name": "New moon",
+    "power": 0
+   },
+   {
+    "name": "Waxing crescent",
+    "power": 0.25
+   },
+   {
+    "name": "First quarter",
+    "power": 0.5
+   },
+   {
+    "name": "Waxing gibbous",
+    "power": 0.9
+   },
+   {
+    "name": "Full moon",
+    "power": 1.5
+   },
+   {
+    "name": "Waning gibbous",
+    "power": 0.9
+   },
+   {
+    "name": "Last quarter",
+    "power": 0.5
+   },
+   {
+    "name": "Waning crescent",
+    "power": 0.25
+   }
+  ]
+ },
+ "tides": {
+  "_about": "Each night (local midnight) the water moves soil, with power = that day's weather power + moon power. Along the water: each bank tile (a tile touching water) may take on a soil carried by the water (chance alongWater x power, capped), chosen among the soils on all the banks, weighted by their maturity. Inland: soil on a bank may creep to one neighbouring tile (chance inland x power, capped). A tile resists by its maturity, and more with a plant growing on it: it holds with chance resist / (resist + hold), where resist = maturity (0 for plain) + plantHold. Tiles that held their soil through the night mature by one level, up to maxLevel. Catch-up covers at most maxNights.",
+  "alongWater": 0.1,
+  "inland": 0.08,
+  "cap": 0.8,
+  "hold": 1.2,
+  "plantHold": 1.5,
+  "maxNights": 14
+ }
 }

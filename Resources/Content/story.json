@@ -1,16 +1,16 @@
 {
  "_about": "All story and hint text. Edit freely; {placeholders} are filled in by the game.",
  "messages": {
-  "welcome": "A quiet clearing around an old log. The ground is soft and waiting.",
+  "welcome": "A quiet clearing around a spring. Water is already finding its way through the moss.",
   "expansion": "The treeline steps back. There's more room to grow.",
-  "offeringsIntro": "Neighbours passing through the forest stop by the old log to leave notes and trade.",
+  "offeringsIntro": "Neighbours passing through the forest leave notes by the spring: things they'd like from your garden.",
   "firstDelivery": "Come back to the Store as your garden grows: new things open up.",
   "forageTitle": "Something at the edge",
   "openingDone": "The tin is empty now, but the ground remembers what you told it."
  },
  "guide": {
   "landmarks": {
-   "landmark.old-log": "The last remnant of an ancient forest. Moss still clings to it, and something in its rings remembers what this place used to be. Neighbours leave notes on it, and the Store keeps its shelves in its hollow."
+   "landmark.spring": "Clear water rising from somewhere deep under the clearing. It runs where it likes, and carries whatever soil it touches along its banks. Rain swells it, and it rises with the moon."
   }
  },
  "visitors": {

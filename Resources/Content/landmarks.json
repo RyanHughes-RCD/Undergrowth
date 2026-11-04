@@ -1,14 +1,13 @@
 [
  {
-  "id": "landmark.old-log",
-  "name": "The Old Log",
-  "sprite": "landmark.old-log",
+  "id": "landmark.spring",
+  "name": "The Spring",
+  "sprite": "landmark.spring",
   "position": "center",
   "footprint": [
-   2,
+   1,
    1
   ],
-  "solid": true,
   "inGuide": true
  }
 ]
