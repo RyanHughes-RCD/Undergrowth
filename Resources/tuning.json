@@ -318,6 +318,168 @@
      0.5
     ],
     "sell": 14
+   },
+   "ring-morel": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "crown-puffball": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "ancient-sporecrown": {
+    "growHours": 16,
+    "yield": 4,
+    "seeds": [
+     0,
+     0.2
+    ],
+    "sell": 40
+   },
+   "moonlight-morel": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "starlight-bonnet": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "starspore": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "dawn-peony": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "petalwhirl": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "greenheart-vine": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "heartleaf-canopy": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "heartwood-sapling": {
+    "growHours": 16,
+    "yield": 4,
+    "seeds": [
+     0,
+     0.2
+    ],
+    "sell": 40
+   },
+   "rainbow-eucalyptus": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "opaline-shelf": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "cave-lily": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "ghost-orchid": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "deeproot-lantern": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "corpse-flower": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
+   },
+   "amethyst-deceiver": {
+    "growHours": 12,
+    "yield": 3,
+    "seeds": [
+     0,
+     0.35
+    ],
+    "sell": 22
    }
   },
   "companions": {
@@ -407,7 +569,7 @@
    "perDay": 2
   },
   "packets": {
-   "_about": "Seed packets are blind pulls: each school sells Common, Uncommon and Rare seeds. Planting one picks a plant from that school's seed plants (plants.json source 'seeds'): first a tier by the packet's `odds` (never a sure thing), then evenly among that school's plants of the tier (a tier with none steps down). The plant shows only as a seedling until it reaches its bud. Harvests return seeds of the plant's own school and tier (seeds per plant in plants), so rare plants give rare seeds. `price` in the Store; `beauty`: the beauty tier that puts that tier of seeds on the shelf. Gift plants and colour varieties keep their own named packets.",
+   "_about": "Seed packets are blind pulls: each school sells Common, Uncommon, Rare, Epic and Legendary seeds. Planting one picks a plant from that school's seed plants (plants.json source 'seeds'): first a tier by the packet's `odds` (never a sure thing: every tier keeps a chance of every plant tier its odds list, and no tier is certain), then evenly among that school's plants of the tier (a tier with none steps down). The plant shows only as a seedling until it reaches its bud. Harvests return seeds of the plant's own school and tier (seeds per plant in plants), so rare plants give rare seeds (and epic ones epic seeds). Epic and Legendary plants are the catalogue's Very rare and Legendary finds; a school with no Legendary plant steps a Legendary pull down to Epic. `price` in the Store; `beauty`: the beauty tier that puts that tier of seeds on the shelf. Gift plants and colour varieties keep their own named packets.",
    "tiers": {
     "common": {
      "price": 5,
@@ -434,6 +596,28 @@
       "common": 15,
       "uncommon": 45,
       "rare": 40
+     }
+    },
+    "epic": {
+     "price": 60,
+     "beauty": 3,
+     "odds": {
+      "common": 8,
+      "uncommon": 27,
+      "rare": 40,
+      "epic": 23,
+      "legendary": 2
+     }
+    },
+    "legendary": {
+     "price": 120,
+     "beauty": 4,
+     "odds": {
+      "common": 4,
+      "uncommon": 14,
+      "rare": 32,
+      "epic": 38,
+      "legendary": 12
      }
     }
    }
@@ -501,7 +685,7 @@
   "recolorCost": 0
  },
  "visitors": {
-  "_about": "Visitors (Content/visitors.json): forest animals drawn by particular plants blooming in the garden, in their time window. Every checkMinutes of game time (offline catch-up included, up to maxCatchUpDays) each visitor's interest rises by interest.gain while every plant it likes is blooming (in bloom or ready) somewhere in the garden, and falls by interest.decay when not. Stages: signs (in its time window, tracks appear beside the plants it likes, chance tracks.chance per check, fading after tracks.hours), clues (tapping tracks reads a clue naming one of its preferences the player doesn't know yet, recorded on its Field Guide page), present (in its window it comes with presence.chance per check, staying presence.minutes, at most presence.perDay a day). Tapping a present visitor befriends it: it leaves its gift seeds at once, comes more often (befriended*), and now and then leaves more on a morning (the morning card's gift surprise). Each check's random choices are seeded from the garden, the visitor and the check's time, so it's deterministic.",
+  "_about": "Visitors (Content/visitors.json): forest animals that leave mementos, then move in. Every checkMinutes of game time (offline catch-up included, up to maxCatchUpDays) each visitor's interest rises by interest.gain while every plant it likes is blooming (in bloom or ready), and falls by interest.decay when not. In its time window, once interest reaches visits.firstAt (its first memento) or visits.at[tier] (later visits), it visits unseen with chance visits.chance, at most visits.perDay a day, and leaves its next memento. On the visit after its last memento it moves in if every condition in its `stays` holds (soil patches it claims for itself: one soil tile, one resident), else it leaves a plainer hint (`restate`). A resident stays while its conditions hold and leaves at the first check where one doesn't, with a parting memento (`parting`). Moving in gives its gift seeds (gift.count) once, and residents leave the morning card's gift surprise. Perks (visitors.json perk): growth multiplies the speed of plants of its school on its patch; tideHold keeps its patch's soil through the tides. The Stump (tribute): an offering is taken at the next nightfall and works for tribute.hours: visitors of its school (and of a tier its own tier reaches: common items early visitors, uncommon settled too, rare all) gain interest tribute.mult[tier] times as fast, gain tribute.court of the normal rate even when their plants aren't blooming, and visit tribute.likedMult times as often if it's a plant they like. It never leaves a memento itself; when its time is up the Stump answers (lingered, moved or untouched). Deterministic from the garden, the visitor and the check's time.",
   "checkMinutes": 30,
   "maxCatchUpDays": 7,
   "interest": {
@@ -509,28 +693,28 @@
    "decay": 0.5,
    "max": 100
   },
-  "stages": {
-   "signs": 10,
-   "clues": 20,
-   "present": 60
-  },
-  "tracks": {
+  "visits": {
+   "firstAt": 10,
+   "at": {
+    "early": 20,
+    "settled": 40,
+    "mystical": 60
+   },
    "chance": 0.35,
-   "hours": 24,
-   "maxPerVisitor": 3
-  },
-  "presence": {
-   "chance": 0.35,
-   "minutes": [
-    60,
-    150
-   ],
-   "perDay": 1,
-   "befriendedPerDay": 2,
-   "befriendedChanceMult": 2
+   "perDay": 1
   },
   "gift": {
    "count": 2
+  },
+  "tribute": {
+   "hours": 24,
+   "mult": [
+    2,
+    3,
+    4
+   ],
+   "court": 0.5,
+   "likedMult": 2
   }
  },
  "naming": {
@@ -842,5 +1026,39 @@
   "basePower": 0.6,
   "matureChance": 0.5,
   "maxTides": 28
+ },
+ "well": {
+  "_about": "The wishing well (landmarks.json landmark.well), found by the second Room to grow. Each six-hour block (00:00, 06:00, 12:00, 18:00 local, like the tides) it's drawn to one focus: a school, or all flora (plants) or all fungi (mushrooms), in a shuffled round so each comes up in turn. The player drops in any handful of grown or foraged items. Its worth = each item's sell price, times `desire` if it matches the focus. luck = log2(1 + worth / luckScale), at most maxLuck. The reward is one of: coins (worth × a random rate in coinRate), a blessing or a seed packet, weighted coins `weights.coins`, blessing weights.blessing + blessingPerLuck × luck, packet weights.packet + packetPerLuck × luck. A blessing lasts blessing.hours: one school (two with chance two + twoPerLuck × luck, at most twoMax) grows `mult` times as fast and can be planted on any soil, at full speed. Blessings don't stack: a school blessed twice grows at `mult` for longer. Its school is the focus, if that's a school, else drawn from the handful by worth. A packet is a blind packet of that school; its tier is drawn from packets.base (common…legendary) with tier i weighted × e^(luckPerTier × luck × i). Every reward and tier keeps a chance at any luck.",
+  "desire": 2.5,
+  "luckScale": 10,
+  "maxLuck": 5,
+  "coinRate": [
+   0.6,
+   0.9
+  ],
+  "weights": {
+   "coins": 50,
+   "blessing": 3,
+   "blessingPerLuck": 8,
+   "packet": 5,
+   "packetPerLuck": 10
+  },
+  "blessing": {
+   "hours": 6,
+   "mult": 1.5,
+   "two": 0.15,
+   "twoPerLuck": 0.1,
+   "twoMax": 0.6
+  },
+  "packets": {
+   "base": [
+    60,
+    30,
+    12,
+    4,
+    1
+   ],
+   "luckPerTier": 0.35
+  }
  }
 }

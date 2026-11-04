@@ -127,8 +127,15 @@ export function varietySwap(palette, hue, leaves = false) {
 }
 
 export const SIDES = ['top', 'bottom', 'left', 'right'];
-/** Plant and blind-packet tiers, weakest first. */
-export const PLANT_TIERS = ['common', 'uncommon', 'rare'];
+/** Plant and blind-packet tiers, weakest first. Epic and Legendary plants are the catalogue's Very rare and Legendary finds. */
+export const PLANT_TIERS = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+export const TIER_NAMES = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', legendary: 'Legendary' };
+/** Visitor tiers, easiest to keep first. */
+export const VISITOR_TIERS = ['early', 'settled', 'mystical'];
+/** The Stump's landmark id (landmarks.json): found by the first Room to grow, it takes offerings. */
+export const STUMP = 'landmark.stump';
+/** The wishing well's landmark id: found by the second Room to grow, it takes handfuls of what you've grown. */
+export const WELL = 'landmark.well';
 /** A blind seed packet's id: seeds.<school>.<tier>. */
 export const blindPacketID = (school, tier) => `seeds.${school}.${tier}`;
 const sameTile = (a, b) => a.x === b.x && a.y === b.y;
@@ -152,6 +159,8 @@ export class Game {
     this.defaults();
     this.fitToGrid();
     this.placeLandmarks();
+    if ((state.revealCount || 0) > 0 && !this.stump) this.placeStump(null);
+    if ((state.revealCount || 0) > 1 && !this.well) this.placeLandmark2x2(WELL, null);
   }
 
   /** Fields every garden has (older version-7 saves may lack newer ones). */
@@ -177,8 +186,19 @@ export class Game {
     s.plants = s.plants || [];
     s.coins = s.coins || 0;
     s.morning = s.morning || { lastSurpriseDay: null };
-    s.guests = s.guests || {};             // visitors: interest, clues known, presence, befriended
-    s.guestTracks = s.guestTracks || [];
+    s.guests = s.guests || {};             // visitors: interest, mementos left (series), notes, home while resident
+    s.visitorNews = s.visitorNews || [];   // mementos, arrivals and departures since the player last looked
+    s.tribute = s.tribute || null;         // the offering on the Stump
+    s.wellBuffs = s.wellBuffs || [];       // the wishing well's blessings in force: { schools, from, until, mult }
+    // Before mementos, visitors left tracks and were befriended with a tap. A befriended one has already
+    // shown itself: it moves in at its next visit if it can stay.
+    delete s.guestTracks;
+    for (const [id, g] of Object.entries(s.guests)) {
+      if (!('befriended' in g) && !('known' in g)) continue;
+      const def = (this.content.visitorList || []).find((v) => v.id === id);
+      if (g.befriended && def) { g.series = (def.mementos || []).length; g.gifted = g.befriended; }
+      for (const k of ['befriended', 'known', 'present', 'presDay', 'presCount', 'visits']) delete g[k];
+    }
     s.collections = s.collections || {};   // school -> time completed
     s.water = s.water || [];               // "x,y" of every water tile, the source pool included
     s.pool = s.pool || null;               // top-left tile of the 2x2 pool the river rises from
@@ -301,7 +321,8 @@ export class Game {
   /** Brings the garden up to `now`. Returns a small report for the UI. */
   advance(now) {
     const report = { forage: this.forageTick(now), tides: this.tideTick(now) };
-    this.visitorTick(now);
+    this.expireBuffs(now);
+    this.visitorTick(now);   // (the tides have already run the checks up to each one)
     this.updateBeauty(now);
     this.state.lastUpdated = Math.max(this.state.lastUpdated || 0, now);
     return report;
@@ -346,7 +367,7 @@ export class Game {
     const ids = new Set((this.content.landmarks || []).map((d) => d.id));
     this.state.landmarks = this.state.landmarks.filter((l) => ids.has(l.id));
     for (const def of this.content.landmarks || []) {
-      if (this.state.landmarks.some((l) => l.id === def.id)) continue;
+      if (def.discovery || this.state.landmarks.some((l) => l.id === def.id)) continue;   // some are found later
       const c = this.state.clearing;
       const tile = def.position && typeof def.position === 'object' ? { ...def.position } : { x: Math.floor((c.x0 + c.x1) / 2), y: Math.floor((c.y0 + c.y1) / 2) };
       if (def.inGuide !== false) this.discover('landmark:' + def.id.replace(/^landmark\./, ''));
@@ -397,17 +418,16 @@ export class Game {
     for (const t of this.poolTiles(tl)) this.makeWater(t);
   }
   /**
-   * Turns a tile to water, whatever was on it: its soil is lost, a plant, debris, a find or tracks are
-   * gone, decor goes back to the Bag and the seed tin moves aside.
+   * Turns a tile to water, whatever was on it: its soil is lost, a plant, debris or a find is gone, decor
+   * goes back to the Bag and the seed tin moves aside. Never under a landmark (the Stump).
    */
   makeWater(t) {
     const s = this.state, k = key(t), at = (x) => sameTile(x.tile, t);
-    if (this.waterAt(t)) return;
+    if (this.waterAt(t) || this.landmarkAt(t)) return;
     delete s.soil[k]; delete s.soilLevel[k];
     s.plants = s.plants.filter((x) => !at(x));
     s.scenery = s.scenery.filter((x) => !at(x));
     s.forage.finds = s.forage.finds.filter((x) => !at(x));
-    s.guestTracks = s.guestTracks.filter((x) => !at(x));
     for (const d of s.decor.placed.filter(at)) { s.decor.placed = s.decor.placed.filter((x) => x !== d); s.decor.owned[d.decorID] = (s.decor.owned[d.decorID] || 0) + 1; }
     s.water.push(k);
     if (s.tin && at(s.tin)) { const n = this.freeNear(t); if (n) s.tin.tile = n; }
@@ -509,7 +529,7 @@ export class Game {
     const sway = (hash32(this.state.seed, tier, 0x7e3) % 5) - 2;
     if (side === 'top' || side === 'bottom') mid.x = Math.min(c.x1 - 1, Math.max(c.x0 + 1, mid.x + sway));
     else mid.y = Math.min(c.y1 - 1, Math.max(c.y0 + 1, mid.y + sway));
-    const blocked = (t) => this.plantAt(t) || this.decorAt(t) || this.tinAt(t) || this.sceneryAt(t);
+    const blocked = (t) => this.plantAt(t) || this.decorAt(t) || this.tinAt(t) || this.sceneryAt(t) || this.landmarkAt(t);
     const a = !blocked(mid) && this.riverPath(start, mid, tier), b = a && this.riverPath(mid, target, tier);
     const path = a && b ? [...a, ...b] : this.riverPath(start, target, tier);
     if (!path) return [];
@@ -543,7 +563,7 @@ export class Game {
       if (d > (dist.get(idx(t)) ?? Infinity)) continue;
       for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
         const n = { x: t.x + dx, y: t.y + dy };
-        if (!this.inClearing(n)) continue;
+        if (!this.inClearing(n) || this.landmarkAt(n)) continue;
         const nd = d + cost(n);
         if (nd < (dist.get(idx(n)) ?? Infinity)) { dist.set(idx(n), nd); prev.set(idx(n), t); open.push({ t: n, d: nd }); }
       }
@@ -574,7 +594,6 @@ export class Game {
     delete this.state.soil[key(t)]; delete this.state.soilLevel[key(t)];
     this.state.water.push(key(t));
     this.state.dug = (this.state.dug || 0) + 1;
-    this.state.guestTracks = this.state.guestTracks.filter((x) => !sameTile(x.tile, t));
     this.rebase(now);
     this.bump('dig');
     return chk.cost;
@@ -679,6 +698,8 @@ export class Game {
     const from = Math.max(s.tideAt + 1, cur - ((this.t.tides || {}).maxTides ?? 28) + 1);
     const sum = { tides: 0, taken: [], held: 0, matured: 0, crossed: 0 };
     for (let n = from; n <= cur; n++) {
+      this.expireBuffs(Game.tideStart(n));        // blessings that ran out before this tide end on time
+      this.visitorTick(Game.tideStart(n) - 1);   // visitors see the soil as it was until the tide turns
       const r = this.runTide(n);
       sum.tides++; sum.taken.push(...r.taken); sum.held += r.held; sum.matured += r.matured; sum.crossed += r.crossed;
       Object.assign(sum, { weather: r.weather, moon: r.moon, power: r.power, level: r.level, at: r.at });
@@ -710,6 +731,7 @@ export class Game {
     const tryTake = (t, school) => {
       const cur = this.soilAt(t);
       if (cur === school || changed.has(key(t))) return;
+      if (this.tideHeld(t)) { held++; return; }      // a resident with tideHold keeps its patch
       const resist = this.soilLevel(t) + (this.plantAt(t) ? (T.plantHold ?? 1.5) : 0);
       if (resist > 0 && rng.next() < resist / (resist + (T.hold ?? 1.2))) { held++; return; }
       taken.push({ tile: { ...t }, from: cur, to: school, plant: !!this.plantAt(t) });
@@ -809,12 +831,48 @@ export class Game {
     this.discover('soil:' + school);
     let feature = null;
     const f = feats[school], spot = near[n];
-    if (f && spot) {
+    // The first Room to grow finds the Stump instead of a wild feature (that school's comes later).
+    if (tier === 1 && !this.stump) {
+      const stump = this.placeStump(spot || start, added) || this.placeStump(spot || start);
+      return { soil: school, soilTiles: patch, feature: null, featureTile: null, stump: stump ? stump.tile : null };
+    }
+    // The second Room to grow also finds the wishing well, on the new ground.
+    let well = null;
+    if (tier === 2 && !this.well) {
+      const l = this.placeLandmark2x2(WELL, spot || start, added.filter((t) => !spot || !sameTile(t, spot))) || this.placeLandmark2x2(WELL, spot || start);
+      well = l ? l.tile : null;
+    }
+    if (f && spot && this.isFree(spot)) {
       this.state.scenery.push({ tile: { ...spot }, sprite: f.sprite, feature: school, flip: (hash32(this.state.seed, tier, 0x502) & 1) === 1 });
       feature = school;
       this.discover('feature:' + school);
     }
-    return { soil: school, soilTiles: patch, feature, featureTile: spot || null };
+    return { soil: school, soilTiles: patch, feature, featureTile: feature ? spot : null, well };
+  }
+  /**
+   * Puts the Stump (2x2) on four free tiles with no soil, nearest `near`: among `within` (the new ground)
+   * when given, else anywhere in the clearing, preferring the edge (for gardens that expanded before it).
+   */
+  placeStump(near, within = null) { return this.placeLandmark2x2(STUMP, near, within); }
+  /** Puts a 2x2 landmark (the Stump, the well) down once, the same way (see placeStump). */
+  placeLandmark2x2(id, near, within = null) {
+    const def = this.landmarkDef(id);
+    if (!def || this.state.landmarks.some((l) => l.id === id)) return null;
+    const allowed = within ? new Set(within.map(key)) : null;
+    const ok = (t) => (!allowed || allowed.has(key(t))) && this.isFree(t) && !this.soilAt(t);
+    const c = this.clearing;
+    let best = null;
+    for (let y = c.y0; y < c.y1; y++) for (let x = c.x0; x < c.x1; x++) {
+      const tiles = [{ x, y }, { x: x + 1, y }, { x, y: y + 1 }, { x: x + 1, y: y + 1 }];
+      if (!tiles.every(ok)) continue;
+      const score = near ? Math.abs(x + 0.5 - near.x) + Math.abs(y + 0.5 - near.y) : Math.min(x - c.x0, c.x1 - x - 1, y - c.y0, c.y1 - y - 1) * 4 + hashUnit(this.state.seed, x, y, 0x57);
+      if (!best || score < best.score) best = { tile: { x, y }, score };
+    }
+    if (!best) return null;
+    const l = { id, tile: best.tile };
+    this.state.landmarks.push(l);
+    this.discover('landmark:' + id.replace(/^landmark\./, ''));
+    return l;
   }
   /** A wild feature uncovered by Room to grow: { name, sprite, beauty, text }. */
   featureDef(school) { return ((this.t.expansion || {}).features || {})[school] || null; }
@@ -982,6 +1040,7 @@ export class Game {
    */
   soilFactor(def, school) {
     const c = this.gcfg.soil || {};
+    if (school !== def.school && this.isBlessed(def.school)) return c.preferred ?? 1;   // a well blessing: it grows anywhere
     if (!school) return c.plain ?? 0.6;
     return school === def.school ? (c.preferred ?? 1) : null;
   }
@@ -1024,6 +1083,8 @@ export class Game {
     const speeds = this.activeCompanions(p).filter((x) => x.rule.effect === 'speed').length;
     if (speeds) r *= Math.min(c.maxSpeed ?? 1.5, Math.pow(c.speed ?? 1.25, speeds));
     r *= this.ornamentFactor(p);
+    r *= this.residentGrowth(p);
+    r *= this.blessingMult(def.school);
     return r;
   }
 
@@ -1201,8 +1262,8 @@ export class Game {
   afterHarvest(p, now) { this.checkCollection(this.plantDef(p.plantID)?.school, now); }
 
   // ---- Field Guide collections (tuning.garden.collections)
-  /** A school's set: its seed plants and its gift plant. */
-  collectionPlants(school) { return this.content.plantList.filter((p) => p.school === school); }
+  /** A school's set: its seed plants up to Rare, and its gift plant (Epic and Legendary finds aren't in it). */
+  collectionPlants(school) { return this.content.plantList.filter((p) => p.school === school && PLANT_TIERS.indexOf(p.tier || 'common') <= 2); }
   collectionStatus(school) {
     const list = this.collectionPlants(school);
     const have = list.filter((p) => this.discovered.has('plant:' + p.id)).length;
@@ -1346,8 +1407,8 @@ export class Game {
       this.rebase(now);
       return { type: 'selfSeed', plantID: p.plantID, tile: p.tile, from: seedling.from };
     }]);
-    // A befriended visitor leaves its gift seeds.
-    const friends = this.guestDefs().filter((d) => this.guest(d.id).befriended && this.content.items[d.gift]).sort((a, b) => (a.id < b.id ? -1 : 1));
+    // A resident leaves its gift seeds.
+    const friends = this.residents().filter((d) => this.content.items[d.gift]).sort((a, b) => (a.id < b.id ? -1 : 1));
     if (friends.length) out.push(['gift', w.gift ?? 4, () => {
       const d = friends[hash32(this.state.seed, day, 0x9f7) % friends.length];
       const results = this.grant([{ item: d.gift, count: 1 }]);
@@ -1514,33 +1575,55 @@ export class Game {
     return d;
   }
 
-  // ---- visitors (Content/visitors.json, tuning.visitors): animals drawn by particular plants blooming
+  // ---- visitors (Content/visitors.json, tuning.visitors): animals that leave mementos, then move in
+  //
+  // Interest rises while every plant a visitor likes is blooming (and faster with a matching offering on
+  // the Stump). Once it's interested enough, it visits in its time window, unseen, and leaves the next of
+  // its mementos: each one hints at one of the conditions it needs to stay (`stays`). On the visit after
+  // its last memento, if every condition holds, it moves in. It stays while they hold and leaves at the
+  // first check where one doesn't, with a parting memento naming what broke. A soil patch belongs to one
+  // resident only: when it moves in it claims those tiles, and no other resident can count them.
   get guestCfg() { return this.t.visitors || {}; }
   guestDefs() { return this.content.visitorList || []; }
   guestDef(id) { return this.guestDefs().find((v) => v.id === id) || null; }
-  guest(id) { return (this.state.guests[id] = this.state.guests[id] || { interest: 0, known: [], befriended: false, present: null, presDay: -1, presCount: 0 }); }
-  /** Its preferences in the order clues reveal them: each liked plant, then the time of day. */
-  guestPrefKeys(def) { return [...def.likes.plants.map((p) => 'plant:' + p), 'time']; }
+  /** A visitor's saved state: interest, mementos left so far (series), its notes, and its home while it lives here. */
+  guest(id) {
+    const g = (this.state.guests[id] = this.state.guests[id] || {});
+    g.interest = g.interest || 0;
+    g.series = g.series || 0;
+    g.notes = g.notes || [];
+    if (g.home === undefined) g.home = null;
+    if (g.visitDay == null) g.visitDay = -1;
+    g.visitCount = g.visitCount || 0;
+    return g;
+  }
+  /** The schools a visitor belongs to (mystical visitors have two). */
+  guestSchools(def) { return def.schools || [def.school]; }
+  guestTierRank(def) { return Math.max(0, VISITOR_TIERS.indexOf(def.tier || 'early')); }
+  isResident(id) { const g = this.state.guests[id]; return !!(g && g.home); }
+  residents() { return this.guestDefs().filter((d) => this.isResident(d.id)); }
   /** Plants it likes that are blooming at t (in bloom or ready). */
   likedBlooming(def, t) { return this.state.plants.filter((p) => def.likes.plants.includes(p.plantID) && t >= p.plantedAt && this.isBlooming(p, t)); }
   /** Every plant it likes is blooming somewhere in the garden. */
   guestLikes(def, t) { const b = this.likedBlooming(def, t); return def.likes.plants.every((id) => b.some((p) => p.plantID === id)); }
-  /** Its stage: none, signs, clues, ready (interested enough to come) or present. */
-  guestStage(id, now) {
-    const g = this.guest(id), st = this.guestCfg.stages || {};
-    if (g.present && now >= g.present.from && now < g.present.until) return 'present';
-    if (g.interest >= (st.present ?? 60)) return 'ready';
-    if (g.interest >= (st.clues ?? 20)) return 'clues';
-    if (g.interest >= (st.signs ?? 10)) return 'signs';
-    return 'none';
+  /** resident, gone (it lived here and left), visiting (it has left mementos) or none. */
+  guestStage(id) {
+    const g = this.guest(id);
+    if (g.home) return 'resident';
+    if (g.left) return 'gone';
+    return g.series > 0 ? 'visiting' : 'none';
   }
-  presentGuests(now) { return this.guestDefs().filter((d) => this.guestStage(d.id, now) === 'present').map((d) => ({ def: d, g: this.guest(d.id) })); }
-  trackAt(t) { return this.state.guestTracks.find((x) => sameTile(x.tile, t)) || null; }
+  /** The interest a visit needs: the first memento comes early, later visits need more (by tier). */
+  visitNeed(def, g) {
+    const V = this.guestCfg.visits || {};
+    return g.series === 0 ? (V.firstAt ?? 10) : ((V.at || {})[def.tier || 'early'] ?? 40);
+  }
 
   /**
-   * Interest checks every checkMinutes of game time, catching up time away (up to maxCatchUpDays). The
-   * plants don't change between player actions (advance runs before each one), so reading them per check
-   * is exact. Each check's random choices are seeded from the garden, the visitor and the check's time.
+   * Visitor checks every checkMinutes of game time, catching up time away (up to maxCatchUpDays). Plants,
+   * decor and soil don't change between player actions and tides (advance runs before each action, and
+   * the tides call this up to just before they turn), so reading them per check is exact. Each check's
+   * random choices are seeded from the garden, the visitor and the check's time.
    */
   visitorTick(now) {
     const cfg = this.guestCfg, defs = this.guestDefs();
@@ -1554,8 +1637,8 @@ export class Game {
     const saved = this.rng;
     try {
       for (let k = k0; k <= k1; k++) {
-        const t = k * step, life = ((cfg.tracks || {}).hours ?? 24) * HOUR;
-        this.state.guestTracks = this.state.guestTracks.filter((x) => t - x.at < life && !this.plantAt(x.tile));
+        const t = k * step;
+        this.tributeStep(t);
         defs.forEach((d, i) => { this.rng = new RNG({ rng: hash32(this.state.seed, i + 1, k) }); this.guestCheck(d, t); });
       }
     } finally { this.rng = saved; }
@@ -1563,78 +1646,354 @@ export class Game {
   }
 
   guestCheck(def, t) {
-    const cfg = this.guestCfg, g = this.guest(def.id), I = cfg.interest || {}, S = cfg.stages || {};
-    const met = this.guestLikes(def, t);
-    g.interest = Math.max(0, Math.min(I.max ?? 100, g.interest + (met ? (I.gain ?? 1.5) : -(I.decay ?? 0.5))));
-    if (g.present && t >= g.present.until) g.present = null;
-    if (!met || this.dayPhase(t) !== def.likes.time) return;
-    // Signs: tracks beside the plants it likes, laid only while it's here (so the time clue is true).
-    const tr = cfg.tracks || {};
-    if (g.interest >= (S.signs ?? 10) && this.state.guestTracks.filter((x) => x.visitorID === def.id).length < (tr.maxPerVisitor ?? 3) && this.rng.chance(tr.chance ?? 0.35)) this.layTrack(def, t);
-    const pr = cfg.presence || {}, day = Game.dayNumber(t);
-    if (g.presDay !== day) { g.presDay = day; g.presCount = 0; }
-    const perDay = g.befriended ? (pr.befriendedPerDay ?? 2) : (pr.perDay ?? 1);
-    const chance = (pr.chance ?? 0.35) * (g.befriended ? (pr.befriendedChanceMult ?? 2) : 1);
-    if (!g.present && g.interest >= (S.present ?? 60) && g.presCount < perDay && this.rng.chance(chance)) this.startPresence(def, t);
+    const cfg = this.guestCfg, g = this.guest(def.id), I = cfg.interest || {}, V = cfg.visits || {};
+    const trib = this.tributeFor(def, t);
+    if (trib && !trib.tr.reached.includes(def.id)) trib.tr.reached.push(def.id);
+    if (g.home) { this.residentCheck(def, t); return; }
+    const met = this.guestLikes(def, t), gain = I.gain ?? 1.5;
+    const delta = met ? gain * (trib ? trib.mult : 1) : trib ? gain * (this.tributeCfg.court ?? 0.5) : -(I.decay ?? 0.5);
+    g.interest = Math.max(0, Math.min(I.max ?? 100, g.interest + delta));
+    if (!(met || trib) || this.dayPhase(t) !== def.likes.time) return;
+    const day = Game.dayNumber(t);
+    if (g.visitDay !== day) { g.visitDay = day; g.visitCount = 0; }
+    if (g.visitCount >= (V.perDay ?? 1) || g.interest < this.visitNeed(def, g)) return;
+    if (!this.rng.chance((V.chance ?? 0.35) * (trib && trib.liked ? (this.tributeCfg.likedMult ?? 2) : 1))) return;
+    g.visitCount++;
+    if (trib && !trib.tr.visited.includes(def.id)) trib.tr.visited.push(def.id);
+    this.guestVisit(def, t);
   }
 
-  /** Open tiles next to the plants it likes (where its tracks and its visits go). */
-  guestSpots(def, t) {
-    const out = [];
-    for (const p of this.likedBlooming(def, t)) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const x = { x: p.tile.x + dx, y: p.tile.y + dy };
-      if ((dx || dy) && this.isFree(x) && !out.some((o) => sameTile(o, x))) out.push(x);
+  /** A visit: the next memento, or, once they're all left, it moves in if it can stay (else a plainer hint). */
+  guestVisit(def, t) {
+    const g = this.guest(def.id), ms = def.mementos || [];
+    if (g.series < ms.length) {
+      g.series++;
+      this.guestNote(def, 'memento', g.series - 1, ms[g.series - 1].text, t);
+      return;
     }
+    const chk = this.stayCheck(def, t);
+    if (chk.ok) { this.moveIn(def, t, chk); return; }
+    const i = chk.broken[(g.restates || 0) % chk.broken.length];
+    g.restates = (g.restates || 0) + 1;
+    const text = (def.restate || {})[i];
+    if (text) this.guestNote(def, 'restate', i, text, t);
+  }
+
+  /** Something a visitor left: kept on its Field Guide page, and news for the next time the player looks. */
+  guestNote(def, kind, ref, text, t, extra = {}) {
+    const g = this.guest(def.id);
+    g.notes.push({ kind, ref, text, at: t });
+    // Every memento stays; only the latest few plainer hints and partings are kept.
+    const later = g.notes.filter((n) => n.kind !== 'memento');
+    if (later.length > 6) g.notes = g.notes.filter((n) => n.kind === 'memento' || later.slice(-6).includes(n));
+    this.state.visitorNews.push({ type: kind, visitor: def.id, text, at: t, ...extra });
+    if (this.state.visitorNews.length > 30) this.state.visitorNews = this.state.visitorNews.slice(-30);
+    if (kind === 'memento') this.bump('memento');
+  }
+
+  moveIn(def, t, chk) {
+    const g = this.guest(def.id);
+    g.home = { since: t, patches: chk.patches };
+    g.left = null;
+    this.discover('visitor:' + def.id.replace(/^visitor\./, ''));
+    this.bump('residents');
+    let results = [];
+    if (!g.gifted && this.content.items[def.gift]) { g.gifted = t; results = this.grant([{ item: def.gift, count: (this.guestCfg.gift || {}).count ?? 2 }]); }
+    this.state.visitorNews.push({ type: 'movedIn', visitor: def.id, at: t, results });
+    this.rebase(t);
+  }
+
+  /** A resident stays while every condition holds (perhaps on another patch); otherwise it leaves now. */
+  residentCheck(def, t) {
+    const g = this.guest(def.id), chk = this.stayCheck(def, t);
+    if (chk.ok) {
+      const before = JSON.stringify(g.home.patches);
+      g.home.patches = chk.patches;
+      if (JSON.stringify(chk.patches) !== before) this.rebase(t);
+      return;
+    }
+    const i = chk.broken[0];
+    g.home = null;
+    g.left = t;
+    g.interest = Math.max(g.interest, ((this.guestCfg.visits || {}).at || {})[def.tier || 'early'] ?? 40);
+    this.guestNote(def, 'parting', i, (def.parting || {})[i] || '', t);
+    this.rebase(t);
+  }
+
+  // ---- what a visitor needs to stay (visitors.json "stays")
+  /** Soil tiles other residents' patches hold (one tile, one resident). */
+  claimedTiles(exceptID = null) {
+    const out = new Set();
+    for (const [id, g] of Object.entries(this.state.guests)) if (id !== exceptID && g.home) for (const p of Object.values(g.home.patches || {})) for (const k of p) out.add(k);
     return out;
   }
-
-  layTrack(def, t) {
-    const g = this.guest(def.id), S = this.guestCfg.stages || {};
-    const spots = this.guestSpots(def, t).filter((x) => !this.trackAt(x));
-    if (!spots.length) return;
-    let clue = null;
-    if (g.interest >= (S.clues ?? 20)) {
-      const keys = this.guestPrefKeys(def), fresh = keys.filter((k) => !g.known.includes(k));
-      const pool = fresh.length ? fresh : keys;
-      clue = pool[this.rng.int(0, pool.length - 1)];
+  soilFits(t, c) { return this.inClearing(t) && !this.isWet(t) && this.soilAt(t) === c.school && this.soilLevel(t) >= (c.minLevel || 1); }
+  /**
+   * A patch for a soil condition among tiles no one holds: a full 3x3 block ("3x3"), or `tiles` tiles
+   * joined side by side. Returns its tile keys, or null.
+   */
+  findPatch(c, taken) {
+    const fits = (t) => !taken.has(key(t)) && this.soilFits(t, c);
+    const cl = this.clearing;
+    if (c.shape === '3x3') {
+      for (let y = cl.y0; y <= cl.y1 - 2; y++) for (let x = cl.x0; x <= cl.x1 - 2; x++) {
+        const block = [];
+        for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) block.push({ x: x + dx, y: y + dy });
+        if (block.every(fits)) return block.map(key);
+      }
+      return null;
     }
-    this.state.guestTracks.push({ id: this.rng.uuid(), visitorID: def.id, tile: { ...this.rng.pick(spots) }, at: t, clue });
+    const n = c.tiles || 4, seen = new Set();
+    for (const t of this.clearingTiles()) {
+      if (seen.has(key(t)) || !fits(t)) continue;
+      const comp = [t];
+      seen.add(key(t));
+      for (let i = 0; i < comp.length && comp.length < n; i++) {
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const u = { x: comp[i].x + dx, y: comp[i].y + dy };
+          if (!seen.has(key(u)) && fits(u)) { seen.add(key(u)); comp.push(u); }
+        }
+      }
+      if (comp.length >= n) return comp.slice(0, n).map(key);
+    }
+    return null;
+  }
+  isRaisedBed(t) { const d = this.decorAt(t); return !!d && !!this.decorKind(this.decorDef(d.decorID)).holdsPlant; }
+  /** One condition at t. A soil condition returns its patch (the one it has, if it still holds) or null. */
+  stayMet(def, i, t, taken, patches) {
+    const c = def.stays[i];
+    if (c.kind === 'soil') {
+      const cur = patches && patches[i];
+      if (cur && cur.every((k) => { const [x, y] = k.split(',').map(Number); return !taken.has(k) && this.soilFits({ x, y }, c); })) return cur;
+      return this.findPatch(c, taken);
+    }
+    if (c.kind === 'bed') return this.state.plants.some((p) => p.plantID === c.plant && t >= p.plantedAt && this.isRaisedBed(p.tile));
+    if (c.kind === 'beauty') return this.beautyTier(t).index >= (c.tier || 0);
+    if (c.kind === 'resident') return this.isResident(c.visitor);
+    return false;
+  }
+  /** Every condition at t: { ok, broken: [indices], patches: { index: tile keys } }. */
+  stayCheck(def, t) {
+    const g = this.guest(def.id), taken = this.claimedTiles(def.id), patches = {}, broken = [];
+    (def.stays || []).forEach((c, i) => {
+      const r = this.stayMet(def, i, t, taken, g.home && g.home.patches);
+      if (!r) { broken.push(i); return; }
+      if (c.kind === 'soil') { patches[i] = r; for (const k of r) taken.add(k); }
+    });
+    return { ok: !broken.length, broken, patches };
+  }
+  /** Every tile a resident's patches hold: "x,y" -> visitor def. */
+  homeTiles() {
+    const out = new Map();
+    for (const d of this.residents()) for (const p of Object.values(this.guest(d.id).home.patches || {})) for (const k of p) out.set(k, d);
+    return out;
+  }
+  /** Residents' perks on a plant: plants of its school on its patch grow faster (perk.growth). */
+  residentGrowth(p) {
+    const d = this.homeTiles().get(key(p.tile)), def = this.plantDef(p.plantID);
+    if (!d || !def || !(d.perk || {}).growth || !this.guestSchools(d).includes(def.school)) return 1;
+    return d.perk.growth;
+  }
+  /** A tile on a resident's patch with perk.tideHold never loses its soil to the tide. */
+  tideHeld(t) { const d = this.homeTiles().get(key(t)); return !!(d && (d.perk || {}).tideHold); }
+  /** Where a resident is seen: somewhere on its patch, moving to another tile every hour or so. */
+  residentTile(def, now) {
+    const tiles = Object.values(this.guest(def.id).home?.patches || {}).flat();
+    if (!tiles.length) return null;
+    const k = tiles[hash32(this.state.seed, hashStr(def.id), Math.floor(now / HOUR)) % tiles.length];
+    const [x, y] = k.split(',').map(Number);
+    return { x, y };
+  }
+  /** News since the player last looked (mementos, arrivals, departures, the Stump). Taking it clears it. */
+  takeVisitorNews() { const n = this.state.visitorNews; this.state.visitorNews = []; return n; }
+
+  // ---- the Stump (landmarks.json landmark.stump): an offering draws visitors of its school
+  get stump() { return this.state.landmarks.find((l) => l.id === STUMP) || null; }
+  get tributeCfg() { return this.guestCfg.tribute || {}; }
+  /** What an item counts for on the Stump: its school, its tier (0 common, 1 uncommon, 2 rare) and plant. */
+  tributeInfo(itemID) {
+    const it = this.content.items[itemID];
+    if (!it || (it.category !== 'plant' && it.category !== 'mushroom')) return null;
+    const pl = it.plant ? this.plantDef(it.plant) : null;
+    const tier = pl ? (pl.tier || 'common') : (it.rarity || 'common');
+    const rank = Math.min(2, PLANT_TIERS.includes(tier) ? PLANT_TIERS.indexOf(tier) : rarityIndex(tier));
+    return { school: (pl && pl.school) || it.school || null, rank, plant: it.plant || null };
+  }
+  /** Bag items that can go on the Stump: garden produce and foraged finds. */
+  offerable() {
+    return Object.entries(this.state.inventory).filter(([id, n]) => n > 0 && this.tributeInfo(id)).map(([id, n]) => ({ id, n, ...this.tributeInfo(id) }));
+  }
+  /** The offering on the Stump now: { item, placedAt, takenAt, until, ... } and its phase (waiting, taken), or null. */
+  tributeState(now) {
+    const tr = this.state.tribute;
+    if (!tr) return null;
+    return { ...tr, phase: now < tr.takenAt ? 'waiting' : 'taken' };
+  }
+  /** When an offering placed at `now` is taken: at the next check after nightfall (now, if it's night). */
+  nightAfter(now) {
+    const step = (this.guestCfg.checkMinutes || 30) * 60000;
+    let t = (Math.floor(now / step) + 1) * step;
+    for (let i = 0; i < 96 && !this.isNight(t); i++) t += step;
+    return t;
+  }
+  offer(itemID, now) {
+    if (!this.stump) throw new GameError("There's nowhere to leave it.");
+    if (this.state.tribute) throw new GameError(this.state.tribute.takenAt > now ? 'Something is already on the stump.' : 'The forest is still answering your last offering.');
+    if (!this.tributeInfo(itemID)) throw new GameError("That isn't something the forest would take.");
+    this.consume(itemID);
+    const takenAt = this.nightAfter(now);
+    this.state.tribute = { item: itemID, placedAt: now, takenAt, until: takenAt + (this.tributeCfg.hours ?? 24) * HOUR, reached: [], visited: [] };
+    this.bump('tribute');
+    return this.state.tribute;
+  }
+  /** Take the offering back before it's gone. */
+  takeBackOffering(now) {
+    const tr = this.state.tribute;
+    if (!tr || now >= tr.takenAt) throw new GameError("It's already gone.");
+    this.state.tribute = null;
+    return this.grant([{ item: tr.item, count: 1 }]);
+  }
+  /** Whether the offering active at t reaches this visitor: { mult, liked, tr } or null. */
+  tributeFor(def, t) {
+    const tr = this.state.tribute;
+    if (!tr || t < tr.takenAt || t >= tr.until) return null;
+    const info = this.tributeInfo(tr.item);
+    if (!info || !info.school || !this.guestSchools(def).includes(info.school) || info.rank < this.guestTierRank(def)) return null;
+    const mult = (this.tributeCfg.mult || [2, 3, 4])[info.rank] ?? 2;
+    return { mult, liked: !!info.plant && def.likes.plants.includes(info.plant), tr };
+  }
+  /** When an offering's day is over, the Stump's answer: someone lingered, it was moved, or barely touched. */
+  tributeStep(t) {
+    const tr = this.state.tribute;
+    if (!tr || t < tr.until) return;
+    const reaction = tr.visited.length ? 'lingered' : tr.reached.length ? 'moved' : 'untouched';
+    this.state.tribute = null;
+    this.state.lastTribute = { item: tr.item, reaction, at: t };
+    this.state.visitorNews.push({ type: 'stump', reaction, item: tr.item, at: t });
   }
 
-  startPresence(def, t) {
-    const g = this.guest(def.id), pr = this.guestCfg.presence || {};
-    const spots = this.guestSpots(def, t);
-    if (!spots.length) return;
-    const [lo, hi] = pr.minutes || [60, 150];
-    g.present = { from: t, until: t + (lo + this.rng.next() * (hi - lo)) * 60000, tile: { ...this.rng.pick(spots) } };
-    g.presCount++;
-    g.visits = (g.visits || 0) + 1;
+  // ---- the wishing well (landmarks.json landmark.well, tuning.well): drop in what you've grown for a reward
+  //
+  // Found by the second Room to grow. Each six-hour block (the tides' clock) it's drawn to one school, or to
+  // all flora or all fungi (its focus). Items it wants count `desire` times their value. The more a wish is
+  // worth, the better its luck: coins are always possible, but luck makes a blessing (a six-hour growth boost
+  // for one or two schools, which also lets them grow on any soil) and seed packets likelier, and the packets
+  // rarer. Nothing is ever certain: every reward and every packet tier keeps a chance at every luck.
+  get well() { return this.state.landmarks.find((l) => l.id === WELL) || null; }
+  get wellCfg() { return this.t.well || {}; }
+  /** The focus for the six-hour block containing t: { id (a school, flora or fungi), until }. */
+  wellFocus(t) {
+    const n = Game.tideNumber(t), opts = [...SCHOOLS, 'flora', 'fungi'], L = opts.length;
+    // A shuffled round of every focus per L blocks, so each comes up in turn and none repeats back to back.
+    const round = (r) => {
+      const perm = opts.slice().sort((a, b) => hash32(this.state.seed, r, hashStr(a), 0x3e11) - hash32(this.state.seed, r, hashStr(b), 0x3e11));
+      return perm;
+    };
+    const r = Math.floor(n / L), perm = round(r);
+    if (perm[0] === round(r - 1)[L - 1]) [perm[0], perm[1]] = [perm[1], perm[0]];
+    return { id: perm[((n % L) + L) % L], until: Game.tideStart(n + 1) };
   }
-
-  /** Reading tracks: the clue goes onto the visitor's Field Guide page. Returns the text. */
-  readTrack(trackID) {
-    const tr = this.state.guestTracks.find((x) => x.id === trackID);
-    if (!tr) throw new GameError('The tracks have faded.');
-    const def = this.guestDef(tr.visitorID);
-    if (!def) return '';
-    if (!tr.clue) return (this.content.story?.visitors || {}).faint || 'Small tracks, too faint to read yet.';
-    const g = this.guest(def.id);
-    if (!g.known.includes(tr.clue)) { g.known.push(tr.clue); this.bump('clue'); }
-    return def.clues[tr.clue] || '';
+  focusName(id) { return { flora: 'Flora', fungi: 'Fungi' }[id] || schoolName(id); }
+  /** How much the well wants an item now: desire× for its focus, else 1. */
+  wellDesire(itemID, t) {
+    const it = this.content.items[itemID], f = this.wellFocus(t).id;
+    if (!it) return 1;
+    const hit = it.school === f || (f === 'flora' && it.category === 'plant') || (f === 'fungi' && it.category === 'mushroom');
+    return hit ? (this.wellCfg.desire ?? 2.5) : 1;
   }
-
-  /** Tapping a present visitor befriends it: its Field Guide page fills in, and it leaves its gift seeds. */
-  befriendGuest(id, now) {
-    const def = this.guestDef(id);
-    if (!def || this.guestStage(id, now) !== 'present') throw new GameError('It has gone.');
-    const g = this.guest(id);
-    if (g.befriended) return { def, again: true, results: [] };
-    g.befriended = now;
-    for (const k of this.guestPrefKeys(def)) if (!g.known.includes(k)) g.known.push(k);
-    this.discover('visitor:' + id.replace(/^visitor\./, ''));
-    this.bump('befriend');
-    const results = this.content.items[def.gift] ? this.grant([{ item: def.gift, count: (this.guestCfg.gift || {}).count ?? 2 }]) : [];
-    return { def, again: false, results };
+  /** Bag items the well takes: anything grown or foraged (flora and fungi). */
+  wellItems() {
+    return Object.entries(this.state.inventory).filter(([id, n]) => n > 0 && this.sellPrice(id) > 0).map(([id, n]) => ({ id, n }));
+  }
+  /** What a handful is worth to the well right now: { value, luck (0..maxLuck), count }. */
+  wishWorth(pick, t) {
+    let value = 0, count = 0;
+    for (const [id, n] of Object.entries(pick || {})) {
+      const k = Math.min(n, this.state.inventory[id] || 0);
+      if (k <= 0) continue;
+      value += k * this.sellPrice(id) * this.wellDesire(id, t);
+      count += k;
+    }
+    const c = this.wellCfg;
+    return { value, count, luck: Math.min(c.maxLuck ?? 5, Math.log2(1 + value / (c.luckScale ?? 10))) };
+  }
+  /** Picks from [[value, weight]] with this.rng. */
+  weighted(list) {
+    const tot = list.reduce((a, x) => a + x[1], 0);
+    let r = this.rng.next() * tot;
+    for (const [v, w] of list) { if (r < w) return v; r -= w; }
+    return list[list.length - 1][0];
+  }
+  /** Schools of the handful, weighted by what each part was worth (for a blessing's or packet's school). */
+  wishSchools(pick, t) {
+    const by = {};
+    for (const [id, n] of Object.entries(pick)) { const s = this.content.items[id]?.school; if (s) by[s] = (by[s] || 0) + n * this.sellPrice(id) * this.wellDesire(id, t); }
+    return by;
+  }
+  /**
+   * Drop a handful into the well: `pick` is { itemID: count }. Returns the reward:
+   * { type: 'coins', coins } | { type: 'blessing', schools, until } | { type: 'packet', item, tier, results }.
+   */
+  wish(pick, now) {
+    if (!this.well) throw new GameError("There's no well here yet.");
+    const clean = {};
+    for (const [id, n] of Object.entries(pick || {})) {
+      if (!(n > 0)) continue;
+      if (!this.sellPrice(id)) throw new GameError("The well won't take that.");
+      if ((this.state.inventory[id] || 0) < n) throw new GameError("You don't have that many.");
+      clean[id] = n;
+    }
+    const worth = this.wishWorth(clean, now);
+    if (!worth.count) throw new GameError('Choose something to drop in.');
+    const c = this.wellCfg, W = c.weights || {}, L = worth.luck;
+    const focus = this.wellFocus(now).id, bySchool = this.wishSchools(clean, now);
+    for (const [id, n] of Object.entries(clean)) this.consume(id, n);
+    this.rebase(now);
+    const kind = this.weighted([['coins', W.coins ?? 50], ['blessing', (W.blessing ?? 10) + (W.blessingPerLuck ?? 8) * L], ['packet', (W.packet ?? 10) + (W.packetPerLuck ?? 10) * L]]);
+    // The school a blessing or packet favours: the focus if it's a school, else what the handful was mostly made of.
+    const pickSchool = (exclude = []) => {
+      if (SCHOOLS.includes(focus) && !exclude.includes(focus)) return focus;
+      const opts = Object.entries(bySchool).filter(([s]) => !exclude.includes(s));
+      return opts.length ? this.weighted(opts) : this.rng.pick(SCHOOLS.filter((s) => !exclude.includes(s)));
+    };
+    let out;
+    if (kind === 'coins') {
+      const [lo, hi] = c.coinRate || [0.6, 0.9];
+      const coins = Math.max(1, Math.round(worth.value * (lo + this.rng.next() * (hi - lo))));
+      this.state.coins += coins;
+      this.bump('earned', coins);
+      out = { type: 'coins', coins };
+    } else if (kind === 'blessing') {
+      const B = c.blessing || {};
+      const schools = [pickSchool()];
+      if (this.rng.chance(Math.min(B.twoMax ?? 0.6, (B.two ?? 0.15) + (B.twoPerLuck ?? 0.1) * L))) schools.push(pickSchool(schools));
+      const b = { schools, from: now, until: now + (B.hours ?? 6) * HOUR, mult: B.mult ?? 1.5 };
+      this.state.wellBuffs.push(b);
+      this.rebase(now);
+      out = { type: 'blessing', schools, until: b.until, mult: b.mult };
+    } else {
+      const P = c.packets || {}, base = P.base || [60, 30, 12, 4, 1], k = P.luckPerTier ?? 0.35;
+      const tier = this.weighted(PLANT_TIERS.map((t, i) => [t, (base[i] ?? 1) * Math.exp(k * L * i)]));
+      const item = blindPacketID(pickSchool(), tier);
+      out = { type: 'packet', item, tier, results: this.grant([{ item, count: 1 }]) };
+    }
+    this.state.wellLast = { at: now, focus, ...out };
+    this.bump('wish');
+    return out;
+  }
+  /** Blessings in force: [{ schools, until, mult }]. (Expired ones are removed as time passes; see expireBuffs.) */
+  get blessings() { return this.state.wellBuffs; }
+  /** The growth boost a blessing gives a school now (1 if none). Blessings don't stack: two only last longer. */
+  blessingMult(school) { return this.state.wellBuffs.filter((b) => b.schools.includes(school)).reduce((a, b) => Math.max(a, b.mult || 1), 1); }
+  isBlessed(school) { return this.state.wellBuffs.some((b) => b.schools.includes(school)); }
+  /** Blessings that ran out by t end exactly then: growth is banked to that moment and rates recomputed. */
+  expireBuffs(t) {
+    const done = this.state.wellBuffs.filter((b) => b.until <= t).sort((a, b) => a.until - b.until);
+    for (const b of done) {
+      this.rebase(b.until);
+      this.state.wellBuffs = this.state.wellBuffs.filter((x) => x !== b);
+      this.rebase(b.until);
+    }
   }
 
   // ---- beauty (tuning.garden.beauty): never shown as a number
@@ -1723,25 +2082,29 @@ export class Game {
   }
   devGiveCoins(n) { this.state.coins += n; }
   devGiveVarieties(n = 2) { const v = Object.values(this.content.varieties); for (const x of v) this.grant([{ item: x.packet, count: n }]); return v.length; }
+  /** Set a visitor's interest: none (and forget it), first (ready for its first memento) or visit (ready to visit). */
   devGuestStage(id, stage) {
-    const g = this.guest(id), S = this.guestCfg.stages || {};
-    g.interest = { none: 0, signs: S.signs ?? 10, clues: S.clues ?? 20, ready: S.present ?? 60 }[stage] ?? 0;
-    if (stage === 'none') { g.known = []; g.befriended = false; g.present = null; }
-  }
-  /** Bring a visitor into the garden now (next to a plant it likes, or anywhere open). */
-  devGuestPresent(id, now) {
     const def = this.guestDef(id), g = this.guest(id);
-    const spots = this.guestSpots(def, now);
-    const tile = spots[0] || this.freeNear(this.state.landmarks[0].tile);
-    g.interest = Math.max(g.interest, (this.guestCfg.stages || {}).present ?? 60);
-    g.present = { from: now, until: now + 30 * 60000, tile };
+    if (stage === 'none') { this.state.guests[id] = {}; this.guest(id); return; }
+    g.interest = stage === 'first' ? this.visitNeed(def, { series: 0 }) : Math.max(this.visitNeed(def, { series: 1 }), g.interest);
   }
-  devTracks(id, now) {
+  /** A visit now: the next memento, or it moves in if it can (else a plainer hint). */
+  devGuestVisit(id, now) {
     const def = this.guestDef(id), g = this.guest(id);
-    g.interest = Math.max(g.interest, (this.guestCfg.stages || {}).clues ?? 20);
-    const spots = this.guestSpots(def, now).length ? this.guestSpots(def, now) : [this.freeNear(this.state.landmarks[0].tile)];
-    const keys = this.guestPrefKeys(def);
-    spots.slice(0, 2).forEach((t, i) => this.state.guestTracks.push({ id: this.rng.uuid(), visitorID: id, tile: { ...t }, at: now, clue: keys[i % keys.length] }));
+    if (g.home) throw new GameError('It already lives here.');
+    this.guestVisit(def, now);
+  }
+  /** Move a visitor in now, whatever its conditions (soil patches it can find are claimed). */
+  devGuestMoveIn(id, now) {
+    const def = this.guestDef(id), g = this.guest(id);
+    if (g.home) throw new GameError('It already lives here.');
+    g.series = (def.mementos || []).length;
+    this.moveIn(def, now, this.stayCheck(def, now));
+  }
+  /** Each condition and whether it holds right now (developer mode). */
+  devGuestConditions(id, now) {
+    const def = this.guestDef(id), chk = this.stayCheck(def, now);
+    return (def.stays || []).map((c, i) => ({ c, ok: !chk.broken.includes(i) }));
   }
   devGiveOrnaments() { for (const r of this.content.relicList) this.state.decor.owned[r.id] = (this.state.decor.owned[r.id] || 0) + 1; return this.content.relicList.length; }
   devSetBeautyBest(i) { this.state.beautyBest = i; }
@@ -1802,9 +2165,10 @@ export class Content {
     }
     // Blind seed packets: Common, Uncommon and Rare seeds of each school (tuning.garden.packets).
     for (const school of SCHOOLS) for (const tier of PLANT_TIERS) {
-      const S = schoolName(school), T = tier.charAt(0).toUpperCase() + tier.slice(1);
-      this.addItem({ id: blindPacketID(school, tier), category: 'packet', name: `${T} ${S} seeds`, rarity: tier, sprite: `packet.${school}.${tier}`, school, blind: tier, inGuide: false,
-        text: { common: `${S} seeds. Mostly common plants, now and then something better.`, uncommon: `${S} seeds with better odds of something special.`, rare: `${S} seeds with good odds of a rare plant. Never a sure thing.` }[tier] });
+      const S = schoolName(school), T = TIER_NAMES[tier];
+      this.addItem({ id: blindPacketID(school, tier), category: 'packet', name: `${T} ${S} seeds`, rarity: { epic: 'veryRare' }[tier] || tier, sprite: `packet.${school}.${tier}`, school, blind: tier, inGuide: false,
+        text: { common: `${S} seeds. Mostly common plants, now and then something better.`, uncommon: `${S} seeds with better odds of something special.`, rare: `${S} seeds with good odds of a rare plant. Never a sure thing.`,
+          epic: `${S} seeds with a real chance of something few gardens ever see. Still never a sure thing.`, legendary: `The finest ${S} seeds there are: the best odds of all of something extraordinary, though even these can come up ordinary.` }[tier] });
     }
     // Soil amendments (amendments.json): Bag items that change a tile's soil.
     // Relics (relics.json) are decor ornaments: kind "ornament", with their school.

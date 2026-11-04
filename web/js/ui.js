@@ -1,5 +1,5 @@
 // DOM user interface: HUD, sheets (Bag, Store, Old Log, Field Guide, developer tools), cards and toasts.
-import { Game, SCHOOLS, RARITY_NAMES, rarityIndex, decorVariant, schoolName } from './core.js';
+import { Game, SCHOOLS, PLANT_TIERS, TIER_NAMES, RARITY_NAMES, rarityIndex, decorVariant, schoolName } from './core.js';
 
 const HOUR = 3600 * 1000;
 
@@ -78,6 +78,8 @@ export class UI {
         h('button', { class: 'round-btn' + (this.app.devMode ? ' dev-on' : ''), title: this.app.devMode ? 'Developer mode' : 'Debug', onclick: () => this.open('debug') },
           ic('bug', 2), this.app.devMode ? h('span', { class: 'dev-tag' }, 'DEV') : null)) : null,
     ));
+    const pill = this.blessingPill(now);
+    if (pill) top.append(h('div', { class: 'hud-row pills' }, pill));
     const bottom = h('div', { class: 'hud-bottom' });
     if (this.mode) bottom.append(this.modeBanner());
     if (this.selectedTile) bottom.append(this.tileCard(this.selectedTile));
@@ -92,7 +94,17 @@ export class UI {
   }
 
   /** Extra bits under the garden name: coins and the beauty meter (a named tier and leaf pips, never a number). */
-  hudExtras(now) { return [' · ', ic('coin', 1), ` ${this.game.state.coins}`, ' · ', this.beautyMeter(now)]; }
+  hudExtras(now) {
+    return [' · ', ic('coin', 1), ` ${this.game.state.coins}`, ' · ', this.beautyMeter(now)];
+  }
+  /** A small pill under the HUD while the well's blessing is on: which schools, and for how long. Tap for the well. */
+  blessingPill(now) {
+    const g = this.game, b = g.blessings;
+    if (!b.length) return null;
+    const schools = [...new Set(b.flatMap((x) => x.schools))], until = Math.max(...b.map((x) => x.until));
+    return h('button', { class: 'blessing-pill', title: 'The well has blessed these schools: they grow faster, on any soil.', onclick: () => { if (g.well) { this.wellPick = {}; this.open('well'); } } },
+      ic('sparkle', 1), ...schools.flatMap((k, i) => [i ? ' &' : '', h('b', { style: `color:${SCHOOL_COLORS[k]}` }, ' ' + schoolName(k))]), h('span', { class: 'sub' }, ` · ${this.forAbout(until - now).replace(/^for /, '')}`));
+  }
   beautyMeter(now) {
     const t = this.game.beautyTier(now), n = this.game.beautyTiers.length - 1;
     const pips = [];
@@ -294,6 +306,8 @@ export class UI {
       store: () => ['Store', this.storeBody()],
       decor: () => this.decorBody(arg),
       visitor: () => this.visitorBody(arg),
+      stump: () => ['The Stump', this.stumpBody()],
+      well: () => ['The Wishing Well', this.wellBody()],
     };
   }
 
@@ -468,15 +482,18 @@ export class UI {
     const sellable = Object.entries(g.state.inventory).filter(([id, n]) => n > 0 && g.sellPrice(id)).map(([id, n]) => ({ def: this.content.items[id], n, price: g.sellPrice(id) }));
     return [
       ['seeds', 'Seeds', () => {
-        const rows = g.storePackets();
-        return [h('p', { class: 'sub' }, "Every packet is a surprise: you won't know what it is until it buds. Better seeds have better odds of something rare, but nothing is certain."),
-          ...SCHOOLS.map((school) => h('div', { class: 'list-row seed-row' },
-            h('div', { class: 'thumb' }, this.sprites.element(`packet.${school}.common`, null, 3)),
-            h('div', { class: 'grow' }, h('b', { style: `color:${SCHOOL_COLORS[school]}` }, `${schoolName(school)} seeds`),
-              h('div', { class: 'seed-tiers' }, rows.filter((x) => x.school === school).map((x) => x.locks.length
-                ? h('button', { class: 'btn small grey', disabled: true, title: `Opens with ${this.lockText(x.locks)}` }, ic('lock', 1), ` ${cap(x.tier)}`)
-                : h('button', { class: 'btn small ' + (g.state.coins >= x.price ? 'green' : 'grey'), disabled: g.state.coins < x.price, onclick: () => a.buyPacket(x.id) },
-                  this.sprites.element(`packet.${school}.${x.tier}`, null, 1), ` ${cap(x.tier)} `, ic('coin', 1), ` ${x.price}`))))))];
+        // Every packet is its own item: grouped by tier, one row per school, each with its own packet.
+        const rows = g.storePackets().filter((x) => !this.seedSchool || x.school === this.seedSchool);
+        const chip = (id, label, color) => h('button', { class: 'tab' + ((this.seedSchool || null) === id ? ' on' : ''), style: color ? `color:${color}` : '', onclick: () => { this.seedSchool = id; this.renderSheet(); } }, label);
+        return [h('p', { class: 'sub' }, "Every packet is a surprise: you won't know what it is until it buds. Better seeds have better odds of something rare, but nothing is ever certain."),
+          h('div', { class: 'tabs seed-schools' }, chip(null, 'All'), ...SCHOOLS.map((k) => chip(k, schoolName(k), SCHOOL_COLORS[k]))),
+          ...PLANT_TIERS.flatMap((tier) => {
+            const list = rows.filter((x) => x.tier === tier);
+            if (!list.length) return [];
+            return [h('div', { class: 'section' }, `${TIER_NAMES[tier]} seeds`),
+              ...list.map((x) => { const it = this.content.items[x.id];
+                return this.buyRow(it.sprite, h('span', { style: `color:${SCHOOL_COLORS[x.school]}` }, it.name), h('div', { class: 'sub' }, it.text), x.price, () => a.buyPacket(x.id), x.locks); })];
+          })];
       }],
       ['soil', 'Soil', () => [h('p', { class: 'sub' }, "Soil that changes a tile for good is hard to come by: the Store has a little each day. Room to grow sometimes uncovers some too."),
         ...g.soilStock(now).map((x) => { const am = this.content.items[x.id];
@@ -552,7 +569,7 @@ export class UI {
     const g = this.game;
     const garden = () => this.content.plantList.map((p) => {
       const item = this.content.items[p.item], c = g.plantCfg(p.id);
-      const from = p.source === 'gift' ? 'Only a friend of the forest can bring its seeds.' : `It comes up from ${schoolName(p.school)} seeds${p.tier === 'common' ? '' : `, ${p.tier === 'rare' ? 'rarely' : 'now and then'}`}.`;
+      const from = p.source === 'gift' ? 'Only a friend of the forest can bring its seeds.' : `It comes up from ${schoolName(p.school)} seeds${{ common: '', uncommon: ', now and then', rare: ', rarely', epic: ', very rarely, and more often from the finest packets', legendary: ', almost never, and only from the finest packets' }[p.tier || 'common']}.`;
       return { key: 'plant:' + p.id, name: p.name, sprite: item.sprite, school: p.school, text: item.guideText, rarity: p.tier,
         hint: `${schoolName(p.school)} soil. ${from}`,
         extra: [h('p', { class: 'sub center' }, `${p.kind === 'fungus' ? 'A fungus' : p.kind === 'leafy' ? 'A leafy plant' : 'A flower'}. ${this.growHoursText(p.id)}. Sells for ${c.sell} coins. ${from}`),
@@ -567,7 +584,7 @@ export class UI {
       })],
       ['mushroom', 'Mushrooms', () => items('mushroom')],
       ['plant', 'Plants', () => items('plant')],
-      ['visitors', 'Visitors', () => (this.content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, visitor: v }))],
+      ['visitors', 'Visitors', () => (this.content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, visitor: v, hint: g.guest(v.id).series > 0 ? 'mementos' : null }))],
     ];
   }
 
@@ -626,33 +643,135 @@ export class UI {
     ];
   }
 
-  /** A visitor's page: its art and name once befriended, and every clue found so far. No numbers. */
+  /**
+   * A visitor's page: a silhouette until it has lived here, then its art, name and story. Every memento it
+   * has left, in order, and the plainer hints and partings since. Its conditions are never listed.
+   */
   visitorBody(id) {
     const def = (this.content.visitorList || []).find((v) => v.id === id);
     if (!def) return ['Visitor', h('p', { class: 'sub' }, 'Unknown.')];
-    const S = this.content.story?.visitors || {};
-    const known = this.game.discovered.has('visitor:' + id.replace(/^visitor\./, ''));
-    const clues = this.visitorClues(def);
+    const g = this.game, st = g.guest(id), stage = g.guestStage(id);
+    const known = g.discovered.has('visitor:' + id.replace(/^visitor\./, ''));
+    const status = { resident: this.story('visitors.resident'), gone: this.story('visitors.gone'), visiting: this.story('visitors.visiting') }[stage];
+    const label = { memento: null, restate: 'It came again', parting: 'When it left' };
     return [known ? def.name : '???', [
-      h('div', { class: 'hero' }, this.sprites.element(def.sprite, known ? null : { silhouette: [40, 44, 52] }, 6, '', true)),
-      h('p', { class: 'center' }, h('b', {}, known ? def.name : (S.unknownName || 'Someone small'))),
+      h('div', { class: 'hero' }, this.sprites.element(def.sprite, known ? null : SIL, 6, '', true)),
+      h('p', { class: 'center' }, h('b', {}, known ? def.name : this.story('visitors.unknownName'))),
       known && def.text ? h('p', { class: 'sub center' }, def.text) : null,
-      h('div', { class: 'section' }, 'Signs'),
-      clues.length ? h('ul', { class: 'clues' }, clues.map((c) => h('li', {}, c))) : h('p', { class: 'sub' }, S.noClues || 'No signs of it yet.'),
+      status ? h('p', { class: 'sub center' }, status) : null,
+      h('div', { class: 'section' }, 'Mementos'),
+      st.notes.length ? h('ul', { class: 'clues' }, st.notes.map((n) => h('li', { class: 'memento-' + n.kind }, label[n.kind] ? h('b', {}, label[n.kind] + ': ') : null, n.text)))
+        : h('p', { class: 'sub' }, this.story('visitors.noMementos')),
     ]];
   }
-  visitorClues(def) { const g = this.game.guest(def.id); return this.game.guestPrefKeys(def).filter((k) => g.known.includes(k)).map((k) => def.clues[k]).filter(Boolean); }
 
-  /** The gentle moment of befriending a visitor, and the seeds it leaves. */
-  befriendCard(r) {
-    const S = this.content.story?.visitors || {};
-    const gift = (r.results || []).map((x) => { const d = this.content.items[x.item]; return d ? h('div', { class: 'reward-item' }, this.sprites.element(d.sprite, d.variant || null, 2), ` ${x.count} × ${d.name}`) : null; });
-    this.showCard((done) => h('div', { class: 'reveal-card pop' },
-      h('div', { class: 'rays-wrap' }, this.burst('#ffe8a0'), this.sprites.element(r.def.sprite, null, 7, 'grow-in', true)),
-      h('h2', {}, r.def.name), h('p', { class: 'sub' }, r.again ? (S.befriendAgain || 'It knows you now.') : (S.befriend || '')),
-      r.again ? null : h('p', { class: 'sub' }, r.def.text || ''),
-      gift.length ? [h('p', { class: 'sub' }, 'It leaves you a gift:'), h('div', { class: 'gifts' }, gift)] : null,
-      h('button', { class: 'btn green', onclick: done }, 'Lovely')));
+  /** One line of visitor news (a memento, a plainer hint, an arrival, a departure, the Stump's answer). */
+  newsLine(n) {
+    const g = this.game, def = n.visitor && g.guestDef(n.visitor);
+    const known = def && g.discovered.has('visitor:' + def.id.replace(/^visitor\./, ''));
+    const name = def ? def.name : '';
+    if (n.type === 'stump') {
+      const it = this.content.items[n.item];
+      return h('div', { class: 'news' }, it ? this.sprites.element(it.sprite, it.variant || null, 2) : null, h('p', { class: 'sub' }, (this.content.story?.visitors?.stump || {})[n.reaction] || ''));
+    }
+    if (n.type === 'movedIn') {
+      const gifts = (n.results || []).map((x) => { const d = this.content.items[x.item]; return d ? ` ${x.count} × ${d.name}` : ''; }).join(',');
+      return h('div', { class: 'news arrival' }, this.sprites.element(def.sprite, null, 2, '', true),
+        h('p', {}, h('b', {}, this.story('visitors.movedIn', { name })), ' ', h('span', { class: 'sub' }, this.story('visitors.movedInText') + (gifts ? ` It brought you${gifts}.` : ''))));
+    }
+    const head = n.type === 'parting' ? this.story('visitors.parting', { name })
+      : this.story(`visitors.${n.type === 'restate' ? 'restate' : 'memento'}${known ? 'Known' : ''}`, { name });
+    return h('div', { class: 'news' }, def ? this.sprites.element(def.sprite, known ? null : SIL, 2, '', true) : null,
+      h('p', { class: 'sub' }, head, ' ', h('i', {}, n.text)));
+  }
+  /** Visitor news on its own card (when there's no morning card to carry it). */
+  visitorNewsCard(news) {
+    const arrival = news.find((n) => n.type === 'movedIn');
+    const title = arrival ? this.story('visitors.movedIn', { name: this.game.guestDef(arrival.visitor)?.name || '' }) : news.some((n) => n.type === 'parting') ? 'Someone has gone' : 'Something was here';
+    const art = arrival ? this.sprites.element(this.game.guestDef(arrival.visitor)?.sprite, null, 6, 'grow-in', true) : null;
+    this.celebrate(title, h('div', { class: 'morning' }, news.map((n) => this.newsLine(n))), art, 'OK');
+  }
+
+  /** Blessing lines: which schools grow faster (and anywhere), and for how long. */
+  blessingLines(now) {
+    return this.game.blessings.map((b) => h('p', { class: 'sub blessing' },
+      this.story('well.blessed', { schools: b.schools.map(schoolName).join(' and '), left: this.forAbout(b.until - now) })));
+  }
+  /** "for about 3 hours", "for less than an hour". */
+  forAbout(ms) { const hrs = ms / HOUR; return hrs < 1 ? 'for less than an hour' : `for about ${Math.round(hrs)} hour${Math.round(hrs) === 1 ? '' : 's'}`; }
+  /**
+   * The wishing well: what it's drawn to now, a handful to choose (steppers), how lucky that handful feels
+   * (in words, never numbers), and any blessing in force.
+   */
+  wellBody() {
+    const g = this.game, now = g.now(), a = this.app, f = g.wellFocus(now);
+    const pick = this.wellPick = this.wellPick || {};
+    for (const id of Object.keys(pick)) if (!(pick[id] > 0) || !(g.state.inventory[id] > 0)) delete pick[id]; else pick[id] = Math.min(pick[id], g.state.inventory[id]);
+    const items = g.wellItems().sort((x, y) => (g.wellDesire(y.id, now) - g.wellDesire(x.id, now)) || (g.sellPrice(y.id) - g.sellPrice(x.id)) || (x.id < y.id ? -1 : 1));
+    const worth = g.wishWorth(pick, now), words = (this.content.story?.well || {}).luck || [];
+    const focusColor = SCHOOL_COLORS[f.id] || '#e6dcc0';
+    const set = (id, n) => { pick[id] = Math.max(0, Math.min(n, g.state.inventory[id] || 0)); this.renderSheet(); };
+    const out = [h('div', { class: 'hero' }, this.sprites.element('landmark.well', null, 3)),
+      h('p', { class: 'sub center' }, (g.landmarkDef('landmark.well') || {}).purpose || ''),
+      h('p', { class: 'center' }, 'Right now the well is drawn to ', h('b', { style: `color:${focusColor}` }, { flora: 'all flora (plants and flowers)', fungi: 'all fungi (mushrooms)' }[f.id] || `${schoolName(f.id)} things`), '.'),
+      h('p', { class: 'sub center' }, this.story('well.focusChange', { when: this.roughly(f.until - now) })),
+      ...this.blessingLines(now)];
+    if (!items.length) { out.push(h('p', { class: 'sub' }, this.story('well.nothing'))); return out; }
+    out.push(h('p', { class: 'sub' }, this.story('well.pickIntro')));
+    for (const x of items) {
+      const it = this.content.items[x.id], n = pick[x.id] || 0, wanted = g.wellDesire(x.id, now) > 1;
+      out.push(h('div', { class: 'list-row' + (wanted ? ' wanted' : '') },
+        h('div', { class: 'thumb' }, this.sprites.element(it.sprite, it.variant || null, 2)),
+        h('div', { class: 'grow' }, h('b', {}, it.name), h('div', { class: 'sub' }, wanted ? `The well wants this · ${x.n} in your Bag` : `${x.n} in your Bag`)),
+        h('div', { class: 'qty' },
+          h('button', { class: 'btn small grey', disabled: !n, onclick: () => set(x.id, n - 1) }, '−'),
+          h('span', { class: 'qty-n' + (n ? ' on' : '') }, String(n)),
+          h('button', { class: 'btn small', disabled: n >= x.n, onclick: () => set(x.id, n + 1) }, '+'),
+          x.n > 1 ? h('button', { class: 'btn small grey', disabled: n >= x.n, onclick: () => set(x.id, x.n) }, 'All') : null)));
+    }
+    const word = worth.count ? words[Math.min(words.length - 1, Math.floor(worth.luck))] || '' : '';
+    out.push(h('div', { class: 'wish-bar' },
+      h('div', { class: 'grow' }, worth.count ? [h('b', {}, word), h('div', { class: 'sub' }, `${worth.count} thing${worth.count === 1 ? '' : 's'} to drop in`),
+        h('span', { class: 'progress' }, h('span', { style: `width:${Math.round(worth.luck / ((this.content.tuning.well || {}).maxLuck || 5) * 100)}%` }))] : h('span', { class: 'sub' }, 'Nothing chosen yet.')),
+      h('button', { class: 'btn green', disabled: !worth.count, onclick: () => { const p = { ...pick }; this.wellPick = {}; a.wish(p); } }, 'Drop them in')));
+    return out;
+  }
+  /** What the well gave back. */
+  wishCard(r) {
+    const g = this.game;
+    if (r.type === 'coins') this.celebrate('A wish', h('p', { class: 'sub' }, `${this.story('well.coins')} +${r.coins} coins.`), h('span', { class: 'row' }, ic('coin', 4)));
+    else if (r.type === 'blessing') this.celebrate('A blessing', h('div', {}, h('p', { class: 'sub' }, this.story('well.blessing', { schools: r.schools.map(schoolName).join(' and ') })),
+      h('p', { class: 'sub' }, `It lasts ${this.forAbout(r.until - g.now()).replace(/^for /, '')}.`)), h('span', { class: 'row' }, ...r.schools.map(() => ic('sparkle', 4))));
+    else {
+      const it = this.content.items[r.item];
+      this.celebrate('A wish', h('div', {}, h('p', { class: 'sub' }, this.story('well.packet')), h('p', {}, h('b', {}, it ? it.name : r.item))), it ? this.sprites.element(it.sprite, null, 5, 'grow-in') : null);
+    }
+  }
+
+  /** The Stump: what's on it, or what could go on it. */
+  stumpBody() {
+    const g = this.game, now = g.now(), tr = g.tributeState(now), a = this.app;
+    const def = g.landmarkDef('landmark.stump') || {};
+    const out = [h('div', { class: 'hero' }, this.sprites.element('landmark.stump', null, 4)), h('p', { class: 'sub center' }, def.purpose || '')];
+    if (tr) {
+      const it = this.content.items[tr.item];
+      out.push(h('div', { class: 'reward-item' }, it ? this.sprites.element(it.sprite, it.variant || null, 2) : null, ` ${it ? it.name : tr.item}`),
+        h('p', { class: 'sub' }, this.story(tr.phase === 'waiting' ? 'visitors.stumpWaiting' : 'visitors.stumpTaken')),
+        tr.phase === 'waiting' ? h('button', { class: 'btn grey small', onclick: () => a.takeBackOffering() }, 'Take it back') : null);
+      return out;
+    }
+    const last = g.state.lastTribute;
+    if (last) out.push(h('p', { class: 'sub' }, h('b', {}, 'Last time: '), (this.content.story?.visitors?.stump || {})[last.reaction] || ''));
+    const list = g.offerable().sort((x, y) => y.rank - x.rank || (this.content.items[x.id].name < this.content.items[y.id].name ? -1 : 1));
+    out.push(h('p', { class: 'sub' }, this.story('visitors.stumpEmpty')));
+    if (!list.length) out.push(h('p', { class: 'sub' }, 'You have nothing gathered to leave. Harvest something first.'));
+    for (const x of list) {
+      const it = this.content.items[x.id];
+      out.push(h('div', { class: 'row item-row' }, this.sprites.element(it.sprite, it.variant || null, 2),
+        h('span', { class: 'grow' }, `${it.name} `, h('span', { class: 'sub' }, `×${x.n}`)),
+        h('button', { class: 'btn green small', onclick: () => a.offer(x.id) }, 'Leave it')));
+    }
+    return out;
   }
 
   collectionCard(e) {
@@ -746,13 +865,15 @@ export class UI {
         h('div', { class: 'row gap wrap' }, amendSel, b('+1', () => a.debugGive(amendSel.value, 1)), b('+5', () => a.debugGive(amendSel.value, 5)),
           b('5 of every soil', () => a.dev((gm) => gm.devGiveAmendments(5), (n) => `+5 of ${n} amendments.`)))]],
       ['Visitors', [
-        h('p', { class: 'sub' }, 'Set a visitor\'s interest, leave its tracks by the plants it likes, or bring it into the garden now.'),
+        h('p', { class: 'sub' }, "Set a visitor's interest, make it visit now (its next memento, or moving in if it can stay), move it in regardless, or see which of its conditions hold."),
         (() => {
-          const sel = h('select', { class: 'select' }, this.content.visitorList.map((v) => h('option', { value: v.id }, `${v.name} (${v.likes.plants.join(', ')}, ${v.likes.time})`)));
+          const sel = h('select', { class: 'select' }, this.content.visitorList.map((v) => h('option', { value: v.id }, `${v.name} (${v.tier}, ${v.likes.plants.join(', ')}, ${v.likes.time})${g.isResident(v.id) ? ' · lives here' : ''}`)));
+          const say = (c) => c.kind === 'soil' ? `${c.shape || c.tiles + ' tiles'} ${c.school} soil, level ${c.minLevel}+` : c.kind === 'bed' ? `raised bed with ${c.plant}` : c.kind === 'beauty' ? `beauty tier ${c.tier}+` : `${c.visitor} living here`;
           return h('div', { class: 'row gap wrap' }, sel,
-            ...[['signs', 'Signs'], ['clues', 'Clues'], ['ready', 'Ready'], ['none', 'Reset']].map(([st, label]) => b(label, () => a.dev((gm) => gm.devGuestStage(sel.value, st), `${label}.`))),
-            b('Tracks now', () => a.dev((gm, t) => gm.devTracks(sel.value, t), 'Tracks laid.')),
-            b('Present now', () => { this.sheet = null; this.close(); a.dev((gm, t) => gm.devGuestPresent(sel.value, t), 'It has come to the garden.'); }));
+            ...[['first', 'Ready for a memento'], ['visit', 'Ready to visit'], ['none', 'Reset']].map(([st, label]) => b(label, () => a.dev((gm) => gm.devGuestStage(sel.value, st), `${label}.`))),
+            b('Visit now', () => { this.sheet = null; this.close(); a.dev((gm, t) => gm.devGuestVisit(sel.value, t)); }),
+            b('Move in now', () => { this.sheet = null; this.close(); a.dev((gm, t) => gm.devGuestMoveIn(sel.value, t)); }),
+            b('Conditions', () => a.dev((gm, t) => gm.devGuestConditions(sel.value, t), (r) => r.map((x) => `${x.ok ? '✓' : '✗'} ${say(x.c)}`).join(' · '))));
         })(),
         h('div', { class: 'row gap wrap' }, b('2 of every colour variety', () => a.dev((gm) => gm.devGiveVarieties(2), (n) => `+2 of ${n} variety packets.`)))]],
       ['Unlock', [h('div', { class: 'row gap wrap' },
@@ -930,6 +1051,7 @@ export class UI {
       rows.length ? h('div', { class: 'gifts' }, rows) : h('p', { class: 'sub' }, g.state.plants.length ? 'Nothing is ready yet.' : 'The garden is waiting for seeds.'),
       m.growing ? h('p', { class: 'sub' }, `${m.growing} still growing. The next is ready ${this.roughly(m.next - now)}.`) : null,
       m.surprise ? this.surpriseLine(m.surprise) : null,
+      ...(m.news || []).map((n) => this.newsLine(n)),
       this.tideLine(g.state.lastTides, now),
       this.forecastRows(now, true));
     this.celebrate(title, body, null, rows.length ? 'Lovely' : 'OK');

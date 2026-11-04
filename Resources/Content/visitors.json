@@ -3,17 +3,36 @@
   "id": "visitor.woodlouse",
   "name": "Woodlouse",
   "sprite": "visitor.woodlouse",
+  "tier": "early",
   "school": "spore",
-  "rarity": "common",
   "likes": {
    "plants": [
     "ink-cap"
    ],
    "time": "day"
   },
-  "clues": {
-   "plant:ink-cap": "Tiny tracks wander between the Ink Caps, which have been nibbled at the edges.",
-   "time": "The tracks are fresh by day, in the damp shade under the leaves."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "spore",
+    "tiles": 4,
+    "minLevel": 2
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A tiny curled grey shell, damp from the shade under the caps."
+   }
+  ],
+  "restate": {
+   "0": "It came back and pottered about, as if looking for a little ground of its own: dark, mushroomy soil that has had time to settle."
+  },
+  "parting": {
+   "0": "The little patch of settled Spore soil it lived on is gone, or too thin for it now."
+  },
+  "perk": {
+   "growth": 1.15
   },
   "text": "A small grey woodlouse that loves damp soil and mushroom gills. It rolls into a ball when surprised.",
   "gift": "packet.ink-cap.lavender"
@@ -22,8 +41,8 @@
   "id": "visitor.salamander",
   "name": "Cave Salamander",
   "sprite": "visitor.salamander",
+  "tier": "settled",
   "school": "spore",
-  "rarity": "rare",
   "likes": {
    "plants": [
     "velvet-shank",
@@ -31,10 +50,54 @@
    ],
    "time": "night"
   },
-  "clues": {
-   "plant:velvet-shank": "A pale, damp trail winds through the Velvet Shanks.",
-   "plant:ink-cap": "The trail curls round the Ink Caps too, as if it's looking for something.",
-   "time": "The trail is only ever fresh after dark."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "spore",
+    "shape": "3x3",
+    "minLevel": 3
+   },
+   {
+    "kind": "bed",
+    "plant": "velvet-shank"
+   },
+   {
+    "kind": "resident",
+    "visitor": "visitor.woodlouse"
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A pale, damp skin, shed whole, cool as a cellar."
+   },
+   {
+    "hint": [
+     0
+    ],
+    "text": "It came from somewhere wide and dark, where the soil is old and rich, and it wanted the middle of it."
+   },
+   {
+    "hint": [
+     1,
+     2
+    ],
+    "text": "It curled up by a Velvet Shank in a raised bed, close to where the woodlouse goes about its business."
+   }
+  ],
+  "restate": {
+   "0": "It searched for a wide square of rich Spore soil, three tiles each way, and found none of its own.",
+   "1": "It looked for a raised bed with a Velvet Shank in it.",
+   "2": "It seemed lonely for the woodlouse. It won't settle where none lives."
+  },
+  "parting": {
+   "0": "Its wide patch of rich Spore soil broke up, or went thin.",
+   "1": "The Velvet Shank in its raised bed is gone.",
+   "2": "The woodlouse left, and it wouldn't stay without it."
+  },
+  "perk": {
+   "growth": 1.2,
+   "tideHold": true
   },
   "text": "A pale, damp-skinned salamander that shelters among fungal roots and soft soil.",
   "gift": "packet.spore-lantern"
@@ -43,17 +106,36 @@
   "id": "visitor.firefly",
   "name": "Firefly",
   "sprite": "visitor.firefly",
+  "tier": "early",
   "school": "glow",
-  "rarity": "common",
   "likes": {
    "plants": [
     "foxfire-button"
    ],
    "time": "dusk"
   },
-  "clues": {
-   "plant:foxfire-button": "The Foxfire Buttons flicker as if something just rose from them.",
-   "time": "The flickering starts as the light goes, at dusk."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "glow",
+    "tiles": 4,
+    "minLevel": 2
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A spent little lantern-shell, still warm at one end."
+   }
+  ],
+  "restate": {
+   "0": "It blinked around the garden as if looking for a few tiles of glowing soil to call its own, soil that has had a little time to settle."
+  },
+  "parting": {
+   "0": "The little patch of settled Glow soil it lived on is gone, or too thin for it now."
+  },
+  "perk": {
+   "growth": 1.15
   },
   "text": "A glowing beetle that drifts over warm, sheltered plants at dusk.",
   "gift": "packet.foxfire-button.azure"
@@ -62,8 +144,8 @@
   "id": "visitor.moth",
   "name": "Glowmoth",
   "sprite": "visitor.moth",
+  "tier": "settled",
   "school": "glow",
-  "rarity": "rare",
   "likes": {
    "plants": [
     "lantern-flower",
@@ -71,10 +153,54 @@
    ],
    "time": "night"
   },
-  "clues": {
-   "plant:lantern-flower": "Glowing dust lies on the Lantern Flowers.",
-   "plant:honey-mushroom": "A little of the same dust has settled on the Honey Mushrooms.",
-   "time": "The dust is only fresh after dark."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "glow",
+    "shape": "3x3",
+    "minLevel": 3
+   },
+   {
+    "kind": "bed",
+    "plant": "lantern-flower"
+   },
+   {
+    "kind": "resident",
+    "visitor": "visitor.firefly"
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "Glowing dust, soft as flour, that lights your fingers."
+   },
+   {
+    "hint": [
+     0
+    ],
+    "text": "It circled the middle of a broad, bright patch, never the edge, where the light runs deep."
+   },
+   {
+    "hint": [
+     1,
+     2
+    ],
+    "text": "It rested on a Lantern Flower in a raised bed. It doesn't like to be the only one glowing; it followed the little lights here."
+   }
+  ],
+  "restate": {
+   "0": "It looked for a wide square of rich Glow soil, three tiles each way, all its own.",
+   "1": "It looked for a Lantern Flower growing in a raised bed.",
+   "2": "It went looking for the fireflies. It won't settle where none live."
+  },
+  "parting": {
+   "0": "Its wide patch of rich Glow soil broke up, or went thin.",
+   "1": "The Lantern Flower in its raised bed is gone.",
+   "2": "The fireflies left, and it wouldn't stay without them."
+  },
+  "perk": {
+   "growth": 1.2,
+   "tideHold": true
   },
   "text": "A soft-winged moth with luminous markings that pulse in the dark.",
   "gift": "packet.moonpetal"
@@ -83,8 +209,8 @@
   "id": "visitor.bumble",
   "name": "Bumblebee",
   "sprite": "visitor.bumble",
+  "tier": "early",
   "school": "bloom",
-  "rarity": "common",
   "likes": {
    "plants": [
     "marigold",
@@ -92,10 +218,28 @@
    ],
    "time": "day"
   },
-  "clues": {
-   "plant:marigold": "Pollen-dusted footprints wander over the Marigolds.",
-   "plant:cornflower": "The Cornflowers are dusted with pollen too.",
-   "time": "There's a busy hum here in the middle of the day."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "bloom",
+    "tiles": 4,
+    "minLevel": 2
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A smudge of golden pollen, as if something rested here heavy with it."
+   }
+  ],
+  "restate": {
+   "0": "It hummed from tile to tile as if looking for a little ground of its own: flowery Bloom soil that has had time to settle."
+  },
+  "parting": {
+   "0": "The little patch of settled Bloom soil it lived on is gone, or too thin for it now."
+  },
+  "perk": {
+   "growth": 1.15
   },
   "text": "A fuzzy, round bumblebee, drawn to bright, nectar-rich flowers.",
   "gift": "packet.marigold.lemon"
@@ -104,17 +248,62 @@
   "id": "visitor.hummingbird",
   "name": "Ruby-throated Hummingbird",
   "sprite": "visitor.hummingbird",
+  "tier": "settled",
   "school": "bloom",
-  "rarity": "rare",
   "likes": {
    "plants": [
     "lavender"
    ],
    "time": "dawn"
   },
-  "clues": {
-   "plant:lavender": "The Lavender has been sipped from, one tiny flower at a time.",
-   "time": "Something was here early, just as the light came."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "bloom",
+    "shape": "3x3",
+    "minLevel": 3
+   },
+   {
+    "kind": "bed",
+    "plant": "lavender"
+   },
+   {
+    "kind": "beauty",
+    "tier": 1
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A tiny ruby feather, bright as a jewel."
+   },
+   {
+    "hint": [
+     0,
+     1
+    ],
+    "text": "It hovered over the middle of a wide, rich patch of flowers, then over a raised bed of Lavender, kept and waiting."
+   },
+   {
+    "hint": [
+     2
+    ],
+    "text": "It seemed to judge the whole garden before it left, the way a guest looks around a room."
+   }
+  ],
+  "restate": {
+   "0": "It looked for a wide square of rich Bloom soil, three tiles each way, all its own.",
+   "1": "It looked for Lavender growing in a raised bed.",
+   "2": "It found the garden a little bare. It only stays where things are tended."
+  },
+  "parting": {
+   "0": "Its wide patch of rich Bloom soil broke up, or went thin.",
+   "1": "The Lavender in its raised bed is gone.",
+   "2": "The garden felt too bare for it."
+  },
+  "perk": {
+   "growth": 1.2,
+   "tideHold": true
   },
   "text": "A hovering nectar-feeder with a ruby throat. It loves tubular, brightly coloured flowers.",
   "gift": "packet.foxglove"
@@ -123,17 +312,36 @@
   "id": "visitor.rabbit",
   "name": "Mossback Hare",
   "sprite": "visitor.rabbit",
+  "tier": "early",
   "school": "verdure",
-  "rarity": "common",
   "likes": {
    "plants": [
     "wood-sorrel"
    ],
    "time": "dawn"
   },
-  "clues": {
-   "plant:wood-sorrel": "Little paths are pressed through the Wood Sorrel.",
-   "time": "The paths are fresh at dawn, still wet with dew."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "verdure",
+    "tiles": 4,
+    "minLevel": 2
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A tuft of soft green-grey fur caught on a leaf."
+   }
+  ],
+  "restate": {
+   "0": "It nosed about as if looking for a little ground of its own: green Verdure soil that has had time to settle."
+  },
+  "parting": {
+   "0": "The little patch of settled Verdure soil it lived on is gone, or too thin for it now."
+  },
+  "perk": {
+   "growth": 1.15
   },
   "text": "A small hare with mossy fur and leaf-like tufts that blends into dense greenery.",
   "gift": "packet.wood-sorrel.purple"
@@ -142,8 +350,8 @@
   "id": "visitor.squirrel",
   "name": "Red Squirrel",
   "sprite": "visitor.squirrel",
+  "tier": "settled",
   "school": "verdure",
-  "rarity": "rare",
   "likes": {
    "plants": [
     "hosta",
@@ -151,10 +359,54 @@
    ],
    "time": "day"
   },
-  "clues": {
-   "plant:hosta": "Nibbled husks lie under the Hosta leaves.",
-   "plant:wood-sorrel": "A few more husks are tucked into the Wood Sorrel.",
-   "time": "Something rustles here in the daytime."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "verdure",
+    "shape": "3x3",
+    "minLevel": 3
+   },
+   {
+    "kind": "bed",
+    "plant": "hosta"
+   },
+   {
+    "kind": "resident",
+    "visitor": "visitor.rabbit"
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A neatly split husk, nibbled clean."
+   },
+   {
+    "hint": [
+     0
+    ],
+    "text": "It wants cover on every side: a wide, rich green, with itself in the middle."
+   },
+   {
+    "hint": [
+     1,
+     2
+    ],
+    "text": "It hid a nut under a Hosta in a raised bed, then sat a long while near where the hare sleeps."
+   }
+  ],
+  "restate": {
+   "0": "It looked for a wide square of rich Verdure soil, three tiles each way, all its own.",
+   "1": "It looked for a Hosta growing in a raised bed.",
+   "2": "It went looking for the hare. It won't settle where none lives."
+  },
+  "parting": {
+   "0": "Its wide patch of rich Verdure soil broke up, or went thin.",
+   "1": "The Hosta in its raised bed is gone.",
+   "2": "The hare left, and it wouldn't stay without it."
+  },
+  "perk": {
+   "growth": 1.2,
+   "tideHold": true
   },
   "text": "A nimble red squirrel, drawn to leafy, seed-rich corners of a garden.",
   "gift": "packet.canopy-bells"
@@ -163,17 +415,36 @@
   "id": "visitor.glasswing",
   "name": "Glasswing Butterfly",
   "sprite": "visitor.glasswing",
+  "tier": "early",
   "school": "shimmer",
-  "rarity": "common",
   "likes": {
    "plants": [
     "jewelweed"
    ],
    "time": "day"
   },
-  "clues": {
-   "plant:jewelweed": "A wing-scale like a sliver of glass lies on a Jewelweed.",
-   "time": "It catches the light in the middle of the day."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "shimmer",
+    "tiles": 4,
+    "minLevel": 2
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A wing-scale like a sliver of glass. The light bends through it."
+   }
+  ],
+  "restate": {
+   "0": "It drifted about as if looking for a little ground of its own: glittering Shimmer soil that has had time to settle."
+  },
+  "parting": {
+   "0": "The little patch of settled Shimmer soil it lived on is gone, or too thin for it now."
+  },
+  "perk": {
+   "growth": 1.15
   },
   "text": "A butterfly with clear wings, made for bright, shimmering clearings.",
   "gift": "packet.jewelweed.sapphire"
@@ -182,8 +453,8 @@
   "id": "visitor.prism-moth",
   "name": "Prism Moth",
   "sprite": "visitor.prism-moth",
+  "tier": "settled",
   "school": "shimmer",
-  "rarity": "rare",
   "likes": {
    "plants": [
     "glassbell",
@@ -191,10 +462,54 @@
    ],
    "time": "dusk"
   },
-  "clues": {
-   "plant:glassbell": "Tiny rainbow flecks dust the Glassbells.",
-   "plant:jewelweed": "A few rainbow flecks have landed on the Jewelweed too.",
-   "time": "The flecks appear at dusk."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "shimmer",
+    "shape": "3x3",
+    "minLevel": 3
+   },
+   {
+    "kind": "bed",
+    "plant": "glassbell"
+   },
+   {
+    "kind": "resident",
+    "visitor": "visitor.glasswing"
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "Rainbow flecks on your fingertips, from something that brushed past at dusk."
+   },
+   {
+    "hint": [
+     0
+    ],
+    "text": "It danced over the middle of a wide patch where the crystals run deep and rich."
+   },
+   {
+    "hint": [
+     1,
+     2
+    ],
+    "text": "It came looking for the glass-winged one, and found a Glassbell in a raised bed to rest in."
+   }
+  ],
+  "restate": {
+   "0": "It looked for a wide square of rich Shimmer soil, three tiles each way, all its own.",
+   "1": "It looked for a Glassbell growing in a raised bed.",
+   "2": "It went looking for the glasswing butterfly. It won't settle where none lives."
+  },
+  "parting": {
+   "0": "Its wide patch of rich Shimmer soil broke up, or went thin.",
+   "1": "The Glassbell in its raised bed is gone.",
+   "2": "The glasswing left, and it wouldn't stay without it."
+  },
+  "perk": {
+   "growth": 1.2,
+   "tideHold": true
   },
   "text": "A moth with reflective scales that flash different colours as it turns.",
   "gift": "packet.prismbell"
@@ -203,17 +518,36 @@
   "id": "visitor.fox",
   "name": "Will-o'-Wisp Fox",
   "sprite": "visitor.fox",
+  "tier": "early",
   "school": "spirit",
-  "rarity": "common",
   "likes": {
    "plants": [
     "wisp-cap"
    ],
    "time": "dawn"
   },
-  "clues": {
-   "plant:wisp-cap": "Faintly glowing pawprints circle the Wisp Caps.",
-   "time": "The pawprints are fresh at dawn, and fade as the sun comes up."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "spirit",
+    "tiles": 4,
+    "minLevel": 2
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A pawprint that glows faintly, then fades as you watch."
+   }
+  ],
+  "restate": {
+   "0": "It circled the garden as if looking for a little ground of its own: misty Spirit soil that has had time to settle."
+  },
+  "parting": {
+   "0": "The little patch of settled Spirit soil it lived on is gone, or too thin for it now."
+  },
+  "perk": {
+   "growth": 1.15
   },
   "text": "A fox-like spirit with faintly glowing paws that wanders where the mist is thickest.",
   "gift": "packet.wisp-cap.rose"
@@ -222,8 +556,8 @@
   "id": "visitor.owl",
   "name": "Barn Owl",
   "sprite": "visitor.owl",
+  "tier": "settled",
   "school": "spirit",
-  "rarity": "rare",
   "likes": {
    "plants": [
     "mistbell",
@@ -231,12 +565,368 @@
    ],
    "time": "night"
   },
-  "clues": {
-   "plant:mistbell": "A soft, pale feather rests among the Mistbells.",
-   "plant:wisp-cap": "Another feather lies by the Wisp Caps.",
-   "time": "It's only ever here in the deep of the night."
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "spirit",
+    "shape": "3x3",
+    "minLevel": 3
+   },
+   {
+    "kind": "bed",
+    "plant": "mistbell"
+   },
+   {
+    "kind": "beauty",
+    "tier": 1
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A soft pale feather, resting in the mist."
+   },
+   {
+    "hint": [
+     0
+    ],
+    "text": "It watched from the middle of a wide stretch of old, misty ground."
+   },
+   {
+    "hint": [
+     1,
+     2
+    ],
+    "text": "It perched above a raised bed of Mistbell, and seemed to weigh how well the garden is kept."
+   }
+  ],
+  "restate": {
+   "0": "It looked for a wide square of rich Spirit soil, three tiles each way, all its own.",
+   "1": "It looked for Mistbell growing in a raised bed.",
+   "2": "It found the garden a little bare. It only settles where things are tended."
+  },
+  "parting": {
+   "0": "Its wide patch of rich Spirit soil broke up, or went thin.",
+   "1": "The Mistbell in its raised bed is gone.",
+   "2": "The garden felt too bare for it."
+  },
+  "perk": {
+   "growth": 1.2,
+   "tideHold": true
   },
   "text": "A quiet, pale hunter that loves silent, misty gardens at night.",
   "gift": "packet.wispwillow"
+ },
+ {
+  "id": "visitor.stag",
+  "name": "Lanternback Stag",
+  "sprite": "visitor.stag",
+  "tier": "mystical",
+  "school": "glow",
+  "schools": [
+   "glow",
+   "verdure"
+  ],
+  "likes": {
+   "plants": [
+    "glowcap",
+    "hellebore"
+   ],
+   "time": "dusk"
+  },
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "glow",
+    "shape": "3x3",
+    "minLevel": 4
+   },
+   {
+    "kind": "soil",
+    "school": "verdure",
+    "shape": "3x3",
+    "minLevel": 4
+   },
+   {
+    "kind": "bed",
+    "plant": "glowcap"
+   },
+   {
+    "kind": "bed",
+    "plant": "hellebore"
+   },
+   {
+    "kind": "beauty",
+    "tier": 3
+   },
+   {
+    "kind": "resident",
+    "visitor": "visitor.moth"
+   },
+   {
+    "kind": "resident",
+    "visitor": "visitor.squirrel"
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A shed velvet strip from an antler. It's green, and it glows."
+   },
+   {
+    "hint": [
+     0,
+     1
+    ],
+    "text": "Its hoofprints crossed two wide stretches of the deepest soil, one bright and one green, and it stood in the middle of each."
+   },
+   {
+    "hint": [
+     2,
+     3
+    ],
+    "text": "It nibbled at a Glowcap in one raised bed and a Hellebore in another, and left them both standing."
+   },
+   {
+    "hint": [
+     4,
+     5,
+     6
+    ],
+    "text": "It looked over the whole garden as if it were lovely, and listened for the glowmoth and the squirrel."
+   }
+  ],
+  "restate": {
+   "0": "It searched for a wide square of the deepest Glow soil, three tiles each way, all its own.",
+   "1": "It searched for a wide square of the deepest Verdure soil, three tiles each way, all its own.",
+   "2": "It looked for a Glowcap growing in a raised bed.",
+   "3": "It looked for a Hellebore growing in a raised bed.",
+   "4": "It found the garden not yet lovely enough to stay.",
+   "5": "It listened for the glowmoth and didn't hear it.",
+   "6": "It listened for the squirrel and didn't hear it."
+  },
+  "parting": {
+   "0": "Its deep Glow ground broke up, or went thin.",
+   "1": "Its deep Verdure ground broke up, or went thin.",
+   "2": "The Glowcap in its raised bed is gone.",
+   "3": "The Hellebore in its raised bed is gone.",
+   "4": "The garden stopped feeling lovely.",
+   "5": "The glowmoth left, and it followed.",
+   "6": "The squirrel left, and it followed."
+  },
+  "perk": {
+   "growth": 1.3,
+   "tideHold": true
+  },
+  "text": "A great quiet stag whose antlers carry moss and little lights. Where it walks, the green deepens and glows.",
+  "gift": "seeds.glow.rare"
+ },
+ {
+  "id": "visitor.tortoise",
+  "name": "Mirrorshell Tortoise",
+  "sprite": "visitor.tortoise",
+  "tier": "mystical",
+  "school": "shimmer",
+  "schools": [
+   "shimmer",
+   "spore"
+  ],
+  "likes": {
+   "plants": [
+    "prism-rose",
+    "morel"
+   ],
+   "time": "day"
+  },
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "shimmer",
+    "shape": "3x3",
+    "minLevel": 4
+   },
+   {
+    "kind": "soil",
+    "school": "spore",
+    "shape": "3x3",
+    "minLevel": 4
+   },
+   {
+    "kind": "bed",
+    "plant": "prism-rose"
+   },
+   {
+    "kind": "bed",
+    "plant": "morel"
+   },
+   {
+    "kind": "beauty",
+    "tier": 3
+   },
+   {
+    "kind": "resident",
+    "visitor": "visitor.prism-moth"
+   },
+   {
+    "kind": "resident",
+    "visitor": "visitor.salamander"
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A flake of shell like a hand mirror, furred with soft grey mould at one edge."
+   },
+   {
+    "hint": [
+     0,
+     1
+    ],
+    "text": "It dragged a slow line between two wide stretches of the deepest soil, one glittering and one dark, and rested in the middle of each."
+   },
+   {
+    "hint": [
+     2,
+     3
+    ],
+    "text": "It dozed between a Prism Rose in one raised bed and a Morel in another."
+   },
+   {
+    "hint": [
+     4,
+     5,
+     6
+    ],
+    "text": "It took in the whole garden as if it were lovely, and looked about for the prism moth and the salamander."
+   }
+  ],
+  "restate": {
+   "0": "It searched for a wide square of the deepest Shimmer soil, three tiles each way, all its own.",
+   "1": "It searched for a wide square of the deepest Spore soil, three tiles each way, all its own.",
+   "2": "It looked for a Prism Rose growing in a raised bed.",
+   "3": "It looked for a Morel growing in a raised bed.",
+   "4": "It found the garden not yet lovely enough to stay.",
+   "5": "It looked for the prism moth and didn't find it.",
+   "6": "It looked for the salamander and didn't find it."
+  },
+  "parting": {
+   "0": "Its deep Shimmer ground broke up, or went thin.",
+   "1": "Its deep Spore ground broke up, or went thin.",
+   "2": "The Prism Rose in its raised bed is gone.",
+   "3": "The Morel in its raised bed is gone.",
+   "4": "The garden stopped feeling lovely.",
+   "5": "The prism moth left, and it followed.",
+   "6": "The salamander left, and it followed."
+  },
+  "perk": {
+   "growth": 1.3,
+   "tideHold": true
+  },
+  "text": "An ancient tortoise whose shell reflects the sky like still water, with mushrooms growing in its seams.",
+  "gift": "seeds.shimmer.rare"
+ },
+ {
+  "id": "visitor.crane",
+  "name": "Mist Crane",
+  "sprite": "visitor.crane",
+  "tier": "mystical",
+  "school": "bloom",
+  "schools": [
+   "bloom",
+   "spirit"
+  ],
+  "likes": {
+   "plants": [
+    "anemone",
+    "ancestors-lace"
+   ],
+   "time": "dawn"
+  },
+  "stays": [
+   {
+    "kind": "soil",
+    "school": "bloom",
+    "shape": "3x3",
+    "minLevel": 4
+   },
+   {
+    "kind": "soil",
+    "school": "spirit",
+    "shape": "3x3",
+    "minLevel": 4
+   },
+   {
+    "kind": "bed",
+    "plant": "anemone"
+   },
+   {
+    "kind": "bed",
+    "plant": "ancestors-lace"
+   },
+   {
+    "kind": "beauty",
+    "tier": 3
+   },
+   {
+    "kind": "resident",
+    "visitor": "visitor.hummingbird"
+   },
+   {
+    "kind": "resident",
+    "visitor": "visitor.owl"
+   }
+  ],
+  "mementos": [
+   {
+    "hint": "school",
+    "text": "A long white feather, faintly pink at the tip, cold with dew."
+   },
+   {
+    "hint": [
+     0,
+     1
+    ],
+    "text": "It stood on one leg in the middle of two wide stretches of the deepest soil, one flowering and one misty."
+   },
+   {
+    "hint": [
+     2,
+     3
+    ],
+    "text": "It bowed over an Anemone in one raised bed and Ancestor's Lace in another."
+   },
+   {
+    "hint": [
+     4,
+     5,
+     6
+    ],
+    "text": "It danced once, as if the garden were lovely, and called softly for the hummingbird and the owl."
+   }
+  ],
+  "restate": {
+   "0": "It searched for a wide square of the deepest Bloom soil, three tiles each way, all its own.",
+   "1": "It searched for a wide square of the deepest Spirit soil, three tiles each way, all its own.",
+   "2": "It looked for an Anemone growing in a raised bed.",
+   "3": "It looked for Ancestor's Lace growing in a raised bed.",
+   "4": "It found the garden not yet lovely enough to stay.",
+   "5": "It called for the hummingbird and had no answer.",
+   "6": "It called for the owl and had no answer."
+  },
+  "parting": {
+   "0": "Its deep Bloom ground broke up, or went thin.",
+   "1": "Its deep Spirit ground broke up, or went thin.",
+   "2": "The Anemone in its raised bed is gone.",
+   "3": "The Ancestor's Lace in its raised bed is gone.",
+   "4": "The garden stopped feeling lovely.",
+   "5": "The hummingbird left, and it followed.",
+   "6": "The owl left, and it followed."
+  },
+  "perk": {
+   "growth": 1.3,
+   "tideHold": true
+  },
+  "text": "A tall pale crane that arrives with the dawn mist. Flowers open where it has stood.",
+  "gift": "seeds.spirit.rare"
  }
 ]
