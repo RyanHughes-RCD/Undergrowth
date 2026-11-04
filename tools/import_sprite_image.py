@@ -9,8 +9,8 @@ How it works:
 1. The picture's art pixels are found on its grid (`cell` source pixels per art pixel; each cell is read
    at its centre). Near-white is background and becomes transparent.
 2. By default one art pixel is one game pixel, so the art keeps its size. With `width` it's scaled to that
-   many game pixels (each covers a block of art pixels: opaque if most of the block is, in the block's
-   average colour) and its edge is redrawn as a 1px outline.
+   many game pixels by area (each takes the average of the art it covers, opaque if at least half of it is
+   art) and its edge is redrawn as a 1px outline.
 3. Colours are reduced to at most `colors` (plus transparent; this also clears the JPEG noise), and the
    sprite is written to Resources/Sprites/<prefix>/<id>.json, standing on its bottom rows.
 
@@ -30,7 +30,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # (without it, one art pixel is one game pixel: the picture keeps its own size)
 ART = {
     "landmark.stump": {"src": "design/art/tree_stump.jpg", "cell": 20, "colors": 32, "tags": ["landmark"]},
-    "landmark.well": {"src": "design/art/wishing_well.jpg", "cell": 20, "colors": 32, "tags": ["landmark"]},
+    # The well is scaled to its 2x2 footprint (32 wide); its roof leans over the row above.
+    "landmark.well": {"src": "design/art/wishing_well.jpg", "cell": 20, "width": 32, "colors": 32, "tags": ["landmark"]},
 }
 WHITE = 690          # r+g+b above this is background
 
@@ -63,27 +64,15 @@ def native(path, cell):
 
 
 def scale(grid, width):
-    """Scale art pixels to `width` game pixels: block coverage decides opacity, the block's average its colour."""
+    """Scale art pixels to `width` game pixels (height follows) by area: each game pixel takes the average of
+    the art it covers (Pillow's BOX filter, alpha-aware), and is opaque if at least half of it is art."""
     h0, w0 = len(grid), len(grid[0])
-    k = w0 / width
-    height = max(1, round(h0 / k))
-    out = []
-    for y in range(height):
-        row = []
-        for x in range(width):
-            y0, y1 = int(y * k), max(int(y * k) + 1, int((y + 1) * k))
-            x0, x1 = int(x * k), max(int(x * k) + 1, int((x + 1) * k))
-            cells = [grid[yy][xx] for yy in range(y0, min(y1, h0)) for xx in range(x0, min(x1, w0))]
-            solid = [c for c in cells if c]
-            if not cells or len(solid) * 2 < len(cells):
-                row.append(None)
-                continue
-            # lean towards the darkest pixels a little, so outlines and shading survive the scale
-            solid.sort(key=sum)
-            keep = solid[: max(1, (len(solid) * 3 + 3) // 4)]
-            row.append(tuple(sum(c[i] for c in keep) // len(keep) for i in range(3)))
-        out.append(row)
-    return out
+    height = max(1, round(h0 * width / w0))
+    im = Image.new("RGBA", (w0, h0), (0, 0, 0, 0))
+    im.putdata([(c + (255,)) if c else (0, 0, 0, 0) for r in grid for c in r])
+    small = im.resize((width, height), Image.Resampling.BOX)
+    px = list(small.getdata()) if not hasattr(small, "get_flattened_data") else list(small.get_flattened_data())
+    return [[px[y * width + x][:3] if px[y * width + x][3] >= 128 else None for x in range(width)] for y in range(height)]
 
 
 def quantize(grid, colors):
