@@ -149,7 +149,7 @@ export class UI {
   tileTitle(tile) {
     const g = this.game;
     if (!g.inClearing(tile)) return 'The treeline';
-    if (g.isWet(tile)) return g.waterAt(tile) ? 'The stream' : 'The spring';
+    if (g.isWet(tile)) return g.isPool(tile) ? 'The pool' : 'The stream';
     const deb = g.debrisAt(tile);
     if (deb) return DEBRIS[deb.sprite.split('.')[1]] || 'Debris';
     const p = g.plantAt(tile);
@@ -171,7 +171,7 @@ export class UI {
   tileBody(tile) {
     const g = this.game, now = g.now(), a = this.app;
     if (!g.inClearing(tile)) return h('p', { class: 'sub' }, 'Dense shrubs. Room to grow (in the Store) opens more of the clearing.');
-    if (g.isWet(tile)) return [h('p', { class: 'sub' }, g.waterAt(tile) ? `Water from the spring, running ${g.waterLevelOn(Game.dayNumber(now)).name.toLowerCase()} today. Soil spreads along its banks but not across it, unless it runs high.` : this.story('guide.landmarks.landmark.spring')),
+    if (g.isWet(tile)) return [h('p', { class: 'sub' }, `${g.isPool(tile) ? 'Clear water welling up from somewhere deep under the clearing. The streams run from here' : 'Water from the pool'}, running ${g.waterLevelOn(Game.dayNumber(now)).name.toLowerCase()} today. Soil spreads along the banks but not across the water, unless it runs high. When the treeline steps back, a stream follows it out to the new edge.`),
       h('div', { class: 'row end' }, h('button', { class: 'btn small', onclick: () => this.forecastCard() }, ic(this.game.weatherOn(Game.dayNumber(now)).icon, 1), ' Forecast'))];
     if (g.debrisAt(tile)) return [h('p', { class: 'sub' }, 'Left over from the wild grotto. Clear it away to free the ground.'),
       ...this.bankNotes(tile),
@@ -439,7 +439,6 @@ export class UI {
     return [
       h('p', { class: 'sub center' }, this.story('messages.offeringsIntro')),
       h('div', { class: 'row space' },
-        h('button', { class: 'btn small grey', onclick: () => this.open('entry', { name: 'The Spring', sprite: 'landmark.spring', variant: null, text: this.story('guide.landmarks.landmark.spring') }) }, 'About the spring'),
         h('button', { class: 'btn small green', onclick: () => this.open('store') }, ic('store', 1), ' Open the Store')),
       ...this.oldLogSections(),
     ];
@@ -904,7 +903,7 @@ export class UI {
     this.showCard((done) => h('div', { class: 'reveal-card pop' },
       h('h2', {}, 'The sky'),
       this.forecastRows(this.game.now()),
-      h('p', { class: 'sub' }, 'Rain swells the spring, and so does the moon: the water rises from Low to Normal, High and Flood. Each night soil on the banks spreads along them and inland, but never through the water, unless it runs High or floods and carries soil to the far bank. Deep soil, and soil with roots in it, holds better.'),
+      h('p', { class: 'sub' }, 'Rain swells the pool and its streams, and so does the moon: the water rises from Low to Normal, High and Flood. Each night soil on the banks spreads along them and inland, but never through the water, unless it runs High or floods and carries soil to the far bank. Deep soil, and soil with roots in it, holds better.'),
       h('button', { class: 'btn green', onclick: done }, 'OK')));
   }
   /** What last night's water did, for the morning card. */

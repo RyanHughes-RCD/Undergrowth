@@ -280,7 +280,7 @@ export class ForestView {
    * that shows on the bank (the most common land around it).
    */
   waterGround(x, y, h, kindAt, spriteFor) {
-    const wet = (dx, dy) => kindAt({ x: x + dx, y: y + dy }) === 'water' || this.isSpring(x + dx, y + dy);
+    const wet = (dx, dy) => kindAt({ x: x + dx, y: y + dy }) === 'water';
     const n = wet(0, -1), e = wet(1, 0), so = wet(0, 1), w = wet(-1, 0);
     const sides = [n, e, so, w].map((b) => (b ? '0' : '1')).join('');
     const pts = [n && w && !wet(-1, -1), n && e && !wet(1, -1), so && e && !wet(1, 1), so && w && !wet(-1, 1)].map((b) => (b ? '1' : '0')).join('');
@@ -295,7 +295,6 @@ export class ForestView {
     const under = pick ? spriteFor(pick.k, pick.t, h >>> 1) : GRASS[h % GRASS.length];
     return `W|${spriteFor('water', { x, y }, h)}|${sides}|${pts}|${this.waterLevelNow().inset ?? 1}|${under}`;
   }
-  isSpring(x, y) { const sp = this.game.spring; return !!sp && sp.tile.x === x && sp.tile.y === y; }
 
   drawWaterGround(key, x, y) {
     const [, id, sides, pts, inset, under] = key.split('|');
@@ -364,10 +363,10 @@ export class ForestView {
       if (inset < 0) {                                                  // flood: water over the bank
         ctx.fillStyle = 'rgba(58,118,168,0.55)';
         const s = -inset;
-        if (!g.isWet({ x, y: y - 1 }) && !this.isSpring(x, y - 1)) ctx.fillRect(px, py - s, TS, s);
-        if (!g.isWet({ x, y: y + 1 }) && !this.isSpring(x, y + 1)) ctx.fillRect(px, py + TS, TS, s);
-        if (!g.isWet({ x: x - 1, y }) && !this.isSpring(x - 1, y)) ctx.fillRect(px - s, py, s, TS);
-        if (!g.isWet({ x: x + 1, y }) && !this.isSpring(x + 1, y)) ctx.fillRect(px + TS, py, s, TS);
+        if (!g.isWet({ x, y: y - 1 })) ctx.fillRect(px, py - s, TS, s);
+        if (!g.isWet({ x, y: y + 1 })) ctx.fillRect(px, py + TS, TS, s);
+        if (!g.isWet({ x: x - 1, y })) ctx.fillRect(px - s, py, s, TS);
+        if (!g.isWet({ x: x + 1, y })) ctx.fillRect(px + TS, py, s, TS);
       }
       for (let i = 0; i < crests; i++) {
         const hb = hash32(x, y, i, 0x7a5e);

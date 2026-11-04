@@ -1,18 +1,14 @@
 {
  "_about": "All story and hint text. Edit freely; {placeholders} are filled in by the game.",
  "messages": {
-  "welcome": "A quiet clearing around a spring. Water is already finding its way through the moss.",
+  "welcome": "A quiet clearing around a little pool. Water is already finding its way through the moss.",
   "expansion": "The treeline steps back. There's more room to grow.",
-  "offeringsIntro": "Neighbours passing through the forest leave notes by the spring: things they'd like from your garden.",
+  "offeringsIntro": "Neighbours passing through the forest leave notes by the pool: things they'd like from your garden.",
   "firstDelivery": "Come back to the Store as your garden grows: new things open up.",
   "forageTitle": "Something at the edge",
   "openingDone": "The tin is empty now, but the ground remembers what you told it."
  },
- "guide": {
-  "landmarks": {
-   "landmark.spring": "Clear water rising from somewhere deep under the clearing. It runs where it likes, and carries whatever soil it touches along its banks. Rain swells it, and it rises with the moon."
-  }
- },
+ "guide": {},
  "visitors": {
   "_about": "Visitor text (Content/visitors.json holds each visitor's own clues).",
   "faint": "Small tracks, too faint to read yet.",

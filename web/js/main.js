@@ -193,12 +193,14 @@ class App {
     }
     else if (e.type === 'expansion') {
       this.view.highlight(e.tiles, 4, '170,255,150');
+      if (e.river && e.river.length) this.view.highlight(e.river, 6, '140,200,255');
       const f = e.feature && this.game.featureDef(e.feature);
+      const water = e.river && e.river.length ? ' The stream follows, out to the new edge.' : '';
       if (e.soil) {
         this.view.highlight(e.soilTiles, 6, '255,236,140');
         const s = e.soil.charAt(0).toUpperCase() + e.soil.slice(1);
-        ui.celebrate('Room to grow', `The ${e.side ? e.side + ' ' : ''}trees step back. On the new ground: a patch of ${s} soil${f ? `, and beside it, ${f.name.charAt(0).toLowerCase() + f.name.slice(1)}` : ''}.`, f ? this.sprites.element(f.sprite, null, 4, 'grow-in') : null);
-      } else ui.toast(ui.story('messages.expansion'));
+        ui.celebrate('Room to grow', `The ${e.side ? e.side + ' ' : ''}trees step back. On the new ground: a patch of ${s} soil${f ? `, and beside it, ${f.name.charAt(0).toLowerCase() + f.name.slice(1)}` : ''}.${water}`, f ? this.sprites.element(f.sprite, null, 4, 'grow-in') : null);
+      } else ui.toast(ui.story('messages.expansion') + water);
     }
   }
 

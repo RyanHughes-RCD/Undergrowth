@@ -1,6 +1,6 @@
 # Undergrowth (working title)
 
-A cozy top-down pixel-art garden in a forest clearing, framed by a shrub treeline around a spring. The design for the garden (plant, grow overnight, harvest) is in `design/garden_rework.md`.
+A cozy top-down pixel-art garden in a forest clearing, framed by a shrub treeline, with a little pool and its streams at the centre. The design for the garden (plant, grow overnight, harvest) is in `design/garden_rework.md`.
 
 The rework was built in phases:
 
@@ -8,7 +8,7 @@ The rework was built in phases:
 2. Added the core loop: soil, seed packets, growth, harvest, coins and the morning check.
 3. Added companions, decor that does something, relic ornaments and garden beauty.
 4. Added long-term goals: collections, cross-pollinated colours, commissions and daily orders, visitors drawn by plants, and Room to grow for coins.
-5. Replaced the Old Log with a spring and its streams, plus weather, the moon, nightly soil spread, soil maturity and digging channels.
+5. Replaced the Old Log with water (first a spring, now a 2×2 pool) and its streams, plus weather, the moon, nightly soil spread, soil maturity and digging channels.
 
 ## Running it
 
@@ -32,7 +32,8 @@ Then open <http://localhost:8000>.
 
 The garden is a new game, so older forests aren't carried over:
 
-- A version 7 garden is upgraded in place to version 8: the Old Log becomes the spring, streams are laid around it (only over open ground), and existing soil starts at level 2 (Settled).
+- A version 7 garden is upgraded in place to version 9: the Old Log becomes the pool (the emptiest 2×2 block around it), streams are laid around it (only over open ground), and existing soil starts at level 2 (Settled).
+- A version 8 garden had a spring landmark at the head of its streams. It becomes the pool: the emptiest 2×2 block around the spring's tile turns to water, whatever was on it (decor goes back to the Bag).
 - When the game loads a save older than version 7, it copies it, untouched, to `undergrowth.forest.v1.archive.v<old version>` (for example `…archive.v6`) and starts a fresh garden.
 - The fresh garden keeps the old save's **Field Guide discoveries**. A card says so once ("A fresh garden").
 - Developer test saves do the same under their own key.
@@ -40,12 +41,12 @@ The garden is a new game, so older forests aren't carried over:
 
 ## The garden (web)
 
-- **The clearing:** a small 5×8 clearing in the middle of the 40×56 forest (`tuning.json` → `grid`, `clearing`). After the spring, its streams and the edge scenery that leaves about 30 open tiles, so the starter kit and the first few days of buying fill it and Room to grow matters.
+- **The clearing:** a small 5×8 clearing in the middle of the 40×56 forest (`tuning.json` → `grid`, `clearing`). After the pool, its streams and the edge debris that leaves about 30 open tiles, so the starter kit and the first few days of buying fill it and Room to grow matters.
   - At full zoom-out the whole clearing and a thin treeline border fit the play area both ways (`visuals.viewBorderTiles`), at a crisp whole-pixel scale. Spare room shows more treeline.
   - Drag to look around; pinch to zoom in.
-- **The spring** sits at the centre (`Content/landmarks.json`). Tap it for the sky: today's and tomorrow's weather and moon. The neighbours' board and the Store are under **Notes** in the bottom bar.
-- **Streams** (`tuning.json` → `water`): a new garden's spring sends out 6–7 water tiles in at least two distinct streams, either leaving in different directions or forking. They meander at random (deterministic from the garden seed) and never touch except where they fork. Water can't be planted, amended or decorated.
-- **Weather and the moon** (`weather`, `moon`): each local day is Clear, Cloudy, Rain or Storm, drawn from the garden seed (it tends to repeat yesterday's). The moon is the real moon's phase that day, one of eight. The **weather button** in the HUD and the spring both show the forecast: today and tomorrow, with the **water level** for each and what it means for the soil that night.
+- **The pool:** the river rises from a 2×2 block of water at the centre of a new garden (`state.pool`). There are no landmarks now (`Content/landmarks.json` is empty). The neighbours' board and the Store are under **Notes** in the bottom bar.
+- **Streams** (`tuning.json` → `water`): the pool sends out 6–7 water tiles in at least two distinct streams, either leaving in different directions or forking. They meander at random (deterministic from the garden seed) and never touch except where they fork. Water can't be planted, amended or decorated. Tap any water for its card and the forecast.
+- **Weather and the moon** (`weather`, `moon`): each local day is Clear, Cloudy, Rain or Storm, drawn from the garden seed (it tends to repeat yesterday's). The moon is the real moon's phase that day, one of eight. The **weather button** in the HUD (and a water tile's card) shows the forecast: today and tomorrow, with the **water level** for each and what it means for the soil that night.
 - **Water level** (`water.levels`): the day's power (weather + moon, below) sets the water Low, Normal, High or Flood. Low water sits well inside its channel and shows a strip of bank (the grass or soil beside it) with a dark wet edge; Normal shows a thin strip; High fills the channel; a Flood spills a little over the banks. The water tile card names today's level, and developer mode can pin the level shown.
 - **Nightly spread** (`tides`): at local midnight soil spreads from the banks (tiles touching water). The power is the day's weather power plus the moon's (a storm on a full moon is 3.7; a clear new-moon night is 0).
   - Along the bank: soil on a bank tile may spread to a neighbouring bank tile, so it grows up or down the stream (25% × power).
@@ -74,6 +75,7 @@ The garden is a new game, so older forests aren't carried over:
   - On the 5×8 start, the top or bottom gives 15 tiles and a side gives 24.
   - **The new ground isn't empty.** Along the old edge it uncovers a 4-tile patch of one school's soil (`wildSoilTiles`), a different school each time in an order shuffled by the garden seed. Beside it is that school's **wild feature**: Mossy stone, Glowing flowers, Wild flowers, Old oak, Crystal outcrop or Misty pine.
   - Features can't be moved or bought, and add 3–4 beauty each. Tap one to see what it is. A card names what was found, and the new soil is highlighted.
+  - **The river follows.** A point on the newly revealed outer edge is picked at random; from the water tile nearest it, a stream winds out to that edge, through a random bend midway. It takes the cheapest route: around plants, decor, features and the tin where it can, through them where it must (their soil is lost, plants and debris are gone, decor goes back to the Bag). The new water is highlighted and the card says so.
   - The foraging patch moves out with the treeline on its own.
   - It's deterministic from the garden seed and the purchase.
 - **Field Guide:** tabs for Mushrooms, Plants (the Plant & Fungi Catalogue) and Visitors. Unfound entries are silhouettes.
@@ -326,7 +328,7 @@ tools/
   - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
   - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed or gold) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
   - Catalogue items and their bud stages (`plant.bud.<key>`; fungi get a small closed button) come from `gen_content_sprites.py`.
-  - School soil tiles (`tile.<school>.<1–4>a/b`), water and the spring come from `gen_terrain.py`.
+  - School soil tiles (`tile.<school>.<1–4>a/b`), and water come from `gen_terrain.py`.
   - Grass, the treeline floor and shrubs come from `gen_topdown.py`.
   - UI icons come from `gen_ui.py`.
 
@@ -337,7 +339,7 @@ tools/
 | `items.json` | The Plant & Fungi Catalogue (from the spreadsheet): id, category, name, rarity, sprite, school, description. |
 | `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`seeds`: comes from blind packets; `gift`: only from visitors), tier (common, uncommon, rare), companions, varieties. Numbers: `tuning.json` → `garden.plants`. Blind packets (`seeds.<school>.<tier>`) are built from the schools; each plant also has a named packet (`packet.<id>`), used for gifts. |
 | `amendments.json` | Soil amendments (kept by hand): id, school (null = plain loam), name, text. |
-| `landmarks.json` | The spring. |
+| `landmarks.json` | Landmarks (none at present). |
 | `opening.json` | The seed tin's card, the questions and their school weights, and what each school's tin holds. |
 | `visitors.json` | Twelve forest animals: name, sprite, school, likes (`plants` that must be blooming, `time` window), a clue per preference (`plant:<id>`, `time`), Field Guide text and gift (a seed packet id). |
 | `relics.json` | One relic per school (kept by hand), for the relic ornaments. |
@@ -352,7 +354,7 @@ tools/
 - **Pixel frames:** panels, buttons, tabs and cards use stepped, notched-corner frames built from box-shadows. There are no rounded corners or blur effects.
 - **Icons:** pixel sprites in the registry (`ui.icon.*`, `ui.burst`), drawn by `tools/gen_ui.py`. There are no emoji.
 - **Treeline:** the edge bushes and the ground under them use deep, shadowed greens (`tools/gen_topdown.py`), so the clearing has a clear dark border.
-- **The spring and water:** the spring (`landmark.spring`, two frames) and water tiles (`tile.water.a/b`) come from `tools/gen_terrain.py`; the renderer cuts each water tile to today's level (a strip of bank, a dark wet edge, rounded outer corners and points of land in bends) and draws gentle waves over it: little crests that rise, rock a pixel side to side and fade, more and livelier the higher the water, plus the odd glint. A flood spills a translucent sheet over the banks. The waves hold still with reduced motion. Weather and moon icons (`ui.icon.sun/cloud/rain/storm`, `ui.icon.moon.0–7`) come from `gen_ui.py`, and rain or a storm draws falling rain over the garden.
+- **Water:** water tiles (`tile.water.a/b`) come from `tools/gen_terrain.py`; the renderer cuts each water tile to today's level (a strip of bank, a dark wet edge, rounded outer corners and points of land in bends) and draws gentle waves over it: little crests that rise, rock a pixel side to side and fade, more and livelier the higher the water, plus the odd glint. A flood spills a translucent sheet over the banks. The waves hold still with reduced motion. Weather and moon icons (`ui.icon.sun/cloud/rain/storm`, `ui.icon.moon.0–7`) come from `gen_ui.py`, and rain or a storm draws falling rain over the garden.
 - **Soil:** each school's soil is the grass tile with its greens moved toward the school's colour plus a few motif specks at four strengths, one per maturity level (`tile.<school>.<level>a/b`), with darker shadows at each level. Soil details (`detail.<school>.a/b`) are drawn by `tools/gen_terrain.py` from small pixel maps. A soil change fades in over `visuals.overlayFadeSeconds`.
   - **Clipped corners:** a soil tile's corner is clipped a little unless the tile above or below or the tile beside that corner has the same soil. Edges between matching tiles stay solid, so patches join up with slightly rounded outer corners.
   - A clipped corner shows the ground most common around the tile, whether grass or another soil.

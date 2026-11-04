@@ -3,7 +3,7 @@
 
 tile.<school>.<level>a / b: grass with its greens moved toward the school's colour and motif specks (caps for
 Spore, motes for Glow, petals for Bloom...), more strongly at each maturity level 1-4. Plain soil is the
-ordinary grass (gen_topdown.py). tile.water.a / b: the stream. landmark.spring: the spring at the centre.
+ordinary grass (gen_topdown.py). tile.water.a / b: the pool and its streams.
 """
 from gen_placeholders import Canvas, write, P, GROUND_PALETTE
 from gen_topdown import rng_for, T
@@ -141,29 +141,7 @@ def water():
         write("tile.water." + v, (T, T), [c], palette=pal, anchor=(8, 8), tags=["tile"])
 
 
-def spring():
-    """The spring: a ring of mossy stones around bright, bubbling water (two frames)."""
-    pal = ["transparent", "#1b1420", "#7c7c86", "#a8a8b4", "#5e5e68", "#5f9a40", "#3f78a8", "#7fb0d4", "#e8f8ff"]
-    frames = []
-    for f in range(2):
-        c = Canvas(T, T)
-        c.ellipse(8, 8.5, 7.2, 6.6, 2)                   # stones
-        c.ellipse(8, 8.5, 5, 4.4, 6)                     # water
-        c.ellipse(7.5, 8, 3, 2.4, 7)
-        for (x, y) in ((3, 4), (12, 5), (2, 10), (13, 11), (7, 2), (9, 15)):
-            c.set(x, y, 3); c.set(x + 1, y, 4)
-        for (x, y) in ((4, 3), (11, 13), (13, 7)):
-            c.set(x, y, 5)
-        bub = ((7, 7), (9, 9)) if f == 0 else ((8, 9), (6, 8))
-        for (x, y) in bub:
-            c.set(x, y, 8)
-        c.outline(1)
-        frames.append(c)
-    write("landmark.spring", (T, T), frames, palette=pal, anchor=(8, 13), tags=["landmark"], durations=[0.7, 0.7])
-
-
 def main():
     school_ground()
     soil_details()
     water()
-    spring()

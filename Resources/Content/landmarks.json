@@ -1,13 +1,1 @@
-[
- {
-  "id": "landmark.spring",
-  "name": "The Spring",
-  "sprite": "landmark.spring",
-  "position": "center",
-  "footprint": [
-   1,
-   1
-  ],
-  "inGuide": true
- }
-]
+[]

@@ -10,7 +10,7 @@
   "startHeight": 8
  },
  "start": {
-  "_about": "A new garden opens on a little grotto around the spring: its streams, scenery along its edge (visual only), and the opening's seed tin (Content/opening.json) on a free tile within tin.near of the spring.",
+  "_about": "A new garden opens on a little grotto around the 2x2 pool at its centre: the pool's streams, debris along its edge (rocks, ferns, roots: they take up their tiles until cleared), and the opening's seed tin (Content/opening.json) on a free tile within tin.near of the pool.",
   "tin": {
    "sprite": "garden.tin",
    "near": 2
@@ -727,7 +727,7 @@
  },
  "debugTools": true,
  "water": {
-  "_about": "The spring (centre of the clearing) and its streams. A new garden's streams take riverTiles water tiles (not counting the spring), in at least minStreams streams: either leaving the spring in different directions or forking, meandering at random (keepDirection: chance to carry straight on). Streams never touch each other except where they fork, so they stay distinct. dig: digging an empty tile next to water turns it into water (its soil is lost) for cost + step x tiles dug so far.",
+  "_about": "The pool (a 2x2 block of water at the centre of a new clearing) and its streams. A new garden's streams take riverTiles water tiles (not counting the pool), in at least minStreams streams: either leaving the pool in different directions or forking, meandering at random (keepDirection: chance to carry straight on). Streams never touch each other except where they fork, so they stay distinct. Each Room to grow carries the river on: from the water tile nearest a random point on the newly revealed outer edge, a stream winds out to that edge, around plants, decor and features where it can and through them where it must (their soil is lost, plants and debris are gone, decor goes back to the Bag). dig: digging an empty tile next to water turns it into water (its soil is lost) for cost + step x tiles dug so far.",
   "riverTiles": [
    6,
    7

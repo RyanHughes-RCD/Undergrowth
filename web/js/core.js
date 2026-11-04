@@ -16,7 +16,7 @@ export const schoolName = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '
  * Save versions. 7 = the garden: everything before it (creatures, relic fields, wild spawns) is archived
  * on load and a fresh garden starts, keeping the Field Guide's discoveries (see Game.fromSave).
  */
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 /** Where an older save is kept when a fresh garden replaces it: <save key>.archive.v<version>. */
 export const archiveKey = (saveKey, version) => `${saveKey}.archive.v${version}`;
 
@@ -180,7 +180,8 @@ export class Game {
     s.guests = s.guests || {};             // visitors: interest, clues known, presence, befriended
     s.guestTracks = s.guestTracks || [];
     s.collections = s.collections || {};   // school -> time completed
-    s.water = s.water || [];               // "x,y" of every water tile (the spring is a landmark)
+    s.water = s.water || [];               // "x,y" of every water tile, the source pool included
+    s.pool = s.pool || null;               // top-left tile of the 2x2 pool the river rises from
     s.soilLevel = s.soilLevel || {};       // "x,y" -> maturity 1..max of a school soil tile
     s.dug = s.dug || 0;
   }
@@ -202,6 +203,7 @@ export class Game {
     };
     const g = new Game(content, state);
     state.forestID = g.rng.uuid();
+    g.placePool();
     g.generateStreams();
     g.state.nightDay = Game.dayNumber(now);
     g.placeScenery();
@@ -219,6 +221,7 @@ export class Game {
   static fromSave(content, saved, now) {
     if (!saved || typeof saved.version !== 'number') return { game: Game.newGarden(content, now), archived: null };
     if (saved.version === 7) return { game: Game.migrate7(content, saved, now), archived: null };
+    if (saved.version === 8) return { game: Game.migrate8(content, saved, now), archived: null };
     if (saved.version < SAVE_VERSION) {
       const g = Game.newGarden(content, now, null, saved.discovered || []);
       if (saved.dev) g.state.dev = { ...saved.dev };
@@ -230,18 +233,47 @@ export class Game {
   }
 
   /**
-   * Version 7 gardens had the Old Log at the centre. The spring takes its place and its streams are cut
-   * around what's already there; soil already laid counts as Settled (level 2).
+   * Version 7 gardens had the Old Log at the centre. The pool takes its place (the emptiest 2x2 block
+   * around it) and its streams are cut around what's already there; soil already laid counts as Settled.
    */
   static migrate7(content, saved, now) {
-    saved.version = SAVE_VERSION;
+    const log = (saved.landmarks || []).find((l) => l.id === 'landmark.old-log');
     saved.landmarks = (saved.landmarks || []).filter((l) => l.id !== 'landmark.old-log');
+    saved.version = SAVE_VERSION;
     const g = new Game(content, saved);
     for (const k of Object.keys(g.state.soil)) g.state.soilLevel[k] = g.state.soilLevel[k] || 2;
+    g.poolAround(log ? log.tile : g.source);
     g.generateStreams();
     g.state.nightDay = Game.dayNumber(now);
     if (!g.state.opening.done && !g.state.tin) g.placeTin();
     return g;
+  }
+
+  /**
+   * Version 8 gardens had the spring (a landmark) at the head of the streams. It becomes the 2x2 pool: the
+   * emptiest block of four tiles around the spring's tile turns to water, whatever was on it.
+   */
+  static migrate8(content, saved, now) {
+    const spring = (saved.landmarks || []).find((l) => l.id === 'landmark.spring');
+    saved.landmarks = (saved.landmarks || []).filter((l) => l.id !== 'landmark.spring');
+    saved.version = SAVE_VERSION;
+    const g = new Game(content, saved);
+    if (!g.state.pool) g.poolAround(spring ? spring.tile : g.source);
+    return g;
+  }
+
+  /** Makes the pool from the emptiest in-clearing 2x2 block that includes tile `t`. */
+  poolAround(t) {
+    let best = null;
+    for (const [ox, oy] of [[0, 0], [-1, 0], [0, -1], [-1, -1]]) {
+      const tl = { x: t.x + ox, y: t.y + oy }, tiles = this.poolTiles(tl);
+      if (!tiles.every((u) => this.inClearing(u))) continue;
+      const cost = tiles.reduce((a, u) => a + (this.waterAt(u) ? 0 : this.isFree(u) ? (this.soilAt(u) ? 1.5 : 1) : 5), 0);
+      if (!best || cost < best.cost) best = { tl, cost };
+    }
+    if (!best) return;
+    this.state.pool = best.tl;
+    for (const u of this.poolTiles(best.tl)) this.makeWater(u);
   }
 
   toJSON() { return { ...this.state, discovered: [...this.discovered] }; }
@@ -307,7 +339,7 @@ export class Game {
   }
   landmarkAt(t) { return this.state.landmarks.find((l) => this.landmarkTiles(l).some((u) => sameTile(u, t))) || null; }
 
-  /** Puts data-defined landmarks (the spring) on the map, once, and keeps their tiles clear. */
+  /** Puts data-defined landmarks (none at present) on the map, once, and keeps their tiles clear. */
   placeLandmarks() {
     const ids = new Set((this.content.landmarks || []).map((d) => d.id));
     this.state.landmarks = this.state.landmarks.filter((l) => ids.has(l.id));
@@ -349,14 +381,41 @@ export class Game {
     return this.inBounds(t) && this.inClearing(t) && !this.waterAt(t) && !this.landmarkAt(t) && !this.sceneryAt(t) && !this.decorAt(t) && !this.plantAt(t) && !this.forageAt(t) && !this.tinAt(t);
   }
 
-  // ---- the spring and its streams (tuning.water)
-  get spring() { return this.state.landmarks.find((l) => l.id === 'landmark.spring') || null; }
+  // ---- the pool and its streams (tuning.water)
+  /** The four tiles of a 2x2 pool whose top-left is `tl`. */
+  poolTiles(tl = this.state.pool) { return tl ? [[0, 0], [1, 0], [0, 1], [1, 1]].map(([dx, dy]) => ({ x: tl.x + dx, y: tl.y + dy })) : []; }
+  isPool(t) { const p = this.state.pool; return !!p && t.x >= p.x && t.x <= p.x + 1 && t.y >= p.y && t.y <= p.y + 1; }
+  /** Where the river rises: the pool's top-left tile (or the clearing's centre), for placing things near it. */
+  get source() { const c = this.clearing; return this.state.pool || { x: Math.floor((c.x0 + c.x1) / 2), y: Math.floor((c.y0 + c.y1) / 2) }; }
+  /** The 2x2 pool at the centre of a new clearing. */
+  placePool() {
+    const c = this.clearing;
+    const tl = { x: Math.floor((c.x0 + c.x1) / 2) - (hash32(this.state.seed, 0x9001) & 1), y: Math.floor((c.y0 + c.y1) / 2) - (hash32(this.state.seed, 0x9002) & 1) };
+    this.state.pool = tl;
+    for (const t of this.poolTiles(tl)) this.makeWater(t);
+  }
+  /**
+   * Turns a tile to water, whatever was on it: its soil is lost, a plant, debris, a find or tracks are
+   * gone, decor goes back to the Bag and the seed tin moves aside.
+   */
+  makeWater(t) {
+    const s = this.state, k = key(t), at = (x) => sameTile(x.tile, t);
+    if (this.waterAt(t)) return;
+    delete s.soil[k]; delete s.soilLevel[k];
+    s.plants = s.plants.filter((x) => !at(x));
+    s.scenery = s.scenery.filter((x) => !at(x));
+    s.forage.finds = s.forage.finds.filter((x) => !at(x));
+    s.guestTracks = s.guestTracks.filter((x) => !at(x));
+    for (const d of s.decor.placed.filter(at)) { s.decor.placed = s.decor.placed.filter((x) => x !== d); s.decor.owned[d.decorID] = (s.decor.owned[d.decorID] || 0) + 1; }
+    s.water.push(k);
+    if (s.tin && at(s.tin)) { const n = this.freeNear(t); if (n) s.tin.tile = n; }
+  }
   waterAt(t) {
     if (this._waterKey !== this.state.water.length) { this._waterSet = new Set(this.state.water); this._waterKey = this.state.water.length; }
     return this._waterSet.has(key(t));
   }
-  /** Water or the spring: what streams and banks are measured from. */
-  isWet(t) { return this.waterAt(t) || (!!this.spring && sameTile(this.spring.tile, t)); }
+  /** Water (the pool and the streams): what banks are measured from. */
+  isWet(t) { return this.waterAt(t); }
   /** A tile touching water (side by side): its soil can be carried off, or carried in. */
   isBank(t) {
     if (this.isWet(t) || !this.inClearing(t) || this.landmarkAt(t)) return false;
@@ -365,22 +424,24 @@ export class Game {
   bankTiles() { return this.clearingTiles().filter((t) => this.isBank(t)); }
 
   /**
-   * Cuts the spring's streams: riverTiles water tiles in at least minStreams streams, which either leave the
-   * spring in different directions or fork, meandering at random. Streams never touch except where they
+   * Cuts the pool's streams: riverTiles water tiles in at least minStreams streams, which either leave the
+   * pool in different directions or fork, meandering at random. Streams never touch except where they
    * join, so they stay distinct. Deterministic from the garden seed. Avoids anything already on the ground, soil included.
    */
   generateStreams() {
-    const sp = this.spring, cfg = this.t.water || {};
-    if (!sp || this.state.water.length) return;
+    const cfg = this.t.water || {}, pool = this.poolTiles();
+    if (!pool.length || this.state.water.length > pool.length) return;
     const rng = new RNG({ rng: hash32(this.state.seed, 0x5791) });
     const [lo, hi] = cfg.riverTiles || [6, 7];
     const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-    const ok = (t, water, from) => this.inClearing(t) && this.isFree(t) && !this.state.soil[key(t)] && !water.has(key(t)) && !sameTile(t, sp.tile)
-      && DIRS.every(([dx, dy]) => { const n = { x: t.x + dx, y: t.y + dy }; return sameTile(n, from) || (!water.has(key(n)) && !sameTile(n, sp.tile)); });
+    const base = new Set(pool.map(key));
+    const ok = (t, water, from) => this.inClearing(t) && this.isFree(t) && !this.state.soil[key(t)] && !water.has(key(t))
+      && DIRS.every(([dx, dy]) => { const n = { x: t.x + dx, y: t.y + dy }; return sameTile(n, from) || !water.has(key(n)); });
     const walk = (start, dir, len, water, out) => {
       let pos = start, d = dir;
       for (let i = 0; i < len; i++) {
-        const opts = [[d, cfg.keepDirection ?? 0.55], [(d + 1) % 4, (1 - (cfg.keepDirection ?? 0.55)) / 2], [(d + 3) % 4, (1 - (cfg.keepDirection ?? 0.55)) / 2]];
+        const keep = cfg.keepDirection ?? 0.55;
+        const opts = i === 0 ? [[d, 1]] : [[d, keep], [(d + 1) % 4, (1 - keep) / 2], [(d + 3) % 4, (1 - keep) / 2]];
         let r = rng.next(), pick = null;
         const valid = opts.filter(([dd]) => ok({ x: pos.x + DIRS[dd][0], y: pos.y + DIRS[dd][1] }, water, pos));
         const tot = valid.reduce((a, [, w]) => a + w, 0);
@@ -394,25 +455,102 @@ export class Game {
       }
       return true;
     };
+    // Ways out of the pool: a pool tile and an outward direction (8 of them).
+    const exits = [];
+    for (const t of pool) DIRS.forEach(([dx, dy], d) => { if (!this.isPool({ x: t.x + dx, y: t.y + dy })) exits.push({ tile: t, dir: d }); });
     let best = null;
-    for (let attempt = 0; attempt < 60; attempt++) {
-      const total = rng.int(lo, hi), water = new Set(), first = [], second = [];
+    for (let attempt = 0; attempt < 80; attempt++) {
+      const total = rng.int(lo, hi), water = new Set(base), first = [], second = [];
       const fork = rng.chance(0.5);
       const a = rng.int(2, total - 2);
-      const dirs = [0, 1, 2, 3].sort(() => rng.next() - 0.5);
-      let good = walk(sp.tile, dirs[0], fork ? a : a, water, first);
+      const e1 = exits[rng.int(0, exits.length - 1)];
+      let good = walk(e1.tile, e1.dir, a, water, first);
       if (good) {
         if (fork) {
           const at = first[rng.int(0, Math.max(0, first.length - 2))];
           const side = rng.chance(0.5) ? (at.dir + 1) % 4 : (at.dir + 3) % 4;
           good = walk(at.tile, side, total - a, water, second);
-        } else good = walk(sp.tile, dirs[1], total - a, water, second);
+        } else {
+          const others = exits.filter((x) => x.dir !== e1.dir);
+          const e2 = others[rng.int(0, others.length - 1)];
+          good = walk(e2.tile, e2.dir, total - a, water, second);
+        }
       }
-      if (good && water.size === total) { best = water; break; }
-      if (!best || water.size > best.size) best = water;
+      const n = water.size - base.size;
+      if (good && n === total) { best = water; break; }
+      if (!best || n > best.size - base.size) best = water;
     }
-    this.state.water = [...best];
-    for (const k of this.state.water) { delete this.state.soil[k]; delete this.state.soilLevel[k]; }
+    for (const k of best) if (!base.has(k)) { const [x, y] = k.split(',').map(Number); this.makeWater({ x, y }); }
+  }
+
+  /**
+   * Room to grow carries the river on: from the water tile nearest a random point on the newly revealed
+   * outer edge, a stream winds out to that edge (the cheapest path, with a little hashed meander). It goes
+   * around plants, decor and features where it can, and through them where it must (see makeWater).
+   * Deterministic from the garden seed and the expansion. Returns the new water tiles.
+   */
+  extendRiver(side, tier) {
+    const c = this.clearing;
+    const edge = [];
+    if (side === 'top' || side === 'bottom') { const y = side === 'top' ? c.y0 : c.y1; for (let x = c.x0 + 1; x < c.x1; x++) edge.push({ x, y }); }
+    else { const x = side === 'left' ? c.x0 : c.x1; for (let y = c.y0 + 1; y < c.y1; y++) edge.push({ x, y }); }
+    if (!edge.length || !this.state.water.length) return [];
+    const target = edge[hash32(this.state.seed, tier, 0x7e1) % edge.length];
+    if (this.waterAt(target)) return [];
+    let start = null, bestD = Infinity;
+    for (const k of this.state.water) {
+      const [x, y] = k.split(',').map(Number), d = Math.abs(x - target.x) + Math.abs(y - target.y) + hashUnit(this.state.seed, tier, x, y) * 0.5;
+      if (d < bestD) { bestD = d; start = { x, y }; }
+    }
+    // A bend on the way: a point midway, pushed up to 2 tiles to one side, so the stream meanders.
+    const mid = { x: Math.round((start.x + target.x) / 2), y: Math.round((start.y + target.y) / 2) };
+    const sway = (hash32(this.state.seed, tier, 0x7e3) % 5) - 2;
+    if (side === 'top' || side === 'bottom') mid.x = Math.min(c.x1 - 1, Math.max(c.x0 + 1, mid.x + sway));
+    else mid.y = Math.min(c.y1 - 1, Math.max(c.y0 + 1, mid.y + sway));
+    const blocked = (t) => this.plantAt(t) || this.decorAt(t) || this.tinAt(t) || this.sceneryAt(t);
+    const a = !blocked(mid) && this.riverPath(start, mid, tier), b = a && this.riverPath(mid, target, tier);
+    const path = a && b ? [...a, ...b] : this.riverPath(start, target, tier);
+    if (!path) return [];
+    const added = [];
+    for (const t of path) if (!this.waterAt(t) && !added.some((u) => sameTile(u, t))) added.push(t);
+    for (const t of added) this.makeWater(t);
+    return added;
+  }
+
+  /**
+   * The cheapest way from `from` to `to` through the clearing (Dijkstra, 4 directions): each step costs a
+   * little more on hashed ground (the meander), more on soil and debris, and a lot through a plant, decor,
+   * a feature or the tin; running along water is cheap. Returns the tiles after `from`, or null.
+   */
+  riverPath(from, to, tier) {
+    const W = this.state.size.width, idx = (t) => t.y * W + t.x, dist = new Map(), prev = new Map(), open = [{ t: from, d: 0 }];
+    dist.set(idx(from), 0);
+    const cost = (t) => {
+      let k = 1 + hashUnit(this.state.seed, tier, t.x, t.y, 0x7e2) * 1.4;
+      if (this.waterAt(t)) k = 0.6;
+      else if (this.plantAt(t) || this.decorAt(t) || this.tinAt(t) || (this.sceneryAt(t) && this.sceneryAt(t).feature)) k += 12;
+      else if (this.sceneryAt(t)) k += 3;
+      else if (this.soilAt(t)) k += 0.6;
+      return k;
+    };
+    while (open.length) {
+      let bi = 0;
+      for (let i = 1; i < open.length; i++) if (open[i].d < open[bi].d) bi = i;
+      const { t, d } = open.splice(bi, 1)[0];
+      if (sameTile(t, to)) break;
+      if (d > (dist.get(idx(t)) ?? Infinity)) continue;
+      for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+        const n = { x: t.x + dx, y: t.y + dy };
+        if (!this.inClearing(n)) continue;
+        const nd = d + cost(n);
+        if (nd < (dist.get(idx(n)) ?? Infinity)) { dist.set(idx(n), nd); prev.set(idx(n), t); open.push({ t: n, d: nd }); }
+      }
+    }
+    if (sameTile(from, to)) return [];
+    if (!prev.has(idx(to))) return null;
+    const path = [];
+    for (let t = to; t && !sameTile(t, from); t = prev.get(idx(t))) path.unshift(t);
+    return path;
   }
 
   /** What digging the next tile costs. */
@@ -629,7 +767,8 @@ export class Game {
     for (let y = next.y0; y <= next.y1; y++) for (let x = next.x0; x <= next.x1; x++) if (!this.inClearing({ x, y })) { this.state.revealed[x + ',' + y] = now; added.push({ x, y }); }
     this.state.clearing = next;
     const wild = this.revealWild(c, added);
-    this.events.push({ type: 'expansion', side, tiles: added, ...wild });
+    const river = this.extendRiver(side, this.state.revealCount || 0);
+    this.events.push({ type: 'expansion', side, tiles: added, ...wild, river });
     return added;
   }
 
@@ -671,11 +810,11 @@ export class Game {
   placeScenery() {
     const sc = (this.t.start || {}).scenery;
     if (!sc || !(sc.sprites || []).length) return;
-    const c = this.clearing, log = this.state.landmarks[0];
+    const c = this.clearing;
     const edge = [];
     for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) {
       const d = Math.min(x - c.x0, c.x1 - x, y - c.y0, c.y1 - y);
-      if (d < (sc.edgeDepth ?? 1) && !(log && x >= log.tile.x - 1 && x <= log.tile.x + this.landmarkFootprint(log)[0] && Math.abs(y - log.tile.y) <= 1)) edge.push({ x, y });
+      if (d < (sc.edgeDepth ?? 1)) edge.push({ x, y });
     }
     for (let i = 0; i < (sc.count || 0) && edge.length; i++) {
       const tile = edge.splice(this.rng.int(0, edge.length - 1), 1)[0];
@@ -684,17 +823,17 @@ export class Game {
     }
   }
 
-  /** The opening's seed tin (Content/opening.json) waits on a free tile near the old log until it's opened. */
+  /** The opening's seed tin (Content/opening.json) waits on a free tile near the pool until it's opened. */
   placeTin() {
     const st = (this.t.start || {}).tin;
-    const log = this.state.landmarks[0];
-    if (!st || !log || !this.content.opening) return;
+    const src = this.source;
+    if (!st || !this.content.opening) return;
     const near = st.near ?? 2, ring = [];
-    for (let dy = -near; dy <= near; dy++) for (let dx = -near; dx <= near; dx++) {
-      const t = { x: log.tile.x + dx, y: log.tile.y + dy };
-      if ((dx || dy) && this.isFree(t)) ring.push(t);
+    for (let dy = -near; dy <= near + 1; dy++) for (let dx = -near; dx <= near + 1; dx++) {
+      const t = { x: src.x + dx, y: src.y + dy };
+      if (this.isFree(t)) ring.push(t);
     }
-    const tile = ring.length ? this.rng.pick(ring) : this.freeNear(log.tile);
+    const tile = ring.length ? this.rng.pick(ring) : this.freeNear(src);
     if (tile) this.state.tin = { tile };
   }
 
