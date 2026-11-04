@@ -245,6 +245,95 @@ export class ForestView {
     return c;
   }
 
+  /**
+   * Which way each water tile flows: a walk out from the spring along the water, so every tile flows away
+   * from the tile it was reached from (forks and dug channels included). `dist` is how many tiles
+   * downstream it is, so ripples line up across tiles. Cached until the water changes.
+   */
+  flowMap() {
+    const g = this.game, sp = g.spring, wk = g.state.water.join(';') + (sp ? `@${sp.tile.x},${sp.tile.y}` : '');
+    if (this.flowFor === wk) return this.flow;
+    const flow = new Map(), wet = new Set(g.state.water);
+    const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    const queue = [];
+    const visit = (x, y, dir, dist) => { const k = x + ',' + y; if (!wet.has(k) || flow.has(k)) return; flow.set(k, { dir, dist, end: true }); queue.push({ x, y, dist }); };
+    if (sp) DIRS.forEach(([dx, dy], d) => visit(sp.tile.x + dx, sp.tile.y + dy, d, 0));
+    for (const k of wet) if (!flow.has(k) && !queue.length) { const [x, y] = k.split(',').map(Number); visit(x, y, 2, 0); }  // water with no spring: flow down
+    for (let i = 0; i < queue.length; i++) {
+      const q = queue[i];
+      DIRS.forEach(([dx, dy], d) => {
+        const before = flow.size;
+        visit(q.x + dx, q.y + dy, d, q.dist + 1);
+        if (flow.size > before) flow.get(q.x + ',' + q.y).end = false;
+      });
+    }
+    this.flowFor = wk; this.flow = flow;
+    return flow;
+  }
+
+  /**
+   * The moving water over the water tiles: a dark lip and a shallow light edge along the banks, and light
+   * ripples drifting downstream in three lanes, continuous from tile to tile. Ripples run faster when
+   * tonight's water runs high (weather + moon), and hold still with reduced motion.
+   */
+  drawWater(ctx, view, t) {
+    const g = this.game, flow = this.flowMap();
+    if (!flow.size) return;
+    const sp = g.spring;
+    const wetAt = (x, y) => g.isWet({ x, y }) || (sp && sp.tile.x === x && sp.tile.y === y);
+    const minute = Math.floor(Date.now() / 60000);
+    if (this.flowPowerAt !== minute) { this.flowPowerAt = minute; try { this.flowPower = g.forecast(g.now())[0].power; } catch (_) { this.flowPower = 0.5; } }
+    const speed = 5 + 4 * Math.min(3, this.flowPower || 0);                 // px per second
+    const run = reducedMotion() ? 0 : t * speed;
+    const LANES = [{ at: 4, len: 4, gap: 10, ph: 0 }, { at: 6, len: 2, gap: 15, ph: 9 }, { at: 8, len: 5, gap: 12, ph: 5 }, { at: 11, len: 3, gap: 9, ph: 2 }];
+    const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    for (const [k, f] of flow) {
+      const [x, y] = k.split(',').map(Number);
+      const px = x * TS, py = y * TS;
+      if (px > view.maxX + TS || px < view.minX - TS * 2 || py > view.maxY + TS || py < view.minY - TS * 2) continue;
+      const open = DIRS.map(([dx, dy]) => !wetAt(x + dx, y + dy));               // N E S W: a bank on that side
+      const clip = [open[0] && open[3], open[0] && open[1], open[2] && open[1], open[2] && open[3]];  // NW NE SE SW
+      // Banks: a dark lip at the edge, a shallow light line inside, both stopping short of clipped corners.
+      const edge = (side, inset, colour) => {
+        ctx.fillStyle = colour;
+        const a = side === 0 || side === 2 ? [clip[side === 0 ? 0 : 3], clip[side === 0 ? 1 : 2]] : [clip[side === 1 ? 1 : 0], clip[side === 1 ? 2 : 3]];
+        const s0 = a[0] ? 3 : 0, s1 = a[1] ? 3 : 0, L = TS - s0 - s1;
+        if (side === 0) ctx.fillRect(px + s0, py + inset, L, 1);
+        if (side === 2) ctx.fillRect(px + s0, py + TS - 1 - inset, L, 1);
+        if (side === 3) ctx.fillRect(px + inset, py + s0, 1, L);
+        if (side === 1) ctx.fillRect(px + TS - 1 - inset, py + s0, 1, L);
+      };
+      open.forEach((o, side) => { if (o) { edge(side, 0, 'rgba(14,30,48,0.55)'); edge(side, 1, 'rgba(127,176,212,0.35)'); } });
+      // Ripples along the flow. u runs downstream (0..TS within the tile), v across it.
+      const [dx, dy] = DIRS[f.dir];
+      const base = f.dist * TS;
+      // Swells: faint light bands across the stream, rolling downstream.
+      ctx.fillStyle = 'rgba(160,205,235,0.16)';
+      for (let u = 0; u < TS; u++) {
+        if (((base + u - run * 0.6) % 8 + 8) % 8 >= 2) continue;
+        const along = (dx || dy) > 0 ? u : TS - 1 - u, a0 = open[dx ? 0 : 3] ? 2 : 0, a1 = open[dx ? 2 : 1] ? 2 : 0;
+        if (dx) ctx.fillRect(px + along, py + a0, 1, TS - a0 - a1); else ctx.fillRect(px + a0, py + along, TS - a0 - a1, 1);
+      }
+      for (const ln of LANES) {
+        const period = ln.len + ln.gap;
+        for (let u = 0; u < TS; u++) {
+          const s = ((base + u - run + ln.ph) % period + period) % period;
+          if (s >= ln.len) continue;
+          if (f.end && u > TS - 4) continue;                                     // the stream peters out
+          ctx.fillStyle = s >= ln.len - 1 ? 'rgba(232,248,255,0.95)' : 'rgba(150,200,232,0.8)';   // bright leading pixel
+          const along = (dx || dy) > 0 ? u : TS - 1 - u;
+          ctx.fillRect(px + (dx ? along : ln.at), py + (dx ? ln.at : along), 1, 1);
+        }
+      }
+      // A glint that drifts and blinks.
+      const hb = hash32(x, y, 0x61);
+      if (!reducedMotion() && ((t * 0.7 + (hb % 100) / 37) % 3) < 0.25) {
+        ctx.fillStyle = 'rgba(232,248,255,0.9)';
+        ctx.fillRect(px + 3 + (hb % 10), py + 3 + ((hb >> 8) % 10), 1, 1);
+      }
+    }
+  }
+
   /** A tile outside the clearing: the treeline floor with a shrub (tuning.visuals.edge). */
   edgeVisual(x, y) {
     const k = x + ',' + y;
@@ -385,6 +474,7 @@ export class ForestView {
         ctx.globalAlpha = 1;
       }
     }
+    this.drawWater(ctx, view, t);
     this.drawUnderlay(ctx, view, t);
 
     // Highlight pulses (expansion, morning, valid planting tiles).

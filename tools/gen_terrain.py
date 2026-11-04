@@ -77,21 +77,21 @@ def school_ground():
 
 
 def water():
-    """The stream: deep blue with lighter ripples and a few glints (tile.water.a / b)."""
-    pal = ["transparent", "#1d3a5a", "#2a5a84", "#3f78a8", "#7fb0d4", "#d8f0ff"]
+    """The stream bed: clear blue, deeper in the middle, with a few soft ripples (tile.water.a / b).
+    The moving ripples and the bank edges are drawn over it by the renderer, flowing downstream."""
+    pal = ["transparent", "#24527c", "#3a76a8", "#4f8cbc", "#7fb0d4", "#d8f0ff", "#2e6492"]
     for v in "ab":
         rng = rng_for("tile.water." + v)
         c = Canvas(T, T)
         for y in range(T):
             for x in range(T):
-                c.px[y][x] = 2 if rng.random() < .8 else 1
-        for _ in range(5):                                # ripples: short light dashes
-            x, y = rng.randint(1, 11), rng.randint(1, 14)
-            for i in range(rng.randint(2, 4)):
-                c.set(x + i, y, 3)
-            c.set(x + 1, y - 1, 4)
-        for _ in range(2):
-            c.set(rng.randint(2, 13), rng.randint(2, 13), 5)
+                d = min(x, y, T - 1 - x, T - 1 - y)              # deeper away from the banks
+                r = rng.random()
+                c.px[y][x] = (1 if r < .35 else 6) if d >= 4 else (6 if r < .25 else 2)
+        for _ in range(3):                                # a few soft, still ripples
+            x, y = rng.randint(2, 11), rng.randint(2, 13)
+            for i in range(rng.randint(2, 3)):
+                c.set(x + i, y, 6 if c.px[y][x + i] == 1 else 3)
         write("tile.water." + v, (T, T), [c], palette=pal, anchor=(8, 8), tags=["tile"])
 
 
