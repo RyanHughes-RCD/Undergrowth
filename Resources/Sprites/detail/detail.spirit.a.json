@@ -1,0 +1,32 @@
+{
+ "id": "detail.spirit.a",
+ "size": [
+  6,
+  6
+ ],
+ "anchor": [
+  3,
+  6
+ ],
+ "palette": [
+  "transparent",
+  "#e0e0ff",
+  "#ffffff",
+  "#7a7ab0"
+ ],
+ "frames": [
+  {
+   "rows": [
+    "..1...",
+    ".121..",
+    "..1...",
+    "..3.1.",
+    "..3121",
+    "..3.3."
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

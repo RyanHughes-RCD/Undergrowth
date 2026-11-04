@@ -34,6 +34,8 @@ export function duration(seconds) {
 let SPRITES = null;
 export const ic = (name, scale = 2, cls = '') => SPRITES.element('ui.icon.' + name, null, scale, 'icon ' + cls);
 
+const DEBRIS = { mossrock: 'A mossy rock', fern: 'A fern', bush: 'A scrubby bush', lichen: 'Lichen-crusted stones', roots: 'Old roots' };
+
 export class UI {
   constructor(app) {
     this.app = app;
@@ -115,7 +117,7 @@ export class UI {
   stageName(stage) { return { seed: 'Just planted', sprout: 'Sprouting', bud: 'In bud', bloom: 'Blooming', ready: 'Ready to harvest' }[stage] || stage; }
   growHoursText(plantID) {
     const c = this.game.plantCfg(plantID);
-    return `${c.growHours}h on its own soil${c.regrowHours ? `, regrows in ${c.regrowHours}h` : ''}`;
+    return `${c.growHours}h on its own soil`;
   }
 
   navButton(icon, label, badge, onclick) {
@@ -148,6 +150,8 @@ export class UI {
     const g = this.game;
     if (!g.inClearing(tile)) return 'The treeline';
     if (g.isWet(tile)) return g.waterAt(tile) ? 'The stream' : 'The spring';
+    const deb = g.debrisAt(tile);
+    if (deb) return DEBRIS[deb.sprite.split('.')[1]] || 'Debris';
     const p = g.plantAt(tile);
     if (p) return this.plantName(p);
     const soil = g.soilAt(tile);
@@ -167,8 +171,11 @@ export class UI {
   tileBody(tile) {
     const g = this.game, now = g.now(), a = this.app;
     if (!g.inClearing(tile)) return h('p', { class: 'sub' }, 'Dense shrubs. Room to grow (in the Store) opens more of the clearing.');
-    if (g.isWet(tile)) return [h('p', { class: 'sub' }, g.waterAt(tile) ? 'Water from the spring. It carries the soil on its banks, most of all on rainy nights and when the moon is full.' : this.story('guide.landmarks.landmark.spring')),
+    if (g.isWet(tile)) return [h('p', { class: 'sub' }, g.waterAt(tile) ? `Water from the spring, running ${g.waterLevelOn(Game.dayNumber(now)).name.toLowerCase()} today. Soil spreads along its banks but not across it, unless it runs high.` : this.story('guide.landmarks.landmark.spring')),
       h('div', { class: 'row end' }, h('button', { class: 'btn small', onclick: () => this.forecastCard() }, ic(this.game.weatherOn(Game.dayNumber(now)).icon, 1), ' Forecast'))];
+    if (g.debrisAt(tile)) return [h('p', { class: 'sub' }, 'Left over from the wild grotto. Clear it away to free the ground.'),
+      ...this.bankNotes(tile),
+      h('div', { class: 'row end' }, h('button', { class: 'btn green small', onclick: () => a.clearDebrisAt(tile) }, 'Clear it away'))];
     const p = g.plantAt(tile);
     const soil = g.soilAt(tile);
     if (p) {
@@ -549,7 +556,7 @@ export class UI {
       const from = p.source === 'gift' ? 'Only a friend of the forest can bring its seeds.' : `It comes up from ${schoolName(p.school)} seeds${p.tier === 'common' ? '' : `, ${p.tier === 'rare' ? 'rarely' : 'now and then'}`}.`;
       return { key: 'plant:' + p.id, name: p.name, sprite: item.sprite, school: p.school, text: item.guideText, rarity: p.tier,
         hint: `${schoolName(p.school)} soil. ${from}`,
-        extra: [h('p', { class: 'sub center' }, `${p.kind === 'fungus' ? 'A fungus' : p.kind === 'leafy' ? 'A leafy plant' : 'A flower'}${p.perennial ? ' that grows back after harvest' : ''}. ${this.growHoursText(p.id)}. Sells for ${c.sell} coins. ${from}`),
+        extra: [h('p', { class: 'sub center' }, `${p.kind === 'fungus' ? 'A fungus' : p.kind === 'leafy' ? 'A leafy plant' : 'A flower'}. ${this.growHoursText(p.id)}. Sells for ${c.sell} coins. ${from}`),
           ...this.plantGuideExtra(p)] };
     });
     return [
@@ -722,6 +729,8 @@ export class UI {
         h('div', { class: 'row gap wrap' },
           b("Run tonight (today's sky)", () => a.dev((gm, t) => gm.runNight(Game.dayNumber(t)).taken.length, (n) => `The night passes: soil carried onto ${n} tile(s).`)),
           b('+5 dug', () => a.dev((gm) => { gm.state.coins += 200; }, '+200 coins for digging.'))),
+        h('div', { class: 'row gap wrap' }, h('span', { class: 'sub' }, 'Show water: '),
+          ...['Auto', ...(((this.content.tuning.water || {}).levels || []).map((l) => l.name))].map((nm, i) => b(nm, () => a.dev((gm) => { gm.state.dev = gm.state.dev || {}; gm.state.dev.waterLevel = i ? i - 1 : null; }, `Water shown: ${nm}.`)))),
         h('p', { class: 'sub' }, `Today ${g.forecast(g.now())[0].weather.name}, ${g.forecast(g.now())[0].moon.name}: power ${g.forecast(g.now())[0].power.toFixed(2)}. Tomorrow power ${g.forecast(g.now())[1].power.toFixed(2)}. Banks: ${g.bankTiles().length}, water tiles: ${g.state.water.length}.`)]],
       ['Garden', [
         h('div', { class: 'row gap wrap' },
@@ -875,25 +884,27 @@ export class UI {
     return h('button', { class: 'weather-btn', title: `${f.weather.name}, ${f.moon.name}. Tap for the forecast.`, onclick: () => this.forecastCard() },
       ic(f.weather.icon, 2), ic('moon.' + f.moon.index, 2));
   }
-  /** How hard the water will run on a night of this power, in words. */
+  /** The water's level on a day of this power, and what it does to the soil that night. */
   waterWords(power) {
-    if (power <= 0.05) return 'The water will lie still.';
-    if (power < 0.6) return 'The water will barely stir.';
-    if (power < 1.4) return 'The water will run steadily.';
-    if (power < 2.4) return 'The water will run high.';
-    return 'The water will run wild.';
+    const lv = this.game.waterLevel(power);
+    const note = power <= 0.05 ? 'still; the soil stays put' : lv.cross > 0.15 ? 'flooding; soil spreads fast and crosses the stream'
+      : lv.cross > 0 ? 'running high; soil may cross the stream' : power < 0.6 ? 'soil barely spreads' : 'soil spreads along the banks';
+    return { name: lv.name, note };
   }
   forecastRows(now, compact = false) {
-    return h('div', { class: 'forecast' + (compact ? ' compact' : '') }, this.game.forecast(now).map((f, i) => h('div', { class: 'forecast-row' },
-      h('b', {}, i ? 'Tomorrow' : 'Today'),
-      h('span', { class: 'fc-icons' }, ic(f.weather.icon, 2), ic('moon.' + f.moon.index, 2)),
-      h('span', { class: 'grow' }, `${f.weather.name}, ${f.moon.name.toLowerCase()}. `, h('span', { class: 'sub' }, `${i ? 'Tomorrow night' : 'Tonight'}: ${this.waterWords(f.power).replace(/^The water will/, 'the water will')}`)))));
+    return h('div', { class: 'forecast' + (compact ? ' compact' : '') }, this.game.forecast(now).map((f, i) => {
+      const w = this.waterWords(f.power);
+      return h('div', { class: 'forecast-row' },
+        h('b', {}, i ? 'Tomorrow' : 'Today'),
+        h('span', { class: 'fc-icons' }, ic(f.weather.icon, 2), ic('moon.' + f.moon.index, 2)),
+        h('span', { class: 'grow' }, `${f.weather.name}, ${f.moon.name.toLowerCase()}. `, h('b', { class: 'lvl lvl-' + w.name.toLowerCase() }, `${w.name} water`), h('span', { class: 'sub' }, `: ${w.note}.`)));
+    }));
   }
   forecastCard() {
     this.showCard((done) => h('div', { class: 'reveal-card pop' },
       h('h2', {}, 'The sky'),
       this.forecastRows(this.game.now()),
-      h('p', { class: 'sub' }, 'Rain swells the spring, and so does the moon. On the nights the water runs high it carries the soil on its banks further. Deep soil, and soil with roots in it, holds better.'),
+      h('p', { class: 'sub' }, 'Rain swells the spring, and so does the moon: the water rises from Low to Normal, High and Flood. Each night soil on the banks spreads along them and inland, but never through the water, unless it runs High or floods and carries soil to the far bank. Deep soil, and soil with roots in it, holds better.'),
       h('button', { class: 'btn green', onclick: done }, 'OK')));
   }
   /** What last night's water did, for the morning card. */
@@ -901,7 +912,7 @@ export class UI {
     if (!n) return null;
     const w = ((this.content.tuning.weather || {}).types || {})[n.weather] || {}, moon = (((this.content.tuning.moon || {}).phases || [])[n.moon] || {}).name || 'the moon';
     const carried = n.taken.length, lost = n.taken.filter((x) => x.from).length;
-    const what = carried ? `the water carried soil onto ${carried} tile${carried === 1 ? '' : 's'}${lost ? ` (${lost} changed school)` : ''}` : 'the water left the soil where it was';
+    const what = carried ? `soil spread along the banks to ${carried} tile${carried === 1 ? '' : 's'}${lost ? ` (${lost} changed school)` : ''}${n.crossed ? `, and the high water carried it across the stream ${n.crossed === 1 ? 'once' : `${n.crossed} times`}` : ''}` : 'the soil stayed where it was';
     return h('p', { class: 'sub night' }, ic('moon.' + n.moon, 1), ` Last night (${(w.name || 'calm').toLowerCase()}, ${moon.toLowerCase()}): ${what}${n.held ? `; ${n.held} held firm` : ''}.`);
   }
 

@@ -334,6 +334,11 @@ class App {
   }
 
   /** Dig a channel: the tile becomes water (its soil is lost). */
+  clearDebrisAt(tile) {
+    const d = this.attempt(() => this.game.clearDebris(tile));
+    if (d) { this.view.dustAt(tile); this.ui.toast('Cleared. The ground is open.'); this.changed(); }
+  }
+
   digAt(tile) {
     const cost = this.attempt(() => this.game.dig(tile, this.game.now()));
     if (cost) { this.view.dustAt(tile); this.ui.toast(`The water finds its way in. (${cost} coins)`); this.changed(); }
@@ -346,7 +351,7 @@ class App {
     if (!r) return;
     this.view.dustAt(tile);
     this.present(r.results);
-    if (this.ui.selectedTile && this.ui.selectedTile.x === tile.x && this.ui.selectedTile.y === tile.y && !r.regrows) this.ui.selectedTile = null;
+    if (this.ui.selectedTile && this.ui.selectedTile.x === tile.x && this.ui.selectedTile.y === tile.y) this.ui.selectedTile = null;
     this.changed();
   }
 

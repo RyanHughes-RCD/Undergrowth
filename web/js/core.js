@@ -334,6 +334,16 @@ export class Game {
   forageAt(t) { return this.state.forage.finds.find((f) => sameTile(f.tile, t)) || null; }
   tinAt(t) { return this.state.tin && sameTile(this.state.tin.tile, t) ? this.state.tin : null; }
 
+  /** Debris: a rock, fern, bush, lichen or roots from the grotto's edge (not a wild feature), which can be cleared. */
+  debrisAt(t) { const d = this.sceneryAt(t); return d && !d.feature ? d : null; }
+  /** Clears the debris off a tile, leaving it open (its soil stays). */
+  clearDebris(t) {
+    const d = this.debrisAt(t);
+    if (!d) throw new GameError("There's nothing to clear here.");
+    this.state.scenery = this.state.scenery.filter((x) => x !== d);
+    this.bump('debrisCleared');
+    return d;
+  }
   /** Nothing on the tile: no water, landmark, scenery, decor, plant, find or the seed tin. */
   isFree(t) {
     return this.inBounds(t) && this.inClearing(t) && !this.waterAt(t) && !this.landmarkAt(t) && !this.sceneryAt(t) && !this.decorAt(t) && !this.plantAt(t) && !this.forageAt(t) && !this.tinAt(t);
@@ -469,6 +479,51 @@ export class Game {
   setSoil(t, school, level = 1) {
     if (school) { this.state.soil[key(t)] = school; this.state.soilLevel[key(t)] = level; } else { delete this.state.soil[key(t)]; delete this.state.soilLevel[key(t)]; }
   }
+  /**
+   * The water's level for a given power (weather + moon): Low, Normal, High or Flood (tuning.water.levels),
+   * with how far it sits in from its banks (inset px) and its chance to carry soil across (cross).
+   */
+  waterLevel(power) {
+    const L = (this.t.water || {}).levels || [{ name: 'Normal', inset: 1, cross: 0 }];
+    let i = L.findIndex((l) => l.below != null && power < l.below);
+    if (i < 0) i = L.length - 1;
+    return { index: i, ...L[i] };
+  }
+  /** A day's water level (developer mode can pin what's shown with state.dev.waterLevel). */
+  waterLevelOn(day) {
+    const pin = this.state.dev && this.state.dev.waterLevel;
+    if (pin != null) { const L = (this.t.water || {}).levels || []; if (L[pin]) return { index: pin, ...L[pin] }; }
+    const w = this.weatherOn(day), m = this.moonOn(day);
+    return this.waterLevel((w.power || 0) + (m.power || 0));
+  }
+  /**
+   * Land tiles next to `t` that soil can reach without crossing water: the four sides, and a corner only when
+   * neither tile beside it is water (so a diagonal never cuts across a bend in the stream).
+   */
+  landNeighbours(t) {
+    const out = [];
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const n = { x: t.x + dx, y: t.y + dy };
+      if (this.isWet(n)) continue;
+      if (dx && dy && (this.isWet({ x: t.x + dx, y: t.y }) || this.isWet({ x: t.x, y: t.y + dy }))) continue;
+      out.push(n);
+    }
+    return out;
+  }
+  /** Land on the far side of the water from `t`: straight across one or two water tiles. */
+  acrossWater(t) {
+    const out = [];
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+      for (let k = 1; k <= 2; k++) {
+        const w = { x: t.x + dx * k, y: t.y + dy * k };
+        if (!this.isWet(w)) break;
+        const far = { x: t.x + dx * (k + 1), y: t.y + dy * (k + 1) };
+        if (!this.isWet(far)) { out.push(far); break; }
+      }
+    }
+    return out;
+  }
   /** Every local midnight since the last one processed. Returns how many nights passed. */
   nightTick(now) {
     const day = Game.dayNumber(now), s = this.state;
@@ -481,9 +536,10 @@ export class Game {
     return n;
   }
   /**
-   * The night after local day `d`. The water's power is that day's weather + moon. Along the water, bank tiles
-   * may take on a soil the water carries (weighted by where it's richest); inland, soil on the banks may creep
-   * one tile. Mature tiles and tiles with a plant hold more often. Tiles that held their soil mature a level.
+   * The night after local day `d`. The water's power is that day's weather + moon, and sets its level. Soil
+   * on a bank spreads along the bank and inland, one tile at a time, never through the water; only at a high
+   * level does it cross the stream to the far bank. Mature tiles and tiles with a plant hold more often.
+   * Tiles that held their soil mature a level.
    * Deterministic from the garden seed and the day. Records state.lastNight for the morning card.
    */
   runNight(d, override = null) {
@@ -505,28 +561,22 @@ export class Game {
       this.setSoil(t, school, 1);
       changed.add(key(t));
     };
+    // Soil spreads from the banks: along the bank (to a neighbouring bank tile), inland (to any open
+    // neighbour), never through the water. Only high water carries soil across to the other side.
     const banks = this.bankTiles();
-    const snapshot = banks.map((t) => ({ t, school: this.soilAt(t), level: this.soilLevel(t) })).filter((x) => x.school);
-    if (power > 0 && snapshot.length) {
-      const weights = {};
-      for (const x of snapshot) weights[x.school] = (weights[x.school] || 0) + x.level;
-      const total = Object.values(weights).reduce((a, b) => a + b, 0);
-      const pAlong = Math.min(T.cap ?? 0.8, (T.alongWater ?? 0.1) * power);
-      for (const b of banks) {
-        if (rng.next() >= pAlong) continue;
-        let r = rng.next() * total, school = null;
-        for (const [k, v] of Object.entries(weights)) { if (r < v) { school = k; break; } r -= v; }
-        if (school) tryTake(b, school);
-      }
-      const pIn = Math.min(T.cap ?? 0.8, (T.inland ?? 0.08) * power);
-      for (const x of snapshot) {
-        if (rng.next() >= pIn) continue;
-        const near = [];
-        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-          const t = { x: x.t.x + dx, y: x.t.y + dy };
-          if ((dx || dy) && this.inClearing(t) && !this.isWet(t) && !this.landmarkAt(t) && !this.sceneryAt(t)) near.push(t);
-        }
-        if (near.length) tryTake(near[rng.int(0, near.length - 1)], x.school);
+    const snapshot = banks.map((t) => ({ t, school: this.soilAt(t) })).filter((x) => x.school);
+    const level = this.waterLevel(power);
+    const open = (t) => this.inClearing(t) && !this.isWet(t) && !this.landmarkAt(t) && !this.sceneryAt(t);
+    const pAlong = Math.min(T.cap ?? 0.8, (T.alongBank ?? 0.18) * power), pIn = Math.min(T.cap ?? 0.8, (T.inland ?? 0.06) * power);
+    let crossed = 0;
+    for (const x of snapshot) {
+      const near = this.landNeighbours(x.t).filter(open);
+      const along = near.filter((t) => this.isBank(t));
+      if (along.length && rng.next() < pAlong) tryTake(along[rng.int(0, along.length - 1)], x.school);
+      if (near.length && rng.next() < pIn) tryTake(near[rng.int(0, near.length - 1)], x.school);
+      if (level.cross > 0 && rng.next() < level.cross) {
+        const across = this.acrossWater(x.t).filter(open);
+        if (across.length) { const before = taken.length; tryTake(across[rng.int(0, across.length - 1)], x.school); if (taken.length > before) { taken[taken.length - 1].crossed = true; crossed++; } }
       }
     }
     // Everything that held its soil tonight matures a level.
@@ -537,7 +587,7 @@ export class Game {
       if (lv < maxLv) { this.state.soilLevel[k] = lv + 1; matured++; }
     }
     this.rebase(night);
-    this.state.lastNight = { day: d, weather: w.id, moon: m.index, power, taken, held, matured };
+    this.state.lastNight = { day: d, weather: w.id, moon: m.index, power, level: level.index, taken, held, matured, crossed };
     this.events.push({ type: 'night', ...this.state.lastNight });
     return this.state.lastNight;
   }
@@ -950,15 +1000,15 @@ export class Game {
   varietyDef(id) { return this.content.varieties[id] || null; }
 
   /**
-   * Harvest a ready plant: its produce and (usually) seeds back. An annual leaves the tile empty; a
-   * perennial drops back to its bud stage and regrows in regrowHours. Returns { results, plant, regrows }.
+   * Harvest a ready plant: its produce and (usually) seeds back. The plant is gone and the tile is free.
+   * Returns { results, plant, firstHarvest }.
    */
   harvest(plantRef, now) {
     const p = this.plantByID(plantRef);
     if (!p) throw new GameError("It's gone.");
     if (!this.isReady(p, now)) throw new GameError("It isn't ready yet.");
     this.rebase(now);
-    const def = this.plantDef(p.plantID), cfg = this.plantCfg(p.plantID);
+    const cfg = this.plantCfg(p.plantID);
     const extras = this.harvestExtras(p, now);
     const companions = this.activeCompanions(p);
     const pending = [{ item: this.produceOf(p), count: this.harvestYield(p) }];
@@ -973,22 +1023,11 @@ export class Game {
       if (this.discover(this.companionKey(p.plantID, c.index))) this.events.push({ type: 'companionFound', plantID: p.plantID, with: c.rule.with, effect: c.rule.effect, tile: p.tile });
     }
     p.harvests++;
-    let regrows = false;
-    if (def.perennial && cfg.regrowHours) {
-      const bud = (this.gcfg.stages || {}).bud ?? 0.45;
-      p.cycle = 'regrow';
-      p.need = cfg.regrowHours * HOUR / (1 - bud);
-      p.grown = p.need * bud;
-      p.since = now;
-      if (p.rareColour) { delete p.variety; delete p.rareColour; }   // a one-off colour; seed-grown varieties stay
-      regrows = true;
-    } else {
-      this.state.plants = this.state.plants.filter((x) => x !== p);
-    }
+    this.state.plants = this.state.plants.filter((x) => x !== p);   // every plant leaves its tile when picked
     this.rebase(now);
     this.bump('harvest');
     this.afterHarvest(p, now, results);
-    return { results, plant: p, regrows, firstHarvest };
+    return { results, plant: p, firstHarvest };
   }
   /**
    * Cross-pollination: harvesting a plant while a plant of the same family (the same kind counts) blooms

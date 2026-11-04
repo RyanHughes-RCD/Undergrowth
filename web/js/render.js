@@ -182,6 +182,7 @@ export class ForestView {
     const spriteFor = (k, t, hh) => (k === 'water' ? `tile.water.${hh & 1 ? 'a' : 'b'}` : k ? `tile.${k}.${Math.max(1, g.soilLevel(t))}${hh & 1 ? 'a' : 'b'}` : GRASS[hh % GRASS.length]);
     const me = kindAt({ x, y });
     if (!me) return GRASS[h % GRASS.length];
+    if (me === 'water') return this.waterGround(x, y, h, kindAt, spriteFor);
     const same = (dx, dy) => kindAt({ x: x + dx, y: y + dy }) === me;
     const n = same(0, -1), e = same(1, 0), so = same(0, 1), w = same(-1, 0);
     const mask = [!n && !w, !n && !e, !so && !e, !so && !w].map((b) => (b ? '1' : '0')).join('');
@@ -194,12 +195,13 @@ export class ForestView {
       count[o] = (count[o] || 0) + 1;
       if (!pick || count[o] > count[pick.k] || (count[o] === count[pick.k] && o < pick.k)) pick = { k: o, t };
     }
-    const under = pick ? spriteFor(pick.k, pick.t, h >> 1) : GRASS[h % GRASS.length];
+    const under = pick ? spriteFor(pick.k, pick.t, h >>> 1) : GRASS[h % GRASS.length];
     return `${spriteFor(me, { x, y }, h)}|${mask}|${under}`;
   }
 
   /** Draws a ground key from ground(): a plain tile, or soil over grass with its open corners faded. */
   drawGround(key, x, y) {
+    if (key.startsWith('W|')) { this.drawWaterGround(key, x, y); return; }
     const [id, mask, under] = key.split('|');
     if (!mask) { this.blit(id, null, x, y, 0); return; }
     this.blit(under, null, x, y, 0);
@@ -246,90 +248,143 @@ export class ForestView {
   }
 
   /**
-   * Which way each water tile flows: a walk out from the spring along the water, so every tile flows away
-   * from the tile it was reached from (forks and dug channels included). `dist` is how many tiles
-   * downstream it is, so ripples line up across tiles. Cached until the water changes.
+   * A small thing growing on a school-soil tile (detail.<school>.a/b): a tuft of grass on Verdure, wildflowers
+   * on Bloom and so on. Whether a tile has one is hashed from the tile and its soil, with a chance that rises
+   * with maturity (tuning.visuals.soilDetails), so it stays put and older soil grows busier. Hidden under
+   * anything standing on the tile.
    */
-  flowMap() {
-    const g = this.game, sp = g.spring, wk = g.state.water.join(';') + (sp ? `@${sp.tile.x},${sp.tile.y}` : '');
-    if (this.flowFor === wk) return this.flow;
-    const flow = new Map(), wet = new Set(g.state.water);
-    const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-    const queue = [];
-    const visit = (x, y, dir, dist) => { const k = x + ',' + y; if (!wet.has(k) || flow.has(k)) return; flow.set(k, { dir, dist, end: true }); queue.push({ x, y, dist }); };
-    if (sp) DIRS.forEach(([dx, dy], d) => visit(sp.tile.x + dx, sp.tile.y + dy, d, 0));
-    for (const k of wet) if (!flow.has(k) && !queue.length) { const [x, y] = k.split(',').map(Number); visit(x, y, 2, 0); }  // water with no spring: flow down
-    for (let i = 0; i < queue.length; i++) {
-      const q = queue[i];
-      DIRS.forEach(([dx, dy], d) => {
-        const before = flow.size;
-        visit(q.x + dx, q.y + dy, d, q.dist + 1);
-        if (flow.size > before) flow.get(q.x + ',' + q.y).end = false;
-      });
+  drawSoilDetail(x, y, c) {
+    const g = this.game, t = { x, y }, school = g.soilAt(t);
+    if (!school) return;
+    const chance = ((this.app.content.tuning.visuals.soilDetails || {}).chance || [])[g.soilLevel(t) - 1] || 0;
+    const hh = hash32(x, y, school.length, 0xde7a);
+    if (hh / 4294967296 >= chance) return;
+    if (g.plantAt(t) || g.decorAt(t) || g.sceneryAt(t) || g.landmarkAt(t) || g.forageAt(t) || g.tinAt(t)) return;
+    const id = `detail.${school}.${(hh >>> 3) & 1 ? 'a' : 'b'}`;
+    this.blit(id, null, c.x + ((hh >>> 8) % 7) - 3, c.y + 5 - ((hh >>> 12) % 4), 0, ((hh >>> 16) & 1) === 1);
+  }
+
+  /** Today's water level (Low, Normal, High, Flood), re-read once a minute. */
+  waterLevelNow() {
+    const g = this.game, minute = Math.floor(Date.now() / 60000), pin = g.state.dev && g.state.dev.waterLevel;
+    if (this.levelAt !== minute || this.levelPin !== pin) {
+      this.levelAt = minute; this.levelPin = pin;
+      try { this.level = g.waterLevelOn(Game.dayNumber(g.now())); } catch (_) { this.level = { index: 1, inset: 1, cross: 0 }; }
     }
-    this.flowFor = wk; this.flow = flow;
-    return flow;
+    return this.level;
   }
 
   /**
-   * The moving water over the water tiles: a dark lip and a shallow light edge along the banks, and light
-   * ripples drifting downstream in three lanes, continuous from tile to tile. Ripples run faster when
-   * tonight's water runs high (weather + moon), and hold still with reduced motion.
+   * A water tile's ground key: its sprite, which sides are bank (N E S W), which corners are a point of land
+   * inside a bend (NW NE SE SW), today's inset (how far the water sits in from the bank) and the ground
+   * that shows on the bank (the most common land around it).
+   */
+  waterGround(x, y, h, kindAt, spriteFor) {
+    const wet = (dx, dy) => kindAt({ x: x + dx, y: y + dy }) === 'water' || this.isSpring(x + dx, y + dy);
+    const n = wet(0, -1), e = wet(1, 0), so = wet(0, 1), w = wet(-1, 0);
+    const sides = [n, e, so, w].map((b) => (b ? '0' : '1')).join('');
+    const pts = [n && w && !wet(-1, -1), n && e && !wet(1, -1), so && e && !wet(1, 1), so && w && !wet(-1, 1)].map((b) => (b ? '1' : '0')).join('');
+    const count = {};
+    let pick = null;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if ((!dx && !dy) || wet(dx, dy)) continue;
+      const t = { x: x + dx, y: y + dy }, o = kindAt(t);
+      count[o] = (count[o] || 0) + 1;
+      if (!pick || count[o] > count[pick.k] || (count[o] === count[pick.k] && o < pick.k)) pick = { k: o, t };
+    }
+    const under = pick ? spriteFor(pick.k, pick.t, h >>> 1) : GRASS[h % GRASS.length];
+    return `W|${spriteFor('water', { x, y }, h)}|${sides}|${pts}|${this.waterLevelNow().inset ?? 1}|${under}`;
+  }
+  isSpring(x, y) { const sp = this.game.spring; return !!sp && sp.tile.x === x && sp.tile.y === y; }
+
+  drawWaterGround(key, x, y) {
+    const [, id, sides, pts, inset, under] = key.split('|');
+    this.blit(under, null, x, y, 0);
+    const a = this.sprites.anchor(id);
+    this.ctx.drawImage(this.waterTile(id, sides, pts, Number(inset)), Math.round(x - a.x), Math.round(y - a.y));
+  }
+
+  /**
+   * The water sprite cut to today's level. Each pixel's distance from dry land (the bank sides, rounded at
+   * outer corners, and the points of land inside bends) decides it: nearer than inset - 1 it's bank (clear,
+   * the ground shows), the next pixel is a dark wet edge, and the rest is water. Cached.
+   */
+  waterTile(id, sides, pts, inset) {
+    const k = [id, sides, pts, inset].join('|');
+    this.waterCache = this.waterCache || new Map();
+    let c = this.waterCache.get(k);
+    if (c) return c;
+    const src = this.sprites.frames(id)[0], W = src.w, H = src.h;
+    c = document.createElement('canvas'); c.width = W; c.height = H;
+    const cx = c.getContext('2d');
+    cx.drawImage(src.canvas, 0, 0);
+    const img = cx.getImageData(0, 0, W, H), R = 3, edge = Math.max(0, inset);
+    const open = sides.split('').map((b) => b === '1'), pt = pts.split('').map((b) => b === '1');
+    const corners = [[0, 0], [W, 0], [W, H], [0, H]];
+    for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+      const fx = px + 0.5, fy = py + 0.5;
+      let d = Infinity;
+      if (open[0]) d = Math.min(d, fy);
+      if (open[1]) d = Math.min(d, W - fx);
+      if (open[2]) d = Math.min(d, H - fy);
+      if (open[3]) d = Math.min(d, fx);
+      corners.forEach(([qx, qy], i) => {
+        const sideA = i === 0 || i === 1 ? open[0] : open[2], sideB = i === 1 || i === 2 ? open[1] : open[3];
+        if (sideA && sideB) {                                         // an outer corner: round it off
+          const ox = qx ? qx - edge - R : edge + R, oy = qy ? qy - edge - R : edge + R;
+          const inX = qx ? fx > ox : fx < ox, inY = qy ? fy > oy : fy < oy;
+          if (inX && inY) d = Math.min(d, edge + R - Math.hypot(fx - ox, fy - oy));
+        }
+        if (pt[i]) d = Math.min(d, Math.hypot(fx - qx, fy - qy) - 0.5);   // a point of land in a bend
+      });
+      const o = (py * W + px) * 4;
+      if (d < edge - 1) img.data[o + 3] = 0;                           // bank: the ground shows
+      else if (d < edge) { img.data[o] = 22; img.data[o + 1] = 40; img.data[o + 2] = 44; img.data[o + 3] = 200; }  // wet edge
+    }
+    cx.putImageData(img, 0, 0);
+    this.waterCache.set(k, c);
+    return c;
+  }
+
+  /**
+   * Over the water: gentle waves, little crests that rise, drift a pixel side to side and fade, a few per
+   * tile, livelier the higher the water; a blinking glint; and at Flood a sheet of water spilling over the
+   * banks. Holds still with reduced motion.
    */
   drawWater(ctx, view, t) {
-    const g = this.game, flow = this.flowMap();
-    if (!flow.size) return;
-    const sp = g.spring;
-    const wetAt = (x, y) => g.isWet({ x, y }) || (sp && sp.tile.x === x && sp.tile.y === y);
-    const minute = Math.floor(Date.now() / 60000);
-    if (this.flowPowerAt !== minute) { this.flowPowerAt = minute; try { this.flowPower = g.forecast(g.now())[0].power; } catch (_) { this.flowPower = 0.5; } }
-    const speed = 5 + 4 * Math.min(3, this.flowPower || 0);                 // px per second
-    const run = reducedMotion() ? 0 : t * speed;
-    const LANES = [{ at: 4, len: 4, gap: 10, ph: 0 }, { at: 6, len: 2, gap: 15, ph: 9 }, { at: 8, len: 5, gap: 12, ph: 5 }, { at: 11, len: 3, gap: 9, ph: 2 }];
-    const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-    for (const [k, f] of flow) {
+    const g = this.game, water = g.state.water;
+    if (!water.length) return;
+    const lv = this.waterLevelNow(), inset = lv.inset ?? 1, still = reducedMotion();
+    const crests = [2, 3, 4, 5][lv.index] ?? 3, pace = [0.5, 0.7, 1, 1.4][lv.index] ?? 0.7;
+    const m = Math.max(0, inset) + 2;
+    for (const k of water) {
       const [x, y] = k.split(',').map(Number);
       const px = x * TS, py = y * TS;
       if (px > view.maxX + TS || px < view.minX - TS * 2 || py > view.maxY + TS || py < view.minY - TS * 2) continue;
-      const open = DIRS.map(([dx, dy]) => !wetAt(x + dx, y + dy));               // N E S W: a bank on that side
-      const clip = [open[0] && open[3], open[0] && open[1], open[2] && open[1], open[2] && open[3]];  // NW NE SE SW
-      // Banks: a dark lip at the edge, a shallow light line inside, both stopping short of clipped corners.
-      const edge = (side, inset, colour) => {
-        ctx.fillStyle = colour;
-        const a = side === 0 || side === 2 ? [clip[side === 0 ? 0 : 3], clip[side === 0 ? 1 : 2]] : [clip[side === 1 ? 1 : 0], clip[side === 1 ? 2 : 3]];
-        const s0 = a[0] ? 3 : 0, s1 = a[1] ? 3 : 0, L = TS - s0 - s1;
-        if (side === 0) ctx.fillRect(px + s0, py + inset, L, 1);
-        if (side === 2) ctx.fillRect(px + s0, py + TS - 1 - inset, L, 1);
-        if (side === 3) ctx.fillRect(px + inset, py + s0, 1, L);
-        if (side === 1) ctx.fillRect(px + TS - 1 - inset, py + s0, 1, L);
-      };
-      open.forEach((o, side) => { if (o) { edge(side, 0, 'rgba(14,30,48,0.55)'); edge(side, 1, 'rgba(127,176,212,0.35)'); } });
-      // Ripples along the flow. u runs downstream (0..TS within the tile), v across it.
-      const [dx, dy] = DIRS[f.dir];
-      const base = f.dist * TS;
-      // Swells: faint light bands across the stream, rolling downstream.
-      ctx.fillStyle = 'rgba(160,205,235,0.16)';
-      for (let u = 0; u < TS; u++) {
-        if (((base + u - run * 0.6) % 8 + 8) % 8 >= 2) continue;
-        const along = (dx || dy) > 0 ? u : TS - 1 - u, a0 = open[dx ? 0 : 3] ? 2 : 0, a1 = open[dx ? 2 : 1] ? 2 : 0;
-        if (dx) ctx.fillRect(px + along, py + a0, 1, TS - a0 - a1); else ctx.fillRect(px + a0, py + along, TS - a0 - a1, 1);
+      if (inset < 0) {                                                  // flood: water over the bank
+        ctx.fillStyle = 'rgba(58,118,168,0.55)';
+        const s = -inset;
+        if (!g.isWet({ x, y: y - 1 }) && !this.isSpring(x, y - 1)) ctx.fillRect(px, py - s, TS, s);
+        if (!g.isWet({ x, y: y + 1 }) && !this.isSpring(x, y + 1)) ctx.fillRect(px, py + TS, TS, s);
+        if (!g.isWet({ x: x - 1, y }) && !this.isSpring(x - 1, y)) ctx.fillRect(px - s, py, s, TS);
+        if (!g.isWet({ x: x + 1, y }) && !this.isSpring(x + 1, y)) ctx.fillRect(px + TS, py, s, TS);
       }
-      for (const ln of LANES) {
-        const period = ln.len + ln.gap;
-        for (let u = 0; u < TS; u++) {
-          const s = ((base + u - run + ln.ph) % period + period) % period;
-          if (s >= ln.len) continue;
-          if (f.end && u > TS - 4) continue;                                     // the stream peters out
-          ctx.fillStyle = s >= ln.len - 1 ? 'rgba(232,248,255,0.95)' : 'rgba(150,200,232,0.8)';   // bright leading pixel
-          const along = (dx || dy) > 0 ? u : TS - 1 - u;
-          ctx.fillRect(px + (dx ? along : ln.at), py + (dx ? ln.at : along), 1, 1);
-        }
+      for (let i = 0; i < crests; i++) {
+        const hb = hash32(x, y, i, 0x7a5e);
+        const cxp = px + m + (hb % Math.max(1, TS - 2 * m - 3)), cyp = py + m + 1 + ((hb >>> 8) % Math.max(1, TS - 2 * m - 1));
+        const ph = ((hb >>> 16) % 1000) / 159;
+        const a = still ? 0.45 : 0.5 + 0.5 * Math.sin(t * pace * 1.6 + ph);
+        if (a < 0.15) continue;
+        const dx = still ? 0 : Math.round(Math.sin(t * pace * 0.7 + ph * 1.3));
+        ctx.fillStyle = `rgba(200,232,250,${(0.75 * a).toFixed(2)})`;
+        ctx.fillRect(cxp + dx + 1, cyp - 1, 2, 1);                       // the crest
+        ctx.fillStyle = `rgba(127,176,212,${(0.6 * a).toFixed(2)})`;
+        ctx.fillRect(cxp + dx, cyp, 1, 1); ctx.fillRect(cxp + dx + 3, cyp, 1, 1);
       }
-      // A glint that drifts and blinks.
       const hb = hash32(x, y, 0x61);
-      if (!reducedMotion() && ((t * 0.7 + (hb % 100) / 37) % 3) < 0.25) {
+      if (!still && ((t * 0.7 + (hb % 100) / 37) % 3) < 0.25) {
         ctx.fillStyle = 'rgba(232,248,255,0.9)';
-        ctx.fillRect(px + 3 + (hb % 10), py + 3 + ((hb >> 8) % 10), 1, 1);
+        ctx.fillRect(px + m + (hb % Math.max(1, TS - 2 * m)), py + m + ((hb >> 8) % Math.max(1, TS - 2 * m)), 1, 1);
       }
     }
   }
@@ -472,6 +527,7 @@ export class ForestView {
         if (fade < 1) { this.drawGround(gs.from, c.x, c.y); ctx.globalAlpha = fade; }
         this.drawGround(ground, c.x, c.y);
         ctx.globalAlpha = 1;
+        this.drawSoilDetail(x, y, c);
       }
     }
     this.drawWater(ctx, view, t);
