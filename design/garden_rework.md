@@ -12,7 +12,7 @@ Plants live in `Resources/Content/plants.json`, which is kept by hand. A plant h
 
 ```json
 {"id": "marigold", "item": "plant.marigold", "school": "bloom", "kind": "flower", "family": "daisy",
- "source": "starter", "perennial": false,
+ "source": "starter",
  "companions": [{"with": "cornflower", "effect": "yield"}],
  "varieties": [{"id": "marigold.lemon", "name": "Lemon Marigold", "hue": 50}]}
 ```
@@ -22,7 +22,6 @@ Plants live in `Resources/Content/plants.json`, which is kept by hand. A plant h
 ```
 
 - `source` is `starter` (in the Store from the start), `store` (opens with a beauty tier or a commission) or `gift` (only from a befriended visitor).
-- Perennials also have `regrowHours`. After a harvest they drop back to the bud stage and regrow.
 
 ## Soil
 
@@ -42,8 +41,8 @@ Plants live in `Resources/Content/plants.json`, which is kept by hand. A plant h
 ## Harvest outputs
 
 - Tap a ready plant to harvest it. You get `yield` produce (the catalogue item).
-- Seeds: `seeds: [guaranteed, chance of one more]` packets of the same plant. Annuals return 1 (+50%); perennials 0 (+25%).
-- Annuals leave the tile empty. Perennials regrow from the bud stage.
+- Seeds: `seeds: [guaranteed, chance of one more]` packets of the same plant. Commons return 1 (+50%); rares 0 (+50%).
+- Every plant leaves its tile when harvested (perennials were removed: nothing regrows in place).
 - Starter grow times are staggered (6, 8, 10, 12, 14, 16, 20 and 24h) so something is ready most mornings.
 
 ## Morning check

@@ -1,6 +1,6 @@
 # Undergrowth (working title)
 
-A cozy top-down pixel-art garden in a forest clearing, framed by a shrub treeline around a spring. The design for the garden (plant, grow overnight, harvest) is in `design/garden_rework.md`.
+A cozy top-down pixel-art garden in a forest clearing, framed by a shrub treeline, with a little pool and its streams at the centre. The design for the garden (plant, grow overnight, harvest) is in `design/garden_rework.md`.
 
 The rework was built in phases:
 
@@ -8,7 +8,7 @@ The rework was built in phases:
 2. Added the core loop: soil, seed packets, growth, harvest, coins and the morning check.
 3. Added companions, decor that does something, relic ornaments and garden beauty.
 4. Added long-term goals: collections, cross-pollinated colours, commissions and daily orders, visitors drawn by plants, and Room to grow for coins.
-5. Replaced the Old Log with a spring and its streams, plus weather, the moon, nightly soil spread, soil maturity and digging channels.
+5. Replaced the Old Log with water (first a spring, now a 2×2 pool) and its streams, plus weather, the moon, soil spread by the tides, soil maturity and digging channels.
 
 ## Running it
 
@@ -32,7 +32,8 @@ Then open <http://localhost:8000>.
 
 The garden is a new game, so older forests aren't carried over:
 
-- A version 7 garden is upgraded in place to version 8: the Old Log becomes the spring, streams are laid around it (only over open ground), and existing soil starts at level 2 (Settled).
+- A version 7 garden is upgraded in place to version 9: the Old Log becomes the pool (the emptiest 2×2 block around it), streams are laid around it (only over open ground), and existing soil starts at level 2 (Settled).
+- A version 8 garden had a spring landmark at the head of its streams. It becomes the pool: the emptiest 2×2 block around the spring's tile turns to water, whatever was on it (decor goes back to the Bag).
 - When the game loads a save older than version 7, it copies it, untouched, to `undergrowth.forest.v1.archive.v<old version>` (for example `…archive.v6`) and starts a fresh garden.
 - The fresh garden keeps the old save's **Field Guide discoveries**. A card says so once ("A fresh garden").
 - Developer test saves do the same under their own key.
@@ -40,21 +41,23 @@ The garden is a new game, so older forests aren't carried over:
 
 ## The garden (web)
 
-- **The clearing:** a small 5×8 clearing in the middle of the 40×56 forest (`tuning.json` → `grid`, `clearing`). After the spring, its streams and the edge scenery that leaves about 30 open tiles, so the starter kit and the first few days of buying fill it and Room to grow matters.
+- **The clearing:** a small 5×8 clearing in the middle of the 40×56 forest (`tuning.json` → `grid`, `clearing`). After the pool, its streams and the edge debris that leaves about 30 open tiles, so the starter kit and the first few days of buying fill it and Room to grow matters.
   - At full zoom-out the whole clearing and a thin treeline border fit the play area both ways (`visuals.viewBorderTiles`), at a crisp whole-pixel scale. Spare room shows more treeline.
   - Drag to look around; pinch to zoom in.
-- **The spring** sits at the centre (`Content/landmarks.json`). Tap it for the sky: today's and tomorrow's weather and moon. The neighbours' board and the Store are under **Notes** in the bottom bar.
-- **Streams** (`tuning.json` → `water`): a new garden's spring sends out 6–7 water tiles in at least two distinct streams, either leaving in different directions or forking. They meander at random (deterministic from the garden seed) and never touch except where they fork. Water can't be planted, amended or decorated.
-- **Weather and the moon** (`weather`, `moon`): each local day is Clear, Cloudy, Rain or Storm, drawn from the garden seed (it tends to repeat yesterday's). The moon is the real moon's phase that day, one of eight. The **weather button** in the HUD and the spring both show the forecast: today and tomorrow, with the water's strength in words (from "lie still" to "run wild").
-- **Nightly tides** (`tides`): at local midnight the water moves soil. Its power is the day's weather power plus the moon's (a storm on a full moon is 3.7; a clear new-moon night is 0).
-  - Along the water, a bank tile (one touching water) may take a soil carried from another bank, chosen by the banks' maturity.
-  - Inland, soil on a bank may creep to one neighbouring tile.
-  - A tile resists by its maturity, and more with a plant on it. The morning card reports last night's weather, moon and how many tiles changed.
+- **The pool:** the river rises from a 2×2 block of water at the centre of a new garden (`state.pool`). There are no landmarks now (`Content/landmarks.json` is empty). The neighbours' board and the Store are under **Notes** in the bottom bar.
+- **Streams** (`tuning.json` → `water`): the pool sends out 6–7 water tiles in at least two distinct streams, either leaving in different directions or forking. They meander at random (deterministic from the garden seed) and never touch except where they fork. Water can't be planted, amended or decorated. Tap any water for its card and the forecast.
+- **Weather and the moon** (`weather`, `moon`): each local day is Clear, Cloudy, Rain or Storm, drawn from the garden seed (it tends to repeat yesterday's). The moon is the real moon's phase that day, one of eight. The **weather button** in the HUD (and a water tile's card) shows the forecast: today and tomorrow, with the **water level** for each and what it means for the soil at each tide that day.
+- **Water level** (`water.levels`): the day's power (weather + moon, below) sets the water Low, Normal, High or Flood. Low water sits well inside its channel and shows a strip of bank (the grass or soil beside it) with a dark wet edge; Normal shows a thin strip; High fills the channel; a Flood spills a little over the banks. The water tile card names today's level, and developer mode can pin the level shown.
+- **Tides** (`tides`): every six hours (local 00:00, 06:00, 12:00 and 18:00) the tide turns and soil spreads from the banks (tiles touching water), so there's something new at every visit. The day's power is its weather power plus the moon's (a storm on a full moon is 3.7; a clear new-moon day is 0); the spread uses power + 0.6 (`basePower`), so even a still day moves a little. Time away catches up, up to 28 tides (a week).
+  - Along the bank: soil on a bank tile may spread to a neighbouring bank tile, so it grows up or down the stream (55% × (power + 0.6), at most 80%).
+  - Inland: it may also creep to any open neighbour (20% × (power + 0.6)).
+  - Never through the water: a step to a corner tile is only allowed when neither tile beside it is water, so soil can't slip across a bend. Soils on opposite banks stay apart, **unless the water is High or in Flood**: then each bank tile with soil has a 10% (High) or 25% (Flood) chance to carry it straight across to the far bank.
+  - A tile resists by its maturity, and more with a plant on it. The return card reports the tides since your last visit: how many tiles changed, any crossings and how much soil matured.
   - A plant whose tile changed school keeps growing, slowly (`garden.soil.wrong`, 35%).
-- **Soil maturity** (`garden.soil.levels`): soil is Fresh, Settled, Rich or Deep (levels 1–4). A tile that keeps its soil through a night goes up a level. On a plant's own soil each level above 1 adds 6% growth speed, and from Rich it gives +1 produce. Higher levels look more strongly of their school. A tile card shows the level.
+- **Soil maturity** (`garden.soil.levels`): soil is Fresh, Settled, Rich or Deep (levels 1–4). Each tide a tile keeps its soil, it has a 50% chance to go up a level (`tides.matureChance`), so about a level every 12 hours: Deep in under two days. On a plant's own soil each level above 1 adds 6% growth speed, and from Rich it gives +1 produce. Each level looks more strongly of its school, with deeper colour and darker shadows, and grows more little details (`visuals.soilDetails`: a tile has one with an 8%, 20%, 40% or 65% chance by level): tufts and clover on Verdure, wildflowers on Bloom, tiny caps and puffballs on Spore, glowing moss and foxfire on Glow, crystal shards and glinting pebbles on Shimmer, ghost-flowers and little cairns on Spirit. Details stay put on their tile and hide under anything standing there. A tile card shows the level.
 - **Digging channels** (`water.dig`): tap an empty tile beside the water and choose *Dig a channel*. It becomes water and its soil is lost. It costs 15 coins, then 5 more for each channel dug before. New banks let the tides reach new ground.
 - **The opening** (no guided tutorial, no instructions):
-  - The clearing is a little grotto: mossy rocks, ferns and roots along its edge (`start.scenery`, visual only).
+  - The clearing is a little grotto: mossy rocks, ferns and roots along its edge (`start.scenery`). This debris blocks its tile; tap it and choose **Clear it away** (free) to open the ground. Wild features from Room to grow can't be cleared.
   - An old seed tin waits by the log (`start.tin`). Tapping it shows the words on its lid, then five quiet questions with four answers each (`Content/opening.json`). No answer names a school or a mechanic. Each answer adds weight to one or two schools.
   - The highest total chooses the garden's starting school, and the runner-up adds a little. The tin holds a starter set (`garden.starterSet`):
     - 4 Common seeds of that school and 2 Common seeds of the runner-up;
@@ -72,6 +75,7 @@ The garden is a new game, so older forests aren't carried over:
   - On the 5×8 start, the top or bottom gives 15 tiles and a side gives 24.
   - **The new ground isn't empty.** Along the old edge it uncovers a 4-tile patch of one school's soil (`wildSoilTiles`), a different school each time in an order shuffled by the garden seed. Beside it is that school's **wild feature**: Mossy stone, Glowing flowers, Wild flowers, Old oak, Crystal outcrop or Misty pine.
   - Features can't be moved or bought, and add 3–4 beauty each. Tap one to see what it is. A card names what was found, and the new soil is highlighted.
+  - **The river follows.** A point on the newly revealed outer edge is picked at random; from the water tile nearest it, a stream winds out to that edge, through a random bend midway. It takes the cheapest route: around plants, decor, features and the tin where it can, through them where it must (their soil is lost, plants and debris are gone, decor goes back to the Bag). The new water is highlighted and the card says so.
   - The foraging patch moves out with the treeline on its own.
   - It's deterministic from the garden seed and the purchase.
 - **Field Guide:** tabs for Mushrooms, Plants (the Plant & Fungi Catalogue) and Visitors. Unfound entries are silhouettes.
@@ -92,7 +96,7 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
   - The tile shows its soil: plain is grass, and a school's soil is its ground tile (`tile.<school>.3a/b`).
 - **Growing well:**
   - On its own school's soil a plant grows at normal speed (`soil.preferred` 1).
-  - On plain soil it grows at 0.6× (`soil.plain`): an 8-hour Marigold takes about 13 hours, so it still lands on the next morning.
+  - On plain soil it grows at 0.6× (`soil.plain`): a 3-hour Marigold takes 5 hours, still inside a six-hour visit.
   - **On another school's soil it can't be planted.** A plant that crawls along at a third of its speed looks broken, and refusing teaches the rule at once. In planting mode its own soil glows brightly, plain ground faintly and other soil not at all. Tapping a wrong tile says which soil the plant likes.
 - **Stages:** seed, sprout, bud, bloom, then ready (at 15%, 45% and 75% of its growth, `garden.stages`).
   - Seed and sprout share the generic art, the bud is the plant's own (`plant.bud.<key>`; fungi got buds too), and bloom is the plant itself.
@@ -103,7 +107,7 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
   - Reloading gives the same times.
 - **Harvest:** tap a ready plant.
   - You get `yield` produce (the catalogue item) and seed packets: `seeds: [always, chance of one more]`.
-  - An annual leaves its tile empty. A perennial drops back to its bud stage and is ready again after `regrowHours`.
+  - Every plant leaves its tile when it's picked; nothing regrows in place. Plant again from the seeds it gives back.
   - The first harvest of each plant adds it to the Field Guide's **Garden** tab.
 - **Coins:** the one currency.
   - The Store's **Sell** tab buys produce (each plant's `sell` price) and anything foraged (`garden.sellByRarity`), one at a time or everything at once.
@@ -137,16 +141,16 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
 
   | School | Common | Uncommon | Rare |
   |---|---|---|---|
-  | Spore | Ink Cap (6h) | Velvet Shank (10h) | Morel (20h) |
-  | Glow | Foxfire Button (12h), Honey Mushroom (12h) | Lantern Flower (24h, perennial) | Glowcap (20h) |
-  | Bloom | Marigold (8h), Cornflower (20h) | Lavender (16h, perennial) | Anemone (18h) |
-  | Verdure | Wood Sorrel (10h, perennial) | Hosta (18h, perennial) | Hellebore (22h, perennial) |
-  | Shimmer | Jewelweed (14h) | Glassbell (14h) | Prism Rose (20h) |
-  | Spirit | Wisp Cap (16h) | Mistbell (18h) | Ancestor's Lace (20h) |
+  | Spore | Ink Cap (2h) | Velvet Shank (4h) | Morel (9h) |
+  | Glow | Foxfire Button (4h), Honey Mushroom (4h) | Lantern Flower (8h) | Glowcap (9h) |
+  | Bloom | Marigold (3h), Cornflower (6h) | Lavender (6h) | Anemone (8h) |
+  | Verdure | Wood Sorrel (3h) | Hosta (6h) | Hellebore (10h) |
+  | Shimmer | Jewelweed (5h) | Glassbell (5h) | Prism Rose (9h) |
+  | Spirit | Wisp Cap (5h) | Mistbell (6h) | Ancestor's Lace (9h) |
 
-  - Grow times are on the plant's own soil.
+  - Grow times are on the plant's own soil. Commons and uncommons are ready within 6 hours, so a visit every six hours always finds something; rares take 8–10.
   - Commons sell for 3–7 coins, uncommons for 6–11 and rares for 13–16.
-  - Annual commons return 1 seed plus a 50% chance of another; rares return a 50% chance of one; perennials 25%.
+  - Commons and uncommons return 1 seed plus a 50% chance of another; rares return a 50% chance of one; gift plants 1 plus a 25% chance.
   - Every plant's numbers are in `tuning.json` → `garden.plants`.
 - **The first morning:** the tin's 6 packets fill 6 tiles. The first harvests sell for about 30–60 coins, enough for the next round of Common seeds or a bag of the day's soil.
 
@@ -203,7 +207,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - From 60 it visits in its window (35% per half hour, staying 1–2.5 hours, once a day). It drifts shyly near the plants it likes. Tap it to befriend it.
   - Everything is seeded from the garden, the visitor and the time, so it's deterministic.
   - **Befriended visitors bring seeds you can't buy.** At once they leave 2 packets of their gift, and later the occasional morning gift. One of each school's pair brings a gift-only plant (Spore Lantern, Moonpetal, Foxglove, Canopy Bells, Prismbell, Wispwillow); the other brings a colour variety's seeds.
-  - In a simulation, a Marigold and a Cornflower left blooming brought the Bumblebee about 39 hours later.
+  - In a simulation (with the slower grow times before the pace-up), a Marigold and a Cornflower left blooming brought the Bumblebee about 39 hours later.
 
   | Visitor | School | Likes blooming | Time | Gift |
   |---|---|---|---|---|
@@ -224,7 +228,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - The old Lantern Moth, Honey Bumble, Fern Rabbit and Mist Fox became the Glowmoth, Bumblebee, Mossback Hare and Will-o'-Wisp Fox, keeping their ids.
   - The Mossback Hedgehog, Prism Beetle, Foxfire Newt and Petal Stag are gone.
   - Their sprites are placeholders from `tools/gen_visitor_sprites.py`.
-- **Gift plants** (only from visitors, never in the Store): they grow 20–24h and sell for 13–16. Canopy Bells and Wispwillow are perennials.
+- **Gift plants** (only from visitors, never in the Store): they grow 9–11h and sell for 13–16.
 - **Room to grow** is bought with coins in the Store: 100, 150, 200 … 850 coins for ten purchases, each clearing 3 rows on the side you choose.
 
 ## The Plant & Fungi Catalogue
@@ -324,7 +328,7 @@ tools/
   - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
   - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed or gold) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
   - Catalogue items and their bud stages (`plant.bud.<key>`; fungi get a small closed button) come from `gen_content_sprites.py`.
-  - School soil tiles (`tile.<school>.<1–4>a/b`), water and the spring come from `gen_terrain.py`.
+  - School soil tiles (`tile.<school>.<1–4>a/b`), and water come from `gen_terrain.py`.
   - Grass, the treeline floor and shrubs come from `gen_topdown.py`.
   - UI icons come from `gen_ui.py`.
 
@@ -333,9 +337,9 @@ tools/
 | File | What it holds |
 |---|---|
 | `items.json` | The Plant & Fungi Catalogue (from the spreadsheet): id, category, name, rarity, sprite, school, description. |
-| `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`seeds`: comes from blind packets; `gift`: only from visitors), tier (common, uncommon, rare), perennial, companions, varieties. Numbers: `tuning.json` → `garden.plants`. Blind packets (`seeds.<school>.<tier>`) are built from the schools; each plant also has a named packet (`packet.<id>`), used for gifts. |
+| `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`seeds`: comes from blind packets; `gift`: only from visitors), tier (common, uncommon, rare), companions, varieties. Numbers: `tuning.json` → `garden.plants`. Blind packets (`seeds.<school>.<tier>`) are built from the schools; each plant also has a named packet (`packet.<id>`), used for gifts. |
 | `amendments.json` | Soil amendments (kept by hand): id, school (null = plain loam), name, text. |
-| `landmarks.json` | The spring. |
+| `landmarks.json` | Landmarks (none at present). |
 | `opening.json` | The seed tin's card, the questions and their school weights, and what each school's tin holds. |
 | `visitors.json` | Twelve forest animals: name, sprite, school, likes (`plants` that must be blooming, `time` window), a clue per preference (`plant:<id>`, `time`), Field Guide text and gift (a seed packet id). |
 | `relics.json` | One relic per school (kept by hand), for the relic ornaments. |
@@ -350,8 +354,8 @@ tools/
 - **Pixel frames:** panels, buttons, tabs and cards use stepped, notched-corner frames built from box-shadows. There are no rounded corners or blur effects.
 - **Icons:** pixel sprites in the registry (`ui.icon.*`, `ui.burst`), drawn by `tools/gen_ui.py`. There are no emoji.
 - **Treeline:** the edge bushes and the ground under them use deep, shadowed greens (`tools/gen_topdown.py`), so the clearing has a clear dark border.
-- **The spring and water:** the spring (`landmark.spring`, two frames) and water tiles (`tile.water.a/b`) come from `tools/gen_terrain.py`; the renderer draws the moving water over them: a dark lip and shallow light edge along the banks, light ripples and soft swells drifting downstream from the spring (following each stream and fork), and the odd glint. The ripples run faster when tonight's water runs high, and hold still with reduced motion. Weather and moon icons (`ui.icon.sun/cloud/rain/storm`, `ui.icon.moon.0–7`) come from `gen_ui.py`, and rain or a storm draws falling rain over the garden.
-- **Soil:** each school's soil is the grass tile with its greens moved toward the school's colour plus a few motif specks at four strengths, one per maturity level (`tile.<school>.<level>a/b`; level 3 is the old look). A soil change fades in over `visuals.overlayFadeSeconds`.
+- **Water:** water tiles (`tile.water.a/b`) come from `tools/gen_terrain.py`; the renderer cuts each water tile to today's level (a strip of bank, a dark wet edge, rounded outer corners and points of land in bends) and draws gentle waves over it: little crests that rise, rock a pixel side to side and fade, more and livelier the higher the water, plus the odd glint. A flood spills a translucent sheet over the banks. The waves hold still with reduced motion. Weather and moon icons (`ui.icon.sun/cloud/rain/storm`, `ui.icon.moon.0–7`) come from `gen_ui.py`, and rain or a storm draws falling rain over the garden.
+- **Soil:** each school's soil is the grass tile with its greens moved toward the school's colour plus a few motif specks at four strengths, one per maturity level (`tile.<school>.<level>a/b`), with darker shadows at each level. Soil details (`detail.<school>.a/b`) are drawn by `tools/gen_terrain.py` from small pixel maps. A soil change fades in over `visuals.overlayFadeSeconds`.
   - **Clipped corners:** a soil tile's corner is clipped a little unless the tile above or below or the tile beside that corner has the same soil. Edges between matching tiles stay solid, so patches join up with slightly rounded outer corners.
   - A clipped corner shows the ground most common around the tile, whether grass or another soil.
   - The rounding has a 4-pixel radius and softens over its last 2 pixels in two alpha steps (`visuals.softCorners`; `ForestView.softTile` in `render.js`, cached per tile and corner mask).

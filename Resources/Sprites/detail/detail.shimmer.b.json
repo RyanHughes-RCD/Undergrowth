@@ -1,0 +1,32 @@
+{
+ "id": "detail.shimmer.b",
+ "size": [
+  6,
+  6
+ ],
+ "anchor": [
+  3,
+  6
+ ],
+ "palette": [
+  "transparent",
+  "#d8ccff",
+  "#ffffff",
+  "#8a7ab0"
+ ],
+ "frames": [
+  {
+   "rows": [
+    "......",
+    ".12...",
+    ".33..1",
+    "....12",
+    "..12.3",
+    "..3..."
+   ]
+  }
+ ],
+ "tags": [
+  "tile"
+ ]
+}

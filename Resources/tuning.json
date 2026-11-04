@@ -10,7 +10,7 @@
   "startHeight": 8
  },
  "start": {
-  "_about": "A new garden opens on a little grotto around the spring: its streams, scenery along its edge (visual only), and the opening's seed tin (Content/opening.json) on a free tile within tin.near of the spring.",
+  "_about": "A new garden opens on a little grotto around the 2x2 pool at its centre: the pool's streams, debris along its edge (rocks, ferns, roots: they take up their tiles until cleared), and the opening's seed tin (Content/opening.json) on a free tile within tin.near of the pool.",
   "tin": {
    "sprite": "garden.tin",
    "near": 2
@@ -30,7 +30,7 @@
   }
  },
  "garden": {
-  "_about": "The garden. Plants (Content/plants.json) grow through stages (seed, sprout, bud, bloom, ready) over growHours on their own school's soil, timed from timestamps so time away counts. soil: growth speed on the plant's own soil (preferred), on plain soil (plain); on another school's soil it can't be planted at all. stages: the share of growth at which sprout, bud and bloom begin; ready at 1. A perennial regrows from the bud stage in regrowHours after each harvest. Per plant (plants): growHours, regrowHours (perennials), yield (produce per harvest), seeds [packets always returned, chance of one more], sell (coins per produce). Seed packets and their odds: packets. amendments: the Store's daily soil stock. sellByRarity: the price of anything else in the Bag that can be sold (foraged finds). startCoins: coins in a new garden. starterSet: what the opening's tin holds: Common seeds of the chosen school and of the runner-up, and a few amendments of each. morning: after minAwayHours of real time away a card sums up what's ready; at most one surprise per local day, with surpriseChance, chosen by weight among the kinds possible right now.",
+  "_about": "The garden. Plants (Content/plants.json) grow through stages (seed, sprout, bud, bloom, ready) over growHours on their own school's soil, timed from timestamps so time away counts. soil: growth speed on the plant's own soil (preferred), on plain soil (plain); on another school's soil it can't be planted at all. stages: the share of growth at which sprout, bud and bloom begin; ready at 1. Per plant (plants): growHours, yield (produce per harvest), seeds [packets always returned, chance of one more], sell (coins per produce). Every plant leaves its tile when it's harvested. Seed packets and their odds: packets. amendments: the Store's daily soil stock. sellByRarity: the price of anything else in the Bag that can be sold (foraged finds). startCoins: coins in a new garden. starterSet: what the opening's tin holds: Common seeds of the chosen school and of the runner-up, and a few amendments of each. morning: after minAwayHours of real time away a card sums up what's ready; at most one surprise per local day, with surpriseChance, chosen by weight among the kinds possible right now.",
   "startCoins": 20,
   "soil": {
    "preferred": 1,
@@ -86,7 +86,7 @@
   },
   "plants": {
    "ink-cap": {
-    "growHours": 6,
+    "growHours": 2,
     "yield": 3,
     "seeds": [
      1,
@@ -95,7 +95,7 @@
     "sell": 3
    },
    "marigold": {
-    "growHours": 8,
+    "growHours": 3,
     "yield": 3,
     "seeds": [
      1,
@@ -104,17 +104,16 @@
     "sell": 4
    },
    "wood-sorrel": {
-    "growHours": 10,
-    "regrowHours": 8,
+    "growHours": 3,
     "yield": 2,
     "seeds": [
-     0,
-     0.25
+     1,
+     0.5
     ],
     "sell": 4
    },
    "foxfire-button": {
-    "growHours": 12,
+    "growHours": 4,
     "yield": 3,
     "seeds": [
      1,
@@ -123,7 +122,7 @@
     "sell": 5
    },
    "jewelweed": {
-    "growHours": 14,
+    "growHours": 5,
     "yield": 3,
     "seeds": [
      1,
@@ -132,7 +131,7 @@
     "sell": 6
    },
    "wisp-cap": {
-    "growHours": 16,
+    "growHours": 5,
     "yield": 3,
     "seeds": [
      1,
@@ -141,7 +140,7 @@
     "sell": 7
    },
    "cornflower": {
-    "growHours": 20,
+    "growHours": 6,
     "yield": 4,
     "seeds": [
      1,
@@ -150,17 +149,16 @@
     "sell": 7
    },
    "lantern-flower": {
-    "growHours": 24,
-    "regrowHours": 18,
+    "growHours": 8,
     "yield": 3,
     "seeds": [
-     0,
-     0.25
+     1,
+     0.5
     ],
     "sell": 9
    },
    "velvet-shank": {
-    "growHours": 10,
+    "growHours": 4,
     "yield": 3,
     "seeds": [
      1,
@@ -169,27 +167,25 @@
     "sell": 6
    },
    "lavender": {
-    "growHours": 16,
-    "regrowHours": 12,
+    "growHours": 6,
     "yield": 3,
     "seeds": [
-     0,
-     0.25
+     1,
+     0.5
     ],
     "sell": 8
    },
    "hosta": {
-    "growHours": 18,
-    "regrowHours": 14,
+    "growHours": 6,
     "yield": 2,
     "seeds": [
-     0,
-     0.25
+     1,
+     0.5
     ],
     "sell": 11
    },
    "glassbell": {
-    "growHours": 14,
+    "growHours": 5,
     "yield": 3,
     "seeds": [
      1,
@@ -198,7 +194,7 @@
     "sell": 8
    },
    "honey-mushroom": {
-    "growHours": 12,
+    "growHours": 4,
     "yield": 4,
     "seeds": [
      1,
@@ -207,7 +203,7 @@
     "sell": 6
    },
    "mistbell": {
-    "growHours": 18,
+    "growHours": 6,
     "yield": 3,
     "seeds": [
      1,
@@ -216,7 +212,7 @@
     "sell": 10
    },
    "spore-lantern": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      1,
@@ -225,7 +221,7 @@
     "sell": 13
    },
    "moonpetal": {
-    "growHours": 22,
+    "growHours": 10,
     "yield": 3,
     "seeds": [
      1,
@@ -234,7 +230,7 @@
     "sell": 14
    },
    "foxglove": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      1,
@@ -243,17 +239,16 @@
     "sell": 13
    },
    "canopy-bells": {
-    "growHours": 22,
-    "regrowHours": 16,
+    "growHours": 10,
     "yield": 3,
     "seeds": [
-     0,
+     1,
      0.25
     ],
     "sell": 14
    },
    "prismbell": {
-    "growHours": 22,
+    "growHours": 10,
     "yield": 3,
     "seeds": [
      1,
@@ -262,17 +257,16 @@
     "sell": 14
    },
    "wispwillow": {
-    "growHours": 24,
-    "regrowHours": 18,
+    "growHours": 11,
     "yield": 3,
     "seeds": [
-     0,
+     1,
      0.25
     ],
     "sell": 16
    },
    "morel": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      0,
@@ -281,7 +275,7 @@
     "sell": 14
    },
    "glowcap": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      0,
@@ -290,7 +284,7 @@
     "sell": 14
    },
    "anemone": {
-    "growHours": 18,
+    "growHours": 8,
     "yield": 3,
     "seeds": [
      0,
@@ -299,17 +293,16 @@
     "sell": 13
    },
    "hellebore": {
-    "growHours": 22,
-    "regrowHours": 16,
+    "growHours": 10,
     "yield": 2,
     "seeds": [
      0,
-     0.25
+     0.5
     ],
     "sell": 16
    },
    "prism-rose": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      0,
@@ -318,7 +311,7 @@
     "sell": 14
    },
    "ancestors-lace": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      0,
@@ -721,17 +714,52 @@
    "radius": 4,
    "soft": 2,
    "steps": 2
+  },
+  "soilDetails": {
+   "_about": "Small things growing on school soil (detail.<school>.a/b): each soil tile shows one with chance[level - 1], so older soil is busier. Hidden under plants, decor and debris.",
+   "chance": [
+    0.08,
+    0.2,
+    0.4,
+    0.65
+   ]
   }
  },
  "debugTools": true,
  "water": {
-  "_about": "The spring (centre of the clearing) and its streams. A new garden's streams take riverTiles water tiles (not counting the spring), in at least minStreams streams: either leaving the spring in different directions or forking, meandering at random (keepDirection: chance to carry straight on). Streams never touch each other except where they fork, so they stay distinct. dig: digging an empty tile next to water turns it into water (its soil is lost) for cost + step x tiles dug so far.",
+  "_about": "The pool (a 2x2 block of water at the centre of a new clearing) and its streams. A new garden's streams take riverTiles water tiles (not counting the pool), in at least minStreams streams: either leaving the pool in different directions or forking, meandering at random (keepDirection: chance to carry straight on). Streams never touch each other except where they fork, so they stay distinct. Each Room to grow carries the river on: from the water tile nearest a random point on the newly revealed outer edge, a stream winds out to that edge, around plants, decor and features where it can and through them where it must (their soil is lost, plants and debris are gone, decor goes back to the Bag). dig: digging an empty tile next to water turns it into water (its soil is lost) for cost + step x tiles dug so far.",
   "riverTiles": [
    6,
    7
   ],
   "minStreams": 2,
   "keepDirection": 0.55,
+  "levels": [
+   {
+    "name": "Low",
+    "below": 0.5,
+    "inset": 4,
+    "cross": 0
+   },
+   {
+    "name": "Normal",
+    "below": 1.5,
+    "inset": 2,
+    "cross": 0
+   },
+   {
+    "name": "High",
+    "below": 2.5,
+    "inset": 0,
+    "cross": 0.1
+   },
+   {
+    "name": "Flood",
+    "inset": -2,
+    "cross": 0.25
+   }
+  ],
+  "_levels": "The water's level each day from its power (weather + moon): the first level whose `below` the power is under. inset: how many pixels of bank show between the water and dry land (negative: it spills over the bank). cross: each night, the chance for soil on a bank to be carried across the stream.",
   "dig": {
    "cost": 15,
    "step": 5
@@ -805,12 +833,14 @@
   ]
  },
  "tides": {
-  "_about": "Each night (local midnight) the water moves soil, with power = that day's weather power + moon power. Along the water: each bank tile (a tile touching water) may take on a soil carried by the water (chance alongWater x power, capped), chosen among the soils on all the banks, weighted by their maturity. Inland: soil on a bank may creep to one neighbouring tile (chance inland x power, capped). A tile resists by its maturity, and more with a plant growing on it: it holds with chance resist / (resist + hold), where resist = maturity (0 for plain) + plantHold. Tiles that held their soil through the night mature by one level, up to maxLevel. Catch-up covers at most maxNights.",
-  "alongWater": 0.1,
-  "inland": 0.08,
+  "_about": "Every six hours (local 00:00, 06:00, 12:00, 18:00) the tide turns and soil spreads from the banks (tiles touching water). The day's power = weather power + moon power sets the water level; the spread uses power + basePower, so even a still day moves a little. Each bank tile with soil may spread it along the bank to a neighbouring bank tile (chance alongBank x (power + basePower)) and inland to any open neighbour (chance inland x (power + basePower)), both capped at cap. Soil never spreads through the water: a corner step is only allowed when neither tile beside it is water. At a High or Flood level (water.levels: cross) it may also carry across the stream to the far bank. A tile resists by its maturity, and more with a plant growing on it: it holds with chance resist / (resist + hold), where resist = maturity (0 for plain) + plantHold. Each tile that held its soil through a tide matures a level with matureChance, up to the max (about one level every 12 hours). Catch-up covers at most maxTides.",
+  "alongBank": 0.55,
+  "inland": 0.2,
   "cap": 0.8,
   "hold": 1.2,
   "plantHold": 1.5,
-  "maxNights": 14
+  "basePower": 0.6,
+  "matureChance": 0.5,
+  "maxTides": 28
  }
 }

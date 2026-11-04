@@ -132,10 +132,10 @@ class App {
    */
   returned(awayHours) {
     const shown = this.morningCheck(awayHours);
-    // A night that passed while the garden was open (or a short absence): just a note.
+    // A tide that turned while the garden was open (or a short absence): just a note.
     if (!shown && this.nightNote) {
       const n = this.nightNote;
-      this.ui.toast(n.taken.length ? `The night passed. The water carried soil onto ${n.taken.length} tile${n.taken.length === 1 ? '' : 's'}.` : 'The night passed quietly.', 'ui.icon.moon.' + n.moon);
+      this.ui.toast(n.taken.length ? `The tide turned. Soil spread to ${n.taken.length} tile${n.taken.length === 1 ? '' : 's'}.` : n.matured ? `The tide turned. The soil settled deeper.` : 'The tide turned quietly.', 'ui.icon.moon.' + n.moon);
     }
     this.nightNote = null;
   }
@@ -178,7 +178,7 @@ class App {
     const ui = this.ui;
     if (e.type === 'freshGarden') ui.freshGardenCard(e);
     else if (e.type === 'beautyTier') ui.beautyCard(e);
-    else if (e.type === 'night') {
+    else if (e.type === 'tides') {
       if (e.taken.length) this.view.highlight(e.taken.map((x) => x.tile), 6, '160,210,255');
       this.nightNote = e;
     }
@@ -193,12 +193,14 @@ class App {
     }
     else if (e.type === 'expansion') {
       this.view.highlight(e.tiles, 4, '170,255,150');
+      if (e.river && e.river.length) this.view.highlight(e.river, 6, '140,200,255');
       const f = e.feature && this.game.featureDef(e.feature);
+      const water = e.river && e.river.length ? ' The stream follows, out to the new edge.' : '';
       if (e.soil) {
         this.view.highlight(e.soilTiles, 6, '255,236,140');
         const s = e.soil.charAt(0).toUpperCase() + e.soil.slice(1);
-        ui.celebrate('Room to grow', `The ${e.side ? e.side + ' ' : ''}trees step back. On the new ground: a patch of ${s} soil${f ? `, and beside it, ${f.name.charAt(0).toLowerCase() + f.name.slice(1)}` : ''}.`, f ? this.sprites.element(f.sprite, null, 4, 'grow-in') : null);
-      } else ui.toast(ui.story('messages.expansion'));
+        ui.celebrate('Room to grow', `The ${e.side ? e.side + ' ' : ''}trees step back. On the new ground: a patch of ${s} soil${f ? `, and beside it, ${f.name.charAt(0).toLowerCase() + f.name.slice(1)}` : ''}.${water}`, f ? this.sprites.element(f.sprite, null, 4, 'grow-in') : null);
+      } else ui.toast(ui.story('messages.expansion') + water);
     }
   }
 
@@ -334,6 +336,11 @@ class App {
   }
 
   /** Dig a channel: the tile becomes water (its soil is lost). */
+  clearDebrisAt(tile) {
+    const d = this.attempt(() => this.game.clearDebris(tile));
+    if (d) { this.view.dustAt(tile); this.ui.toast('Cleared. The ground is open.'); this.changed(); }
+  }
+
   digAt(tile) {
     const cost = this.attempt(() => this.game.dig(tile, this.game.now()));
     if (cost) { this.view.dustAt(tile); this.ui.toast(`The water finds its way in. (${cost} coins)`); this.changed(); }
@@ -346,7 +353,7 @@ class App {
     if (!r) return;
     this.view.dustAt(tile);
     this.present(r.results);
-    if (this.ui.selectedTile && this.ui.selectedTile.x === tile.x && this.ui.selectedTile.y === tile.y && !r.regrows) this.ui.selectedTile = null;
+    if (this.ui.selectedTile && this.ui.selectedTile.x === tile.x && this.ui.selectedTile.y === tile.y) this.ui.selectedTile = null;
     this.changed();
   }
 

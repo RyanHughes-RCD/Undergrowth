@@ -294,5 +294,9 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .forecast-row > b { width: 72px; flex: none; }
 .forecast-row .grow { min-width: 0; }
 .fc-icons { display: inline-flex; gap: 2px; flex: none; }
+.forecast-row .lvl { color: #9fd0f0; }
+.forecast-row .lvl-low { color: #c8b58a; }
+.forecast-row .lvl-high { color: #7fc4ff; }
+.forecast-row .lvl-flood { color: #ffd27f; }
 .forecast.compact { margin-top: 6px; }
 .night, .bank { display: flex; align-items: flex-start; gap: 4px; }
