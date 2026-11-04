@@ -127,12 +127,15 @@ export function varietySwap(palette, hue, leaves = false) {
 }
 
 export const SIDES = ['top', 'bottom', 'left', 'right'];
-/** Plant and blind-packet tiers, weakest first. */
-export const PLANT_TIERS = ['common', 'uncommon', 'rare'];
+/** Plant and blind-packet tiers, weakest first. Epic and Legendary plants are the catalogue's Very rare and Legendary finds. */
+export const PLANT_TIERS = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+export const TIER_NAMES = { common: 'Common', uncommon: 'Uncommon', rare: 'Rare', epic: 'Epic', legendary: 'Legendary' };
 /** Visitor tiers, easiest to keep first. */
 export const VISITOR_TIERS = ['early', 'settled', 'mystical'];
 /** The Stump's landmark id (landmarks.json): found by the first Room to grow, it takes offerings. */
 export const STUMP = 'landmark.stump';
+/** The wishing well's landmark id: found by the second Room to grow, it takes handfuls of what you've grown. */
+export const WELL = 'landmark.well';
 /** A blind seed packet's id: seeds.<school>.<tier>. */
 export const blindPacketID = (school, tier) => `seeds.${school}.${tier}`;
 const sameTile = (a, b) => a.x === b.x && a.y === b.y;
@@ -157,6 +160,7 @@ export class Game {
     this.fitToGrid();
     this.placeLandmarks();
     if ((state.revealCount || 0) > 0 && !this.stump) this.placeStump(null);
+    if ((state.revealCount || 0) > 1 && !this.well) this.placeLandmark2x2(WELL, null);
   }
 
   /** Fields every garden has (older version-7 saves may lack newer ones). */
@@ -185,6 +189,7 @@ export class Game {
     s.guests = s.guests || {};             // visitors: interest, mementos left (series), notes, home while resident
     s.visitorNews = s.visitorNews || [];   // mementos, arrivals and departures since the player last looked
     s.tribute = s.tribute || null;         // the offering on the Stump
+    s.wellBuffs = s.wellBuffs || [];       // the wishing well's blessings in force: { schools, from, until, mult }
     // Before mementos, visitors left tracks and were befriended with a tap. A befriended one has already
     // shown itself: it moves in at its next visit if it can stay.
     delete s.guestTracks;
@@ -316,6 +321,7 @@ export class Game {
   /** Brings the garden up to `now`. Returns a small report for the UI. */
   advance(now) {
     const report = { forage: this.forageTick(now), tides: this.tideTick(now) };
+    this.expireBuffs(now);
     this.visitorTick(now);   // (the tides have already run the checks up to each one)
     this.updateBeauty(now);
     this.state.lastUpdated = Math.max(this.state.lastUpdated || 0, now);
@@ -692,6 +698,7 @@ export class Game {
     const from = Math.max(s.tideAt + 1, cur - ((this.t.tides || {}).maxTides ?? 28) + 1);
     const sum = { tides: 0, taken: [], held: 0, matured: 0, crossed: 0 };
     for (let n = from; n <= cur; n++) {
+      this.expireBuffs(Game.tideStart(n));        // blessings that ran out before this tide end on time
       this.visitorTick(Game.tideStart(n) - 1);   // visitors see the soil as it was until the tide turns
       const r = this.runTide(n);
       sum.tides++; sum.taken.push(...r.taken); sum.held += r.held; sum.matured += r.matured; sum.crossed += r.crossed;
@@ -829,20 +836,28 @@ export class Game {
       const stump = this.placeStump(spot || start, added) || this.placeStump(spot || start);
       return { soil: school, soilTiles: patch, feature: null, featureTile: null, stump: stump ? stump.tile : null };
     }
-    if (f && spot) {
+    // The second Room to grow also finds the wishing well, on the new ground.
+    let well = null;
+    if (tier === 2 && !this.well) {
+      const l = this.placeLandmark2x2(WELL, spot || start, added.filter((t) => !spot || !sameTile(t, spot))) || this.placeLandmark2x2(WELL, spot || start);
+      well = l ? l.tile : null;
+    }
+    if (f && spot && this.isFree(spot)) {
       this.state.scenery.push({ tile: { ...spot }, sprite: f.sprite, feature: school, flip: (hash32(this.state.seed, tier, 0x502) & 1) === 1 });
       feature = school;
       this.discover('feature:' + school);
     }
-    return { soil: school, soilTiles: patch, feature, featureTile: spot || null };
+    return { soil: school, soilTiles: patch, feature, featureTile: feature ? spot : null, well };
   }
   /**
    * Puts the Stump (2x2) on four free tiles with no soil, nearest `near`: among `within` (the new ground)
    * when given, else anywhere in the clearing, preferring the edge (for gardens that expanded before it).
    */
-  placeStump(near, within = null) {
-    const def = this.landmarkDef(STUMP);
-    if (!def || this.stump) return null;
+  placeStump(near, within = null) { return this.placeLandmark2x2(STUMP, near, within); }
+  /** Puts a 2x2 landmark (the Stump, the well) down once, the same way (see placeStump). */
+  placeLandmark2x2(id, near, within = null) {
+    const def = this.landmarkDef(id);
+    if (!def || this.state.landmarks.some((l) => l.id === id)) return null;
     const allowed = within ? new Set(within.map(key)) : null;
     const ok = (t) => (!allowed || allowed.has(key(t))) && this.isFree(t) && !this.soilAt(t);
     const c = this.clearing;
@@ -854,9 +869,9 @@ export class Game {
       if (!best || score < best.score) best = { tile: { x, y }, score };
     }
     if (!best) return null;
-    const l = { id: STUMP, tile: best.tile };
+    const l = { id, tile: best.tile };
     this.state.landmarks.push(l);
-    this.discover('landmark:stump');
+    this.discover('landmark:' + id.replace(/^landmark\./, ''));
     return l;
   }
   /** A wild feature uncovered by Room to grow: { name, sprite, beauty, text }. */
@@ -1025,6 +1040,7 @@ export class Game {
    */
   soilFactor(def, school) {
     const c = this.gcfg.soil || {};
+    if (school !== def.school && this.isBlessed(def.school)) return c.preferred ?? 1;   // a well blessing: it grows anywhere
     if (!school) return c.plain ?? 0.6;
     return school === def.school ? (c.preferred ?? 1) : null;
   }
@@ -1068,6 +1084,7 @@ export class Game {
     if (speeds) r *= Math.min(c.maxSpeed ?? 1.5, Math.pow(c.speed ?? 1.25, speeds));
     r *= this.ornamentFactor(p);
     r *= this.residentGrowth(p);
+    r *= this.blessingMult(def.school);
     return r;
   }
 
@@ -1245,8 +1262,8 @@ export class Game {
   afterHarvest(p, now) { this.checkCollection(this.plantDef(p.plantID)?.school, now); }
 
   // ---- Field Guide collections (tuning.garden.collections)
-  /** A school's set: its seed plants and its gift plant. */
-  collectionPlants(school) { return this.content.plantList.filter((p) => p.school === school); }
+  /** A school's set: its seed plants up to Rare, and its gift plant (Epic and Legendary finds aren't in it). */
+  collectionPlants(school) { return this.content.plantList.filter((p) => p.school === school && PLANT_TIERS.indexOf(p.tier || 'common') <= 2); }
   collectionStatus(school) {
     const list = this.collectionPlants(school);
     const have = list.filter((p) => this.discovered.has('plant:' + p.id)).length;
@@ -1799,7 +1816,7 @@ export class Game {
     if (!it || (it.category !== 'plant' && it.category !== 'mushroom')) return null;
     const pl = it.plant ? this.plantDef(it.plant) : null;
     const tier = pl ? (pl.tier || 'common') : (it.rarity || 'common');
-    const rank = PLANT_TIERS.includes(tier) ? PLANT_TIERS.indexOf(tier) : Math.min(2, rarityIndex(tier));
+    const rank = Math.min(2, PLANT_TIERS.includes(tier) ? PLANT_TIERS.indexOf(tier) : rarityIndex(tier));
     return { school: (pl && pl.school) || it.school || null, rank, plant: it.plant || null };
   }
   /** Bag items that can go on the Stump: garden produce and foraged finds. */
@@ -1853,6 +1870,130 @@ export class Game {
     this.state.tribute = null;
     this.state.lastTribute = { item: tr.item, reaction, at: t };
     this.state.visitorNews.push({ type: 'stump', reaction, item: tr.item, at: t });
+  }
+
+  // ---- the wishing well (landmarks.json landmark.well, tuning.well): drop in what you've grown for a reward
+  //
+  // Found by the second Room to grow. Each six-hour block (the tides' clock) it's drawn to one school, or to
+  // all flora or all fungi (its focus). Items it wants count `desire` times their value. The more a wish is
+  // worth, the better its luck: coins are always possible, but luck makes a blessing (a six-hour growth boost
+  // for one or two schools, which also lets them grow on any soil) and seed packets likelier, and the packets
+  // rarer. Nothing is ever certain: every reward and every packet tier keeps a chance at every luck.
+  get well() { return this.state.landmarks.find((l) => l.id === WELL) || null; }
+  get wellCfg() { return this.t.well || {}; }
+  /** The focus for the six-hour block containing t: { id (a school, flora or fungi), until }. */
+  wellFocus(t) {
+    const n = Game.tideNumber(t), opts = [...SCHOOLS, 'flora', 'fungi'], L = opts.length;
+    // A shuffled round of every focus per L blocks, so each comes up in turn and none repeats back to back.
+    const round = (r) => {
+      const perm = opts.slice().sort((a, b) => hash32(this.state.seed, r, hashStr(a), 0x3e11) - hash32(this.state.seed, r, hashStr(b), 0x3e11));
+      return perm;
+    };
+    const r = Math.floor(n / L), perm = round(r);
+    if (perm[0] === round(r - 1)[L - 1]) [perm[0], perm[1]] = [perm[1], perm[0]];
+    return { id: perm[((n % L) + L) % L], until: Game.tideStart(n + 1) };
+  }
+  focusName(id) { return { flora: 'Flora', fungi: 'Fungi' }[id] || schoolName(id); }
+  /** How much the well wants an item now: desire× for its focus, else 1. */
+  wellDesire(itemID, t) {
+    const it = this.content.items[itemID], f = this.wellFocus(t).id;
+    if (!it) return 1;
+    const hit = it.school === f || (f === 'flora' && it.category === 'plant') || (f === 'fungi' && it.category === 'mushroom');
+    return hit ? (this.wellCfg.desire ?? 2.5) : 1;
+  }
+  /** Bag items the well takes: anything grown or foraged (flora and fungi). */
+  wellItems() {
+    return Object.entries(this.state.inventory).filter(([id, n]) => n > 0 && this.sellPrice(id) > 0).map(([id, n]) => ({ id, n }));
+  }
+  /** What a handful is worth to the well right now: { value, luck (0..maxLuck), count }. */
+  wishWorth(pick, t) {
+    let value = 0, count = 0;
+    for (const [id, n] of Object.entries(pick || {})) {
+      const k = Math.min(n, this.state.inventory[id] || 0);
+      if (k <= 0) continue;
+      value += k * this.sellPrice(id) * this.wellDesire(id, t);
+      count += k;
+    }
+    const c = this.wellCfg;
+    return { value, count, luck: Math.min(c.maxLuck ?? 5, Math.log2(1 + value / (c.luckScale ?? 10))) };
+  }
+  /** Picks from [[value, weight]] with this.rng. */
+  weighted(list) {
+    const tot = list.reduce((a, x) => a + x[1], 0);
+    let r = this.rng.next() * tot;
+    for (const [v, w] of list) { if (r < w) return v; r -= w; }
+    return list[list.length - 1][0];
+  }
+  /** Schools of the handful, weighted by what each part was worth (for a blessing's or packet's school). */
+  wishSchools(pick, t) {
+    const by = {};
+    for (const [id, n] of Object.entries(pick)) { const s = this.content.items[id]?.school; if (s) by[s] = (by[s] || 0) + n * this.sellPrice(id) * this.wellDesire(id, t); }
+    return by;
+  }
+  /**
+   * Drop a handful into the well: `pick` is { itemID: count }. Returns the reward:
+   * { type: 'coins', coins } | { type: 'blessing', schools, until } | { type: 'packet', item, tier, results }.
+   */
+  wish(pick, now) {
+    if (!this.well) throw new GameError("There's no well here yet.");
+    const clean = {};
+    for (const [id, n] of Object.entries(pick || {})) {
+      if (!(n > 0)) continue;
+      if (!this.sellPrice(id)) throw new GameError("The well won't take that.");
+      if ((this.state.inventory[id] || 0) < n) throw new GameError("You don't have that many.");
+      clean[id] = n;
+    }
+    const worth = this.wishWorth(clean, now);
+    if (!worth.count) throw new GameError('Choose something to drop in.');
+    const c = this.wellCfg, W = c.weights || {}, L = worth.luck;
+    const focus = this.wellFocus(now).id, bySchool = this.wishSchools(clean, now);
+    for (const [id, n] of Object.entries(clean)) this.consume(id, n);
+    this.rebase(now);
+    const kind = this.weighted([['coins', W.coins ?? 50], ['blessing', (W.blessing ?? 10) + (W.blessingPerLuck ?? 8) * L], ['packet', (W.packet ?? 10) + (W.packetPerLuck ?? 10) * L]]);
+    // The school a blessing or packet favours: the focus if it's a school, else what the handful was mostly made of.
+    const pickSchool = (exclude = []) => {
+      if (SCHOOLS.includes(focus) && !exclude.includes(focus)) return focus;
+      const opts = Object.entries(bySchool).filter(([s]) => !exclude.includes(s));
+      return opts.length ? this.weighted(opts) : this.rng.pick(SCHOOLS.filter((s) => !exclude.includes(s)));
+    };
+    let out;
+    if (kind === 'coins') {
+      const [lo, hi] = c.coinRate || [0.6, 0.9];
+      const coins = Math.max(1, Math.round(worth.value * (lo + this.rng.next() * (hi - lo))));
+      this.state.coins += coins;
+      this.bump('earned', coins);
+      out = { type: 'coins', coins };
+    } else if (kind === 'blessing') {
+      const B = c.blessing || {};
+      const schools = [pickSchool()];
+      if (this.rng.chance(Math.min(B.twoMax ?? 0.6, (B.two ?? 0.15) + (B.twoPerLuck ?? 0.1) * L))) schools.push(pickSchool(schools));
+      const b = { schools, from: now, until: now + (B.hours ?? 6) * HOUR, mult: B.mult ?? 1.5 };
+      this.state.wellBuffs.push(b);
+      this.rebase(now);
+      out = { type: 'blessing', schools, until: b.until, mult: b.mult };
+    } else {
+      const P = c.packets || {}, base = P.base || [60, 30, 12, 4, 1], k = P.luckPerTier ?? 0.35;
+      const tier = this.weighted(PLANT_TIERS.map((t, i) => [t, (base[i] ?? 1) * Math.exp(k * L * i)]));
+      const item = blindPacketID(pickSchool(), tier);
+      out = { type: 'packet', item, tier, results: this.grant([{ item, count: 1 }]) };
+    }
+    this.state.wellLast = { at: now, focus, ...out };
+    this.bump('wish');
+    return out;
+  }
+  /** Blessings in force: [{ schools, until, mult }]. (Expired ones are removed as time passes; see expireBuffs.) */
+  get blessings() { return this.state.wellBuffs; }
+  /** The growth boost a blessing gives a school now (1 if none). Blessings don't stack: two only last longer. */
+  blessingMult(school) { return this.state.wellBuffs.filter((b) => b.schools.includes(school)).reduce((a, b) => Math.max(a, b.mult || 1), 1); }
+  isBlessed(school) { return this.state.wellBuffs.some((b) => b.schools.includes(school)); }
+  /** Blessings that ran out by t end exactly then: growth is banked to that moment and rates recomputed. */
+  expireBuffs(t) {
+    const done = this.state.wellBuffs.filter((b) => b.until <= t).sort((a, b) => a.until - b.until);
+    for (const b of done) {
+      this.rebase(b.until);
+      this.state.wellBuffs = this.state.wellBuffs.filter((x) => x !== b);
+      this.rebase(b.until);
+    }
   }
 
   // ---- beauty (tuning.garden.beauty): never shown as a number
@@ -2024,9 +2165,10 @@ export class Content {
     }
     // Blind seed packets: Common, Uncommon and Rare seeds of each school (tuning.garden.packets).
     for (const school of SCHOOLS) for (const tier of PLANT_TIERS) {
-      const S = schoolName(school), T = tier.charAt(0).toUpperCase() + tier.slice(1);
-      this.addItem({ id: blindPacketID(school, tier), category: 'packet', name: `${T} ${S} seeds`, rarity: tier, sprite: `packet.${school}.${tier}`, school, blind: tier, inGuide: false,
-        text: { common: `${S} seeds. Mostly common plants, now and then something better.`, uncommon: `${S} seeds with better odds of something special.`, rare: `${S} seeds with good odds of a rare plant. Never a sure thing.` }[tier] });
+      const S = schoolName(school), T = TIER_NAMES[tier];
+      this.addItem({ id: blindPacketID(school, tier), category: 'packet', name: `${T} ${S} seeds`, rarity: { epic: 'veryRare' }[tier] || tier, sprite: `packet.${school}.${tier}`, school, blind: tier, inGuide: false,
+        text: { common: `${S} seeds. Mostly common plants, now and then something better.`, uncommon: `${S} seeds with better odds of something special.`, rare: `${S} seeds with good odds of a rare plant. Never a sure thing.`,
+          epic: `${S} seeds with a real chance of something few gardens ever see. Still never a sure thing.`, legendary: `The finest ${S} seeds there are: the best odds of all of something extraordinary, though even these can come up ordinary.` }[tier] });
     }
     // Soil amendments (amendments.json): Bag items that change a tile's soil.
     // Relics (relics.json) are decor ornaments: kind "ornament", with their school.

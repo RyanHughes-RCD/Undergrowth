@@ -10,6 +10,7 @@ The rework was built in phases:
 4. Added long-term goals: collections, cross-pollinated colours, commissions and daily orders, visitors drawn by plants, and Room to grow for coins.
 5. Replaced the Old Log with water (first a spring, now a 2×2 pool) and its streams, plus weather, the moon, soil spread by the tides, soil maturity and digging channels.
 6. Visitors who stay: mementos instead of tracks, residents who live in the garden while their conditions hold, and the Stump, which takes offerings.
+7. Epic and Legendary seeds, and the wishing well.
 
 ## Running it
 
@@ -75,6 +76,7 @@ The garden is a new game, so older forests aren't carried over:
   - That side's trees step back 3 rows (`sideTiles`). A side already at the forest's edge can't be chosen.
   - On the 5×8 start, the top or bottom gives 15 tiles and a side gives 24.
   - **The new ground isn't empty.** Along the old edge it uncovers a 4-tile patch of one school's soil (`wildSoilTiles`), a different school each time in an order shuffled by the garden seed. Beside it is that school's **wild feature**: Mossy stone, Glowing flowers, Wild flowers, Old oak, Crystal outcrop or Misty pine.
+  - **The second purchase also finds the wishing well:** a 2×2 well on the new ground, beside that tier's feature (see The wishing well). Gardens that had already bought it twice get the well on four free tiles with no soil.
   - **The first purchase finds the Stump instead of a feature:** a 2×2 stump on the new ground, beside the soil patch (see Visitors who stay). That school's feature turns up later in the cycle. Gardens that had already bought Room to grow get the Stump on four free tiles with no soil, near the clearing's edge.
   - Features can't be moved or bought, and add 3–4 beauty each. Tap one to see what it is. A card names what was found, and the new soil is highlighted.
   - **The river follows.** A point on the newly revealed outer edge is picked at random; from the water tile nearest it, a stream winds out to that edge, through a random bend midway. It takes the cheapest route: around plants, decor, features and the tin where it can, through them where it must (their soil is lost, plants and debris are gone, decor goes back to the Bag). The new water is highlighted and the card says so.
@@ -124,18 +126,22 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
 
 ### Seeds are blind pulls
 
-Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon Shimmer seeds", "Rare Spirit seeds" (`seeds.<school>.<tier>`, `garden.packets`).
+Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon Shimmer seeds", "Rare Spirit seeds", "Epic Glow seeds", "Legendary Verdure seeds" (`seeds.<school>.<tier>`, `garden.packets`). Each is its own item in the Store: one row per packet, with its own art (plain paper, green trim, gold foil, violet with a seal, an iridescent border), grouped by tier, with a filter by school.
 
 - **Planting rolls the plant.**
   - First a tier is drawn by the packet's odds, then a plant evenly among that school's seed plants of that tier. A tier with none steps down.
-  - Better packets have better odds, never a sure thing.
+  - Better packets have better odds, never a sure thing: every packet keeps a chance of a common plant, and none is certain of any tier.
   - The seedling stays a mystery ("Bloom seedling, what will it be?") until its bud shows. Its card gives only when it buds, since the ready time would give it away.
 
-  | Packet | Price | On the shelf | Common | Uncommon | Rare |
-  |---|---|---|---|---|---|
-  | Common | 5 | from the start | 80% | 17% | 3% |
-  | Uncommon | 12 | Tended | 40% | 48% | 12% |
-  | Rare | 28 | Pleasant | 15% | 45% | 40% |
+  | Packet | Price | On the shelf | Common | Uncommon | Rare | Epic | Legendary |
+  |---|---|---|---|---|---|---|---|
+  | Common | 5 | from the start | 80% | 17% | 3% | | |
+  | Uncommon | 12 | Tended | 40% | 48% | 12% | | |
+  | Rare | 28 | Pleasant | 15% | 45% | 40% | | |
+  | Epic | 60 | Lovely | 8% | 27% | 40% | 23% | 2% |
+  | Legendary | 120 | Charming | 4% | 14% | 32% | 38% | 12% |
+
+  - Only Spore and Verdure have a Legendary plant, so elsewhere a Legendary pull steps down to Epic.
 
 - **Harvests return seeds of the plant's own school and tier.** A rare plant gives Rare seeds, so lucky pulls compound slowly.
 - **Not in any packet:** gift plants (from visitors) and colour varieties keep their own named packets, which only friends and cross-pollination give.
@@ -153,6 +159,18 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - Grow times are on the plant's own soil. Commons and uncommons are ready within 6 hours, so a visit every six hours always finds something; rares take 8–10.
   - Commons sell for 3–7 coins, uncommons for 6–11 and rares for 13–16.
   - Commons and uncommons return 1 seed plus a 50% chance of another; rares return a 50% chance of one; gift plants 1 plus a 25% chance.
+  - **Epic and Legendary plants** are the catalogue's Very rare and Legendary finds, with their own art and buds:
+
+    | School | Epic | Legendary |
+    |---|---|---|
+    | Spore | Ring Morel, Crown Puffball | Ancient Sporecrown |
+    | Glow | Moonlight Morel, Starlight Bonnet, Starspore | |
+    | Bloom | Dawn Peony, Petalwhirl | |
+    | Verdure | Greenheart Vine, Heartleaf Canopy | Heartwood Sapling |
+    | Shimmer | Rainbow Eucalyptus, Opaline Shelf | |
+    | Spirit | Cave Lily, Ghost Orchid, Deeproot Lantern, Corpse Flower, Amethyst Deceiver | |
+
+    Epics grow in 12h, yield 3, sell for 22 and return a 35% chance of Epic seeds. Legendaries grow in 16h, yield 4, sell for 40 and return a 20% chance of Legendary seeds. They aren't part of the Field Guide collections, so the sets (and the relics) are as before.
   - Every plant's numbers are in `tuning.json` → `garden.plants`.
 - **The first morning:** the tin's 6 packets fill 6 tiles. The first harvests sell for about 30–60 coins, enough for the next round of Common seeds or a bag of the day's soil.
 
@@ -244,6 +262,14 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - From nightfall it works for 24 hours, for visitors of the item's school and of a tier its own tier reaches: common items reach early visitors, uncommon ones settled visitors too, rare ones all. For them, interest rises 2×, 3× or 4× as fast (by the item's tier), and rises at half the normal rate even when their plants aren't blooming. A plant a visitor likes doubles its chance of visiting.
   - It never leaves a memento itself. When its day is over, the Stump answers on the next card: something lingered (a visitor it reached came), the offering was moved (it reached someone) or it was barely touched. The Stump's page shows the last answer.
   - One offering at a time.
+- **The wishing well** (`landmarks.json` `landmark.well`, `tuning.well`): found by the second Room to grow. It takes up 2×2 tiles, can't be cleared or moved, and the river goes around it.
+  - **Its focus:** each six-hour block (00:00, 06:00, 12:00, 18:00, like the tides) it's drawn to one of eight things: one of the six schools, all flora (plants) or all fungi (mushrooms). They come round in a shuffled order, each once per eight blocks, never the same twice in a row. Its page says what it wants and when that changes.
+  - **A wish:** tap it, choose any handful of grown or foraged things (each with − / + / All), and drop them in. The handful's worth is each item's sell price, ×2.5 for what the well wants. The page shows how lucky it feels in words (a pebble's worth, a ripple, a stir, a swell, a surge, a wave), never as a number.
+  - **The reward** is one of three. Luck (from the worth) makes the last two likelier, and nothing is ever certain:
+    - **Coins:** 60–90% of the handful's worth, so a wish the well wants pays better than selling.
+    - **A blessing** for 6 hours: one school (sometimes two, likelier with more luck) grows 1.5× as fast, and can be planted on any soil at full speed. Afterwards a plant left on the wrong soil crawls (as when a tide changes its tile). Blessings don't stack: blessing a school again only makes it last longer. The HUD shows a pill while one is on.
+    - **A seed packet** of the focus school (or of what the handful was mostly), from Common to Legendary. More luck makes the rarer tiers likelier, but a Common packet is always possible.
+  - In a simulation: one Marigold gives coins about 74% of the time. A handful of 40 rare mushrooms gives coins a third of the time, and about half its packets are Legendary.
 - **Gift plants** (only from visitors, never in the Store): they grow 9–11h and sell for 13–16.
 - **Room to grow** is bought with coins in the Store: 100, 150, 200 … 850 coins for ten purchases, each clearing 3 rows on the side you choose.
 
@@ -341,8 +367,9 @@ tools/
 - **`anchor`** is measured in pixel-edge coordinates from the top-left. Objects anchor at their feet; ground tiles at their centre.
 - **Missing sprite ids** render as a magenta "?" instead of crashing.
 - **Placeholder art:** `python3 tools/gen_placeholders.py` regenerates every placeholder sprite. Re-running it reproduces the committed sprites exactly.
-  - Visitor animals (`visitor.<id>`, two frames each) and the Stump (`landmark.stump`, 32×28 for its 2×2 footprint) come from `gen_visitor_sprites.py`.
-  - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed or gold) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
+  - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
+  - The Stump and the wishing well (`landmark.stump` 58×53, `landmark.well` 44×63) are drawn art, imported at their own size (one art pixel per game pixel) from `design/art/` by `python3 tools/import_sprite_image.py` (needs Pillow). They stand on their 2×2 tiles and overhang a little, like a tree.
+  - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed, gold, violet with a seal or iridescent) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
   - Catalogue items and their bud stages (`plant.bud.<key>`; fungi get a small closed button) come from `gen_content_sprites.py`.
   - School soil tiles (`tile.<school>.<1–4>a/b`), and water come from `gen_terrain.py`.
   - Grass, the treeline floor and shrubs come from `gen_topdown.py`.
@@ -355,7 +382,7 @@ tools/
 | `items.json` | The Plant & Fungi Catalogue (from the spreadsheet): id, category, name, rarity, sprite, school, description. |
 | `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`seeds`: comes from blind packets; `gift`: only from visitors), tier (common, uncommon, rare), companions, varieties. Numbers: `tuning.json` → `garden.plants`. Blind packets (`seeds.<school>.<tier>`) are built from the schools; each plant also has a named packet (`packet.<id>`), used for gifts. |
 | `amendments.json` | Soil amendments (kept by hand): id, school (null = plain loam), name, text. |
-| `landmarks.json` | Landmarks: the Stump (`footprint` 2×2, `discovery: firstExpansion`: placed by Room to grow, not at the start). |
+| `landmarks.json` | Landmarks: the Stump and the wishing well (`footprint` 2×2; `discovery` firstExpansion / secondExpansion: placed by Room to grow, not at the start). |
 | `opening.json` | The seed tin's card, the questions and their school weights, and what each school's tin holds. |
 | `visitors.json` | Fifteen forest animals: name, sprite, tier (early, settled, mystical), school (and `schools` for two), likes (`plants` that must be blooming, `time` window), `stays` (conditions: soil, bed, beauty, resident), `mementos` (text, and which conditions each `hint`s at), `restate` and `parting` (a line per condition), `perk` (growth, tideHold), Field Guide text and gift (a seed packet id). |
 | `relics.json` | One relic per school (kept by hand), for the relic ornaments. |

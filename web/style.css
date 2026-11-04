@@ -272,6 +272,13 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .news i { color: #f0e6c8; }
 .news.arrival b { color: var(--gold); }
 .item-row { gap: 8px; margin: 6px 0; }
+/* The wishing well */
+.list-row.wanted b { color: var(--gold); }
+.wish-bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--panel-hi); border: 2px solid var(--edge); position: sticky; bottom: 0; }
+.wish-bar .progress { display: block; margin-top: 4px; }
+.blessing { color: #9ff4e8; }
+.hud-row.pills { justify-content: flex-start; }
+.blessing-pill { font: inherit; font-size: var(--t-small); color: var(--text); background: var(--panel); border: 2px solid var(--edge); border-radius: 999px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 2px; }
 .item-row .grow { flex: 1; }
 
 /* ---------- garden ---------- */

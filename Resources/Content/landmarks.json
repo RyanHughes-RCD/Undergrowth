@@ -10,5 +10,17 @@
   "inGuide": true,
   "discovery": "firstExpansion",
   "purpose": "An old stump, too wide to see past. Leave something on it and it's gone by morning. What comes looking depends on what you leave."
+ },
+ {
+  "id": "landmark.well",
+  "name": "The Wishing Well",
+  "sprite": "landmark.well",
+  "footprint": [
+   2,
+   2
+  ],
+  "inGuide": true,
+  "discovery": "secondExpansion",
+  "purpose": "An old well, mossy and deep. Drop in a handful of what you've grown and make a wish. It wants different things at different hours, and it answers best when it gets what it wants."
  }
 ]

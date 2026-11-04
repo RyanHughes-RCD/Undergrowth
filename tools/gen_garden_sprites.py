@@ -112,13 +112,14 @@ def packets():
         sprite("packet." + p["id"], ["#e8dcc0", "#fff6e4", "#c8b898", band, band_l, glyph, glyph_l, "#4f8a2c"], draw, tags=("garden", "packet"))
 
 
-TIER_TRIM = {"common": ("#c8b898", "#e8dcc0"), "uncommon": ("#4fa83a", "#a8e07a"), "rare": ("#d8a020", "#ffe070")}
+TIER_TRIM = {"common": ("#c8b898", "#e8dcc0"), "uncommon": ("#4fa83a", "#a8e07a"), "rare": ("#d8a020", "#ffe070"),
+             "epic": ("#9a4fd8", "#e0b0ff"), "legendary": ("#e05a9a", "#a8f4ff")}
 
 
 def blind_packets():
     """Blind seed packets, one per school and tier (packet.<school>.<tier>): the school's band, a question
-    mark, and a trim for the tier (plain paper, green, gold foil). 2 paper, 3 paper light, 4 fold shade,
-    5 band, 6 band light, 7 trim, 8 trim light, 9 mark."""
+    mark, and a trim for the tier (plain paper, green, gold foil, violet with a seal, an iridescent border all
+    round). 2 paper, 3 paper light, 4 fold shade, 5 band, 6 band light, 7 trim, 8 trim light, 9 mark."""
     for school in ("spore", "glow", "bloom", "verdure", "shimmer", "spirit"):
         band, band_l = SCHOOL[school]
         for tier, (trim, trim_l) in TIER_TRIM.items():
@@ -129,8 +130,12 @@ def blind_packets():
                 c.rect(12, 5, 12, 14, 4)
                 if tier != "common":                       # trim down both sides and along the bottom
                     c.rect(3, 5, 3, 14, 7); c.rect(3, 14, 12, 14, 7); c.set(4, 13, 8)
-                if tier == "rare":
+                if tier in ("rare", "epic", "legendary"):
                     c.set(11, 6, 8); c.set(5, 11, 8)
+                if tier in ("epic", "legendary"):          # a wax seal on the band
+                    c.rect(7, 3, 8, 4, 7); c.set(8, 3, 8)
+                if tier == "legendary":                    # the trim goes all round, glinting
+                    c.rect(12, 5, 12, 14, 7); c.set(12, 7, 8); c.set(3, 9, 8); c.set(10, 14, 8); c.set(11, 12, 8)
                 # a question mark
                 c.rect(6, 6, 9, 6, 9); c.set(9, 7, 9); c.set(9, 8, 9); c.rect(7, 9, 8, 9, 9); c.set(7, 10, 9); c.set(7, 12, 9)
             sprite(f"packet.{school}.{tier}", ["#e8dcc0", "#fff6e4", "#c8b898", band, band_l, trim, trim_l, band], draw, tags=("garden", "packet"))

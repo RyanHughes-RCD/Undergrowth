@@ -462,7 +462,7 @@ export class ForestView {
     const st = g.stump, tr = g.tributeState(now);
     if (st && tr && tr.phase === 'waiting') {
       const it = this.app.content.items[tr.item], p = at({ x: st.tile.x, y: st.tile.y + 1 });
-      if (it) out.push({ sprite: it.sprite, variant: it.variant || null, x: p.x + TS / 2, y: p.y - 15, tile: st.tile, kind: 'landmark', key: 'tribute', still: true, sortY: p.y - TS + 1 });
+      if (it) out.push({ sprite: it.sprite, variant: it.variant || null, x: p.x + TS / 2, y: p.y - 34, tile: st.tile, kind: 'landmark', key: 'tribute', still: true, sortY: p.y - TS + 1 });
     }
     return out;
   }

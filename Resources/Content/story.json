@@ -33,5 +33,24 @@
   "stumpTaken": "Your offering is gone. The forest is still answering it.",
   "stumpEmpty": "Leave something you've gathered:",
   "stumpFound": "Beside it, an old stump, too wide to see past."
+ },
+ "well": {
+  "_about": "The wishing well's text.",
+  "found": "And there's an old well here, mossy and deep.",
+  "focusChange": "It will want something else {when}.",
+  "pickIntro": "Choose what to drop in. The more it's worth to the well, the better your luck.",
+  "nothing": "You have nothing grown to drop in. Harvest something first.",
+  "luck": [
+   "A pebble's worth",
+   "A ripple",
+   "A stir",
+   "A swell",
+   "A surge",
+   "A wave"
+  ],
+  "coins": "The well sends up a glint of coins.",
+  "blessing": "The water shines. For a while, {schools} plants grow faster, and will grow on any soil.",
+  "packet": "Something floats up from the dark: a seed packet.",
+  "blessed": "{schools}: growing faster, on any soil, {left}."
  }
 }

@@ -5,11 +5,10 @@
 
 One 16x16 sprite with two frames (a wing beat, a step, a blink) for each animal in Content/visitors.json:
 visitor.<id>. Drawn from a few body templates (winged insect, bee, bird, owl, fox, hare, squirrel,
-salamander, woodlouse, stag, tortoise, crane) in each animal's colours, and the Stump
-(landmark.stump, 32x28, for its 2x2 footprint). Placeholder art, meant to be redrawn.
+salamander, woodlouse, stag, tortoise, crane) in each animal's colours. (The Stump and the
+wishing well come from drawn art: tools/import_sprite_image.py.) Placeholder art, meant to be redrawn.
 Palette: 1 outline, 2 body, 3 light, 4 dark, 5 accent, 6 eye, 7 glow.
 """
-import math
 import os
 import sys
 
@@ -170,25 +169,6 @@ def crane(c, f):
         c.line(10, 10, 10, 15, 4)
 
 
-def stump(c):
-    """The Stump: two tiles wide, a cut top with rings, bark down the sides, roots and moss."""
-    c.rect(4, 11, 27, 24, 2)                      # trunk
-    for x in (7, 12, 17, 22):                     # bark grooves
-        c.line(x, 13, x + (1 if x % 2 else -1), 24, 4)
-    c.rect(4, 11, 6, 24, 4); c.rect(25, 11, 27, 24, 3)
-    for x0, x1 in ((1, 6), (25, 30)):             # roots
-        c.ellipse((x0 + x1) / 2, 25, 3.4, 2.2, 2)
-    c.ellipse(11, 26, 3, 1.6, 2); c.ellipse(21, 26, 3, 1.6, 2)
-    c.ellipse(16, 10.5, 12, 5.2, 5)               # cut top
-    for rx, ry in ((8.5, 3.6), (5, 2.1), (2, 0.9)):
-        for i in range(48):
-            a = i / 48 * math.tau
-            c.set(16 + math.cos(a) * rx, 10.5 + math.sin(a) * ry, 6)
-    for (x, y) in ((5, 14), (6, 15), (26, 17), (25, 18), (9, 22), (10, 23), (20, 23), (5, 9), (27, 10)):
-        c.set(x, y, 7)
-    c.ellipse(26, 13, 1.8, 1.4, 7); c.ellipse(6, 20, 1.6, 1.2, 7)
-
-
 ANIMALS = {
     "woodlouse": (woodlouse, ["#7a7a86", "#a8a8b4", "#4a4a56", "#c8c8d0", "#1b1420", "#ffffff"]),
     "salamander": (salamander, ["#e8d8d0", "#fff4ee", "#b89a96", "#c86a7a", "#1b1420", "#ffffff"]),
@@ -217,11 +197,7 @@ def main():
             c.outline(1)
             frames.append(c)
         write("visitor." + key, (16, 16), frames, palette=["transparent", OUT] + pal, anchor=(8, 15), tags=["visitor"], durations=[0.5, 0.5])
-    c = Canvas(32, 28)
-    stump(c)
-    c.outline(1)
-    write("landmark.stump", (32, 28), [c], palette=["transparent", OUT, "#6a4a30", "#8a6442", "#3e2a1c", "#d8b884", "#a07a4e", "#5e8a3a"], anchor=(16, 26), tags=["landmark"])
-    print("visitor sprites: %d (and the stump)" % len(ANIMALS))
+    print("visitor sprites: %d" % len(ANIMALS))
 
 
 if __name__ == "__main__":

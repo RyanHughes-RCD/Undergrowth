@@ -1,5 +1,5 @@
 // Undergrowth web game — boot, clock, saving, and player actions.
-import { Content, Game, GameError, SAVE_VERSION, STUMP, archiveKey } from './core.js';
+import { Content, Game, GameError, SAVE_VERSION, STUMP, WELL, archiveKey } from './core.js';
 import { SpriteRegistry } from './sprites.js';
 import { ForestView } from './render.js';
 import { UI } from './ui.js';
@@ -206,12 +206,14 @@ class App {
       this.view.highlight(e.tiles, 4, '170,255,150');
       if (e.river && e.river.length) this.view.highlight(e.river, 6, '140,200,255');
       const f = e.feature && this.game.featureDef(e.feature);
-      if (e.stump) this.view.highlight([e.stump, { x: e.stump.x + 1, y: e.stump.y }, { x: e.stump.x, y: e.stump.y + 1 }, { x: e.stump.x + 1, y: e.stump.y + 1 }], 6, '255,236,140');
+      const block = (t) => [t, { x: t.x + 1, y: t.y }, { x: t.x, y: t.y + 1 }, { x: t.x + 1, y: t.y + 1 }];
+      if (e.stump) this.view.highlight(block(e.stump), 6, '255,236,140');
+      if (e.well) this.view.highlight(block(e.well), 6, '160,220,255');
       const water = e.river && e.river.length ? ' The stream follows, out to the new edge.' : '';
       if (e.soil) {
         this.view.highlight(e.soilTiles, 6, '255,236,140');
         const s = e.soil.charAt(0).toUpperCase() + e.soil.slice(1);
-        ui.celebrate('Room to grow', `The ${e.side ? e.side + ' ' : ''}trees step back. On the new ground: a patch of ${s} soil${f ? `, and beside it, ${f.name.charAt(0).toLowerCase() + f.name.slice(1)}` : ''}.${e.stump ? ' ' + ui.story('visitors.stumpFound') : ''}${water}`, f ? this.sprites.element(f.sprite, null, 4, 'grow-in') : e.stump ? this.sprites.element('landmark.stump', null, 3, 'grow-in') : null);
+        ui.celebrate('Room to grow', `The ${e.side ? e.side + ' ' : ''}trees step back. On the new ground: a patch of ${s} soil${f ? `, and beside it, ${f.name.charAt(0).toLowerCase() + f.name.slice(1)}` : ''}.${e.stump ? ' ' + ui.story('visitors.stumpFound') : ''}${e.well ? ' ' + ui.story('well.found') : ''}${water}`, e.well ? this.sprites.element('landmark.well', null, 2, 'grow-in') : f ? this.sprites.element(f.sprite, null, 4, 'grow-in') : e.stump ? this.sprites.element('landmark.stump', null, 2, 'grow-in') : null);
       } else ui.toast(ui.story('messages.expansion') + water);
     }
   }
@@ -276,7 +278,7 @@ class App {
   tapThing(tile) {
     const g = this.game, ui = this.ui, now = g.now();
     const landmark = g.landmarkAt(tile);
-    if (landmark) { ui.selectedTile = null; if (landmark.id === STUMP) ui.open('stump'); else ui.forecastCard(); this.changed(false); return true; }
+    if (landmark) { ui.selectedTile = null; if (landmark.id === STUMP) ui.open('stump'); else if (landmark.id === WELL) { ui.wellPick = {}; ui.open('well'); } else ui.forecastCard(); this.changed(false); return true; }
     // A resident: its Field Guide page.
     if (tile.hitKind === 'resident') { ui.selectedTile = null; ui.open('visitor', tile.hitKey); this.changed(false); return true; }
     if (g.tinAt(tile)) { ui.selectedTile = null; ui.openOpening(); return true; }
@@ -420,6 +422,14 @@ class App {
     if (this.attempt(() => { this.game.removeDecor(placedID); return true; })) { this.ui.sheet = null; this.ui.close(); this.ui.toast('Put away in your Bag.'); this.changed(); }
   }
   renameForest(name) { this.game.renameForest(name); this.changed(); }
+
+  /** Drop the chosen handful into the wishing well. */
+  wish(pick) {
+    const g = this.game, r = this.attempt(() => g.wish(pick, g.now()));
+    if (!r) return;
+    this.ui.wishCard(r);
+    this.changed();
+  }
 
   /** Leave something on the Stump, or take it back before nightfall. */
   offer(itemID) {
