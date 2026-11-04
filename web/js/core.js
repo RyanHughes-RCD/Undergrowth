@@ -707,6 +707,13 @@ export class Game {
     }
     return out;
   }
+  /** A school's group for the tides: sun (spreads on clear days) or rain (on wet ones). */
+  spreadGroup(school) { const G = (this.t.tides || {}).groups || {}; return Object.keys(G).find((k) => (G[k] || []).includes(school)) || null; }
+  /** How hard a day's weather pushes a school's soil to spread: its group's `spread` + tides.basePower. */
+  spreadPush(w, school) {
+    const T = this.t.tides || {}, g = this.spreadGroup(school), sp = (w && w.spread) || {};
+    return (g && sp[g] != null ? sp[g] : (w && w.power) || 0) + (T.basePower ?? 0.2);
+  }
   /** The local six-hour block a time falls in (0 = 00:00-06:00 on local day 0). A tide turns at each one's start. */
   static tideNumber(t) { return Math.floor((t - new Date(t).getTimezoneOffset() * 60000) / (6 * HOUR)); }
   static tideStart(n) { return Game.dayStart(Math.floor(n / 4)) + (n % 4) * 6 * HOUR; }
@@ -746,7 +753,7 @@ export class Game {
     const d = Math.floor(n / 4);
     const w = override?.weather ? { id: override.weather, ...((this.t.weather || {}).types || {})[override.weather] } : this.weatherOn(d);
     const m = override?.moon != null ? { index: override.moon, ...(((this.t.moon || {}).phases || [])[override.moon] || {}) } : this.moonOn(d);
-    const power = (w.power || 0) + (m.power || 0), push = power + (T.basePower ?? 0.4);
+    const power = (w.power || 0) + (m.power || 0);   // the water's level (crossings); spreading follows the weather
     const rng = new RNG({ rng: hash32(this.state.seed, n, 0x71de) });
     const at = Game.tideStart(n);
     this.rebase(at);
@@ -768,13 +775,15 @@ export class Game {
     const snapshot = this.wateredSoilTiles().map((t) => ({ t, school: this.soilAt(t) }));
     const level = this.waterLevel(power);
     const open = (t) => this.inClearing(t) && !this.isWet(t) && !this.landmarkAt(t) && !this.sceneryAt(t);
-    const pAlong = Math.min(T.cap ?? 0.8, (T.alongBank ?? 0.25) * push), pIn = Math.min(T.cap ?? 0.8, (T.inland ?? 0.06) * push);
+    const chances = {};   // per school: [along the bank, outward], from its group's push in today's weather
+    const odds = (school) => chances[school] || (chances[school] = ((push) => [Math.min(T.cap ?? 0.8, (T.alongBank ?? 0.25) * push), Math.min(T.cap ?? 0.8, (T.inland ?? 0.06) * push)])(this.spreadPush(w, school)));
     let crossed = 0;
     for (const x of snapshot) {
       // Only neighbours that aren't already this soil are worth a try (inside a patch, nothing changes).
       const near = this.landNeighbours(x.t).filter((t) => open(t) && this.soilAt(t) !== x.school);
       const bank = this.isBank(x.t);
       const along = bank ? near.filter((t) => this.isBank(t)) : [];
+      const [pAlong, pIn] = odds(x.school);
       if (along.length && rng.next() < pAlong) tryTake(along[rng.int(0, along.length - 1)], x.school);
       if (near.length && rng.next() < pIn) tryTake(near[rng.int(0, near.length - 1)], x.school);
       if (bank && level.cross > 0 && rng.next() < level.cross) {

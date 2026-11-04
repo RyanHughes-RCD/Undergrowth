@@ -1016,12 +1016,19 @@ export class UI {
     return h('button', { class: 'weather-btn', title: `${f.weather.name}, ${f.moon.name}. Tap for the forecast.`, onclick: () => this.forecastCard() },
       ic(f.weather.icon, 2), ic('moon.' + f.moon.index, 2));
   }
-  /** The water's level on a day of this power, and what it does to the soil at each tide that day. */
+  /** The water's level on a day of this power, and whether soil can cross it. */
   waterWords(power) {
     const lv = this.game.waterLevel(power);
-    const note = power <= 0.05 ? 'still; soil creeps slowly' : lv.cross > 0.15 ? 'soil spreads fast and crosses the stream'
-      : lv.cross > 0 ? 'soil may cross the stream' : power < 0.6 ? 'soil barely spreads' : 'soil spreads from the water';
+    const note = lv.cross > 0.15 ? 'soil crosses the stream easily' : lv.cross > 0 ? 'soil may cross the stream' : power < 0.5 ? 'it runs low and quiet' : 'soil stays on its own side';
     return { name: lv.name, note };
+  }
+  /** Which schools a day's weather spreads: one phrase per group (sun, rain), strongest first. */
+  spreadWords(weather) {
+    const g = this.game, G = (this.content.tuning.tides || {}).groups || {};
+    return Object.values(G).map((schools) => ({ schools, push: g.spreadPush(weather, schools[0]) }))
+      .sort((a, b) => b.push - a.push)
+      .map((x) => h('span', {}, ...x.schools.flatMap((k, i) => [i ? (i === x.schools.length - 1 ? ' and ' : ', ') : '', h('b', { style: `color:${SCHOOL_COLORS[k]}` }, schoolName(k))]),
+        ` ${x.push >= 1.4 ? 'spread fast' : x.push >= 0.8 ? 'spread steadily' : 'barely spread'}`));
   }
   forecastRows(now, compact = false) {
     return h('div', { class: 'forecast' + (compact ? ' compact' : '') }, this.game.forecast(now).map((f, i) => {
@@ -1029,14 +1036,15 @@ export class UI {
       return h('div', { class: 'forecast-row' },
         h('b', {}, i ? 'Tomorrow' : 'Today'),
         h('span', { class: 'fc-icons' }, ic(f.weather.icon, 2), ic('moon.' + f.moon.index, 2)),
-        h('span', { class: 'grow' }, `${f.weather.name}, ${f.moon.name.toLowerCase()}. `, h('b', { class: 'lvl lvl-' + w.name.toLowerCase() }, `${w.name} water`), h('span', { class: 'sub' }, `: ${w.note}.`)));
+        h('span', { class: 'grow' }, `${f.weather.name}, ${f.moon.name.toLowerCase()}. `, h('b', { class: 'lvl lvl-' + w.name.toLowerCase() }, `${w.name} water`), h('span', { class: 'sub' }, `: ${w.note}. `),
+          h('span', { class: 'sub spread' }, ...this.spreadWords(f.weather).flatMap((x, i) => (i ? ['; ', x] : [x])), '.')));
     }));
   }
   forecastCard() {
     this.showCard((done) => h('div', { class: 'reveal-card pop' },
       h('h2', {}, 'The sky'),
       this.forecastRows(this.game.now()),
-      h('p', { class: 'sub' }, 'Rain swells the pool and its streams, and so does the moon: the water rises from Low to Normal, High and Flood. Every six hours the tide turns: any patch of soil that touches the water can spread, from any of its tiles, but never through the water, unless it runs High or floods and carries soil to the far bank. A patch that doesn't touch the water stays as it is. Deep soil, and soil with roots in it, holds better.'),
+      h('p', { class: 'sub' }, 'Rain swells the pool and its streams, and so does the moon: the water rises from Low to Normal, High and Flood. Every six hours the tide turns: any patch of soil that touches the water can spread, from any of its tiles, but never through the water, unless it runs High or floods and carries soil to the far bank. A patch that does not touch the water stays as it is. What spreads depends on the weather: Bloom, Verdure and Shimmer love the sun, Spore, Glow and Spirit the rain, and on cloudy days both creep along. Deep soil, and soil with roots in it, holds better.'),
       h('button', { class: 'btn green', onclick: done }, 'OK')));
   }
   /** What the tides did while you were away, for the return card. */
