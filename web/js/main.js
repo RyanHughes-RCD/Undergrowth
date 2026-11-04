@@ -1,5 +1,5 @@
 // Undergrowth web game — boot, clock, saving, and player actions.
-import { Content, Game, GameError, SAVE_VERSION, archiveKey } from './core.js';
+import { Content, Game, GameError, SAVE_VERSION, STUMP, archiveKey } from './core.js';
 import { SpriteRegistry } from './sprites.js';
 import { ForestView } from './render.js';
 import { UI } from './ui.js';
@@ -132,6 +132,7 @@ class App {
    */
   returned(awayHours) {
     const shown = this.morningCheck(awayHours);
+    if (!shown) this.visitorNews();
     // A tide that turned while the garden was open (or a short absence): just a note.
     if (!shown && this.nightNote) {
       const n = this.nightNote;
@@ -146,7 +147,8 @@ class App {
     const g = this.game, now = g.now();
     if (this.game.state.tin) return false;         // the first session ends on the tin, not a summary
     const m = g.morning(now);
-    if (!m.ready.length && !m.surprise && !m.growing && !this.nightNote) return false;
+    m.news = g.takeVisitorNews();
+    if (!m.ready.length && !m.surprise && !m.growing && !this.nightNote && !m.news.length) return false;
     const tiles = m.ready.flatMap((r) => r.tiles);
     if (m.surprise && m.surprise.tile) tiles.push(m.surprise.tile);
     if (tiles.length) this.view.highlight(tiles, 5, '255,236,140');
@@ -164,6 +166,15 @@ class App {
     this.ui.render(false);
     this.processEvents();
     if (this.nightNote) this.returned(0);
+    else this.visitorNews();
+  }
+
+  /** Mementos, arrivals and departures since the player last looked: one card. */
+  visitorNews() {
+    const news = this.game.takeVisitorNews();
+    if (!news.length) return;
+    this.ui.visitorNewsCard(news);
+    this.changed();
   }
 
   /** Shows one-shot game events. */
@@ -195,11 +206,12 @@ class App {
       this.view.highlight(e.tiles, 4, '170,255,150');
       if (e.river && e.river.length) this.view.highlight(e.river, 6, '140,200,255');
       const f = e.feature && this.game.featureDef(e.feature);
+      if (e.stump) this.view.highlight([e.stump, { x: e.stump.x + 1, y: e.stump.y }, { x: e.stump.x, y: e.stump.y + 1 }, { x: e.stump.x + 1, y: e.stump.y + 1 }], 6, '255,236,140');
       const water = e.river && e.river.length ? ' The stream follows, out to the new edge.' : '';
       if (e.soil) {
         this.view.highlight(e.soilTiles, 6, '255,236,140');
         const s = e.soil.charAt(0).toUpperCase() + e.soil.slice(1);
-        ui.celebrate('Room to grow', `The ${e.side ? e.side + ' ' : ''}trees step back. On the new ground: a patch of ${s} soil${f ? `, and beside it, ${f.name.charAt(0).toLowerCase() + f.name.slice(1)}` : ''}.${water}`, f ? this.sprites.element(f.sprite, null, 4, 'grow-in') : null);
+        ui.celebrate('Room to grow', `The ${e.side ? e.side + ' ' : ''}trees step back. On the new ground: a patch of ${s} soil${f ? `, and beside it, ${f.name.charAt(0).toLowerCase() + f.name.slice(1)}` : ''}.${e.stump ? ' ' + ui.story('visitors.stumpFound') : ''}${water}`, f ? this.sprites.element(f.sprite, null, 4, 'grow-in') : e.stump ? this.sprites.element('landmark.stump', null, 3, 'grow-in') : null);
       } else ui.toast(ui.story('messages.expansion') + water);
     }
   }
@@ -264,7 +276,9 @@ class App {
   tapThing(tile) {
     const g = this.game, ui = this.ui, now = g.now();
     const landmark = g.landmarkAt(tile);
-    if (landmark) { ui.selectedTile = null; ui.forecastCard(); this.changed(false); return true; }
+    if (landmark) { ui.selectedTile = null; if (landmark.id === STUMP) ui.open('stump'); else ui.forecastCard(); this.changed(false); return true; }
+    // A resident: its Field Guide page.
+    if (tile.hitKind === 'resident') { ui.selectedTile = null; ui.open('visitor', tile.hitKey); this.changed(false); return true; }
     if (g.tinAt(tile)) { ui.selectedTile = null; ui.openOpening(); return true; }
     const find = g.forageAt(tile);
     if (find) {
@@ -274,12 +288,6 @@ class App {
     }
     const plant = g.plantAt(tile);
     if (plant && g.isReady(plant, now) && !(ui.selectedTile && ui.selectedTile.x === tile.x && ui.selectedTile.y === tile.y && ui.plantInspector)) { this.harvestAt(tile); return true; }
-    // A visitor in the garden: tapping it befriends it.
-    if (tile.hitKind === 'guest') {
-      const r = this.attempt(() => g.befriendGuest(tile.hitKey, now));
-      if (r) { ui.befriendCard(r); this.changed(); }
-      return true;
-    }
     // A wild feature uncovered by Room to grow: what it is.
     const wild = g.sceneryAt(tile);
     if (wild && wild.feature && g.featureDef(wild.feature)) {
@@ -299,13 +307,6 @@ class App {
     if (!g.inBounds(tile)) return;
     if (ui.mode) { const fn = this.modeHandlers[ui.mode.type]; if (fn) fn(tile); return; }
     if (this.tapThing(tile)) return;
-    // Tracks: reading them gives a clue (kept on the visitor's Field Guide page).
-    const track = g.trackAt(tile);
-    if (track && !g.plantAt(tile)) {
-      const text = this.attempt(() => g.readTrack(track.id));
-      if (text) { ui.toast(text); this.changed(); }
-      return;
-    }
     ui.selectedTile = ui.selectedTile && ui.selectedTile.x === tile.x && ui.selectedTile.y === tile.y ? null : tile;
     this.changed(false);
   }
@@ -419,6 +420,18 @@ class App {
     if (this.attempt(() => { this.game.removeDecor(placedID); return true; })) { this.ui.sheet = null; this.ui.close(); this.ui.toast('Put away in your Bag.'); this.changed(); }
   }
   renameForest(name) { this.game.renameForest(name); this.changed(); }
+
+  /** Leave something on the Stump, or take it back before nightfall. */
+  offer(itemID) {
+    const g = this.game, tr = this.attempt(() => g.offer(itemID, g.now()));
+    if (!tr) return;
+    this.ui.toast(this.ui.story('visitors.stumpWaiting'), this.content.items[itemID]?.sprite);
+    this.changed();
+  }
+  takeBackOffering() {
+    const r = this.attempt(() => this.game.takeBackOffering(this.game.now()));
+    if (r) { this.present(r); this.changed(); }
+  }
 
   // ---------------------------------------------------------------- developer mode
 

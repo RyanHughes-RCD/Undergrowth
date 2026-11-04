@@ -5,9 +5,11 @@
 
 One 16x16 sprite with two frames (a wing beat, a step, a blink) for each animal in Content/visitors.json:
 visitor.<id>. Drawn from a few body templates (winged insect, bee, bird, owl, fox, hare, squirrel,
-salamander, woodlouse) in each animal's colours. Placeholder art, meant to be redrawn.
+salamander, woodlouse, stag, tortoise, crane) in each animal's colours, and the Stump
+(landmark.stump, 32x28, for its 2x2 footprint). Placeholder art, meant to be redrawn.
 Palette: 1 outline, 2 body, 3 light, 4 dark, 5 accent, 6 eye, 7 glow.
 """
+import math
 import os
 import sys
 
@@ -118,6 +120,75 @@ def woodlouse(c, f):
         c.set(x, 14 - (f if x == 8 else 0), 4)
 
 
+def stag(c, f):
+    """A deer side-on: long legs, a raised head and branching antlers with little lights in them."""
+    c.ellipse(8.5, 9.5, 4.4, 2.4, 2)              # body
+    c.ellipse(9, 10.2, 3.4, 1.2, 3)               # pale belly
+    c.line(4.5, 8.5, 3.5, 5.5, 2)                 # neck
+    c.ellipse(3, 5, 1.8, 1.4, 2)                  # head
+    c.set(1, 5.5, 4); c.set(3, 4.5, 6)
+    for x0, d in ((3, -1), (4, 1)):               # antlers
+        c.line(x0, 3.5, x0 + d * 2, 0.5, 4)
+        c.set(x0 + d * 2, 1.5, 4); c.set(x0 + d, 2, 4)
+    c.set(1, 0, 7); c.set(6, 0, 7); c.set(5, 2, 7)
+    step = f
+    for x in (6, 7, 10, 11):
+        lift = step if x in (6, 10) else 0
+        c.rect(x, 11, x, 14 - lift, 4)
+    c.set(13, 8.5, 3)                             # tail
+    c.set(8, 8, 5); c.set(10, 8.5, 5)             # moss on its back
+
+
+def tortoise(c, f):
+    """A domed shell like a mirror, mushrooms in its seams, a slow head."""
+    c.ellipse(8, 10, 5.6, 3.8, 2)                 # shell
+    c.ellipse(7, 8.6, 3, 1.6, 3)                  # mirror shine
+    c.set(6, 8, 7); c.set(9, 9, 7)
+    c.line(4, 11, 12, 11, 4)                      # seam
+    c.set(10, 6.6, 5); c.set(11, 6.6, 5); c.set(10.5, 7.4, 4)   # a little mushroom
+    hx = 1.6 if f == 0 else 2.4
+    c.ellipse(hx, 11.5, 1.6, 1.3, 4)              # head
+    c.set(hx - 0.6, 11, 6)
+    for x in (4, 11):
+        c.rect(x, 13, x + 1, 14, 4)
+
+
+def crane(c, f):
+    """A tall pale crane on one leg, its neck curved, a pink-tipped wing."""
+    c.ellipse(9, 8, 3.6, 2.4, 2)                  # body
+    c.ellipse(11, 8.5, 2.4, 1.4, 3)               # wing
+    c.set(13, 9, 5); c.set(12, 9.5, 5)
+    c.line(6.5, 7, 5, 4, 2); c.line(5, 4, 5.5, 2, 2)   # neck
+    c.ellipse(5.5, 1.8, 1.3, 1.1, 2)
+    c.set(5, 1, 5)                                # red crown
+    c.set(6, 1.8, 6)
+    c.line(4.5, 2.2, 2, 3, 4)                     # beak
+    c.line(9, 10, 9, 15, 4)                       # standing leg
+    if f == 0:
+        c.line(9, 12, 11, 11, 4)                  # the tucked leg
+    else:
+        c.line(10, 10, 10, 15, 4)
+
+
+def stump(c):
+    """The Stump: two tiles wide, a cut top with rings, bark down the sides, roots and moss."""
+    c.rect(4, 11, 27, 24, 2)                      # trunk
+    for x in (7, 12, 17, 22):                     # bark grooves
+        c.line(x, 13, x + (1 if x % 2 else -1), 24, 4)
+    c.rect(4, 11, 6, 24, 4); c.rect(25, 11, 27, 24, 3)
+    for x0, x1 in ((1, 6), (25, 30)):             # roots
+        c.ellipse((x0 + x1) / 2, 25, 3.4, 2.2, 2)
+    c.ellipse(11, 26, 3, 1.6, 2); c.ellipse(21, 26, 3, 1.6, 2)
+    c.ellipse(16, 10.5, 12, 5.2, 5)               # cut top
+    for rx, ry in ((8.5, 3.6), (5, 2.1), (2, 0.9)):
+        for i in range(48):
+            a = i / 48 * math.tau
+            c.set(16 + math.cos(a) * rx, 10.5 + math.sin(a) * ry, 6)
+    for (x, y) in ((5, 14), (6, 15), (26, 17), (25, 18), (9, 22), (10, 23), (20, 23), (5, 9), (27, 10)):
+        c.set(x, y, 7)
+    c.ellipse(26, 13, 1.8, 1.4, 7); c.ellipse(6, 20, 1.6, 1.2, 7)
+
+
 ANIMALS = {
     "woodlouse": (woodlouse, ["#7a7a86", "#a8a8b4", "#4a4a56", "#c8c8d0", "#1b1420", "#ffffff"]),
     "salamander": (salamander, ["#e8d8d0", "#fff4ee", "#b89a96", "#c86a7a", "#1b1420", "#ffffff"]),
@@ -131,6 +202,9 @@ ANIMALS = {
     "prism-moth": (moth, ["#a898d8", "#f4c8ff", "#5a4a8a", "#7cf2ff", "#1b1420", "#ffffff"]),
     "fox": (fox, ["#7a7ad0", "#c8c8f4", "#4a4a8a", "#ffffff", "#1b1420", "#c8fbff"]),
     "owl": (owl, ["#c8a070", "#f4ead8", "#8a6a44", "#d8a050", "#1b1420", "#ffffff"]),
+    "stag": (stag, ["#7a5a3a", "#c8a878", "#4a3422", "#6fbf4a", "#ffffff", "#7cf2ff"]),
+    "tortoise": (tortoise, ["#8a90b8", "#e8f0ff", "#4a4e6a", "#c8a07a", "#1b1420", "#ffffff"]),
+    "crane": (crane, ["#e8e4f0", "#ffffff", "#7a7488", "#ff8ab8", "#1b1420", "#ffffff"]),
 }
 
 
@@ -143,7 +217,11 @@ def main():
             c.outline(1)
             frames.append(c)
         write("visitor." + key, (16, 16), frames, palette=["transparent", OUT] + pal, anchor=(8, 15), tags=["visitor"], durations=[0.5, 0.5])
-    print("visitor sprites: %d" % len(ANIMALS))
+    c = Canvas(32, 28)
+    stump(c)
+    c.outline(1)
+    write("landmark.stump", (32, 28), [c], palette=["transparent", OUT, "#6a4a30", "#8a6442", "#3e2a1c", "#d8b884", "#a07a4e", "#5e8a3a"], anchor=(16, 26), tags=["landmark"])
+    print("visitor sprites: %d (and the stump)" % len(ANIMALS))
 
 
 if __name__ == "__main__":

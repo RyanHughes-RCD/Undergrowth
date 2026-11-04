@@ -10,13 +10,28 @@
  },
  "guide": {},
  "visitors": {
-  "_about": "Visitor text (Content/visitors.json holds each visitor's own clues).",
-  "faint": "Small tracks, too faint to read yet.",
-  "befriendTitle": "{name}",
-  "befriend": "It stops, looks at you for a long moment, and lets you come close.",
-  "befriendAgain": "It knows you now.",
+  "_about": "Visitor text (Content/visitors.json holds each visitor's own mementos, hints and partings).",
+  "unknownName": "Someone small",
+  "noMementos": "Nothing has visited yet.",
+  "memento": "Something visited and left this:",
+  "mementoKnown": "The {name} visited and left this:",
+  "restate": "Something came again, and seemed to be looking for something:",
+  "restateKnown": "The {name} came again, and seemed to be looking for something:",
+  "parting": "The {name} has left.",
+  "movedIn": "The {name} has moved in.",
+  "movedInText": "It has found everything it needs here, and it will stay for as long as that's true.",
+  "resident": "It lives here now.",
+  "gone": "It lived here once, and left. It remembers the way back.",
+  "visiting": "Something has been visiting.",
   "gift": "The {name} left something for you: {item}.",
-  "noClues": "No signs of it yet.",
-  "unknownName": "Someone small"
+  "stump": {
+   "lingered": "Something lingered by the stump a long while, and left with your offering.",
+   "moved": "Your offering has been moved, just a little, as if something considered it.",
+   "untouched": "Your offering was barely touched."
+  },
+  "stumpWaiting": "Your offering waits on the stump. It will be gone by morning.",
+  "stumpTaken": "Your offering is gone. The forest is still answering it.",
+  "stumpEmpty": "Leave something you've gathered:",
+  "stumpFound": "Beside it, an old stump, too wide to see past."
  }
 }

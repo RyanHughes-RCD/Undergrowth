@@ -1,6 +1,6 @@
 # Visitors who stay: mementos, the Stump and residency
 
-Design notes for reworking the visitor system (`Content/visitors.json`, `tuning.visitors`). **Not in the game yet.**
+Design notes for the visitor system (`Content/visitors.json`, `tuning.visitors`). **Built in the web game**: the README's "Visitors who stay" and "The Stump" sections describe exactly what's in, with the numbers. This note keeps the reasoning.
 
 ## The change in one line
 
@@ -15,6 +15,9 @@ Residents replace the role landmarks used to play: a well-developed, well-kept g
 | What does the first Room to grow reveal? | Its wild soil patch **and** the Stump. The Stump takes the place of that purchase's wild feature. |
 | What can a flowerbed condition ask for? | Any plant the player has harvested at least once (it's in their Field Guide). |
 | When does a resident leave? | Strictly: at the first visitor check (`checkMinutes`, 30) where any condition is broken. No grace period. |
+| Can two residents count the same soil tile? | No. One soil tile counts for one resident's patch only. Moving in claims the tiles; if a patch breaks, the resident may move to another unclaimed patch that fits. |
+| Does a colour variety count for its base plant in a bed? | Yes (it's the same plant). |
+| How many offerings on the Stump at once? | One. A new one can go on once the last one's day is over. |
 
 ## 1. Mementos
 
@@ -147,7 +150,7 @@ Save state: per visitor `mementos` (count left), `resident` (bool), `movedInAt`,
 
 ## 8. Still open
 
-- Should a bed plant that's a colour variety count for its base plant?
-- Can one tile's soil count toward two residents' patches? (Sharing makes mystical easier. Separate patches make the garden bigger.)
-- Does the Stump hold one tribute at a time, or a few?
-- Art: a 2×2 stump, memento icons (a set per kind: shell, feather, fur, dust, scale, pawprint), and sprites for the three mystical animals.
+- Raised beds aren't claimed like soil: one bed with a Lantern Flower counts for any visitor that asks for one. Make beds exclusive too if that feels too easy.
+- The optional harvest warning ("The Glowmoth is watching you closely") isn't built yet.
+
+- Art: the 2×2 stump and the three mystical animals have placeholder sprites. Memento icons (a set per kind: shell, feather, fur, dust, scale, pawprint) aren't drawn; the news and Field Guide show the visitor's silhouette instead.

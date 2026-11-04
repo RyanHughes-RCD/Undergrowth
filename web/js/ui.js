@@ -294,6 +294,7 @@ export class UI {
       store: () => ['Store', this.storeBody()],
       decor: () => this.decorBody(arg),
       visitor: () => this.visitorBody(arg),
+      stump: () => ['The Stump', this.stumpBody()],
     };
   }
 
@@ -567,7 +568,7 @@ export class UI {
       })],
       ['mushroom', 'Mushrooms', () => items('mushroom')],
       ['plant', 'Plants', () => items('plant')],
-      ['visitors', 'Visitors', () => (this.content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, visitor: v }))],
+      ['visitors', 'Visitors', () => (this.content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, visitor: v, hint: g.guest(v.id).series > 0 ? 'mementos' : null }))],
     ];
   }
 
@@ -626,33 +627,79 @@ export class UI {
     ];
   }
 
-  /** A visitor's page: its art and name once befriended, and every clue found so far. No numbers. */
+  /**
+   * A visitor's page: a silhouette until it has lived here, then its art, name and story. Every memento it
+   * has left, in order, and the plainer hints and partings since. Its conditions are never listed.
+   */
   visitorBody(id) {
     const def = (this.content.visitorList || []).find((v) => v.id === id);
     if (!def) return ['Visitor', h('p', { class: 'sub' }, 'Unknown.')];
-    const S = this.content.story?.visitors || {};
-    const known = this.game.discovered.has('visitor:' + id.replace(/^visitor\./, ''));
-    const clues = this.visitorClues(def);
+    const g = this.game, st = g.guest(id), stage = g.guestStage(id);
+    const known = g.discovered.has('visitor:' + id.replace(/^visitor\./, ''));
+    const status = { resident: this.story('visitors.resident'), gone: this.story('visitors.gone'), visiting: this.story('visitors.visiting') }[stage];
+    const label = { memento: null, restate: 'It came again', parting: 'When it left' };
     return [known ? def.name : '???', [
-      h('div', { class: 'hero' }, this.sprites.element(def.sprite, known ? null : { silhouette: [40, 44, 52] }, 6, '', true)),
-      h('p', { class: 'center' }, h('b', {}, known ? def.name : (S.unknownName || 'Someone small'))),
+      h('div', { class: 'hero' }, this.sprites.element(def.sprite, known ? null : SIL, 6, '', true)),
+      h('p', { class: 'center' }, h('b', {}, known ? def.name : this.story('visitors.unknownName'))),
       known && def.text ? h('p', { class: 'sub center' }, def.text) : null,
-      h('div', { class: 'section' }, 'Signs'),
-      clues.length ? h('ul', { class: 'clues' }, clues.map((c) => h('li', {}, c))) : h('p', { class: 'sub' }, S.noClues || 'No signs of it yet.'),
+      status ? h('p', { class: 'sub center' }, status) : null,
+      h('div', { class: 'section' }, 'Mementos'),
+      st.notes.length ? h('ul', { class: 'clues' }, st.notes.map((n) => h('li', { class: 'memento-' + n.kind }, label[n.kind] ? h('b', {}, label[n.kind] + ': ') : null, n.text)))
+        : h('p', { class: 'sub' }, this.story('visitors.noMementos')),
     ]];
   }
-  visitorClues(def) { const g = this.game.guest(def.id); return this.game.guestPrefKeys(def).filter((k) => g.known.includes(k)).map((k) => def.clues[k]).filter(Boolean); }
 
-  /** The gentle moment of befriending a visitor, and the seeds it leaves. */
-  befriendCard(r) {
-    const S = this.content.story?.visitors || {};
-    const gift = (r.results || []).map((x) => { const d = this.content.items[x.item]; return d ? h('div', { class: 'reward-item' }, this.sprites.element(d.sprite, d.variant || null, 2), ` ${x.count} × ${d.name}`) : null; });
-    this.showCard((done) => h('div', { class: 'reveal-card pop' },
-      h('div', { class: 'rays-wrap' }, this.burst('#ffe8a0'), this.sprites.element(r.def.sprite, null, 7, 'grow-in', true)),
-      h('h2', {}, r.def.name), h('p', { class: 'sub' }, r.again ? (S.befriendAgain || 'It knows you now.') : (S.befriend || '')),
-      r.again ? null : h('p', { class: 'sub' }, r.def.text || ''),
-      gift.length ? [h('p', { class: 'sub' }, 'It leaves you a gift:'), h('div', { class: 'gifts' }, gift)] : null,
-      h('button', { class: 'btn green', onclick: done }, 'Lovely')));
+  /** One line of visitor news (a memento, a plainer hint, an arrival, a departure, the Stump's answer). */
+  newsLine(n) {
+    const g = this.game, def = n.visitor && g.guestDef(n.visitor);
+    const known = def && g.discovered.has('visitor:' + def.id.replace(/^visitor\./, ''));
+    const name = def ? def.name : '';
+    if (n.type === 'stump') {
+      const it = this.content.items[n.item];
+      return h('div', { class: 'news' }, it ? this.sprites.element(it.sprite, it.variant || null, 2) : null, h('p', { class: 'sub' }, (this.content.story?.visitors?.stump || {})[n.reaction] || ''));
+    }
+    if (n.type === 'movedIn') {
+      const gifts = (n.results || []).map((x) => { const d = this.content.items[x.item]; return d ? ` ${x.count} × ${d.name}` : ''; }).join(',');
+      return h('div', { class: 'news arrival' }, this.sprites.element(def.sprite, null, 2, '', true),
+        h('p', {}, h('b', {}, this.story('visitors.movedIn', { name })), ' ', h('span', { class: 'sub' }, this.story('visitors.movedInText') + (gifts ? ` It brought you${gifts}.` : ''))));
+    }
+    const head = n.type === 'parting' ? this.story('visitors.parting', { name })
+      : this.story(`visitors.${n.type === 'restate' ? 'restate' : 'memento'}${known ? 'Known' : ''}`, { name });
+    return h('div', { class: 'news' }, def ? this.sprites.element(def.sprite, known ? null : SIL, 2, '', true) : null,
+      h('p', { class: 'sub' }, head, ' ', h('i', {}, n.text)));
+  }
+  /** Visitor news on its own card (when there's no morning card to carry it). */
+  visitorNewsCard(news) {
+    const arrival = news.find((n) => n.type === 'movedIn');
+    const title = arrival ? this.story('visitors.movedIn', { name: this.game.guestDef(arrival.visitor)?.name || '' }) : news.some((n) => n.type === 'parting') ? 'Someone has gone' : 'Something was here';
+    const art = arrival ? this.sprites.element(this.game.guestDef(arrival.visitor)?.sprite, null, 6, 'grow-in', true) : null;
+    this.celebrate(title, h('div', { class: 'morning' }, news.map((n) => this.newsLine(n))), art, 'OK');
+  }
+
+  /** The Stump: what's on it, or what could go on it. */
+  stumpBody() {
+    const g = this.game, now = g.now(), tr = g.tributeState(now), a = this.app;
+    const def = g.landmarkDef('landmark.stump') || {};
+    const out = [h('div', { class: 'hero' }, this.sprites.element('landmark.stump', null, 4)), h('p', { class: 'sub center' }, def.purpose || '')];
+    if (tr) {
+      const it = this.content.items[tr.item];
+      out.push(h('div', { class: 'reward-item' }, it ? this.sprites.element(it.sprite, it.variant || null, 2) : null, ` ${it ? it.name : tr.item}`),
+        h('p', { class: 'sub' }, this.story(tr.phase === 'waiting' ? 'visitors.stumpWaiting' : 'visitors.stumpTaken')),
+        tr.phase === 'waiting' ? h('button', { class: 'btn grey small', onclick: () => a.takeBackOffering() }, 'Take it back') : null);
+      return out;
+    }
+    const last = g.state.lastTribute;
+    if (last) out.push(h('p', { class: 'sub' }, h('b', {}, 'Last time: '), (this.content.story?.visitors?.stump || {})[last.reaction] || ''));
+    const list = g.offerable().sort((x, y) => y.rank - x.rank || (this.content.items[x.id].name < this.content.items[y.id].name ? -1 : 1));
+    out.push(h('p', { class: 'sub' }, this.story('visitors.stumpEmpty')));
+    if (!list.length) out.push(h('p', { class: 'sub' }, 'You have nothing gathered to leave. Harvest something first.'));
+    for (const x of list) {
+      const it = this.content.items[x.id];
+      out.push(h('div', { class: 'row item-row' }, this.sprites.element(it.sprite, it.variant || null, 2),
+        h('span', { class: 'grow' }, `${it.name} `, h('span', { class: 'sub' }, `×${x.n}`)),
+        h('button', { class: 'btn green small', onclick: () => a.offer(x.id) }, 'Leave it')));
+    }
+    return out;
   }
 
   collectionCard(e) {
@@ -746,13 +793,15 @@ export class UI {
         h('div', { class: 'row gap wrap' }, amendSel, b('+1', () => a.debugGive(amendSel.value, 1)), b('+5', () => a.debugGive(amendSel.value, 5)),
           b('5 of every soil', () => a.dev((gm) => gm.devGiveAmendments(5), (n) => `+5 of ${n} amendments.`)))]],
       ['Visitors', [
-        h('p', { class: 'sub' }, 'Set a visitor\'s interest, leave its tracks by the plants it likes, or bring it into the garden now.'),
+        h('p', { class: 'sub' }, "Set a visitor's interest, make it visit now (its next memento, or moving in if it can stay), move it in regardless, or see which of its conditions hold."),
         (() => {
-          const sel = h('select', { class: 'select' }, this.content.visitorList.map((v) => h('option', { value: v.id }, `${v.name} (${v.likes.plants.join(', ')}, ${v.likes.time})`)));
+          const sel = h('select', { class: 'select' }, this.content.visitorList.map((v) => h('option', { value: v.id }, `${v.name} (${v.tier}, ${v.likes.plants.join(', ')}, ${v.likes.time})${g.isResident(v.id) ? ' · lives here' : ''}`)));
+          const say = (c) => c.kind === 'soil' ? `${c.shape || c.tiles + ' tiles'} ${c.school} soil, level ${c.minLevel}+` : c.kind === 'bed' ? `raised bed with ${c.plant}` : c.kind === 'beauty' ? `beauty tier ${c.tier}+` : `${c.visitor} living here`;
           return h('div', { class: 'row gap wrap' }, sel,
-            ...[['signs', 'Signs'], ['clues', 'Clues'], ['ready', 'Ready'], ['none', 'Reset']].map(([st, label]) => b(label, () => a.dev((gm) => gm.devGuestStage(sel.value, st), `${label}.`))),
-            b('Tracks now', () => a.dev((gm, t) => gm.devTracks(sel.value, t), 'Tracks laid.')),
-            b('Present now', () => { this.sheet = null; this.close(); a.dev((gm, t) => gm.devGuestPresent(sel.value, t), 'It has come to the garden.'); }));
+            ...[['first', 'Ready for a memento'], ['visit', 'Ready to visit'], ['none', 'Reset']].map(([st, label]) => b(label, () => a.dev((gm) => gm.devGuestStage(sel.value, st), `${label}.`))),
+            b('Visit now', () => { this.sheet = null; this.close(); a.dev((gm, t) => gm.devGuestVisit(sel.value, t)); }),
+            b('Move in now', () => { this.sheet = null; this.close(); a.dev((gm, t) => gm.devGuestMoveIn(sel.value, t)); }),
+            b('Conditions', () => a.dev((gm, t) => gm.devGuestConditions(sel.value, t), (r) => r.map((x) => `${x.ok ? '✓' : '✗'} ${say(x.c)}`).join(' · '))));
         })(),
         h('div', { class: 'row gap wrap' }, b('2 of every colour variety', () => a.dev((gm) => gm.devGiveVarieties(2), (n) => `+2 of ${n} variety packets.`)))]],
       ['Unlock', [h('div', { class: 'row gap wrap' },
@@ -930,6 +979,7 @@ export class UI {
       rows.length ? h('div', { class: 'gifts' }, rows) : h('p', { class: 'sub' }, g.state.plants.length ? 'Nothing is ready yet.' : 'The garden is waiting for seeds.'),
       m.growing ? h('p', { class: 'sub' }, `${m.growing} still growing. The next is ready ${this.roughly(m.next - now)}.`) : null,
       m.surprise ? this.surpriseLine(m.surprise) : null,
+      ...(m.news || []).map((n) => this.newsLine(n)),
       this.tideLine(g.state.lastTides, now),
       this.forecastRows(now, true));
     this.celebrate(title, body, null, rows.length ? 'Lovely' : 'OK');

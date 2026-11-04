@@ -9,6 +9,7 @@ The rework was built in phases:
 3. Added companions, decor that does something, relic ornaments and garden beauty.
 4. Added long-term goals: collections, cross-pollinated colours, commissions and daily orders, visitors drawn by plants, and Room to grow for coins.
 5. Replaced the Old Log with water (first a spring, now a 2×2 pool) and its streams, plus weather, the moon, soil spread by the tides, soil maturity and digging channels.
+6. Visitors who stay: mementos instead of tracks, residents who live in the garden while their conditions hold, and the Stump, which takes offerings.
 
 ## Running it
 
@@ -44,7 +45,7 @@ The garden is a new game, so older forests aren't carried over:
 - **The clearing:** a small 5×8 clearing in the middle of the 40×56 forest (`tuning.json` → `grid`, `clearing`). After the pool, its streams and the edge debris that leaves about 30 open tiles, so the starter kit and the first few days of buying fill it and Room to grow matters.
   - At full zoom-out the whole clearing and a thin treeline border fit the play area both ways (`visuals.viewBorderTiles`), at a crisp whole-pixel scale. Spare room shows more treeline.
   - Drag to look around; pinch to zoom in.
-- **The pool:** the river rises from a 2×2 block of water at the centre of a new garden (`state.pool`). There are no landmarks now (`Content/landmarks.json` is empty). The neighbours' board and the Store are under **Notes** in the bottom bar.
+- **The pool:** the river rises from a 2×2 block of water at the centre of a new garden (`state.pool`). The only landmark is the Stump, found later (see Room to grow). The neighbours' board and the Store are under **Notes** in the bottom bar.
 - **Streams** (`tuning.json` → `water`): the pool sends out 6–7 water tiles in at least two distinct streams, either leaving in different directions or forking. They meander at random (deterministic from the garden seed) and never touch except where they fork. Water can't be planted, amended or decorated. Tap any water for its card and the forecast.
 - **Weather and the moon** (`weather`, `moon`): each local day is Clear, Cloudy, Rain or Storm, drawn from the garden seed (it tends to repeat yesterday's). The moon is the real moon's phase that day, one of eight. The **weather button** in the HUD (and a water tile's card) shows the forecast: today and tomorrow, with the **water level** for each and what it means for the soil at each tide that day.
 - **Water level** (`water.levels`): the day's power (weather + moon, below) sets the water Low, Normal, High or Flood. Low water sits well inside its channel and shows a strip of bank (the grass or soil beside it) with a dark wet edge; Normal shows a thin strip; High fills the channel; a Flood spills a little over the banks. The water tile card names today's level, and developer mode can pin the level shown.
@@ -74,6 +75,7 @@ The garden is a new game, so older forests aren't carried over:
   - That side's trees step back 3 rows (`sideTiles`). A side already at the forest's edge can't be chosen.
   - On the 5×8 start, the top or bottom gives 15 tiles and a side gives 24.
   - **The new ground isn't empty.** Along the old edge it uncovers a 4-tile patch of one school's soil (`wildSoilTiles`), a different school each time in an order shuffled by the garden seed. Beside it is that school's **wild feature**: Mossy stone, Glowing flowers, Wild flowers, Old oak, Crystal outcrop or Misty pine.
+  - **The first purchase finds the Stump instead of a feature:** a 2×2 stump on the new ground, beside the soil patch (see Visitors who stay). That school's feature turns up later in the cycle. Gardens that had already bought Room to grow get the Stump on four free tiles with no soil, near the clearing's edge.
   - Features can't be moved or bought, and add 3–4 beauty each. Tap one to see what it is. A card names what was found, and the new soil is highlighted.
   - **The river follows.** A point on the newly revealed outer edge is picked at random; from the water tile nearest it, a stream winds out to that edge, through a random bend midway. It takes the cheapest route: around plants, decor, features and the tin where it can, through them where it must (their soil is lost, plants and debris are gone, decor goes back to the Bag). The new water is highlighted and the card says so.
   - The foraging patch moves out with the treeline on its own.
@@ -115,7 +117,7 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
 - **The morning check:** on opening after 4 hours or more of real time away (`garden.morning.minAwayHours`), a short card names everything ready to harvest and when the next plant will be. Ready plants are highlighted.
   - At most one small surprise per local day (`surpriseChance` 0.7), chosen from the garden seed and the day, among what's possible right now.
   - **A self-seeded seedling:** a blooming plant seeds a neighbouring open tile it can grow in, and a sprout appears there.
-  - **A visitor's gift:** a befriended visitor leaves its gift seeds in the Bag.
+  - **A visitor's gift:** a resident leaves its gift seeds in the Bag.
   - **A rare colour:** a ready plant turns out to be one of its colour varieties, just this once.
   - The weights are 3, 4 and 2 (`morning.weights`).
   - Developer time skips don't trigger the card; **Come back after…** does.
@@ -200,34 +202,48 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
 - **The Notes board** (the old Old Log board) has two kinds of request (Offerings sheet). Its button sparkles when something there can be delivered.
   - **Commissions** (`commission`) are ten one-off requests for things you grow, paying 40–300 coins. Some open Store items: "A basket for the log" opens the Raised bed, "Something blue" the Birdbath, "Lantern-light" the Glow lantern. Later ones need a beauty tier, colour varieties or gift plants.
   - **Daily orders** (`order`) are two small orders each local day, at about 1.5× the sell price. They're chosen from the garden seed and the day among orders for produce you've already harvested (`garden.orders.perDay`).
-- **Visitors drawn by plants** (`Content/visitors.json`, `tuning.visitors`): twelve animals from `design/animal_visitors_notes.md`, two per school.
-  - Each likes particular plants blooming in the garden, in a time window.
-  - While every plant it likes is in bloom (or ready), its interest rises by 1.5 every 30 minutes of game time (time away counts). Otherwise it falls by 0.5.
-  - At 10 interest, little tracks appear beside those plants during its window. From 20, tapping tracks reads a clue that names one of its preferences, kept on its Field Guide page.
-  - From 60 it visits in its window (35% per half hour, staying 1–2.5 hours, once a day). It drifts shyly near the plants it likes. Tap it to befriend it.
+- **Visitors who stay** (`Content/visitors.json`, `tuning.visitors`, design notes in `design/visitor_residency.md`): fifteen animals in three tiers. They leave **mementos** while they court the garden, then **move in** and live there for as long as their conditions hold.
+  - **Interest:** every 30 minutes of game time (time away counts), a visitor's interest rises by 1.5 while every plant it likes is blooming (or ready), and falls by 0.5 otherwise.
+  - **Mementos:** in its time window, at 10 interest it makes its first visit, and later visits need 20 (early), 40 (settled) or 60 (mystical). A visit has a 35% chance per check, at most once a day. Visits are never seen: each leaves the next of its mementos (1 for early visitors, 3 settled, 4 mystical). Each memento hints at one of the conditions it needs to stay, in its own words, and never names a number.
+  - **Moving in:** on the visit after its last memento, it moves in if every condition holds. If not, it leaves a plainer hint about one condition that isn't met.
+  - **Staying:** a resident stays while every condition holds and leaves at the first check where one doesn't (strictly, no grace period). It leaves a parting memento that names what broke. Coming back takes one visit with the conditions met again.
+  - **Conditions** (`stays`):
+    - **soil:** a patch of a school's soil at a maturity level: 4 tiles joined side by side (`tiles`) or a full 3×3 (`shape`). **One soil tile counts for one resident only:** moving in claims the patch, and other residents can't count those tiles. If a patch breaks but another unclaimed one fits, the resident moves to it.
+    - **bed:** a raised bed with a named plant in it, at any stage. Plants never wilt, so a ready plant left unharvested holds the condition. Harvesting it ends it.
+    - **beauty:** the garden's beauty tier now (not the best ever reached).
+    - **resident:** another visitor living there.
+  - **What residents bring:** their gift seeds (2 packets) the first time they move in, the morning card's gift surprise, and a perk on their own patch. Plants of their school there grow faster (×1.15 early, ×1.2 settled, ×1.3 mystical). Settled and mystical residents' patches never lose soil to the tides.
+  - Residents are seen on their patch, never blocking a tile: about in their own time of day, resting otherwise. Tap one for its Field Guide page.
+  - **News:** mementos, arrivals and departures appear on the morning card, or on their own card when there's no morning card.
+  - **The Field Guide's Visitors tab** shows a silhouette until a visitor has lived in the garden. Its page lists every memento it has left, then the plainer hints and partings since. A sparkle marks a silhouette that has left mementos.
+  - Old saves: tracks are gone. A befriended visitor has already left all its mementos (and its gift), so it moves in at its next visit if it can stay.
   - Everything is seeded from the garden, the visitor and the time, so it's deterministic.
-  - **Befriended visitors bring seeds you can't buy.** At once they leave 2 packets of their gift, and later the occasional morning gift. One of each school's pair brings a gift-only plant (Spore Lantern, Moonpetal, Foxglove, Canopy Bells, Prismbell, Wispwillow); the other brings a colour variety's seeds.
-  - In a simulation (with the slower grow times before the pace-up), a Marigold and a Cornflower left blooming brought the Bumblebee about 39 hours later.
 
-  | Visitor | School | Likes blooming | Time | Gift |
-  |---|---|---|---|---|
-  | Woodlouse | Spore | Ink Cap | day | Lavender Ink Cap seeds |
-  | Cave Salamander | Spore | Velvet Shank, Ink Cap | night | Spore Lantern seeds |
-  | Firefly | Glow | Foxfire Button | dusk | Azure Foxfire seeds |
-  | Glowmoth | Glow | Lantern Flower, Honey Mushroom | night | Moonpetal seeds |
-  | Bumblebee | Bloom | Marigold, Cornflower | day | Lemon Marigold seeds |
-  | Ruby-throated Hummingbird | Bloom | Lavender | dawn | Foxglove seeds |
-  | Mossback Hare | Verdure | Wood Sorrel | dawn | Purple Wood Sorrel seeds |
-  | Red Squirrel | Verdure | Hosta, Wood Sorrel | day | Canopy Bells seeds |
-  | Glasswing Butterfly | Shimmer | Jewelweed | day | Sapphire Jewelweed seeds |
-  | Prism Moth | Shimmer | Glassbell, Jewelweed | dusk | Prismbell seeds |
-  | Will-o'-Wisp Fox | Spirit | Wisp Cap | dawn | Rose Wisp Cap seeds |
-  | Barn Owl | Spirit | Mistbell, Wisp Cap | night | Wispwillow seeds |
+  | Visitor | Tier | School | Courted by (blooming) | Time | Stays while |
+  |---|---|---|---|---|---|
+  | Woodlouse | early | Spore | Ink Cap | day | 4 joined Spore tiles, Settled+ |
+  | Firefly | early | Glow | Foxfire Button | dusk | 4 joined Glow tiles, Settled+ |
+  | Bumblebee | early | Bloom | Marigold, Cornflower | day | 4 joined Bloom tiles, Settled+ |
+  | Mossback Hare | early | Verdure | Wood Sorrel | dawn | 4 joined Verdure tiles, Settled+ |
+  | Glasswing Butterfly | early | Shimmer | Jewelweed | day | 4 joined Shimmer tiles, Settled+ |
+  | Will-o'-Wisp Fox | early | Spirit | Wisp Cap | dawn | 4 joined Spirit tiles, Settled+ |
+  | Cave Salamander | settled | Spore | Velvet Shank, Ink Cap | night | 3×3 Spore, Rich+ · bed with Velvet Shank · Woodlouse lives here |
+  | Glowmoth | settled | Glow | Lantern Flower, Honey Mushroom | night | 3×3 Glow, Rich+ · bed with Lantern Flower · Firefly lives here |
+  | Ruby-throated Hummingbird | settled | Bloom | Lavender | dawn | 3×3 Bloom, Rich+ · bed with Lavender · Tended+ |
+  | Red Squirrel | settled | Verdure | Hosta, Wood Sorrel | day | 3×3 Verdure, Rich+ · bed with Hosta · Mossback Hare lives here |
+  | Prism Moth | settled | Shimmer | Glassbell, Jewelweed | dusk | 3×3 Shimmer, Rich+ · bed with Glassbell · Glasswing lives here |
+  | Barn Owl | settled | Spirit | Mistbell, Wisp Cap | night | 3×3 Spirit, Rich+ · bed with Mistbell · Tended+ |
+  | Lanternback Stag | mystical | Glow + Verdure | Glowcap, Hellebore | dusk | 3×3 Deep Glow · 3×3 Deep Verdure · beds with Glowcap and Hellebore · Lovely+ · Glowmoth and Red Squirrel live here |
+  | Mirrorshell Tortoise | mystical | Shimmer + Spore | Prism Rose, Morel | day | 3×3 Deep Shimmer · 3×3 Deep Spore · beds with Prism Rose and Morel · Lovely+ · Prism Moth and Cave Salamander live here |
+  | Mist Crane | mystical | Bloom + Spirit | Anemone, Ancestor's Lace | dawn | 3×3 Deep Bloom · 3×3 Deep Spirit · beds with Anemone and Ancestor's Lace · Lovely+ · Hummingbird and Barn Owl live here |
 
-  - The notes' clue ideas became the clue lines.
-  - The old Lantern Moth, Honey Bumble, Fern Rabbit and Mist Fox became the Glowmoth, Bumblebee, Mossback Hare and Will-o'-Wisp Fox, keeping their ids.
-  - The Mossback Hedgehog, Prism Beetle, Foxfire Newt and Petal Stag are gone.
-  - Their sprites are placeholders from `tools/gen_visitor_sprites.py`.
+  - Gifts are as before: one of each school's early/settled pair brings a gift-only plant (Spore Lantern, Moonpetal, Foxglove, Canopy Bells, Prismbell, Wispwillow), the other a colour variety's seeds. Mystical visitors bring Rare seeds of their first school.
+  - Sprites are placeholders from `tools/gen_visitor_sprites.py`.
+- **The Stump** (`landmarks.json` `landmark.stump`, `tuning.visitors.tribute`): found by the first Room to grow. It takes up 2×2 tiles, can't be cleared or moved, and the river goes around it.
+  - Tap it to leave one gathered item (garden produce or a forage find). It sits on the stump until the next nightfall; until then you can take it back.
+  - From nightfall it works for 24 hours, for visitors of the item's school and of a tier its own tier reaches: common items reach early visitors, uncommon ones settled visitors too, rare ones all. For them, interest rises 2×, 3× or 4× as fast (by the item's tier), and rises at half the normal rate even when their plants aren't blooming. A plant a visitor likes doubles its chance of visiting.
+  - It never leaves a memento itself. When its day is over, the Stump answers on the next card: something lingered (a visitor it reached came), the offering was moved (it reached someone) or it was barely touched. The Stump's page shows the last answer.
+  - One offering at a time.
 - **Gift plants** (only from visitors, never in the Store): they grow 9–11h and sell for 13–16.
 - **Room to grow** is bought with coins in the Store: 100, 150, 200 … 850 coins for ten purchases, each clearing 3 rows on the side you choose.
 
@@ -274,7 +290,7 @@ A separate test garden for trying anything without touching your real save.
   - **Garden:** grow all plants now; +100 or +1000 coins; give any blind or named seed packet or amendment, or 5 of each.
   - **Plant timers:** tap a plant to see its exact progress, rate, time to ready and stage times.
   - The six relic ornaments; see the beauty score and set the best beauty tier reached.
-  - **Visitors:** set a visitor's interest stage, lay its tracks now, or bring it into the garden now. Also give 2 of every colour variety packet.
+  - **Visitors:** set a visitor's interest (ready for a memento, ready to visit, reset), make it visit now (its next memento, or moving in if it can stay), move it in regardless, or see which of its conditions hold. Also give 2 of every colour variety packet.
   - Fill the Field Guide; open the whole forest; give any item or decor.
   - Complete or reset Store listings; open the seed tin as any school.
   - Grow forage finds now; save and load named setups.
@@ -325,7 +341,7 @@ tools/
 - **`anchor`** is measured in pixel-edge coordinates from the top-left. Objects anchor at their feet; ground tiles at their centre.
 - **Missing sprite ids** render as a magenta "?" instead of crashing.
 - **Placeholder art:** `python3 tools/gen_placeholders.py` regenerates every placeholder sprite. Re-running it reproduces the committed sprites exactly.
-  - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
+  - Visitor animals (`visitor.<id>`, two frames each) and the Stump (`landmark.stump`, 32×28 for its 2×2 footprint) come from `gen_visitor_sprites.py`.
   - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed or gold) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
   - Catalogue items and their bud stages (`plant.bud.<key>`; fungi get a small closed button) come from `gen_content_sprites.py`.
   - School soil tiles (`tile.<school>.<1–4>a/b`), and water come from `gen_terrain.py`.
@@ -339,9 +355,9 @@ tools/
 | `items.json` | The Plant & Fungi Catalogue (from the spreadsheet): id, category, name, rarity, sprite, school, description. |
 | `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`seeds`: comes from blind packets; `gift`: only from visitors), tier (common, uncommon, rare), companions, varieties. Numbers: `tuning.json` → `garden.plants`. Blind packets (`seeds.<school>.<tier>`) are built from the schools; each plant also has a named packet (`packet.<id>`), used for gifts. |
 | `amendments.json` | Soil amendments (kept by hand): id, school (null = plain loam), name, text. |
-| `landmarks.json` | Landmarks (none at present). |
+| `landmarks.json` | Landmarks: the Stump (`footprint` 2×2, `discovery: firstExpansion`: placed by Room to grow, not at the start). |
 | `opening.json` | The seed tin's card, the questions and their school weights, and what each school's tin holds. |
-| `visitors.json` | Twelve forest animals: name, sprite, school, likes (`plants` that must be blooming, `time` window), a clue per preference (`plant:<id>`, `time`), Field Guide text and gift (a seed packet id). |
+| `visitors.json` | Fifteen forest animals: name, sprite, tier (early, settled, mystical), school (and `schools` for two), likes (`plants` that must be blooming, `time` window), `stays` (conditions: soil, bed, beauty, resident), `mementos` (text, and which conditions each `hint`s at), `restate` and `parting` (a line per condition), `perk` (growth, tideHold), Field Guide text and gift (a seed packet id). |
 | `relics.json` | One relic per school (kept by hand), for the relic ornaments. |
 | `requests.json`, `cosmetics.json` | Store listings, Old Log requests and decor (from the Offerings spreadsheet). |
 | `story.json` | Story and hint text. |

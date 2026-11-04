@@ -447,11 +447,22 @@ export class ForestView {
     }
     return out.concat(this.moreObjects(now, at));
   }
-  /** Visitors in the garden right now: shy, drifting near the plants they like. Tap to befriend. */
+  /**
+   * Residents on their patches: about in their own time of day (wandering), resting otherwise. They never
+   * take a tile. And an offering waiting on the Stump, sitting on its top.
+   */
   moreObjects(now, at) {
-    const g = this.game, out = [];
-    for (const { def, g: st } of g.presentGuests(now)) {
-      out.push({ sprite: def.sprite, ...at(st.present.tile), tile: st.present.tile, kind: 'guest', key: def.id, wander: true, phase: hash32(st.present.tile.x, st.present.tile.y, 17) % 1000 / 160 });
+    const g = this.game, out = [], phase = g.dayPhase(now);
+    for (const def of g.residents()) {
+      const t = g.residentTile(def, now);
+      if (!t) continue;
+      const awake = def.likes.time === phase, p = at(t);
+      out.push({ sprite: def.sprite, x: p.x + 3, y: p.y - 2, tile: t, kind: 'resident', key: def.id, wander: awake, still: !awake, phase: hash32(t.x, t.y, 17) % 1000 / 160, sortY: p.y + 1 });
+    }
+    const st = g.stump, tr = g.tributeState(now);
+    if (st && tr && tr.phase === 'waiting') {
+      const it = this.app.content.items[tr.item], p = at({ x: st.tile.x, y: st.tile.y + 1 });
+      if (it) out.push({ sprite: it.sprite, variant: it.variant || null, x: p.x + TS / 2, y: p.y - 15, tile: st.tile, kind: 'landmark', key: 'tribute', still: true, sortY: p.y - TS + 1 });
     }
     return out;
   }
@@ -597,7 +608,6 @@ export class ForestView {
    * soil rules show themselves (a seed only lights its own soil and plain ground).
    */
   drawUnderlay(ctx) {
-    this.drawTracks(ctx);
     const m = this.app.ui.mode, g = this.game;
     if (!m || (m.type !== 'plant' && m.type !== 'amend')) return;
     const item = this.app.content.items[m.itemID];
@@ -633,22 +643,6 @@ export class ForestView {
       ctx.fillRect(x, y, 1, 3); ctx.fillRect(x - 1, y + 3, 1, 2);
     }
     ctx.restore();
-  }
-
-  /** Visitor signs: little footprints by the plants a visitor likes, fading over tuning.visitors.tracks.hours. */
-  drawTracks(ctx) {
-    const g = this.game, now = g.now(), life = ((this.app.content.tuning.visitors || {}).tracks || {}).hours ?? 24;
-    for (const tr of g.state.guestTracks || []) {
-      const a = Math.max(0.15, 1 - (now - tr.at) / (life * 3600000)) * 0.85;
-      const bx = tr.tile.x * TS + 3, by = tr.tile.y * TS + 4, hh = hash32(tr.tile.x, tr.tile.y, 23);
-      ctx.globalAlpha = a; ctx.fillStyle = '#2a1e18';
-      for (let i = 0; i < 4; i++) {
-        const x = bx + i * 3 + ((hh >> i) & 1), y = by + (i % 2 ? 5 : 2) + i * 2;
-        ctx.fillRect(x, y, 2, 1); ctx.fillRect(x, y - 1, 1, 1); ctx.fillRect(x + 1, y - 1, 1, 1);
-      }
-      ctx.fillStyle = '#e8dcc0'; ctx.globalAlpha = a * 0.5; ctx.fillRect(bx + 1, by + 1, 1, 1);
-    }
-    ctx.globalAlpha = 1;
   }
 
   /** Over the lit scene: rain on rainy days, and lanterns glowing at dusk and night (decor kinds with glow). */

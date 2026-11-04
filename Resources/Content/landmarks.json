@@ -1,1 +1,14 @@
-[]
+[
+ {
+  "id": "landmark.stump",
+  "name": "The Stump",
+  "sprite": "landmark.stump",
+  "footprint": [
+   2,
+   2
+  ],
+  "inGuide": true,
+  "discovery": "firstExpansion",
+  "purpose": "An old stump, too wide to see past. Leave something on it and it's gone by morning. What comes looking depends on what you leave."
+ }
+]
