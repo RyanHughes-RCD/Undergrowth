@@ -183,7 +183,7 @@ export class UI {
   tileBody(tile) {
     const g = this.game, now = g.now(), a = this.app;
     if (!g.inClearing(tile)) return h('p', { class: 'sub' }, 'Dense shrubs. Room to grow (in the Store) opens more of the clearing.');
-    if (g.isWet(tile)) return [h('p', { class: 'sub' }, `${g.isPool(tile) ? 'Clear water welling up from somewhere deep under the clearing. The streams run from here' : 'Water from the pool'}, running ${g.waterLevelOn(Game.dayNumber(now)).name.toLowerCase()} today. Soil spreads along the banks but not across the water, unless it runs high. When the treeline steps back, a stream follows it out to the new edge.`),
+    if (g.isWet(tile)) return [h('p', { class: 'sub' }, `${g.isPool(tile) ? 'Clear water welling up from somewhere deep under the clearing. The streams run from here' : 'Water from the pool'}, running ${g.waterLevelOn(Game.dayNumber(now)).name.toLowerCase()} today. Soil spreads from any patch that touches it, but not across the water, unless it runs high. When the treeline steps back, a stream follows it out to the new edge.`),
       h('div', { class: 'row end' }, h('button', { class: 'btn small', onclick: () => this.forecastCard() }, ic(this.game.weatherOn(Game.dayNumber(now)).icon, 1), ' Forecast'))];
     if (g.debrisAt(tile)) return [h('p', { class: 'sub' }, 'Left over from the wild grotto. Clear it away to free the ground.'),
       ...this.bankNotes(tile),
@@ -239,7 +239,7 @@ export class UI {
       row('Progress', `${(g.progress(p, now) * 100).toFixed(1)}% (${g.stageOf(p, now)}, ${p.cycle})`),
       row('Rate', `×${p.rate.toFixed(3)}`),
       row('Ready in', g.isReady(p, now) ? 'ready' : this.timer(g.readyAt(p) - now)),
-      ...['sprout', 'bud', 'bloom'].map((st) => row(`${st} at`, g.stageAt(p, g.gcfg.stages[st]) <= now ? 'passed' : this.timer(g.stageAt(p, g.gcfg.stages[st]) - now))),
+      ...['sprout', 'bud'].map((st) => row(`${st} at`, g.stageAt(p, g.gcfg.stages[st]) <= now ? 'passed' : this.timer(g.stageAt(p, g.gcfg.stages[st]) - now))),
       row('Planted', new Date(p.plantedAt).toLocaleString()), row('Harvests', String(p.harvests)));
   }
 
@@ -495,11 +495,13 @@ export class UI {
                 return this.buyRow(it.sprite, h('span', { style: `color:${SCHOOL_COLORS[x.school]}` }, it.name), h('div', { class: 'sub' }, it.text), x.price, () => a.buyPacket(x.id), x.locks); })];
           })];
       }],
-      ['soil', 'Soil', () => [h('p', { class: 'sub' }, "Soil that changes a tile for good is hard to come by: the Store has a little each day. Room to grow sometimes uncovers some too."),
-        ...g.soilStock(now).map((x) => { const am = this.content.items[x.id];
-          return x.soldOut ? h('div', { class: 'list-row locked' }, h('div', { class: 'thumb' }, this.sprites.element(am.sprite, null, 3)), h('div', { class: 'grow' }, h('b', {}, am.name), h('div', { class: 'sub' }, 'Sold out until tomorrow.')))
-            : this.buyRow(am.sprite, am.name, h('div', { class: 'sub' }, am.text), x.price, () => a.buyAmendment(x.id)); }),
-        h('p', { class: 'sub' }, 'New soil comes in every morning.')]],
+      ['soil', 'Soil', () => {
+        const n = g.soilBoughtToday(now);
+        return [h('p', { class: 'sub' }, "Every soil is on the shelf, but good soil is dear: it costs more as the garden grows, and each bag you buy today makes the next one dearer still. Prices settle again each morning. Room to grow uncovers some for free."),
+          n ? h('p', { class: 'sub' }, `You've bought ${n} bag${n === 1 ? '' : 's'} of soil today.`) : null,
+          ...g.soilStock(now).map((x) => { const am = this.content.items[x.id];
+            return this.buyRow(am.sprite, am.amend ? h('span', { style: `color:${SCHOOL_COLORS[am.amend]}` }, am.name) : am.name, h('div', { class: 'sub' }, am.text), x.price, () => a.buyAmendment(x.id)); })];
+      }],
       ['decor', 'Decor', () => [h('p', { class: 'sub' }, 'Things to set out in your garden. Find them in your Bag under Decor.'),
         ...decor.map((st) => { const d = g.decorDef(st.req.reward.id) || {}; return this.buyRow(d.sprite || 'ui.icon.board', d.name || st.req.name, h('div', { class: 'sub' }, d.text || st.req.text || ''), st.coins, () => a.deliverRequest(st.req.id), st.locks); })]],
       ['sell', 'Sell', () => [h('p', { class: 'sub' }, 'The Store buys what you grow and find.'),
@@ -562,28 +564,24 @@ export class UI {
   // -------------------------------------------------------------- Field Guide
 
   /** Field Guide tabs: [id, label, entries()]. Later systems add theirs. */
+  /**
+   * Field Guide tabs: [id, label, entries()]. Plants and Mushrooms list the whole catalogue; an entry you can
+   * grow also carries its growing notes (soil, time, price, where its seeds come from, its set, good
+   * neighbours), and an unfound one hints at where to look.
+   */
   guideTabs() {
-    const items = (cat) => this.content.itemList.filter((i) => i.inGuide !== false && i.category === cat)
-      .map((i, idx) => ({ i, idx })).sort((a, b) => rarityIndex(a.i.rarity) - rarityIndex(b.i.rarity) || a.idx - b.idx)
-      .map(({ i }) => ({ key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: i.variant || null, rarity: i.rarity, text: i.guideText, school: i.school }));
     const g = this.game;
-    const garden = () => this.content.plantList.map((p) => {
-      const item = this.content.items[p.item], c = g.plantCfg(p.id);
-      const from = p.source === 'gift' ? 'Only a friend of the forest can bring its seeds.' : `It comes up from ${schoolName(p.school)} seeds${{ common: '', uncommon: ', now and then', rare: ', rarely', epic: ', very rarely, and more often from the finest packets', legendary: ', almost never, and only from the finest packets' }[p.tier || 'common']}.`;
-      return { key: 'plant:' + p.id, name: p.name, sprite: item.sprite, school: p.school, text: item.guideText, rarity: p.tier,
-        hint: `${schoolName(p.school)} soil. ${from}`,
-        extra: [h('p', { class: 'sub center' }, `${p.kind === 'fungus' ? 'A fungus' : p.kind === 'leafy' ? 'A leafy plant' : 'A flower'}. ${this.growHoursText(p.id)}. Sells for ${c.sell} coins. ${from}`),
-          ...this.plantGuideExtra(p)] };
-    });
+    const items = (cat) => this.content.itemList.filter((i) => i.inGuide !== false && i.category === cat && !i.variety)
+      .map((i, idx) => ({ i, idx })).sort((a, b) => rarityIndex(a.i.rarity) - rarityIndex(b.i.rarity) || a.idx - b.idx)
+      .map(({ i }) => ({ key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: i.variant || null, rarity: i.rarity, text: i.guideText, school: i.school, ...this.growNotes(i) }));
     return [
-      ['garden', 'Garden', garden],
+      ['plant', 'Plants', () => items('plant')],
+      ['mushroom', 'Mushrooms', () => items('mushroom')],
       ['varieties', 'Colours', () => Object.values(this.content.varieties).map((v) => {
         const it = this.content.items[v.produce];
         return { key: 'item:' + v.produce, name: v.name, sprite: it.sprite, variant: v.variant, school: it.school, text: it.guideText,
           hint: `A rare colour of ${g.plantDef(v.plantID)?.name}. Some say it comes from good neighbours.` };
       })],
-      ['mushroom', 'Mushrooms', () => items('mushroom')],
-      ['plant', 'Plants', () => items('plant')],
       ['visitors', 'Visitors', () => (this.content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, visitor: v, hint: g.guest(v.id).series > 0 ? 'mementos' : null }))],
     ];
   }
@@ -608,9 +606,25 @@ export class UI {
       })),
     ]];
   }
-  /** The Garden tab opens with each school's collection: plants grown of its set, and its reward. */
+  /** A catalogue item you can grow: its hint (while unfound) and its growing notes. {} for one you can't. */
+  growNotes(item) {
+    const g = this.game, p = item.plant && g.plantDef(item.plant);
+    if (!p) return {};
+    const c = g.plantCfg(p.id);
+    const from = p.source === 'gift' ? 'Only a friend of the forest can bring its seeds.' : `It comes up from ${schoolName(p.school)} seeds${{ common: '', uncommon: ', now and then', rare: ', rarely', epic: ', very rarely, and more often from the finest packets', legendary: ', almost never, and only from the finest packets' }[p.tier || 'common']}.`;
+    const inSet = g.collectionPlants(p.school).includes(p);
+    const grown = g.discovered.has('plant:' + p.id);
+    return {
+      hint: `${schoolName(p.school)} soil. ${from}`,
+      extra: [h('div', { class: 'section' }, 'In the garden'),
+        h('p', { class: 'sub center' }, `${p.kind === 'fungus' ? 'A fungus' : p.kind === 'leafy' ? 'A leafy plant' : 'A flower'} for ${schoolName(p.school)} soil. ${this.growHoursText(p.id)}. Sells for ${c.sell} coins. ${from}`),
+        inSet ? h('p', { class: 'sub center' }, `Part of the ${schoolName(p.school)} set${grown ? ': you have grown it.' : ': grow and harvest it to count it.'}`) : null,
+        ...this.plantGuideExtra(p)],
+    };
+  }
+  /** Plants and Mushrooms open with each school's collection: plants grown of its set, and its reward. */
   guideHeader(tab) {
-    if (tab !== 'garden') return [];
+    if (tab !== 'plant' && tab !== 'mushroom') return [];
     const g = this.game;
     return [h('div', { class: 'collections' }, SCHOOLS.map((school) => {
       const st = g.collectionStatus(school);
@@ -620,7 +634,7 @@ export class UI {
         h('span', { style: `color:${SCHOOL_COLORS[school]}` }, schoolName(school)),
         h('span', { class: 'progress' }, h('span', { style: `width:${Math.round(st.have / Math.max(1, st.total) * 100)}%` })),
         h('b', {}, `${st.have}/${st.total}`));
-    })), h('p', { class: 'sub' }, "Grow and harvest every plant of a school to complete its set. Something old is waiting for whoever does.")];
+    })), h('p', { class: 'sub' }, "Grow and harvest every plant and mushroom of a school's set (its seed plants up to Rare, and its gift plant) to complete it. Something old is waiting for whoever does.")];
   }
   /** More on a garden plant's Field Guide page: its companions (unknown ones stay hidden until found). */
   plantGuideExtra(p) {
@@ -1004,12 +1018,19 @@ export class UI {
     return h('button', { class: 'weather-btn', title: `${f.weather.name}, ${f.moon.name}. Tap for the forecast.`, onclick: () => this.forecastCard() },
       ic(f.weather.icon, 2), ic('moon.' + f.moon.index, 2));
   }
-  /** The water's level on a day of this power, and what it does to the soil at each tide that day. */
+  /** The water's level on a day of this power, and whether soil can cross it. */
   waterWords(power) {
     const lv = this.game.waterLevel(power);
-    const note = power <= 0.05 ? 'still; soil creeps slowly' : lv.cross > 0.15 ? 'soil spreads fast and crosses the stream'
-      : lv.cross > 0 ? 'soil may cross the stream' : power < 0.6 ? 'soil barely spreads' : 'soil spreads along the banks';
+    const note = lv.cross > 0.15 ? 'soil crosses the stream easily' : lv.cross > 0 ? 'soil may cross the stream' : power < 0.5 ? 'it runs low and quiet' : 'soil stays on its own side';
     return { name: lv.name, note };
+  }
+  /** Which schools a day's weather spreads: one phrase per group (sun, rain), strongest first. */
+  spreadWords(weather) {
+    const g = this.game, G = (this.content.tuning.tides || {}).groups || {};
+    return Object.values(G).map((schools) => ({ schools, push: g.spreadPush(weather, schools[0]) }))
+      .sort((a, b) => b.push - a.push)
+      .map((x) => h('span', {}, ...x.schools.flatMap((k, i) => [i ? (i === x.schools.length - 1 ? ' and ' : ', ') : '', h('b', { style: `color:${SCHOOL_COLORS[k]}` }, schoolName(k))]),
+        ` ${x.push >= 1.4 ? 'spread fast' : x.push >= 0.8 ? 'spread steadily' : 'barely spread'}`));
   }
   forecastRows(now, compact = false) {
     return h('div', { class: 'forecast' + (compact ? ' compact' : '') }, this.game.forecast(now).map((f, i) => {
@@ -1017,14 +1038,15 @@ export class UI {
       return h('div', { class: 'forecast-row' },
         h('b', {}, i ? 'Tomorrow' : 'Today'),
         h('span', { class: 'fc-icons' }, ic(f.weather.icon, 2), ic('moon.' + f.moon.index, 2)),
-        h('span', { class: 'grow' }, `${f.weather.name}, ${f.moon.name.toLowerCase()}. `, h('b', { class: 'lvl lvl-' + w.name.toLowerCase() }, `${w.name} water`), h('span', { class: 'sub' }, `: ${w.note}.`)));
+        h('span', { class: 'grow' }, `${f.weather.name}, ${f.moon.name.toLowerCase()}. `, h('b', { class: 'lvl lvl-' + w.name.toLowerCase() }, `${w.name} water`), h('span', { class: 'sub' }, `: ${w.note}. `),
+          h('span', { class: 'sub spread' }, ...this.spreadWords(f.weather).flatMap((x, i) => (i ? ['; ', x] : [x])), '.')));
     }));
   }
   forecastCard() {
     this.showCard((done) => h('div', { class: 'reveal-card pop' },
       h('h2', {}, 'The sky'),
       this.forecastRows(this.game.now()),
-      h('p', { class: 'sub' }, 'Rain swells the pool and its streams, and so does the moon: the water rises from Low to Normal, High and Flood. Every six hours the tide turns: soil on the banks spreads along them and inland, but never through the water, unless it runs High or floods and carries soil to the far bank. Deep soil, and soil with roots in it, holds better.'),
+      h('p', { class: 'sub' }, 'Rain swells the pool and its streams, and so does the moon: the water rises from Low to Normal, High and Flood. Every six hours the tide turns: any patch of soil that touches the water can spread, from any of its tiles, but never through the water, unless it runs High or floods and carries soil to the far bank. A patch that does not touch the water stays as it is. What spreads depends on the weather: Bloom, Verdure and Shimmer love the sun, Spore, Glow and Spirit the rain, and on cloudy days both creep along. Deep soil, and soil with roots in it, holds better.'),
       h('button', { class: 'btn green', onclick: done }, 'OK')));
   }
   /** What the tides did while you were away, for the return card. */

@@ -683,6 +683,37 @@ export class Game {
     }
     return out;
   }
+  /**
+   * Soil tiles that can spread at a tide: every tile of a patch (tiles of one school joined side by side or
+   * corner to corner, never across water) with at least one tile on a bank.
+   */
+  wateredSoilTiles() {
+    const seen = new Set(), out = [];
+    for (const k of Object.keys(this.state.soil)) {
+      if (seen.has(k)) continue;
+      const [x, y] = k.split(',').map(Number), school = this.state.soil[k];
+      const comp = [{ x, y }];
+      seen.add(k);
+      let watered = false;
+      for (let i = 0; i < comp.length; i++) {
+        const t = comp[i];
+        if (!watered && this.isBank(t)) watered = true;
+        for (const n of this.landNeighbours(t)) {
+          const nk = key(n);
+          if (!seen.has(nk) && this.state.soil[nk] === school && this.inClearing(n)) { seen.add(nk); comp.push(n); }
+        }
+      }
+      if (watered) out.push(...comp);
+    }
+    return out;
+  }
+  /** A school's group for the tides: sun (spreads on clear days) or rain (on wet ones). */
+  spreadGroup(school) { const G = (this.t.tides || {}).groups || {}; return Object.keys(G).find((k) => (G[k] || []).includes(school)) || null; }
+  /** How hard a day's weather pushes a school's soil to spread: its group's `spread` + tides.basePower. */
+  spreadPush(w, school) {
+    const T = this.t.tides || {}, g = this.spreadGroup(school), sp = (w && w.spread) || {};
+    return (g && sp[g] != null ? sp[g] : (w && w.power) || 0) + (T.basePower ?? 0.2);
+  }
   /** The local six-hour block a time falls in (0 = 00:00-06:00 on local day 0). A tide turns at each one's start. */
   static tideNumber(t) { return Math.floor((t - new Date(t).getTimezoneOffset() * 60000) / (6 * HOUR)); }
   static tideStart(n) { return Game.dayStart(Math.floor(n / 4)) + (n % 4) * 6 * HOUR; }
@@ -722,7 +753,7 @@ export class Game {
     const d = Math.floor(n / 4);
     const w = override?.weather ? { id: override.weather, ...((this.t.weather || {}).types || {})[override.weather] } : this.weatherOn(d);
     const m = override?.moon != null ? { index: override.moon, ...(((this.t.moon || {}).phases || [])[override.moon] || {}) } : this.moonOn(d);
-    const power = (w.power || 0) + (m.power || 0), push = power + (T.basePower ?? 0.4);
+    const power = (w.power || 0) + (m.power || 0);   // the water's level (crossings); spreading follows the weather
     const rng = new RNG({ rng: hash32(this.state.seed, n, 0x71de) });
     const at = Game.tideStart(n);
     this.rebase(at);
@@ -738,19 +769,24 @@ export class Game {
       this.setSoil(t, school, 1);
       changed.add(key(t));
     };
-    // Soil spreads from the banks: along the bank (to a neighbouring bank tile), inland (to any open
-    // neighbour), never through the water. Only high water carries soil across to the other side.
-    const snapshot = this.bankTiles().map((t) => ({ t, school: this.soilAt(t) })).filter((x) => x.school);
+    // Soil spreads from every patch that touches the water: each of its tiles may spread to an open
+    // neighbour, and its bank tiles also along the bank. A patch with no tile on a bank (an island) stays
+    // as it is. Never through the water; only high water carries soil across to the other side.
+    const snapshot = this.wateredSoilTiles().map((t) => ({ t, school: this.soilAt(t) }));
     const level = this.waterLevel(power);
     const open = (t) => this.inClearing(t) && !this.isWet(t) && !this.landmarkAt(t) && !this.sceneryAt(t);
-    const pAlong = Math.min(T.cap ?? 0.8, (T.alongBank ?? 0.25) * push), pIn = Math.min(T.cap ?? 0.8, (T.inland ?? 0.06) * push);
+    const chances = {};   // per school: [along the bank, outward], from its group's push in today's weather
+    const odds = (school) => chances[school] || (chances[school] = ((push) => [Math.min(T.cap ?? 0.8, (T.alongBank ?? 0.25) * push), Math.min(T.cap ?? 0.8, (T.inland ?? 0.06) * push)])(this.spreadPush(w, school)));
     let crossed = 0;
     for (const x of snapshot) {
-      const near = this.landNeighbours(x.t).filter(open);
-      const along = near.filter((t) => this.isBank(t));
+      // Only neighbours that aren't already this soil are worth a try (inside a patch, nothing changes).
+      const near = this.landNeighbours(x.t).filter((t) => open(t) && this.soilAt(t) !== x.school);
+      const bank = this.isBank(x.t);
+      const along = bank ? near.filter((t) => this.isBank(t)) : [];
+      const [pAlong, pIn] = odds(x.school);
       if (along.length && rng.next() < pAlong) tryTake(along[rng.int(0, along.length - 1)], x.school);
       if (near.length && rng.next() < pIn) tryTake(near[rng.int(0, near.length - 1)], x.school);
-      if (level.cross > 0 && rng.next() < level.cross) {
+      if (bank && level.cross > 0 && rng.next() < level.cross) {
         const across = this.acrossWater(x.t).filter(open);
         if (across.length) { const before = taken.length; tryTake(across[rng.int(0, across.length - 1)], x.school); if (taken.length > before) { taken[taken.length - 1].crossed = true; crossed++; } }
       }
@@ -1121,17 +1157,20 @@ export class Game {
   /** Growth done by time t: banked growth plus time since at the current rate, capped at the need. */
   grownAt(p, t) { return Math.min(this.growNeed(p), p.grown + Math.max(0, t - p.since) * p.rate); }
   progress(p, t) { return this.grownAt(p, t) / this.growNeed(p); }
-  /** seed, sprout, bud, bloom or ready (tuning.garden.stages). */
+  /**
+   * seed, sprout, bud or ready (tuning.garden.stages). A plant flowers only when it's ready to pick: until
+   * then it shows its bud.
+   */
   stageOf(p, t) {
     const k = this.progress(p, t), st = this.gcfg.stages || {};
     if (k >= 1) return 'ready';
-    if (k >= (st.bloom ?? 0.75)) return 'bloom';
     if (k >= (st.bud ?? 0.45)) return 'bud';
     if (k >= (st.sprout ?? 0.15)) return 'sprout';
     return 'seed';
   }
   isReady(p, t) { return this.progress(p, t) >= 1; }
-  isBlooming(p, t) { const s = this.stageOf(p, t); return s === 'bloom' || s === 'ready'; }
+  /** In bloom: only once it's ready (what visitors, beauty, neighbours and self-seeding look for). */
+  isBlooming(p, t) { return this.isReady(p, t); }
   /** When the plant will be ready at its current rate (it's deterministic: only player actions change rates). */
   readyAt(p) { return p.rate > 0 ? p.since + Math.max(0, this.growNeed(p) - p.grown) / p.rate : Infinity; }
   /** When it reaches a stage (a share of its growth). */
@@ -1346,30 +1385,35 @@ export class Game {
     this.spend(row.price * n);
     return this.grant([{ item: packetID, count: n }]);
   }
-  amendmentPrice(itemID) {
-    const def = this.content.items[itemID], c = this.gcfg.amendments || {};
-    return def && def.category === 'amendment' ? (def.amend ? c.price ?? 20 : c.plainPrice ?? 2) : 0;
+  /** School soil bags bought today (the day's prices climb with each one). */
+  soilBoughtToday(now) {
+    const day = Game.dayNumber(now), st = this.state.soilShop;
+    if (!st || st.day !== day) return 0;
+    return Array.isArray(st.bought) ? st.bought.length : (st.bought || 0);   // older saves kept a list
   }
   /**
-   * Today's soil stock: perDay school amendments (one bag each), chosen from the garden seed and the
-   * local day, plus Garden loam, which is always there. Returns [{ id, price, soldOut }].
+   * A bag's price now. Garden loam (back to plain) is always plainPrice. School soil starts at
+   * price + perExpansion × Room to grow bought, and each school bag already bought today multiplies it by
+   * dayStep (back to the start each morning), rounded to `round` coins.
    */
+  amendmentPrice(itemID, now = this.state.lastUpdated) {
+    const def = this.content.items[itemID], c = this.gcfg.amendments || {};
+    if (!def || def.category !== 'amendment') return 0;
+    if (!def.amend) return c.plainPrice ?? 2;
+    const base = (c.price ?? 20) + (c.perExpansion ?? 15) * this.expansionTier;
+    const r = c.round ?? 5;
+    return Math.max(r, Math.round(base * Math.pow(c.dayStep ?? 1.5, this.soilBoughtToday(now)) / r) * r);
+  }
+  /** The Store's soil: every school's amendment and Garden loam, always in stock. Returns [{ id, price }]. */
   soilStock(now) {
-    const day = Game.dayNumber(now), c = this.gcfg.amendments || {};
-    let st = this.state.soilShop;
-    if (!st || st.day !== day) {
-      const order = SCHOOLS.slice().sort((a, b) => hash32(this.state.seed, day, hashStr(a)) - hash32(this.state.seed, day, hashStr(b)));
-      st = this.state.soilShop = { day, offers: order.slice(0, c.perDay ?? 2).map((s) => 'amend.' + s), bought: [] };
-    }
-    const plain = (this.content.amendmentList.find((a) => !a.school) || {}).id;
-    return [...st.offers.map((id) => ({ id, price: this.amendmentPrice(id), soldOut: st.bought.includes(id) })), ...(plain ? [{ id: plain, price: this.amendmentPrice(plain), soldOut: false }] : [])];
+    return this.content.amendmentList.slice().sort((a, b) => (a.school ? 0 : 1) - (b.school ? 0 : 1) || SCHOOLS.indexOf(a.school) - SCHOOLS.indexOf(b.school))
+      .map((a) => ({ id: a.id, price: this.amendmentPrice(a.id, now) }));
   }
   buyAmendment(itemID, now = this.state.lastUpdated) {
     const row = this.soilStock(now).find((x) => x.id === itemID);
-    if (!row) throw new GameError("That isn't in stock today.");
-    if (row.soldOut) throw new GameError('Sold out until tomorrow.');
+    if (!row) throw new GameError("The Store doesn't sell that.");
     this.spend(row.price);
-    if (this.content.items[itemID].amend) this.state.soilShop.bought.push(itemID);
+    if (this.content.items[itemID].amend) this.state.soilShop = { day: Game.dayNumber(now), bought: this.soilBoughtToday(now) + 1 };
     return this.grant([{ item: itemID, count: 1 }]);
   }
 
@@ -1602,7 +1646,7 @@ export class Game {
   guestTierRank(def) { return Math.max(0, VISITOR_TIERS.indexOf(def.tier || 'early')); }
   isResident(id) { const g = this.state.guests[id]; return !!(g && g.home); }
   residents() { return this.guestDefs().filter((d) => this.isResident(d.id)); }
-  /** Plants it likes that are blooming at t (in bloom or ready). */
+  /** Plants it likes that are in bloom at t (ready to pick: plants only flower then). */
   likedBlooming(def, t) { return this.state.plants.filter((p) => def.likes.plants.includes(p.plantID) && t >= p.plantedAt && this.isBlooming(p, t)); }
   /** Every plant it likes is blooming somewhere in the garden. */
   guestLikes(def, t) { const b = this.likedBlooming(def, t); return def.likes.plants.every((id) => b.some((p) => p.plantID === id)); }
@@ -1997,7 +2041,7 @@ export class Game {
   }
 
   // ---- beauty (tuning.garden.beauty): never shown as a number
-  /** variety × distinct plants + blooming × plants in bloom or ready + every placed decor's beauty. */
+  /** variety × distinct plants + blooming × plants in bloom (ready) + every placed decor's beauty. */
   beautyScore(now) {
     const b = this.gcfg.beauty || {};
     const kinds = new Set(this.state.plants.map((p) => p.plantID)).size;

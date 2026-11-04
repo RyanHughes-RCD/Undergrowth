@@ -50,11 +50,13 @@ The garden is a new game, so older forests aren't carried over:
 - **Streams** (`tuning.json` → `water`): the pool sends out 6–7 water tiles in at least two distinct streams, either leaving in different directions or forking. They meander at random (deterministic from the garden seed) and never touch except where they fork. Water can't be planted, amended or decorated. Tap any water for its card and the forecast.
 - **Weather and the moon** (`weather`, `moon`): each local day is Clear, Cloudy, Rain or Storm, drawn from the garden seed (it tends to repeat yesterday's). The moon is the real moon's phase that day, one of eight. The **weather button** in the HUD (and a water tile's card) shows the forecast: today and tomorrow, with the **water level** for each and what it means for the soil at each tide that day.
 - **Water level** (`water.levels`): the day's power (weather + moon, below) sets the water Low, Normal, High or Flood. Low water sits well inside its channel and shows a strip of bank (the grass or soil beside it) with a dark wet edge; Normal shows a thin strip; High fills the channel; a Flood spills a little over the banks. The water tile card names today's level, and developer mode can pin the level shown.
-- **Tides** (`tides`): every six hours (local 00:00, 06:00, 12:00 and 18:00) the tide turns and soil spreads from the banks (tiles touching water), so there's something new at every visit. The day's power is its weather power plus the moon's (a storm on a full moon is 3.7; a clear new-moon day is 0); the spread uses power + 0.6 (`basePower`), so even a still day moves a little. Time away catches up, up to 28 tides (a week).
-  - Along the bank: soil on a bank tile may spread to a neighbouring bank tile, so it grows up or down the stream (55% × (power + 0.6), at most 80%).
-  - Inland: it may also creep to any open neighbour (20% × (power + 0.6)).
+- **Tides** (`tides`): every six hours (local 00:00, 06:00, 12:00 and 18:00) the tide turns and soil spreads from every patch that touches the water, so there's something new at every visit. The day's power is its weather power plus the moon's (a storm on a full moon is 3.7; a clear new-moon day is 0); the spread uses power + 0.6 (`basePower`), so even a still day moves a little. Time away catches up, up to 28 tides (a week).
+  - **Patches:** a patch is soil of one school joined side by side or corner to corner (never across water). If even one of its tiles is on a bank (touching water), the whole patch can spread, from any of its tiles, in any direction. A patch with no tile on a bank (an island) stays its size: it never grows, though a watered patch next to it can still eat into it.
+  - Outward: each tile of a watered patch may spread to an open neighbour that isn't already its soil (20% × (power + 0.6), at most 80%).
+  - Along the bank: its bank tiles may also spread to a neighbouring bank tile, so it grows up or down the stream (55% × (power + 0.6), at most 80%).
+  - In a simulation, one Shimmer tile on a bank covered nearly a whole three-expansion garden in about six days.
   - Never through the water: a step to a corner tile is only allowed when neither tile beside it is water, so soil can't slip across a bend. Soils on opposite banks stay apart, **unless the water is High or in Flood**: then each bank tile with soil has a 10% (High) or 25% (Flood) chance to carry it straight across to the far bank.
-  - A tile resists by its maturity, and more with a plant on it. The return card reports the tides since your last visit: how many tiles changed, any crossings and how much soil matured.
+  - A tile resists another school's soil by its maturity, and more with a plant on it: it holds with chance resist / (resist + 1.6), where resist = its level (0 for plain) + 1.5 with a plant. A Deep tile holds about 71% of the time (about 77% with a plant), a little softer than before (`hold` was 1.2), so borders between schools keep shifting slowly. The return card reports the tides since your last visit: how many tiles changed, any crossings and how much soil matured.
   - A plant whose tile changed school keeps growing, slowly (`garden.soil.wrong`, 35%).
 - **Soil maturity** (`garden.soil.levels`): soil is Fresh, Settled, Rich or Deep (levels 1–4). Each tide a tile keeps its soil, it has a 50% chance to go up a level (`tides.matureChance`), so about a level every 12 hours: Deep in under two days. On a plant's own soil each level above 1 adds 6% growth speed, and from Rich it gives +1 produce. Each level looks more strongly of its school, with deeper colour and darker shadows, and grows more little details (`visuals.soilDetails`: a tile has one with an 8%, 20%, 40% or 65% chance by level): tufts and clover on Verdure, wildflowers on Bloom, tiny caps and puffballs on Spore, glowing moss and foxfire on Glow, crystal shards and glinting pebbles on Shimmer, ghost-flowers and little cairns on Spirit. Details stay put on their tile and hide under anything standing there. A tile card shows the level.
 - **Digging channels** (`water.dig`): tap an empty tile beside the water and choose *Dig a channel*. It becomes water and its soil is lost. It costs 15 coins, then 5 more for each channel dug before. New banks let the tides reach new ground.
@@ -82,7 +84,7 @@ The garden is a new game, so older forests aren't carried over:
   - **The river follows.** A point on the newly revealed outer edge is picked at random; from the water tile nearest it, a stream winds out to that edge, through a random bend midway. It takes the cheapest route: around plants, decor, features and the tin where it can, through them where it must (their soil is lost, plants and debris are gone, decor goes back to the Bag). The new water is highlighted and the card says so.
   - The foraging patch moves out with the treeline on its own.
   - It's deterministic from the garden seed and the purchase.
-- **Field Guide:** tabs for Mushrooms, Plants (the Plant & Fungi Catalogue) and Visitors. Unfound entries are silhouettes.
+- **Field Guide:** tabs for Plants and Mushrooms (the Plant & Fungi Catalogue), Colours and Visitors. Unfound entries are silhouettes. An entry you can grow also has its growing notes (soil, grow time, price, where its seeds come from, its set, good neighbours), and while unfound it hints at where to look (a sparkle). Plants and Mushrooms open with the collections. (There used to be a separate Garden tab with just the growable plants; its notes now live on these entries.)
 - **Time:** the real local clock (`tuning.json` → `clock`). Everything runs on timestamps, so the garden catches up when the game reopens.
 
 ## Growing things (web)
@@ -95,15 +97,23 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
 - **Soil:** every clearing tile has one soil: plain, or one of the six schools (saved as `state.soil`; plain isn't stored).
   - You change a tile's soil on purpose with an amendment from the Bag: Spore compost, Glow dust, Bloom mulch, Verdure leaf mould, Shimmer crystal dust or Spirit mist. Garden loam turns it back to plain (`Content/amendments.json`).
   - One bag does one tile, and the soil stays until you change it. A tile with a plant on it can't be changed.
-  - **Soil is scarce** (`garden.amendments`). Each morning the Store stocks two school amendments, chosen from the garden seed and the day: one bag each, at 20 coins. Garden loam is always there at 2.
+  - **Soil is dear** (`garden.amendments`). Every school's amendment is always in the Store, but a bag costs 20 coins + 15 for each Room to grow you've bought, and each school bag already bought that day makes the next 1.5× dearer (rounded to 5). Prices reset each morning, so reshaping the garden takes days, not one shopping trip. Garden loam is always 2.
+
+    | Room to grow bought | 1st bag today | 2nd | 3rd | 4th | 5th | 5 bags in a day |
+    |---|---|---|---|---|---|---|
+    | 0 | 20 | 30 | 45 | 70 | 100 | 265 |
+    | 2 | 50 | 75 | 115 | 170 | 255 | 665 |
+    | 5 | 95 | 145 | 215 | 320 | 480 | 1255 |
+    | 10 | 170 | 255 | 385 | 575 | 860 | 2245 |
   - The other sources are the opening's tin and the soil patches Room to grow uncovers.
   - The tile shows its soil: plain is grass, and a school's soil is its ground tile (`tile.<school>.3a/b`).
 - **Growing well:**
   - On its own school's soil a plant grows at normal speed (`soil.preferred` 1).
   - On plain soil it grows at 0.6× (`soil.plain`): a 3-hour Marigold takes 5 hours, still inside a six-hour visit.
   - **On another school's soil it can't be planted.** A plant that crawls along at a third of its speed looks broken, and refusing teaches the rule at once. In planting mode its own soil glows brightly, plain ground faintly and other soil not at all. Tapping a wrong tile says which soil the plant likes.
-- **Stages:** seed, sprout, bud, bloom, then ready (at 15%, 45% and 75% of its growth, `garden.stages`).
-  - Seed and sprout share the generic art, the bud is the plant's own (`plant.bud.<key>`; fungi got buds too), and bloom is the plant itself.
+- **Stages:** seed, sprout, bud, then ready (at 15% and 45% of its growth, `garden.stages`).
+  - Seed and sprout share the generic art, and the bud is the plant's own (`plant.bud.<key>`; fungi got buds too).
+  - **A plant only flowers when it's ready to pick:** it shows its bud until then, and the plant itself (in its colour) once it's ready. Everything that looks for blooming plants (visitors' interest, beauty, cross-pollination partners, self-seeding) looks for ready ones.
   - A ready plant sparkles and bobs. It waits there for as long as it takes: nothing wilts or dies.
 - **Timing is deterministic:**
   - Each plant stores `grown` (ms of normal-speed growth), `since` and `rate`. Its progress at time t is `(grown + (t − since) × rate) / need`.
@@ -198,7 +208,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - Decor is placed, moved and put away by hand. A raised bed with a plant in it stays put until it's harvested or dug up.
   - Tapping a placed piece says what it does.
 - **Relics are ornaments now:** the six relics (`Content/relics.json`, one per school) are decor of kind `ornament`. They're earned by completing a school's collection (phase 4); developer mode can give them.
-- **Garden beauty** (`garden.beauty`): 3 × each distinct plant growing + 1 × each plant in bloom or ready + every placed decor's beauty.
+- **Garden beauty** (`garden.beauty`): 3 × each distinct plant growing + 1 × each plant in bloom (ready to pick) + every placed decor's beauty.
   - It's never shown as a number: the HUD shows a named tier with a leaf meter. The tiers are Bare, Tended (8), Pleasant (20), Lovely (36), Charming (56) and Enchanting (80).
   - The best tier ever reached is kept (`state.beautyBest`) and never relocks.
   - Reaching a tier shows a gentle card naming what it put in the Store. Tiers open better seed packets (Uncommon at Tended, Rare at Pleasant) and some decor ('Needs beauty tier' in the Offerings sheet): Flower planter and Wind chime at Tended, Birdbath and Mushroom lamp at Pleasant, Fairy ring and Crystal lamp at Lovely, Root arch at Charming.
@@ -209,9 +219,9 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
 
 - **Field Guide collections:** each school's set is its seed plants and its gift plant (Spore 4, Glow 5, Bloom 5, Verdure 4, Shimmer 4, Spirit 4).
   - Harvest every plant in a set once to complete it. The reward is that school's relic ornament (the only way to earn one) and 150 coins (`garden.collections`).
-  - The Garden tab of the Field Guide opens with each set's progress and the relic as a silhouette until earned.
+  - The Field Guide's Plants and Mushrooms tabs open with each set's progress and the relic as a silhouette until earned. A set member's page says whether you've grown it.
 - **Cross-pollination and colour varieties** (`plants.json` varieties, `garden.varieties`):
-  - Harvest a plant while a blooming plant of the same family is in one of its 8 neighbours. The same kind counts, and the families are caps, daisies, bells, clovers, spikes and willows.
+  - Harvest a plant while a blooming (ready) plant of the same family is in one of its 8 neighbours. The same kind counts, and the families are caps, daisies, bells, clovers, spikes and willows.
   - With a hidden chance (12%) you get a seed packet of one of its colour varieties, one not yet found first.
   - There are 14 varieties, one per common and uncommon plant: Lemon Marigold, Pink Cornflower, Lavender Ink Cap, Golden Hosta and so on.
   - A variety grows like its plant and breeds true. Its produce sells for twice as much and has its own entry in the Field Guide's **Colours** tab (a hint shows until found).
@@ -221,7 +231,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - **Commissions** (`commission`) are ten one-off requests for things you grow, paying 40–300 coins. Some open Store items: "A basket for the log" opens the Raised bed, "Something blue" the Birdbath, "Lantern-light" the Glow lantern. Later ones need a beauty tier, colour varieties or gift plants.
   - **Daily orders** (`order`) are two small orders each local day, at about 1.5× the sell price. They're chosen from the garden seed and the day among orders for produce you've already harvested (`garden.orders.perDay`).
 - **Visitors who stay** (`Content/visitors.json`, `tuning.visitors`, design notes in `design/visitor_residency.md`): fifteen animals in three tiers. They leave **mementos** while they court the garden, then **move in** and live there for as long as their conditions hold.
-  - **Interest:** every 30 minutes of game time (time away counts), a visitor's interest rises by 1.5 while every plant it likes is blooming (or ready), and falls by 0.5 otherwise.
+  - **Interest:** every 30 minutes of game time (time away counts), a visitor's interest rises by 1.5 while every plant it likes is in bloom (ready to pick), and falls by 0.5 otherwise.
   - **Mementos:** in its time window, at 10 interest it makes its first visit, and later visits need 20 (early), 40 (settled) or 60 (mystical). A visit has a 35% chance per check, at most once a day. Visits are never seen: each leaves the next of its mementos (1 for early visitors, 3 settled, 4 mystical). Each memento hints at one of the conditions it needs to stay, in its own words, and never names a number.
   - **Moving in:** on the visit after its last memento, it moves in if every condition holds. If not, it leaves a plainer hint about one condition that isn't met.
   - **Staying:** a resident stays while every condition holds and leaves at the first check where one doesn't (strictly, no grace period). It leaves a parting memento that names what broke. Coming back takes one visit with the conditions met again.
@@ -382,7 +392,7 @@ tools/
 | `items.json` | The Plant & Fungi Catalogue (from the spreadsheet): id, category, name, rarity, sprite, school, description. |
 | `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`seeds`: comes from blind packets; `gift`: only from visitors), tier (common, uncommon, rare), companions, varieties. Numbers: `tuning.json` → `garden.plants`. Blind packets (`seeds.<school>.<tier>`) are built from the schools; each plant also has a named packet (`packet.<id>`), used for gifts. |
 | `amendments.json` | Soil amendments (kept by hand): id, school (null = plain loam), name, text. |
-| `landmarks.json` | Landmarks: the Stump and the wishing well (`footprint` 2×2; `discovery` firstExpansion / secondExpansion: placed by Room to grow, not at the start). |
+| `landmarks.json` | Landmarks: the Stump and the wishing well (`footprint` 2×2; `discovery` firstExpansion / secondExpansion: placed by Room to grow, not at the start; `tapFootprint`: only taps on its own tiles open it, so the well's roof doesn't catch taps meant for the row above). |
 | `opening.json` | The seed tin's card, the questions and their school weights, and what each school's tin holds. |
 | `visitors.json` | Fifteen forest animals: name, sprite, tier (early, settled, mystical), school (and `schools` for two), likes (`plants` that must be blooming, `time` window), `stays` (conditions: soil, bed, beauty, resident), `mementos` (text, and which conditions each `hint`s at), `restate` and `parting` (a line per condition), `perk` (growth, tideHold), Field Guide text and gift (a seed packet id). |
 | `relics.json` | One relic per school (kept by hand), for the relic ornaments. |

@@ -442,7 +442,7 @@ export class ForestView {
     const g = this.game, out = [];
     for (const p of g.state.plants) {
       const stage = g.stageOf(p, now), ready = stage === 'ready';
-      out.push({ sprite: this.plantSprite(p, now), variant: stage === 'bloom' || ready ? this.plantVariant(p) : null, ...at(p.tile), tile: p.tile, kind: 'plant', key: p.id,
+      out.push({ sprite: this.plantSprite(p, now), variant: ready ? this.plantVariant(p) : null, ...at(p.tile), tile: p.tile, kind: 'plant', key: p.id,
         still: !ready, glimmer: ready, bob: ready, phase: hash32(p.tile.x, p.tile.y, 7) % 1000 / 250 });
     }
     return out.concat(this.moreObjects(now, at));
@@ -948,6 +948,12 @@ export class ForestView {
     for (let i = this.drawn.length - 1; i >= 0; i--) {
       const o = this.drawn[i];
       if (!o.kind) continue;
+      // A landmark marked tapFootprint (the well) answers only on its own tiles: a tap on the roof above them
+      // falls through to whatever is underneath.
+      if (o.kind === 'landmark' && (this.game.landmarkDef(o.key) || {}).tapFootprint) {
+        const t = tileAt(w.x, w.y), l = this.game.landmarkAt(t);
+        if (!l || l.id !== o.key) continue;
+      }
       const f = this.sprites.frames(o.sprite, o.variant)[0];
       const a = this.sprites.anchor(o.sprite);
       const ox = o.drawX ?? o.x, oy = o.drawY ?? o.y;
