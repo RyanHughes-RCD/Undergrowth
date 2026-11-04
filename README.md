@@ -378,7 +378,7 @@ tools/
 - **Missing sprite ids** render as a magenta "?" instead of crashing.
 - **Placeholder art:** `python3 tools/gen_placeholders.py` regenerates every placeholder sprite. Re-running it reproduces the committed sprites exactly.
   - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
-  - The Stump and the wishing well (`landmark.stump` 58×53, `landmark.well` 44×63) are drawn art, imported at their own size (one art pixel per game pixel) from `design/art/` by `python3 tools/import_sprite_image.py` (needs Pillow). They stand on their 2×2 tiles and overhang a little, like a tree.
+  - The Stump and the wishing well (`landmark.stump` 32×29, `landmark.well` 32×46) are drawn art from `design/art/`, scaled to their 2×2 footprint (32 pixels wide) by `python3 tools/import_sprite_image.py` (needs Pillow). The well's roof leans over the row above; only its own tiles open it.
   - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed, gold, violet with a seal or iridescent) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
   - Catalogue items and their bud stages (`plant.bud.<key>`; fungi get a small closed button) come from `gen_content_sprites.py`.
   - School soil tiles (`tile.<school>.<1–4>a/b`), and water come from `gen_terrain.py`.
