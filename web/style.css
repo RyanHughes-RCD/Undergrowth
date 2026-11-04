@@ -57,7 +57,7 @@ button { border: 0; background: none; cursor: pointer; padding: 0; }
 
 /* ---------- pixel frames ---------- */
 /* Outer 1-pixel edge with notched corners + inner highlight (top) and shade (bottom). */
-.frame, .name-btn, .speed-btn, .round-btn, .slot, .nav-btn, .banner, .card, .coach, #toast, .btn, .tab,
+.frame, .name-btn, .speed-btn, .weather-btn, .round-btn, .slot, .nav-btn, .banner, .card, .coach, #toast, .btn, .tab,
 .guide-cell, .thumb, .reveal-card, .sheet-panel, .field input, .select, .badge {
   border-radius: 0;
   box-shadow:
@@ -288,3 +288,11 @@ label.check input { width: 18px; height: 18px; accent-color: #ff9a3a; }
 .grow-mid { display: flex; justify-content: center; }
 .seed-tiers { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .seed-row .grow { min-width: 0; }
+.weather-btn { display: flex; align-items: center; gap: 4px; padding: 6px 8px; pointer-events: auto; }
+.forecast { display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left; font-size: var(--t-small); }
+.forecast-row { display: flex; align-items: center; gap: 8px; }
+.forecast-row > b { width: 72px; flex: none; }
+.forecast-row .grow { min-width: 0; }
+.fc-icons { display: inline-flex; gap: 2px; flex: none; }
+.forecast.compact { margin-top: 6px; }
+.night, .bank { display: flex; align-items: flex-start; gap: 4px; }

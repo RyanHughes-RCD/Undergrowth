@@ -131,18 +131,29 @@ class App {
    * tuning.garden.morning.minAwayHours), the morning card sums up what's ready (and the night's surprise).
    */
   returned(awayHours) {
+    const shown = this.morningCheck(awayHours);
+    // A night that passed while the garden was open (or a short absence): just a note.
+    if (!shown && this.nightNote) {
+      const n = this.nightNote;
+      this.ui.toast(n.taken.length ? `The night passed. The water carried soil onto ${n.taken.length} tile${n.taken.length === 1 ? '' : 's'}.` : 'The night passed quietly.', 'ui.icon.moon.' + n.moon);
+    }
+    this.nightNote = null;
+  }
+
+  morningCheck(awayHours) {
     const cfg = (this.content.tuning.garden || {}).morning || {};
-    if (!(awayHours >= (cfg.minAwayHours ?? 4))) return;
+    if (!(awayHours >= (cfg.minAwayHours ?? 4))) return false;
     const g = this.game, now = g.now();
-    if (this.game.state.tin) return;               // the first session ends on the tin, not a summary
+    if (this.game.state.tin) return false;         // the first session ends on the tin, not a summary
     const m = g.morning(now);
-    if (!m.ready.length && !m.surprise && !m.growing) return;
+    if (!m.ready.length && !m.surprise && !m.growing && !this.nightNote) return false;
     const tiles = m.ready.flatMap((r) => r.tiles);
     if (m.surprise && m.surprise.tile) tiles.push(m.surprise.tile);
     if (tiles.length) this.view.highlight(tiles, 5, '255,236,140');
     if (m.surprise && m.surprise.tile) this.view.panTo(m.surprise.tile, 1.2);
     this.ui.morningCard(m, awayHours);
     this.changed();
+    return true;
   }
 
   // ---------------------------------------------------------------- state
@@ -152,6 +163,7 @@ class App {
     this.view.sync();
     this.ui.render(false);
     this.processEvents();
+    if (this.nightNote) this.returned(0);
   }
 
   /** Shows one-shot game events. */
@@ -166,6 +178,10 @@ class App {
     const ui = this.ui;
     if (e.type === 'freshGarden') ui.freshGardenCard(e);
     else if (e.type === 'beautyTier') ui.beautyCard(e);
+    else if (e.type === 'night') {
+      if (e.taken.length) this.view.highlight(e.taken.map((x) => x.tile), 6, '160,210,255');
+      this.nightNote = e;
+    }
     else if (e.type === 'collection') ui.collectionCard(e);
     else if (e.type === 'crossPollinated') {
       const v = this.game.varietyDef(e.variety);
@@ -246,7 +262,7 @@ class App {
   tapThing(tile) {
     const g = this.game, ui = this.ui, now = g.now();
     const landmark = g.landmarkAt(tile);
-    if (landmark) { ui.selectedTile = null; ui.open('offerings'); this.changed(false); return true; }
+    if (landmark) { ui.selectedTile = null; ui.forecastCard(); this.changed(false); return true; }
     if (g.tinAt(tile)) { ui.selectedTile = null; ui.openOpening(); return true; }
     const find = g.forageAt(tile);
     if (find) {
@@ -315,6 +331,12 @@ class App {
     this.ui.toast(r.soil ? `${r.soil.charAt(0).toUpperCase() + r.soil.slice(1)} soil now.` : 'Plain soil again.', this.content.items[itemID]?.sprite);
     if (refresh) this.changed();
     return r;
+  }
+
+  /** Dig a channel: the tile becomes water (its soil is lost). */
+  digAt(tile) {
+    const cost = this.attempt(() => this.game.dig(tile, this.game.now()));
+    if (cost) { this.view.dustAt(tile); this.ui.toast(`The water finds its way in. (${cost} coins)`); this.changed(); }
   }
 
   harvestAt(tile) {

@@ -1,8 +1,8 @@
 {
- "_about": "The opening: an old seed tin waits by the old log (tuning.start.tin). Tapping it shows the card, then the questions; each answer adds weight to one or two schools, the highest total decides the starting school (ties broken at random among the leaders), and the second highest gives a little extra (tuning.garden.starterSet). No answer names a school, a stat or a mechanic.",
+ "_about": "The opening: an old seed tin waits by the spring (tuning.start.tin). Tapping it shows the card, then the questions; each answer adds weight to one or two schools, the highest total decides the starting school (ties broken at random among the leaders), and the second highest gives a little extra (tuning.garden.starterSet). No answer names a school, a stat or a mechanic.",
  "card": {
   "title": "An old seed tin",
-  "intro": "Something half-sunk in the moss by the old log: a little tin, dented and green with age. Words are scratched into the lid.",
+  "intro": "Something half-sunk in the moss by the spring: a little tin, dented and green with age. Words are scratched into the lid.",
   "inscription": "Tell me what you love, and I'll give you something to grow.",
   "begin": "Open it",
   "keep": "Thank you"

@@ -198,6 +198,4 @@ if __name__ == "__main__":
     decor()
     relics()
     board_icon()
-    import gen_landmark_art  # the Old Log, drawn from design/landmark_old_log.jpg
-    gen_landmark_art.main()
     print("wrote Offerings sprites")

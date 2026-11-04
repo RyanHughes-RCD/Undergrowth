@@ -5,7 +5,7 @@
 // hedge. Pinch to zoom in; pan is clamped to the clearing. Each garden tile shows its soil (grass for
 // plain, the school's ground tile otherwise); objects (the Old Log, scenery, decor, finds, plants) are
 // drawn sorted by their feet; then the time-of-day light, tree shadows and fireflies.
-import { hash32, decorVariant } from './core.js';
+import { Game, hash32, decorVariant } from './core.js';
 
 export const TS = 16;
 const FOOT = 5; // objects stand a little below the tile centre
@@ -171,10 +171,167 @@ export class ForestView {
   }
 
   /** A clearing tile's ground: its soil (plain = grass, a school = that school's ground tile). */
+  /**
+   * A clearing tile's ground key for drawGround: its sprite (grass, a school's soil at its maturity level, or
+   * water), which corners are clipped (NW NE SE SW: a corner clips unless a tile beside it is the same kind
+   * of ground), and what shows through the clipped corners (the ground most common around it).
+   */
   ground(x, y) {
-    const school = this.game.soilAt ? this.game.soilAt({ x, y }) : null;
-    const h = hash32(x, y, 0x5011);
-    return school ? `tile.${school}.3${h & 1 ? 'a' : 'b'}` : GRASS[h % GRASS.length];
+    const g = this.game, h = hash32(x, y, 0x5011);
+    const kindAt = (t) => (!g.inClearing(t) ? '' : g.isWet(t) ? 'water' : g.soilAt(t) || '');
+    const spriteFor = (k, t, hh) => (k === 'water' ? `tile.water.${hh & 1 ? 'a' : 'b'}` : k ? `tile.${k}.${Math.max(1, g.soilLevel(t))}${hh & 1 ? 'a' : 'b'}` : GRASS[hh % GRASS.length]);
+    const me = kindAt({ x, y });
+    if (!me) return GRASS[h % GRASS.length];
+    const same = (dx, dy) => kindAt({ x: x + dx, y: y + dy }) === me;
+    const n = same(0, -1), e = same(1, 0), so = same(0, 1), w = same(-1, 0);
+    const mask = [!n && !w, !n && !e, !so && !e, !so && !w].map((b) => (b ? '1' : '0')).join('');
+    const count = {};
+    let pick = null;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const t = { x: x + dx, y: y + dy }, o = kindAt(t);
+      if (o === me) continue;
+      count[o] = (count[o] || 0) + 1;
+      if (!pick || count[o] > count[pick.k] || (count[o] === count[pick.k] && o < pick.k)) pick = { k: o, t };
+    }
+    const under = pick ? spriteFor(pick.k, pick.t, h >> 1) : GRASS[h % GRASS.length];
+    return `${spriteFor(me, { x, y }, h)}|${mask}|${under}`;
+  }
+
+  /** Draws a ground key from ground(): a plain tile, or soil over grass with its open corners faded. */
+  drawGround(key, x, y) {
+    const [id, mask, under] = key.split('|');
+    if (!mask) { this.blit(id, null, x, y, 0); return; }
+    this.blit(under, null, x, y, 0);
+    if (mask === '0000') { this.blit(id, null, x, y, 0); return; }
+    const a = this.sprites.anchor(id);
+    this.ctx.drawImage(this.softTile(id, mask), Math.round(x - a.x), Math.round(y - a.y));
+  }
+
+  /**
+   * A soil tile with some corners clipped into the ground (mask: NW NE SE SW, '1' = clip). Each clipped
+   * corner is rounded off a little (tuning.visuals.softCorners): full soil inside a circle of `radius` px
+   * centred that far in from the corner, fading out over `soft` px beyond it in `steps` steps. Cached.
+   */
+  softTile(id, mask) {
+    const k = id + '|' + mask;
+    this.softCache = this.softCache || new Map();
+    let c = this.softCache.get(k);
+    if (c) return c;
+    const src = this.sprites.frames(id)[0];
+    c = document.createElement('canvas');
+    c.width = src.w; c.height = src.h;
+    const cx = c.getContext('2d');
+    cx.drawImage(src.canvas, 0, 0);
+    const img = cx.getImageData(0, 0, c.width, c.height), W = c.width, H = c.height;
+    const sc = this.app.content.tuning.visuals.softCorners || {};
+    const r = sc.radius ?? 4, soft = sc.soft ?? 2, steps = sc.steps ?? 2;
+    const corners = [[0, 0], [W, 0], [W, H], [0, H]];
+    for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+      let alpha = 1;
+      corners.forEach(([qx, qy], i) => {
+        if (mask[i] !== '1') return;
+        const ox = qx ? qx - r : r, oy = qy ? qy - r : r;                       // the rounding circle's centre
+        const inX = qx ? px + 0.5 > ox : px + 0.5 < ox, inY = qy ? py + 0.5 > oy : py + 0.5 < oy;
+        if (!inX || !inY) return;                                               // not in this corner's quarter
+        const d = Math.hypot(px + 0.5 - ox, py + 0.5 - oy);
+        const k2 = 1 - (d - (r - soft)) / soft;                                 // 1 inside, 0 at the corner side
+        alpha = Math.min(alpha, Math.max(0, Math.min(1, k2)));
+      });
+      if (alpha < 1) img.data[(py * W + px) * 4 + 3] *= Math.round(alpha * steps) / steps;
+    }
+    cx.putImageData(img, 0, 0);
+    this.softCache.set(k, c);
+    return c;
+  }
+
+  /**
+   * Which way each water tile flows: a walk out from the spring along the water, so every tile flows away
+   * from the tile it was reached from (forks and dug channels included). `dist` is how many tiles
+   * downstream it is, so ripples line up across tiles. Cached until the water changes.
+   */
+  flowMap() {
+    const g = this.game, sp = g.spring, wk = g.state.water.join(';') + (sp ? `@${sp.tile.x},${sp.tile.y}` : '');
+    if (this.flowFor === wk) return this.flow;
+    const flow = new Map(), wet = new Set(g.state.water);
+    const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    const queue = [];
+    const visit = (x, y, dir, dist) => { const k = x + ',' + y; if (!wet.has(k) || flow.has(k)) return; flow.set(k, { dir, dist, end: true }); queue.push({ x, y, dist }); };
+    if (sp) DIRS.forEach(([dx, dy], d) => visit(sp.tile.x + dx, sp.tile.y + dy, d, 0));
+    for (const k of wet) if (!flow.has(k) && !queue.length) { const [x, y] = k.split(',').map(Number); visit(x, y, 2, 0); }  // water with no spring: flow down
+    for (let i = 0; i < queue.length; i++) {
+      const q = queue[i];
+      DIRS.forEach(([dx, dy], d) => {
+        const before = flow.size;
+        visit(q.x + dx, q.y + dy, d, q.dist + 1);
+        if (flow.size > before) flow.get(q.x + ',' + q.y).end = false;
+      });
+    }
+    this.flowFor = wk; this.flow = flow;
+    return flow;
+  }
+
+  /**
+   * The moving water over the water tiles: a dark lip and a shallow light edge along the banks, and light
+   * ripples drifting downstream in three lanes, continuous from tile to tile. Ripples run faster when
+   * tonight's water runs high (weather + moon), and hold still with reduced motion.
+   */
+  drawWater(ctx, view, t) {
+    const g = this.game, flow = this.flowMap();
+    if (!flow.size) return;
+    const sp = g.spring;
+    const wetAt = (x, y) => g.isWet({ x, y }) || (sp && sp.tile.x === x && sp.tile.y === y);
+    const minute = Math.floor(Date.now() / 60000);
+    if (this.flowPowerAt !== minute) { this.flowPowerAt = minute; try { this.flowPower = g.forecast(g.now())[0].power; } catch (_) { this.flowPower = 0.5; } }
+    const speed = 5 + 4 * Math.min(3, this.flowPower || 0);                 // px per second
+    const run = reducedMotion() ? 0 : t * speed;
+    const LANES = [{ at: 4, len: 4, gap: 10, ph: 0 }, { at: 6, len: 2, gap: 15, ph: 9 }, { at: 8, len: 5, gap: 12, ph: 5 }, { at: 11, len: 3, gap: 9, ph: 2 }];
+    const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    for (const [k, f] of flow) {
+      const [x, y] = k.split(',').map(Number);
+      const px = x * TS, py = y * TS;
+      if (px > view.maxX + TS || px < view.minX - TS * 2 || py > view.maxY + TS || py < view.minY - TS * 2) continue;
+      const open = DIRS.map(([dx, dy]) => !wetAt(x + dx, y + dy));               // N E S W: a bank on that side
+      const clip = [open[0] && open[3], open[0] && open[1], open[2] && open[1], open[2] && open[3]];  // NW NE SE SW
+      // Banks: a dark lip at the edge, a shallow light line inside, both stopping short of clipped corners.
+      const edge = (side, inset, colour) => {
+        ctx.fillStyle = colour;
+        const a = side === 0 || side === 2 ? [clip[side === 0 ? 0 : 3], clip[side === 0 ? 1 : 2]] : [clip[side === 1 ? 1 : 0], clip[side === 1 ? 2 : 3]];
+        const s0 = a[0] ? 3 : 0, s1 = a[1] ? 3 : 0, L = TS - s0 - s1;
+        if (side === 0) ctx.fillRect(px + s0, py + inset, L, 1);
+        if (side === 2) ctx.fillRect(px + s0, py + TS - 1 - inset, L, 1);
+        if (side === 3) ctx.fillRect(px + inset, py + s0, 1, L);
+        if (side === 1) ctx.fillRect(px + TS - 1 - inset, py + s0, 1, L);
+      };
+      open.forEach((o, side) => { if (o) { edge(side, 0, 'rgba(14,30,48,0.55)'); edge(side, 1, 'rgba(127,176,212,0.35)'); } });
+      // Ripples along the flow. u runs downstream (0..TS within the tile), v across it.
+      const [dx, dy] = DIRS[f.dir];
+      const base = f.dist * TS;
+      // Swells: faint light bands across the stream, rolling downstream.
+      ctx.fillStyle = 'rgba(160,205,235,0.16)';
+      for (let u = 0; u < TS; u++) {
+        if (((base + u - run * 0.6) % 8 + 8) % 8 >= 2) continue;
+        const along = (dx || dy) > 0 ? u : TS - 1 - u, a0 = open[dx ? 0 : 3] ? 2 : 0, a1 = open[dx ? 2 : 1] ? 2 : 0;
+        if (dx) ctx.fillRect(px + along, py + a0, 1, TS - a0 - a1); else ctx.fillRect(px + a0, py + along, TS - a0 - a1, 1);
+      }
+      for (const ln of LANES) {
+        const period = ln.len + ln.gap;
+        for (let u = 0; u < TS; u++) {
+          const s = ((base + u - run + ln.ph) % period + period) % period;
+          if (s >= ln.len) continue;
+          if (f.end && u > TS - 4) continue;                                     // the stream peters out
+          ctx.fillStyle = s >= ln.len - 1 ? 'rgba(232,248,255,0.95)' : 'rgba(150,200,232,0.8)';   // bright leading pixel
+          const along = (dx || dy) > 0 ? u : TS - 1 - u;
+          ctx.fillRect(px + (dx ? along : ln.at), py + (dx ? ln.at : along), 1, 1);
+        }
+      }
+      // A glint that drifts and blinks.
+      const hb = hash32(x, y, 0x61);
+      if (!reducedMotion() && ((t * 0.7 + (hb % 100) / 37) % 3) < 0.25) {
+        ctx.fillStyle = 'rgba(232,248,255,0.9)';
+        ctx.fillRect(px + 3 + (hb % 10), py + 3 + ((hb >> 8) % 10), 1, 1);
+      }
+    }
   }
 
   /** A tile outside the clearing: the treeline floor with a shrub (tuning.visuals.edge). */
@@ -206,7 +363,7 @@ export class ForestView {
       if (!def) continue;
       const [fw, fh] = g.landmarkFootprint(l);
       const pos = at({ x: l.tile.x, y: l.tile.y + fh - 1 });
-      objs.push({ sprite: def.sprite, x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: l.tile, kind: 'landmark', key: l.id, still: true, glimmer: g.oldLogReady(now) > 0 });
+      objs.push({ sprite: def.sprite, x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: l.tile, kind: 'landmark', key: l.id, still: true, sortY: pos.y - TS });
     }
     for (const d of s.scenery || []) objs.push({ sprite: d.sprite, ...at(d.tile), tile: d.tile, kind: 'scenery', key: 'sc' + d.tile.x + ',' + d.tile.y, flip: d.flip, still: true });
     for (const d of s.decor.placed) {
@@ -312,11 +469,12 @@ export class ForestView {
         if (!prev || prev.ground !== ground) this.groundSince.set(k, { ground, from: prev ? prev.ground : null, at: prev ? nowMs : 0 });
         const gs = this.groundSince.get(k);
         const fade = fadeMs > 0 && gs.from ? Math.min(1, (nowMs - gs.at) / fadeMs) : 1;
-        if (fade < 1) { this.blit(gs.from, null, c.x, c.y, 0); ctx.globalAlpha = fade; }
-        this.blit(ground, null, c.x, c.y, 0);
+        if (fade < 1) { this.drawGround(gs.from, c.x, c.y); ctx.globalAlpha = fade; }
+        this.drawGround(ground, c.x, c.y);
         ctx.globalAlpha = 1;
       }
     }
+    this.drawWater(ctx, view, t);
     this.drawUnderlay(ctx, view, t);
 
     // Highlight pulses (expansion, morning, valid planting tiles).
@@ -404,6 +562,24 @@ export class ForestView {
       ctx.strokeRect(x * TS + 1.5, y * TS + 1.5, TS - 3, TS - 3);
     }
   }
+  /** Rain falling on rainy and stormy days: short slanted streaks, more and faster in a storm. Still with reduced motion. */
+  drawRain(ctx, view, t) {
+    const g = this.game, w = g.weatherOn(Game.dayNumber(g.now()));
+    if (w.id !== 'rain' && w.id !== 'storm') return;
+    const storm = w.id === 'storm', n = storm ? 140 : 70, still = reducedMotion();
+    const W = view.maxX - view.minX, H = view.maxY - view.minY;
+    ctx.save();
+    ctx.globalAlpha = storm ? 0.45 : 0.3;
+    ctx.fillStyle = '#c8dcf4';
+    for (let i = 0; i < n; i++) {
+      const hx = hash32(i, 77) / 4294967296, hy = hash32(i, 78) / 4294967296;
+      const fall = still ? 0 : (t * (storm ? 160 : 110) + hy * H) % H;
+      const x = Math.round(view.minX + ((hx * W + fall * 0.35) % W)), y = Math.round(view.minY + (still ? hy * H : fall));
+      ctx.fillRect(x, y, 1, 3); ctx.fillRect(x - 1, y + 3, 1, 2);
+    }
+    ctx.restore();
+  }
+
   /** Visitor signs: little footprints by the plants a visitor likes, fading over tuning.visitors.tracks.hours. */
   drawTracks(ctx) {
     const g = this.game, now = g.now(), life = ((this.app.content.tuning.visitors || {}).tracks || {}).hours ?? 24;
@@ -420,8 +596,9 @@ export class ForestView {
     ctx.globalAlpha = 1;
   }
 
-  /** Over the lit scene: lanterns glow at dusk and night (decor kinds with glow). */
+  /** Over the lit scene: rain on rainy days, and lanterns glowing at dusk and night (decor kinds with glow). */
   drawOverlay(ctx, view, t) {
+    this.drawRain(ctx, view, t);
     const g = this.game, phase = g.dayPhase(g.now());
     if (phase !== 'dusk' && phase !== 'night') return;
     const strength = phase === 'night' ? 1 : 0.6;

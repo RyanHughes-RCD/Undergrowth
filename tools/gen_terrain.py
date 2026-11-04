@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Soil art: one ground tile pair per garden school (run via gen_placeholders.py).
+"""Soil and water art (run via gen_placeholders.py).
 
-tile.<school>.3a / .3b: grass with its greens moved toward the school's colour and a few motif specks
-(caps for Spore, motes for Glow, petals for Bloom...). Plain soil is the ordinary grass (gen_topdown.py).
+tile.<school>.<level>a / b: grass with its greens moved toward the school's colour and motif specks (caps for
+Spore, motes for Glow, petals for Bloom...), more strongly at each maturity level 1-4. Plain soil is the
+ordinary grass (gen_topdown.py). tile.water.a / b: the stream. landmark.spring: the spring at the centre.
 """
 from gen_placeholders import Canvas, write, P, GROUND_PALETTE
 from gen_topdown import rng_for, T
@@ -20,7 +21,9 @@ SCHOOL_GROUND = {   # school: (grass hue it moves toward, motif colours)
     "shimmer": ("#8a84b8", ["#f4f0ff", "#c8b4f4"]),
     "spirit": ("#4a4c8a", ["#c8c8f4", "#9a9ad0"]),
 }
-GROUND_LEVELS = [(3, 0.64, 5)]   # (level, how far the greens move, motif specks): one look per soil, clearly unlike grass
+# (level, how far the greens move, motif specks): soil matures from 1 (just changed) to 4 (long held), each level
+# more strongly its school's colour. Level 3 is the old single look.
+GROUND_LEVELS = [(1, 0.38, 2), (2, 0.52, 3), (3, 0.64, 5), (4, 0.78, 8)]
 GRASS_SLOTS = ("grass", "grass_l", "grass_d", "grass_ll")
 MOTIF_SLOTS = ("pink", "white")                                             # flower slots the grass tile never uses
 
@@ -73,5 +76,47 @@ def school_ground():
 
 
 
+def water():
+    """The stream bed: clear blue, deeper in the middle, with a few soft ripples (tile.water.a / b).
+    The moving ripples and the bank edges are drawn over it by the renderer, flowing downstream."""
+    pal = ["transparent", "#24527c", "#3a76a8", "#4f8cbc", "#7fb0d4", "#d8f0ff", "#2e6492"]
+    for v in "ab":
+        rng = rng_for("tile.water." + v)
+        c = Canvas(T, T)
+        for y in range(T):
+            for x in range(T):
+                d = min(x, y, T - 1 - x, T - 1 - y)              # deeper away from the banks
+                r = rng.random()
+                c.px[y][x] = (1 if r < .35 else 6) if d >= 4 else (6 if r < .25 else 2)
+        for _ in range(3):                                # a few soft, still ripples
+            x, y = rng.randint(2, 11), rng.randint(2, 13)
+            for i in range(rng.randint(2, 3)):
+                c.set(x + i, y, 6 if c.px[y][x + i] == 1 else 3)
+        write("tile.water." + v, (T, T), [c], palette=pal, anchor=(8, 8), tags=["tile"])
+
+
+def spring():
+    """The spring: a ring of mossy stones around bright, bubbling water (two frames)."""
+    pal = ["transparent", "#1b1420", "#7c7c86", "#a8a8b4", "#5e5e68", "#5f9a40", "#3f78a8", "#7fb0d4", "#e8f8ff"]
+    frames = []
+    for f in range(2):
+        c = Canvas(T, T)
+        c.ellipse(8, 8.5, 7.2, 6.6, 2)                   # stones
+        c.ellipse(8, 8.5, 5, 4.4, 6)                     # water
+        c.ellipse(7.5, 8, 3, 2.4, 7)
+        for (x, y) in ((3, 4), (12, 5), (2, 10), (13, 11), (7, 2), (9, 15)):
+            c.set(x, y, 3); c.set(x + 1, y, 4)
+        for (x, y) in ((4, 3), (11, 13), (13, 7)):
+            c.set(x, y, 5)
+        bub = ((7, 7), (9, 9)) if f == 0 else ((8, 9), (6, 8))
+        for (x, y) in bub:
+            c.set(x, y, 8)
+        c.outline(1)
+        frames.append(c)
+    write("landmark.spring", (T, T), frames, palette=pal, anchor=(8, 13), tags=["landmark"], durations=[0.7, 0.7])
+
+
 def main():
     school_ground()
+    water()
+    spring()
