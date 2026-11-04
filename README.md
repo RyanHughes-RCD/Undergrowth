@@ -97,7 +97,14 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
 - **Soil:** every clearing tile has one soil: plain, or one of the six schools (saved as `state.soil`; plain isn't stored).
   - You change a tile's soil on purpose with an amendment from the Bag: Spore compost, Glow dust, Bloom mulch, Verdure leaf mould, Shimmer crystal dust or Spirit mist. Garden loam turns it back to plain (`Content/amendments.json`).
   - One bag does one tile, and the soil stays until you change it. A tile with a plant on it can't be changed.
-  - **Soil is scarce** (`garden.amendments`). Each morning the Store stocks two school amendments, chosen from the garden seed and the day: one bag each, at 20 coins. Garden loam is always there at 2.
+  - **Soil is dear** (`garden.amendments`). Every school's amendment is always in the Store, but a bag costs 20 coins + 15 for each Room to grow you've bought, and each school bag already bought that day makes the next 1.5× dearer (rounded to 5). Prices reset each morning, so reshaping the garden takes days, not one shopping trip. Garden loam is always 2.
+
+    | Room to grow bought | 1st bag today | 2nd | 3rd | 4th | 5th | 5 bags in a day |
+    |---|---|---|---|---|---|---|
+    | 0 | 20 | 30 | 45 | 70 | 100 | 265 |
+    | 2 | 50 | 75 | 115 | 170 | 255 | 665 |
+    | 5 | 95 | 145 | 215 | 320 | 480 | 1255 |
+    | 10 | 170 | 255 | 385 | 575 | 860 | 2245 |
   - The other sources are the opening's tin and the soil patches Room to grow uncovers.
   - The tile shows its soil: plain is grass, and a school's soil is its ground tile (`tile.<school>.3a/b`).
 - **Growing well:**

@@ -1385,30 +1385,35 @@ export class Game {
     this.spend(row.price * n);
     return this.grant([{ item: packetID, count: n }]);
   }
-  amendmentPrice(itemID) {
-    const def = this.content.items[itemID], c = this.gcfg.amendments || {};
-    return def && def.category === 'amendment' ? (def.amend ? c.price ?? 20 : c.plainPrice ?? 2) : 0;
+  /** School soil bags bought today (the day's prices climb with each one). */
+  soilBoughtToday(now) {
+    const day = Game.dayNumber(now), st = this.state.soilShop;
+    if (!st || st.day !== day) return 0;
+    return Array.isArray(st.bought) ? st.bought.length : (st.bought || 0);   // older saves kept a list
   }
   /**
-   * Today's soil stock: perDay school amendments (one bag each), chosen from the garden seed and the
-   * local day, plus Garden loam, which is always there. Returns [{ id, price, soldOut }].
+   * A bag's price now. Garden loam (back to plain) is always plainPrice. School soil starts at
+   * price + perExpansion × Room to grow bought, and each school bag already bought today multiplies it by
+   * dayStep (back to the start each morning), rounded to `round` coins.
    */
+  amendmentPrice(itemID, now = this.state.lastUpdated) {
+    const def = this.content.items[itemID], c = this.gcfg.amendments || {};
+    if (!def || def.category !== 'amendment') return 0;
+    if (!def.amend) return c.plainPrice ?? 2;
+    const base = (c.price ?? 20) + (c.perExpansion ?? 15) * this.expansionTier;
+    const r = c.round ?? 5;
+    return Math.max(r, Math.round(base * Math.pow(c.dayStep ?? 1.5, this.soilBoughtToday(now)) / r) * r);
+  }
+  /** The Store's soil: every school's amendment and Garden loam, always in stock. Returns [{ id, price }]. */
   soilStock(now) {
-    const day = Game.dayNumber(now), c = this.gcfg.amendments || {};
-    let st = this.state.soilShop;
-    if (!st || st.day !== day) {
-      const order = SCHOOLS.slice().sort((a, b) => hash32(this.state.seed, day, hashStr(a)) - hash32(this.state.seed, day, hashStr(b)));
-      st = this.state.soilShop = { day, offers: order.slice(0, c.perDay ?? 2).map((s) => 'amend.' + s), bought: [] };
-    }
-    const plain = (this.content.amendmentList.find((a) => !a.school) || {}).id;
-    return [...st.offers.map((id) => ({ id, price: this.amendmentPrice(id), soldOut: st.bought.includes(id) })), ...(plain ? [{ id: plain, price: this.amendmentPrice(plain), soldOut: false }] : [])];
+    return this.content.amendmentList.slice().sort((a, b) => (a.school ? 0 : 1) - (b.school ? 0 : 1) || SCHOOLS.indexOf(a.school) - SCHOOLS.indexOf(b.school))
+      .map((a) => ({ id: a.id, price: this.amendmentPrice(a.id, now) }));
   }
   buyAmendment(itemID, now = this.state.lastUpdated) {
     const row = this.soilStock(now).find((x) => x.id === itemID);
-    if (!row) throw new GameError("That isn't in stock today.");
-    if (row.soldOut) throw new GameError('Sold out until tomorrow.');
+    if (!row) throw new GameError("The Store doesn't sell that.");
     this.spend(row.price);
-    if (this.content.items[itemID].amend) this.state.soilShop.bought.push(itemID);
+    if (this.content.items[itemID].amend) this.state.soilShop = { day: Game.dayNumber(now), bought: this.soilBoughtToday(now) + 1 };
     return this.grant([{ item: itemID, count: 1 }]);
   }
 

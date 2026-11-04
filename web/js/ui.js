@@ -495,11 +495,13 @@ export class UI {
                 return this.buyRow(it.sprite, h('span', { style: `color:${SCHOOL_COLORS[x.school]}` }, it.name), h('div', { class: 'sub' }, it.text), x.price, () => a.buyPacket(x.id), x.locks); })];
           })];
       }],
-      ['soil', 'Soil', () => [h('p', { class: 'sub' }, "Soil that changes a tile for good is hard to come by: the Store has a little each day. Room to grow sometimes uncovers some too."),
-        ...g.soilStock(now).map((x) => { const am = this.content.items[x.id];
-          return x.soldOut ? h('div', { class: 'list-row locked' }, h('div', { class: 'thumb' }, this.sprites.element(am.sprite, null, 3)), h('div', { class: 'grow' }, h('b', {}, am.name), h('div', { class: 'sub' }, 'Sold out until tomorrow.')))
-            : this.buyRow(am.sprite, am.name, h('div', { class: 'sub' }, am.text), x.price, () => a.buyAmendment(x.id)); }),
-        h('p', { class: 'sub' }, 'New soil comes in every morning.')]],
+      ['soil', 'Soil', () => {
+        const n = g.soilBoughtToday(now);
+        return [h('p', { class: 'sub' }, "Every soil is on the shelf, but good soil is dear: it costs more as the garden grows, and each bag you buy today makes the next one dearer still. Prices settle again each morning. Room to grow uncovers some for free."),
+          n ? h('p', { class: 'sub' }, `You've bought ${n} bag${n === 1 ? '' : 's'} of soil today.`) : null,
+          ...g.soilStock(now).map((x) => { const am = this.content.items[x.id];
+            return this.buyRow(am.sprite, am.amend ? h('span', { style: `color:${SCHOOL_COLORS[am.amend]}` }, am.name) : am.name, h('div', { class: 'sub' }, am.text), x.price, () => a.buyAmendment(x.id)); })];
+      }],
       ['decor', 'Decor', () => [h('p', { class: 'sub' }, 'Things to set out in your garden. Find them in your Bag under Decor.'),
         ...decor.map((st) => { const d = g.decorDef(st.req.reward.id) || {}; return this.buyRow(d.sprite || 'ui.icon.board', d.name || st.req.name, h('div', { class: 'sub' }, d.text || st.req.text || ''), st.coins, () => a.deliverRequest(st.req.id), st.locks); })]],
       ['sell', 'Sell', () => [h('p', { class: 'sub' }, 'The Store buys what you grow and find.'),

@@ -55,10 +55,12 @@
    "bud": 0.45
   },
   "amendments": {
-   "_about": "Soil amendments are scarce: the Store stocks perDay school amendments each local day (one bag each, chosen from the garden seed and the day) at `price`; Garden loam (back to plain) is always there at plainPrice. Other sources: the opening's tin, and the soil patches Room to grow uncovers.",
+   "_about": "Soil amendments: every school's is always in the Store, but dear. A school bag costs price + perExpansion × Room to grow purchases, and each school bag already bought that local day multiplies it by dayStep (so redoing the garden at once is ruinous; prices reset each morning), rounded to `round` coins. Garden loam (back to plain) is always plainPrice. Other sources: the opening's tin, and the soil patches Room to grow uncovers.",
    "price": 20,
-   "plainPrice": 2,
-   "perDay": 2
+   "perExpansion": 15,
+   "dayStep": 1.5,
+   "round": 5,
+   "plainPrice": 2
   },
   "sellByRarity": {
    "common": 2,
