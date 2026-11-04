@@ -82,7 +82,7 @@ The garden is a new game, so older forests aren't carried over:
   - **The river follows.** A point on the newly revealed outer edge is picked at random; from the water tile nearest it, a stream winds out to that edge, through a random bend midway. It takes the cheapest route: around plants, decor, features and the tin where it can, through them where it must (their soil is lost, plants and debris are gone, decor goes back to the Bag). The new water is highlighted and the card says so.
   - The foraging patch moves out with the treeline on its own.
   - It's deterministic from the garden seed and the purchase.
-- **Field Guide:** tabs for Mushrooms, Plants (the Plant & Fungi Catalogue) and Visitors. Unfound entries are silhouettes.
+- **Field Guide:** tabs for Plants and Mushrooms (the Plant & Fungi Catalogue), Colours and Visitors. Unfound entries are silhouettes. An entry you can grow also has its growing notes (soil, grow time, price, where its seeds come from, its set, good neighbours), and while unfound it hints at where to look (a sparkle). Plants and Mushrooms open with the collections. (There used to be a separate Garden tab with just the growable plants; its notes now live on these entries.)
 - **Time:** the real local clock (`tuning.json` → `clock`). Everything runs on timestamps, so the garden catches up when the game reopens.
 
 ## Growing things (web)
@@ -102,8 +102,9 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
   - On its own school's soil a plant grows at normal speed (`soil.preferred` 1).
   - On plain soil it grows at 0.6× (`soil.plain`): a 3-hour Marigold takes 5 hours, still inside a six-hour visit.
   - **On another school's soil it can't be planted.** A plant that crawls along at a third of its speed looks broken, and refusing teaches the rule at once. In planting mode its own soil glows brightly, plain ground faintly and other soil not at all. Tapping a wrong tile says which soil the plant likes.
-- **Stages:** seed, sprout, bud, bloom, then ready (at 15%, 45% and 75% of its growth, `garden.stages`).
-  - Seed and sprout share the generic art, the bud is the plant's own (`plant.bud.<key>`; fungi got buds too), and bloom is the plant itself.
+- **Stages:** seed, sprout, bud, then ready (at 15% and 45% of its growth, `garden.stages`).
+  - Seed and sprout share the generic art, and the bud is the plant's own (`plant.bud.<key>`; fungi got buds too).
+  - **A plant only flowers when it's ready to pick:** it shows its bud until then, and the plant itself (in its colour) once it's ready. Everything that looks for blooming plants (visitors' interest, beauty, cross-pollination partners, self-seeding) looks for ready ones.
   - A ready plant sparkles and bobs. It waits there for as long as it takes: nothing wilts or dies.
 - **Timing is deterministic:**
   - Each plant stores `grown` (ms of normal-speed growth), `since` and `rate`. Its progress at time t is `(grown + (t − since) × rate) / need`.
@@ -198,7 +199,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - Decor is placed, moved and put away by hand. A raised bed with a plant in it stays put until it's harvested or dug up.
   - Tapping a placed piece says what it does.
 - **Relics are ornaments now:** the six relics (`Content/relics.json`, one per school) are decor of kind `ornament`. They're earned by completing a school's collection (phase 4); developer mode can give them.
-- **Garden beauty** (`garden.beauty`): 3 × each distinct plant growing + 1 × each plant in bloom or ready + every placed decor's beauty.
+- **Garden beauty** (`garden.beauty`): 3 × each distinct plant growing + 1 × each plant in bloom (ready to pick) + every placed decor's beauty.
   - It's never shown as a number: the HUD shows a named tier with a leaf meter. The tiers are Bare, Tended (8), Pleasant (20), Lovely (36), Charming (56) and Enchanting (80).
   - The best tier ever reached is kept (`state.beautyBest`) and never relocks.
   - Reaching a tier shows a gentle card naming what it put in the Store. Tiers open better seed packets (Uncommon at Tended, Rare at Pleasant) and some decor ('Needs beauty tier' in the Offerings sheet): Flower planter and Wind chime at Tended, Birdbath and Mushroom lamp at Pleasant, Fairy ring and Crystal lamp at Lovely, Root arch at Charming.
@@ -209,9 +210,9 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
 
 - **Field Guide collections:** each school's set is its seed plants and its gift plant (Spore 4, Glow 5, Bloom 5, Verdure 4, Shimmer 4, Spirit 4).
   - Harvest every plant in a set once to complete it. The reward is that school's relic ornament (the only way to earn one) and 150 coins (`garden.collections`).
-  - The Garden tab of the Field Guide opens with each set's progress and the relic as a silhouette until earned.
+  - The Field Guide's Plants and Mushrooms tabs open with each set's progress and the relic as a silhouette until earned. A set member's page says whether you've grown it.
 - **Cross-pollination and colour varieties** (`plants.json` varieties, `garden.varieties`):
-  - Harvest a plant while a blooming plant of the same family is in one of its 8 neighbours. The same kind counts, and the families are caps, daisies, bells, clovers, spikes and willows.
+  - Harvest a plant while a blooming (ready) plant of the same family is in one of its 8 neighbours. The same kind counts, and the families are caps, daisies, bells, clovers, spikes and willows.
   - With a hidden chance (12%) you get a seed packet of one of its colour varieties, one not yet found first.
   - There are 14 varieties, one per common and uncommon plant: Lemon Marigold, Pink Cornflower, Lavender Ink Cap, Golden Hosta and so on.
   - A variety grows like its plant and breeds true. Its produce sells for twice as much and has its own entry in the Field Guide's **Colours** tab (a hint shows until found).
@@ -221,7 +222,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - **Commissions** (`commission`) are ten one-off requests for things you grow, paying 40–300 coins. Some open Store items: "A basket for the log" opens the Raised bed, "Something blue" the Birdbath, "Lantern-light" the Glow lantern. Later ones need a beauty tier, colour varieties or gift plants.
   - **Daily orders** (`order`) are two small orders each local day, at about 1.5× the sell price. They're chosen from the garden seed and the day among orders for produce you've already harvested (`garden.orders.perDay`).
 - **Visitors who stay** (`Content/visitors.json`, `tuning.visitors`, design notes in `design/visitor_residency.md`): fifteen animals in three tiers. They leave **mementos** while they court the garden, then **move in** and live there for as long as their conditions hold.
-  - **Interest:** every 30 minutes of game time (time away counts), a visitor's interest rises by 1.5 while every plant it likes is blooming (or ready), and falls by 0.5 otherwise.
+  - **Interest:** every 30 minutes of game time (time away counts), a visitor's interest rises by 1.5 while every plant it likes is in bloom (ready to pick), and falls by 0.5 otherwise.
   - **Mementos:** in its time window, at 10 interest it makes its first visit, and later visits need 20 (early), 40 (settled) or 60 (mystical). A visit has a 35% chance per check, at most once a day. Visits are never seen: each leaves the next of its mementos (1 for early visitors, 3 settled, 4 mystical). Each memento hints at one of the conditions it needs to stay, in its own words, and never names a number.
   - **Moving in:** on the visit after its last memento, it moves in if every condition holds. If not, it leaves a plainer hint about one condition that isn't met.
   - **Staying:** a resident stays while every condition holds and leaves at the first check where one doesn't (strictly, no grace period). It leaves a parting memento that names what broke. Coming back takes one visit with the conditions met again.

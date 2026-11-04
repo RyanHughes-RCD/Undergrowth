@@ -442,7 +442,7 @@ export class ForestView {
     const g = this.game, out = [];
     for (const p of g.state.plants) {
       const stage = g.stageOf(p, now), ready = stage === 'ready';
-      out.push({ sprite: this.plantSprite(p, now), variant: stage === 'bloom' || ready ? this.plantVariant(p) : null, ...at(p.tile), tile: p.tile, kind: 'plant', key: p.id,
+      out.push({ sprite: this.plantSprite(p, now), variant: ready ? this.plantVariant(p) : null, ...at(p.tile), tile: p.tile, kind: 'plant', key: p.id,
         still: !ready, glimmer: ready, bob: ready, phase: hash32(p.tile.x, p.tile.y, 7) % 1000 / 250 });
     }
     return out.concat(this.moreObjects(now, at));

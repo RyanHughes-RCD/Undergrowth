@@ -1121,17 +1121,20 @@ export class Game {
   /** Growth done by time t: banked growth plus time since at the current rate, capped at the need. */
   grownAt(p, t) { return Math.min(this.growNeed(p), p.grown + Math.max(0, t - p.since) * p.rate); }
   progress(p, t) { return this.grownAt(p, t) / this.growNeed(p); }
-  /** seed, sprout, bud, bloom or ready (tuning.garden.stages). */
+  /**
+   * seed, sprout, bud or ready (tuning.garden.stages). A plant flowers only when it's ready to pick: until
+   * then it shows its bud.
+   */
   stageOf(p, t) {
     const k = this.progress(p, t), st = this.gcfg.stages || {};
     if (k >= 1) return 'ready';
-    if (k >= (st.bloom ?? 0.75)) return 'bloom';
     if (k >= (st.bud ?? 0.45)) return 'bud';
     if (k >= (st.sprout ?? 0.15)) return 'sprout';
     return 'seed';
   }
   isReady(p, t) { return this.progress(p, t) >= 1; }
-  isBlooming(p, t) { const s = this.stageOf(p, t); return s === 'bloom' || s === 'ready'; }
+  /** In bloom: only once it's ready (what visitors, beauty, neighbours and self-seeding look for). */
+  isBlooming(p, t) { return this.isReady(p, t); }
   /** When the plant will be ready at its current rate (it's deterministic: only player actions change rates). */
   readyAt(p) { return p.rate > 0 ? p.since + Math.max(0, this.growNeed(p) - p.grown) / p.rate : Infinity; }
   /** When it reaches a stage (a share of its growth). */
@@ -1602,7 +1605,7 @@ export class Game {
   guestTierRank(def) { return Math.max(0, VISITOR_TIERS.indexOf(def.tier || 'early')); }
   isResident(id) { const g = this.state.guests[id]; return !!(g && g.home); }
   residents() { return this.guestDefs().filter((d) => this.isResident(d.id)); }
-  /** Plants it likes that are blooming at t (in bloom or ready). */
+  /** Plants it likes that are in bloom at t (ready to pick: plants only flower then). */
   likedBlooming(def, t) { return this.state.plants.filter((p) => def.likes.plants.includes(p.plantID) && t >= p.plantedAt && this.isBlooming(p, t)); }
   /** Every plant it likes is blooming somewhere in the garden. */
   guestLikes(def, t) { const b = this.likedBlooming(def, t); return def.likes.plants.every((id) => b.some((p) => p.plantID === id)); }
@@ -1997,7 +2000,7 @@ export class Game {
   }
 
   // ---- beauty (tuning.garden.beauty): never shown as a number
-  /** variety × distinct plants + blooming × plants in bloom or ready + every placed decor's beauty. */
+  /** variety × distinct plants + blooming × plants in bloom (ready) + every placed decor's beauty. */
   beautyScore(now) {
     const b = this.gcfg.beauty || {};
     const kinds = new Set(this.state.plants.map((p) => p.plantID)).size;

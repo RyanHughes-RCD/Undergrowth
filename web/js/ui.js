@@ -239,7 +239,7 @@ export class UI {
       row('Progress', `${(g.progress(p, now) * 100).toFixed(1)}% (${g.stageOf(p, now)}, ${p.cycle})`),
       row('Rate', `×${p.rate.toFixed(3)}`),
       row('Ready in', g.isReady(p, now) ? 'ready' : this.timer(g.readyAt(p) - now)),
-      ...['sprout', 'bud', 'bloom'].map((st) => row(`${st} at`, g.stageAt(p, g.gcfg.stages[st]) <= now ? 'passed' : this.timer(g.stageAt(p, g.gcfg.stages[st]) - now))),
+      ...['sprout', 'bud'].map((st) => row(`${st} at`, g.stageAt(p, g.gcfg.stages[st]) <= now ? 'passed' : this.timer(g.stageAt(p, g.gcfg.stages[st]) - now))),
       row('Planted', new Date(p.plantedAt).toLocaleString()), row('Harvests', String(p.harvests)));
   }
 
@@ -562,28 +562,24 @@ export class UI {
   // -------------------------------------------------------------- Field Guide
 
   /** Field Guide tabs: [id, label, entries()]. Later systems add theirs. */
+  /**
+   * Field Guide tabs: [id, label, entries()]. Plants and Mushrooms list the whole catalogue; an entry you can
+   * grow also carries its growing notes (soil, time, price, where its seeds come from, its set, good
+   * neighbours), and an unfound one hints at where to look.
+   */
   guideTabs() {
-    const items = (cat) => this.content.itemList.filter((i) => i.inGuide !== false && i.category === cat)
-      .map((i, idx) => ({ i, idx })).sort((a, b) => rarityIndex(a.i.rarity) - rarityIndex(b.i.rarity) || a.idx - b.idx)
-      .map(({ i }) => ({ key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: i.variant || null, rarity: i.rarity, text: i.guideText, school: i.school }));
     const g = this.game;
-    const garden = () => this.content.plantList.map((p) => {
-      const item = this.content.items[p.item], c = g.plantCfg(p.id);
-      const from = p.source === 'gift' ? 'Only a friend of the forest can bring its seeds.' : `It comes up from ${schoolName(p.school)} seeds${{ common: '', uncommon: ', now and then', rare: ', rarely', epic: ', very rarely, and more often from the finest packets', legendary: ', almost never, and only from the finest packets' }[p.tier || 'common']}.`;
-      return { key: 'plant:' + p.id, name: p.name, sprite: item.sprite, school: p.school, text: item.guideText, rarity: p.tier,
-        hint: `${schoolName(p.school)} soil. ${from}`,
-        extra: [h('p', { class: 'sub center' }, `${p.kind === 'fungus' ? 'A fungus' : p.kind === 'leafy' ? 'A leafy plant' : 'A flower'}. ${this.growHoursText(p.id)}. Sells for ${c.sell} coins. ${from}`),
-          ...this.plantGuideExtra(p)] };
-    });
+    const items = (cat) => this.content.itemList.filter((i) => i.inGuide !== false && i.category === cat && !i.variety)
+      .map((i, idx) => ({ i, idx })).sort((a, b) => rarityIndex(a.i.rarity) - rarityIndex(b.i.rarity) || a.idx - b.idx)
+      .map(({ i }) => ({ key: 'item:' + i.id, name: i.name, sprite: i.sprite, variant: i.variant || null, rarity: i.rarity, text: i.guideText, school: i.school, ...this.growNotes(i) }));
     return [
-      ['garden', 'Garden', garden],
+      ['plant', 'Plants', () => items('plant')],
+      ['mushroom', 'Mushrooms', () => items('mushroom')],
       ['varieties', 'Colours', () => Object.values(this.content.varieties).map((v) => {
         const it = this.content.items[v.produce];
         return { key: 'item:' + v.produce, name: v.name, sprite: it.sprite, variant: v.variant, school: it.school, text: it.guideText,
           hint: `A rare colour of ${g.plantDef(v.plantID)?.name}. Some say it comes from good neighbours.` };
       })],
-      ['mushroom', 'Mushrooms', () => items('mushroom')],
-      ['plant', 'Plants', () => items('plant')],
       ['visitors', 'Visitors', () => (this.content.visitorList || []).map((v) => ({ key: 'visitor:' + v.id.replace(/^visitor\./, ''), name: v.name, sprite: v.sprite, visitor: v, hint: g.guest(v.id).series > 0 ? 'mementos' : null }))],
     ];
   }
@@ -608,9 +604,25 @@ export class UI {
       })),
     ]];
   }
-  /** The Garden tab opens with each school's collection: plants grown of its set, and its reward. */
+  /** A catalogue item you can grow: its hint (while unfound) and its growing notes. {} for one you can't. */
+  growNotes(item) {
+    const g = this.game, p = item.plant && g.plantDef(item.plant);
+    if (!p) return {};
+    const c = g.plantCfg(p.id);
+    const from = p.source === 'gift' ? 'Only a friend of the forest can bring its seeds.' : `It comes up from ${schoolName(p.school)} seeds${{ common: '', uncommon: ', now and then', rare: ', rarely', epic: ', very rarely, and more often from the finest packets', legendary: ', almost never, and only from the finest packets' }[p.tier || 'common']}.`;
+    const inSet = g.collectionPlants(p.school).includes(p);
+    const grown = g.discovered.has('plant:' + p.id);
+    return {
+      hint: `${schoolName(p.school)} soil. ${from}`,
+      extra: [h('div', { class: 'section' }, 'In the garden'),
+        h('p', { class: 'sub center' }, `${p.kind === 'fungus' ? 'A fungus' : p.kind === 'leafy' ? 'A leafy plant' : 'A flower'} for ${schoolName(p.school)} soil. ${this.growHoursText(p.id)}. Sells for ${c.sell} coins. ${from}`),
+        inSet ? h('p', { class: 'sub center' }, `Part of the ${schoolName(p.school)} set${grown ? ': you have grown it.' : ': grow and harvest it to count it.'}`) : null,
+        ...this.plantGuideExtra(p)],
+    };
+  }
+  /** Plants and Mushrooms open with each school's collection: plants grown of its set, and its reward. */
   guideHeader(tab) {
-    if (tab !== 'garden') return [];
+    if (tab !== 'plant' && tab !== 'mushroom') return [];
     const g = this.game;
     return [h('div', { class: 'collections' }, SCHOOLS.map((school) => {
       const st = g.collectionStatus(school);
@@ -620,7 +632,7 @@ export class UI {
         h('span', { style: `color:${SCHOOL_COLORS[school]}` }, schoolName(school)),
         h('span', { class: 'progress' }, h('span', { style: `width:${Math.round(st.have / Math.max(1, st.total) * 100)}%` })),
         h('b', {}, `${st.have}/${st.total}`));
-    })), h('p', { class: 'sub' }, "Grow and harvest every plant of a school to complete its set. Something old is waiting for whoever does.")];
+    })), h('p', { class: 'sub' }, "Grow and harvest every plant and mushroom of a school's set (its seed plants up to Rare, and its gift plant) to complete it. Something old is waiting for whoever does.")];
   }
   /** More on a garden plant's Field Guide page: its companions (unknown ones stay hidden until found). */
   plantGuideExtra(p) {
