@@ -86,7 +86,7 @@
   },
   "plants": {
    "ink-cap": {
-    "growHours": 6,
+    "growHours": 2,
     "yield": 3,
     "seeds": [
      1,
@@ -95,7 +95,7 @@
     "sell": 3
    },
    "marigold": {
-    "growHours": 8,
+    "growHours": 3,
     "yield": 3,
     "seeds": [
      1,
@@ -104,7 +104,7 @@
     "sell": 4
    },
    "wood-sorrel": {
-    "growHours": 10,
+    "growHours": 3,
     "yield": 2,
     "seeds": [
      1,
@@ -113,7 +113,7 @@
     "sell": 4
    },
    "foxfire-button": {
-    "growHours": 12,
+    "growHours": 4,
     "yield": 3,
     "seeds": [
      1,
@@ -122,7 +122,7 @@
     "sell": 5
    },
    "jewelweed": {
-    "growHours": 14,
+    "growHours": 5,
     "yield": 3,
     "seeds": [
      1,
@@ -131,7 +131,7 @@
     "sell": 6
    },
    "wisp-cap": {
-    "growHours": 16,
+    "growHours": 5,
     "yield": 3,
     "seeds": [
      1,
@@ -140,7 +140,7 @@
     "sell": 7
    },
    "cornflower": {
-    "growHours": 20,
+    "growHours": 6,
     "yield": 4,
     "seeds": [
      1,
@@ -149,7 +149,7 @@
     "sell": 7
    },
    "lantern-flower": {
-    "growHours": 24,
+    "growHours": 8,
     "yield": 3,
     "seeds": [
      1,
@@ -158,7 +158,7 @@
     "sell": 9
    },
    "velvet-shank": {
-    "growHours": 10,
+    "growHours": 4,
     "yield": 3,
     "seeds": [
      1,
@@ -167,7 +167,7 @@
     "sell": 6
    },
    "lavender": {
-    "growHours": 16,
+    "growHours": 6,
     "yield": 3,
     "seeds": [
      1,
@@ -176,7 +176,7 @@
     "sell": 8
    },
    "hosta": {
-    "growHours": 18,
+    "growHours": 6,
     "yield": 2,
     "seeds": [
      1,
@@ -185,7 +185,7 @@
     "sell": 11
    },
    "glassbell": {
-    "growHours": 14,
+    "growHours": 5,
     "yield": 3,
     "seeds": [
      1,
@@ -194,7 +194,7 @@
     "sell": 8
    },
    "honey-mushroom": {
-    "growHours": 12,
+    "growHours": 4,
     "yield": 4,
     "seeds": [
      1,
@@ -203,7 +203,7 @@
     "sell": 6
    },
    "mistbell": {
-    "growHours": 18,
+    "growHours": 6,
     "yield": 3,
     "seeds": [
      1,
@@ -212,7 +212,7 @@
     "sell": 10
    },
    "spore-lantern": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      1,
@@ -221,7 +221,7 @@
     "sell": 13
    },
    "moonpetal": {
-    "growHours": 22,
+    "growHours": 10,
     "yield": 3,
     "seeds": [
      1,
@@ -230,7 +230,7 @@
     "sell": 14
    },
    "foxglove": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      1,
@@ -239,7 +239,7 @@
     "sell": 13
    },
    "canopy-bells": {
-    "growHours": 22,
+    "growHours": 10,
     "yield": 3,
     "seeds": [
      1,
@@ -248,7 +248,7 @@
     "sell": 14
    },
    "prismbell": {
-    "growHours": 22,
+    "growHours": 10,
     "yield": 3,
     "seeds": [
      1,
@@ -257,7 +257,7 @@
     "sell": 14
    },
    "wispwillow": {
-    "growHours": 24,
+    "growHours": 11,
     "yield": 3,
     "seeds": [
      1,
@@ -266,7 +266,7 @@
     "sell": 16
    },
    "morel": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      0,
@@ -275,7 +275,7 @@
     "sell": 14
    },
    "glowcap": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      0,
@@ -284,7 +284,7 @@
     "sell": 14
    },
    "anemone": {
-    "growHours": 18,
+    "growHours": 8,
     "yield": 3,
     "seeds": [
      0,
@@ -293,7 +293,7 @@
     "sell": 13
    },
    "hellebore": {
-    "growHours": 22,
+    "growHours": 10,
     "yield": 2,
     "seeds": [
      0,
@@ -302,7 +302,7 @@
     "sell": 16
    },
    "prism-rose": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      0,
@@ -311,7 +311,7 @@
     "sell": 14
    },
    "ancestors-lace": {
-    "growHours": 20,
+    "growHours": 9,
     "yield": 3,
     "seeds": [
      0,
@@ -833,12 +833,14 @@
   ]
  },
  "tides": {
-  "_about": "Each night (local midnight) soil spreads from the banks (tiles touching water), with power = that day's weather power + moon power. Each bank tile with soil may spread it along the bank to a neighbouring bank tile (chance alongBank x power) and inland to any open neighbour (chance inland x power), both capped at cap. Soil never spreads through the water: a corner step is only allowed when neither tile beside it is water. At a High or Flood level (water.levels: cross) it may also carry across the stream to the far bank. A tile resists by its maturity, and more with a plant growing on it: it holds with chance resist / (resist + hold), where resist = maturity (0 for plain) + plantHold. Tiles that held their soil through the night mature by one level, up to maxLevel. Catch-up covers at most maxNights.",
-  "alongBank": 0.25,
-  "inland": 0.06,
+  "_about": "Every six hours (local 00:00, 06:00, 12:00, 18:00) the tide turns and soil spreads from the banks (tiles touching water). The day's power = weather power + moon power sets the water level; the spread uses power + basePower, so even a still day moves a little. Each bank tile with soil may spread it along the bank to a neighbouring bank tile (chance alongBank x (power + basePower)) and inland to any open neighbour (chance inland x (power + basePower)), both capped at cap. Soil never spreads through the water: a corner step is only allowed when neither tile beside it is water. At a High or Flood level (water.levels: cross) it may also carry across the stream to the far bank. A tile resists by its maturity, and more with a plant growing on it: it holds with chance resist / (resist + hold), where resist = maturity (0 for plain) + plantHold. Each tile that held its soil through a tide matures a level with matureChance, up to the max (about one level every 12 hours). Catch-up covers at most maxTides.",
+  "alongBank": 0.55,
+  "inland": 0.2,
   "cap": 0.8,
   "hold": 1.2,
   "plantHold": 1.5,
-  "maxNights": 14
+  "basePower": 0.6,
+  "matureChance": 0.5,
+  "maxTides": 28
  }
 }

@@ -132,10 +132,10 @@ class App {
    */
   returned(awayHours) {
     const shown = this.morningCheck(awayHours);
-    // A night that passed while the garden was open (or a short absence): just a note.
+    // A tide that turned while the garden was open (or a short absence): just a note.
     if (!shown && this.nightNote) {
       const n = this.nightNote;
-      this.ui.toast(n.taken.length ? `The night passed. The water carried soil onto ${n.taken.length} tile${n.taken.length === 1 ? '' : 's'}.` : 'The night passed quietly.', 'ui.icon.moon.' + n.moon);
+      this.ui.toast(n.taken.length ? `The tide turned. Soil spread to ${n.taken.length} tile${n.taken.length === 1 ? '' : 's'}.` : n.matured ? `The tide turned. The soil settled deeper.` : 'The tide turned quietly.', 'ui.icon.moon.' + n.moon);
     }
     this.nightNote = null;
   }
@@ -178,7 +178,7 @@ class App {
     const ui = this.ui;
     if (e.type === 'freshGarden') ui.freshGardenCard(e);
     else if (e.type === 'beautyTier') ui.beautyCard(e);
-    else if (e.type === 'night') {
+    else if (e.type === 'tides') {
       if (e.taken.length) this.view.highlight(e.taken.map((x) => x.tile), 6, '160,210,255');
       this.nightNote = e;
     }

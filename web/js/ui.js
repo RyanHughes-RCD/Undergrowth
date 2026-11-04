@@ -723,10 +723,10 @@ export class UI {
         (() => {
           const ws = h('select', { class: 'select' }, Object.entries((this.content.tuning.weather || {}).types || {}).map(([k, v]) => h('option', { value: k }, v.name)));
           const ms = h('select', { class: 'select' }, ((this.content.tuning.moon || {}).phases || []).map((p, i) => h('option', { value: String(i), selected: i === 4 }, p.name)));
-          return h('div', { class: 'row gap wrap' }, ws, ms, b('Run a night now', () => a.dev((gm, t) => { const r = gm.runNight(Game.dayNumber(t), { weather: ws.value, moon: Number(ms.value) }); return r.taken.length; }, (n) => `The night passes: soil carried onto ${n} tile(s).`), 'orange'));
+          return h('div', { class: 'row gap wrap' }, ws, ms, b('Run a tide now', () => a.dev((gm, t) => { const r = gm.runTide(Game.tideNumber(t), { weather: ws.value, moon: Number(ms.value) }); return r.taken.length; }, (n) => `The tide turns: soil spread to ${n} tile(s).`), 'orange'));
         })(),
         h('div', { class: 'row gap wrap' },
-          b("Run tonight (today's sky)", () => a.dev((gm, t) => gm.runNight(Game.dayNumber(t)).taken.length, (n) => `The night passes: soil carried onto ${n} tile(s).`)),
+          b("Run a tide (today's sky)", () => a.dev((gm, t) => gm.runTide(Game.tideNumber(t)).taken.length, (n) => `The tide turns: soil spread to ${n} tile(s).`)),
           b('+5 dug', () => a.dev((gm) => { gm.state.coins += 200; }, '+200 coins for digging.'))),
         h('div', { class: 'row gap wrap' }, h('span', { class: 'sub' }, 'Show water: '),
           ...['Auto', ...(((this.content.tuning.water || {}).levels || []).map((l) => l.name))].map((nm, i) => b(nm, () => a.dev((gm) => { gm.state.dev = gm.state.dev || {}; gm.state.dev.waterLevel = i ? i - 1 : null; }, `Water shown: ${nm}.`)))),
@@ -883,11 +883,11 @@ export class UI {
     return h('button', { class: 'weather-btn', title: `${f.weather.name}, ${f.moon.name}. Tap for the forecast.`, onclick: () => this.forecastCard() },
       ic(f.weather.icon, 2), ic('moon.' + f.moon.index, 2));
   }
-  /** The water's level on a day of this power, and what it does to the soil that night. */
+  /** The water's level on a day of this power, and what it does to the soil at each tide that day. */
   waterWords(power) {
     const lv = this.game.waterLevel(power);
-    const note = power <= 0.05 ? 'still; the soil stays put' : lv.cross > 0.15 ? 'flooding; soil spreads fast and crosses the stream'
-      : lv.cross > 0 ? 'running high; soil may cross the stream' : power < 0.6 ? 'soil barely spreads' : 'soil spreads along the banks';
+    const note = power <= 0.05 ? 'still; soil creeps slowly' : lv.cross > 0.15 ? 'soil spreads fast and crosses the stream'
+      : lv.cross > 0 ? 'soil may cross the stream' : power < 0.6 ? 'soil barely spreads' : 'soil spreads along the banks';
     return { name: lv.name, note };
   }
   forecastRows(now, compact = false) {
@@ -903,16 +903,17 @@ export class UI {
     this.showCard((done) => h('div', { class: 'reveal-card pop' },
       h('h2', {}, 'The sky'),
       this.forecastRows(this.game.now()),
-      h('p', { class: 'sub' }, 'Rain swells the pool and its streams, and so does the moon: the water rises from Low to Normal, High and Flood. Each night soil on the banks spreads along them and inland, but never through the water, unless it runs High or floods and carries soil to the far bank. Deep soil, and soil with roots in it, holds better.'),
+      h('p', { class: 'sub' }, 'Rain swells the pool and its streams, and so does the moon: the water rises from Low to Normal, High and Flood. Every six hours the tide turns: soil on the banks spreads along them and inland, but never through the water, unless it runs High or floods and carries soil to the far bank. Deep soil, and soil with roots in it, holds better.'),
       h('button', { class: 'btn green', onclick: done }, 'OK')));
   }
-  /** What last night's water did, for the morning card. */
-  nightLine(n) {
-    if (!n) return null;
+  /** What the tides did while you were away, for the return card. */
+  tideLine(n) {
+    if (!n || !n.tides) return null;
     const w = ((this.content.tuning.weather || {}).types || {})[n.weather] || {}, moon = (((this.content.tuning.moon || {}).phases || [])[n.moon] || {}).name || 'the moon';
     const carried = n.taken.length, lost = n.taken.filter((x) => x.from).length;
-    const what = carried ? `soil spread along the banks to ${carried} tile${carried === 1 ? '' : 's'}${lost ? ` (${lost} changed school)` : ''}${n.crossed ? `, and the high water carried it across the stream ${n.crossed === 1 ? 'once' : `${n.crossed} times`}` : ''}` : 'the soil stayed where it was';
-    return h('p', { class: 'sub night' }, ic('moon.' + n.moon, 1), ` Last night (${(w.name || 'calm').toLowerCase()}, ${moon.toLowerCase()}): ${what}${n.held ? `; ${n.held} held firm` : ''}.`);
+    const what = carried ? `soil spread along the banks to ${carried} tile${carried === 1 ? '' : 's'}${lost ? ` (${lost} changed school)` : ''}${n.crossed ? `, and high water carried it across the stream ${n.crossed === 1 ? 'once' : `${n.crossed} times`}` : ''}` : 'the soil stayed where it was';
+    const when = n.tides === 1 ? 'The last tide' : `${n.tides} tides`;
+    return h('p', { class: 'sub night' }, ic('moon.' + n.moon, 1), ` ${when} (${(w.name || 'calm').toLowerCase()}, ${moon.toLowerCase()}): ${what}${n.matured ? `; soil matured on ${n.matured} tile${n.matured === 1 ? '' : 's'}` : ''}.`);
   }
 
   /** The morning check: what's ready, what's still growing, and the night's surprise, if any. */
@@ -929,7 +930,7 @@ export class UI {
       rows.length ? h('div', { class: 'gifts' }, rows) : h('p', { class: 'sub' }, g.state.plants.length ? 'Nothing is ready yet.' : 'The garden is waiting for seeds.'),
       m.growing ? h('p', { class: 'sub' }, `${m.growing} still growing. The next is ready ${this.roughly(m.next - now)}.`) : null,
       m.surprise ? this.surpriseLine(m.surprise) : null,
-      this.nightLine(g.state.lastNight, now),
+      this.tideLine(g.state.lastTides, now),
       this.forecastRows(now, true));
     this.celebrate(title, body, null, rows.length ? 'Lovely' : 'OK');
   }

@@ -184,6 +184,8 @@ export class Game {
     s.pool = s.pool || null;               // top-left tile of the 2x2 pool the river rises from
     s.soilLevel = s.soilLevel || {};       // "x,y" -> maturity 1..max of a school soil tile
     s.dug = s.dug || 0;
+    if (s.tideAt == null && s.nightDay != null) s.tideAt = s.nightDay * 4;   // nightly saves: the last tide was that midnight's
+    delete s.nightDay; delete s.lastNight;
   }
 
   /** A fresh garden. `discovered` carries Field Guide entries over (from an archived older save). */
@@ -205,7 +207,7 @@ export class Game {
     state.forestID = g.rng.uuid();
     g.placePool();
     g.generateStreams();
-    g.state.nightDay = Game.dayNumber(now);
+    g.state.tideAt = Game.tideNumber(now);
     g.placeScenery();
     g.placeTin();
     g.state.forage.slot = g.forageSlot(now);
@@ -244,7 +246,7 @@ export class Game {
     for (const k of Object.keys(g.state.soil)) g.state.soilLevel[k] = g.state.soilLevel[k] || 2;
     g.poolAround(log ? log.tile : g.source);
     g.generateStreams();
-    g.state.nightDay = Game.dayNumber(now);
+    g.state.tideAt = Game.tideNumber(now);
     if (!g.state.opening.done && !g.state.tin) g.placeTin();
     return g;
   }
@@ -298,7 +300,7 @@ export class Game {
 
   /** Brings the garden up to `now`. Returns a small report for the UI. */
   advance(now) {
-    const report = { forage: this.forageTick(now), nights: this.nightTick(now) };
+    const report = { forage: this.forageTick(now), tides: this.tideTick(now) };
     this.visitorTick(now);
     this.updateBeauty(now);
     this.state.lastUpdated = Math.max(this.state.lastUpdated || 0, now);
@@ -662,32 +664,47 @@ export class Game {
     }
     return out;
   }
-  /** Every local midnight since the last one processed. Returns how many nights passed. */
-  nightTick(now) {
-    const day = Game.dayNumber(now), s = this.state;
-    if (s.nightDay == null) { s.nightDay = day; return 0; }
-    if (day <= s.nightDay) return 0;
-    const from = Math.max(s.nightDay, day - ((this.t.tides || {}).maxNights ?? 14));
-    let n = 0;
-    for (let d = from; d < day; d++) { this.runNight(d); n++; }
-    s.nightDay = day;
-    return n;
+  /** The local six-hour block a time falls in (0 = 00:00-06:00 on local day 0). A tide turns at each one's start. */
+  static tideNumber(t) { return Math.floor((t - new Date(t).getTimezoneOffset() * 60000) / (6 * HOUR)); }
+  static tideStart(n) { return Game.dayStart(Math.floor(n / 4)) + (n % 4) * 6 * HOUR; }
+  /**
+   * Every tide since the last one processed (one each local 00:00, 06:00, 12:00 and 18:00; catch-up covers
+   * at most tides.maxTides). Records what they did together in state.lastTides for the return card.
+   * Returns how many tides turned.
+   */
+  tideTick(now) {
+    const cur = Game.tideNumber(now), s = this.state;
+    if (s.tideAt == null) { s.tideAt = cur; return 0; }
+    if (cur <= s.tideAt) return 0;
+    const from = Math.max(s.tideAt + 1, cur - ((this.t.tides || {}).maxTides ?? 28) + 1);
+    const sum = { tides: 0, taken: [], held: 0, matured: 0, crossed: 0 };
+    for (let n = from; n <= cur; n++) {
+      const r = this.runTide(n);
+      sum.tides++; sum.taken.push(...r.taken); sum.held += r.held; sum.matured += r.matured; sum.crossed += r.crossed;
+      Object.assign(sum, { weather: r.weather, moon: r.moon, power: r.power, level: r.level, at: r.at });
+    }
+    s.tideAt = cur;
+    if (sum.taken.length > 40) sum.taken = sum.taken.slice(-40);
+    s.lastTides = sum;
+    this.events.push({ type: 'tides', ...sum });
+    return sum.tides;
   }
   /**
-   * The night after local day `d`. The water's power is that day's weather + moon, and sets its level. Soil
-   * on a bank spreads along the bank and inland, one tile at a time, never through the water; only at a high
-   * level does it cross the stream to the far bank. Mature tiles and tiles with a plant hold more often.
-   * Tiles that held their soil mature a level.
-   * Deterministic from the garden seed and the day. Records state.lastNight for the morning card.
+   * One tide (number n; see tideNumber). The water's power is that day's weather + moon, and sets its level.
+   * Soil on a bank spreads along the bank and inland, one tile at a time, never through the water; only at a
+   * high level does it cross the stream to the far bank. The spread uses power + tides.basePower, so even a
+   * still day moves a little. Mature tiles and tiles with a plant hold more often. Each tile that held its
+   * soil may mature a level (tides.matureChance). Deterministic from the garden seed and the tide.
    */
-  runNight(d, override = null) {
+  runTide(n, override = null) {
     const T = this.t.tides || {}, maxLv = ((this.gcfg.soil || {}).levels || {}).max ?? 4;
+    const d = Math.floor(n / 4);
     const w = override?.weather ? { id: override.weather, ...((this.t.weather || {}).types || {})[override.weather] } : this.weatherOn(d);
     const m = override?.moon != null ? { index: override.moon, ...(((this.t.moon || {}).phases || [])[override.moon] || {}) } : this.moonOn(d);
-    const power = (w.power || 0) + (m.power || 0);
-    const rng = new RNG({ rng: hash32(this.state.seed, d, 0x71de) });
-    const night = Game.dayStart(d + 1);
-    this.rebase(night);
+    const power = (w.power || 0) + (m.power || 0), push = power + (T.basePower ?? 0.4);
+    const rng = new RNG({ rng: hash32(this.state.seed, n, 0x71de) });
+    const at = Game.tideStart(n);
+    this.rebase(at);
     const changed = new Set(), taken = [];
     let held = 0;
     const tryTake = (t, school) => {
@@ -701,11 +718,10 @@ export class Game {
     };
     // Soil spreads from the banks: along the bank (to a neighbouring bank tile), inland (to any open
     // neighbour), never through the water. Only high water carries soil across to the other side.
-    const banks = this.bankTiles();
-    const snapshot = banks.map((t) => ({ t, school: this.soilAt(t) })).filter((x) => x.school);
+    const snapshot = this.bankTiles().map((t) => ({ t, school: this.soilAt(t) })).filter((x) => x.school);
     const level = this.waterLevel(power);
     const open = (t) => this.inClearing(t) && !this.isWet(t) && !this.landmarkAt(t) && !this.sceneryAt(t);
-    const pAlong = Math.min(T.cap ?? 0.8, (T.alongBank ?? 0.18) * power), pIn = Math.min(T.cap ?? 0.8, (T.inland ?? 0.06) * power);
+    const pAlong = Math.min(T.cap ?? 0.8, (T.alongBank ?? 0.25) * push), pIn = Math.min(T.cap ?? 0.8, (T.inland ?? 0.06) * push);
     let crossed = 0;
     for (const x of snapshot) {
       const near = this.landNeighbours(x.t).filter(open);
@@ -717,17 +733,15 @@ export class Game {
         if (across.length) { const before = taken.length; tryTake(across[rng.int(0, across.length - 1)], x.school); if (taken.length > before) { taken[taken.length - 1].crossed = true; crossed++; } }
       }
     }
-    // Everything that held its soil tonight matures a level.
+    // Soil that held through the tide may mature a level.
     let matured = 0;
     for (const k of Object.keys(this.state.soil)) {
       if (changed.has(k)) continue;
       const lv = this.state.soilLevel[k] || 1;
-      if (lv < maxLv) { this.state.soilLevel[k] = lv + 1; matured++; }
+      if (lv < maxLv && rng.next() < (T.matureChance ?? 0.5)) { this.state.soilLevel[k] = lv + 1; matured++; }
     }
-    this.rebase(night);
-    this.state.lastNight = { day: d, weather: w.id, moon: m.index, power, level: level.index, taken, held, matured, crossed };
-    this.events.push({ type: 'night', ...this.state.lastNight });
-    return this.state.lastNight;
+    this.rebase(at);
+    return { n, at, day: d, weather: w.id, moon: m.index, power, level: level.index, taken, held, matured, crossed };
   }
 
   /** Nearest free clearing tile to `t` (ring search). */

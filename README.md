@@ -8,7 +8,7 @@ The rework was built in phases:
 2. Added the core loop: soil, seed packets, growth, harvest, coins and the morning check.
 3. Added companions, decor that does something, relic ornaments and garden beauty.
 4. Added long-term goals: collections, cross-pollinated colours, commissions and daily orders, visitors drawn by plants, and Room to grow for coins.
-5. Replaced the Old Log with water (first a spring, now a 2×2 pool) and its streams, plus weather, the moon, nightly soil spread, soil maturity and digging channels.
+5. Replaced the Old Log with water (first a spring, now a 2×2 pool) and its streams, plus weather, the moon, soil spread by the tides, soil maturity and digging channels.
 
 ## Running it
 
@@ -46,15 +46,15 @@ The garden is a new game, so older forests aren't carried over:
   - Drag to look around; pinch to zoom in.
 - **The pool:** the river rises from a 2×2 block of water at the centre of a new garden (`state.pool`). There are no landmarks now (`Content/landmarks.json` is empty). The neighbours' board and the Store are under **Notes** in the bottom bar.
 - **Streams** (`tuning.json` → `water`): the pool sends out 6–7 water tiles in at least two distinct streams, either leaving in different directions or forking. They meander at random (deterministic from the garden seed) and never touch except where they fork. Water can't be planted, amended or decorated. Tap any water for its card and the forecast.
-- **Weather and the moon** (`weather`, `moon`): each local day is Clear, Cloudy, Rain or Storm, drawn from the garden seed (it tends to repeat yesterday's). The moon is the real moon's phase that day, one of eight. The **weather button** in the HUD (and a water tile's card) shows the forecast: today and tomorrow, with the **water level** for each and what it means for the soil that night.
+- **Weather and the moon** (`weather`, `moon`): each local day is Clear, Cloudy, Rain or Storm, drawn from the garden seed (it tends to repeat yesterday's). The moon is the real moon's phase that day, one of eight. The **weather button** in the HUD (and a water tile's card) shows the forecast: today and tomorrow, with the **water level** for each and what it means for the soil at each tide that day.
 - **Water level** (`water.levels`): the day's power (weather + moon, below) sets the water Low, Normal, High or Flood. Low water sits well inside its channel and shows a strip of bank (the grass or soil beside it) with a dark wet edge; Normal shows a thin strip; High fills the channel; a Flood spills a little over the banks. The water tile card names today's level, and developer mode can pin the level shown.
-- **Nightly spread** (`tides`): at local midnight soil spreads from the banks (tiles touching water). The power is the day's weather power plus the moon's (a storm on a full moon is 3.7; a clear new-moon night is 0).
-  - Along the bank: soil on a bank tile may spread to a neighbouring bank tile, so it grows up or down the stream (25% × power).
-  - Inland: it may also creep to any open neighbour (6% × power).
+- **Tides** (`tides`): every six hours (local 00:00, 06:00, 12:00 and 18:00) the tide turns and soil spreads from the banks (tiles touching water), so there's something new at every visit. The day's power is its weather power plus the moon's (a storm on a full moon is 3.7; a clear new-moon day is 0); the spread uses power + 0.6 (`basePower`), so even a still day moves a little. Time away catches up, up to 28 tides (a week).
+  - Along the bank: soil on a bank tile may spread to a neighbouring bank tile, so it grows up or down the stream (55% × (power + 0.6), at most 80%).
+  - Inland: it may also creep to any open neighbour (20% × (power + 0.6)).
   - Never through the water: a step to a corner tile is only allowed when neither tile beside it is water, so soil can't slip across a bend. Soils on opposite banks stay apart, **unless the water is High or in Flood**: then each bank tile with soil has a 10% (High) or 25% (Flood) chance to carry it straight across to the far bank.
-  - A tile resists by its maturity, and more with a plant on it. The morning card reports last night's weather, moon, how many tiles changed and any crossings.
+  - A tile resists by its maturity, and more with a plant on it. The return card reports the tides since your last visit: how many tiles changed, any crossings and how much soil matured.
   - A plant whose tile changed school keeps growing, slowly (`garden.soil.wrong`, 35%).
-- **Soil maturity** (`garden.soil.levels`): soil is Fresh, Settled, Rich or Deep (levels 1–4). A tile that keeps its soil through a night goes up a level. On a plant's own soil each level above 1 adds 6% growth speed, and from Rich it gives +1 produce. Each level looks more strongly of its school, with deeper colour and darker shadows, and grows more little details (`visuals.soilDetails`: a tile has one with an 8%, 20%, 40% or 65% chance by level): tufts and clover on Verdure, wildflowers on Bloom, tiny caps and puffballs on Spore, glowing moss and foxfire on Glow, crystal shards and glinting pebbles on Shimmer, ghost-flowers and little cairns on Spirit. Details stay put on their tile and hide under anything standing there. A tile card shows the level.
+- **Soil maturity** (`garden.soil.levels`): soil is Fresh, Settled, Rich or Deep (levels 1–4). Each tide a tile keeps its soil, it has a 50% chance to go up a level (`tides.matureChance`), so about a level every 12 hours: Deep in under two days. On a plant's own soil each level above 1 adds 6% growth speed, and from Rich it gives +1 produce. Each level looks more strongly of its school, with deeper colour and darker shadows, and grows more little details (`visuals.soilDetails`: a tile has one with an 8%, 20%, 40% or 65% chance by level): tufts and clover on Verdure, wildflowers on Bloom, tiny caps and puffballs on Spore, glowing moss and foxfire on Glow, crystal shards and glinting pebbles on Shimmer, ghost-flowers and little cairns on Spirit. Details stay put on their tile and hide under anything standing there. A tile card shows the level.
 - **Digging channels** (`water.dig`): tap an empty tile beside the water and choose *Dig a channel*. It becomes water and its soil is lost. It costs 15 coins, then 5 more for each channel dug before. New banks let the tides reach new ground.
 - **The opening** (no guided tutorial, no instructions):
   - The clearing is a little grotto: mossy rocks, ferns and roots along its edge (`start.scenery`). This debris blocks its tile; tap it and choose **Clear it away** (free) to open the ground. Wild features from Room to grow can't be cleared.
@@ -96,7 +96,7 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
   - The tile shows its soil: plain is grass, and a school's soil is its ground tile (`tile.<school>.3a/b`).
 - **Growing well:**
   - On its own school's soil a plant grows at normal speed (`soil.preferred` 1).
-  - On plain soil it grows at 0.6× (`soil.plain`): an 8-hour Marigold takes about 13 hours, so it still lands on the next morning.
+  - On plain soil it grows at 0.6× (`soil.plain`): a 3-hour Marigold takes 5 hours, still inside a six-hour visit.
   - **On another school's soil it can't be planted.** A plant that crawls along at a third of its speed looks broken, and refusing teaches the rule at once. In planting mode its own soil glows brightly, plain ground faintly and other soil not at all. Tapping a wrong tile says which soil the plant likes.
 - **Stages:** seed, sprout, bud, bloom, then ready (at 15%, 45% and 75% of its growth, `garden.stages`).
   - Seed and sprout share the generic art, the bud is the plant's own (`plant.bud.<key>`; fungi got buds too), and bloom is the plant itself.
@@ -141,14 +141,14 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
 
   | School | Common | Uncommon | Rare |
   |---|---|---|---|
-  | Spore | Ink Cap (6h) | Velvet Shank (10h) | Morel (20h) |
-  | Glow | Foxfire Button (12h), Honey Mushroom (12h) | Lantern Flower (24h) | Glowcap (20h) |
-  | Bloom | Marigold (8h), Cornflower (20h) | Lavender (16h) | Anemone (18h) |
-  | Verdure | Wood Sorrel (10h) | Hosta (18h) | Hellebore (22h) |
-  | Shimmer | Jewelweed (14h) | Glassbell (14h) | Prism Rose (20h) |
-  | Spirit | Wisp Cap (16h) | Mistbell (18h) | Ancestor's Lace (20h) |
+  | Spore | Ink Cap (2h) | Velvet Shank (4h) | Morel (9h) |
+  | Glow | Foxfire Button (4h), Honey Mushroom (4h) | Lantern Flower (8h) | Glowcap (9h) |
+  | Bloom | Marigold (3h), Cornflower (6h) | Lavender (6h) | Anemone (8h) |
+  | Verdure | Wood Sorrel (3h) | Hosta (6h) | Hellebore (10h) |
+  | Shimmer | Jewelweed (5h) | Glassbell (5h) | Prism Rose (9h) |
+  | Spirit | Wisp Cap (5h) | Mistbell (6h) | Ancestor's Lace (9h) |
 
-  - Grow times are on the plant's own soil.
+  - Grow times are on the plant's own soil. Commons and uncommons are ready within 6 hours, so a visit every six hours always finds something; rares take 8–10.
   - Commons sell for 3–7 coins, uncommons for 6–11 and rares for 13–16.
   - Commons and uncommons return 1 seed plus a 50% chance of another; rares return a 50% chance of one; gift plants 1 plus a 25% chance.
   - Every plant's numbers are in `tuning.json` → `garden.plants`.
@@ -207,7 +207,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - From 60 it visits in its window (35% per half hour, staying 1–2.5 hours, once a day). It drifts shyly near the plants it likes. Tap it to befriend it.
   - Everything is seeded from the garden, the visitor and the time, so it's deterministic.
   - **Befriended visitors bring seeds you can't buy.** At once they leave 2 packets of their gift, and later the occasional morning gift. One of each school's pair brings a gift-only plant (Spore Lantern, Moonpetal, Foxglove, Canopy Bells, Prismbell, Wispwillow); the other brings a colour variety's seeds.
-  - In a simulation, a Marigold and a Cornflower left blooming brought the Bumblebee about 39 hours later.
+  - In a simulation (with the slower grow times before the pace-up), a Marigold and a Cornflower left blooming brought the Bumblebee about 39 hours later.
 
   | Visitor | School | Likes blooming | Time | Gift |
   |---|---|---|---|---|
@@ -228,7 +228,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - The old Lantern Moth, Honey Bumble, Fern Rabbit and Mist Fox became the Glowmoth, Bumblebee, Mossback Hare and Will-o'-Wisp Fox, keeping their ids.
   - The Mossback Hedgehog, Prism Beetle, Foxfire Newt and Petal Stag are gone.
   - Their sprites are placeholders from `tools/gen_visitor_sprites.py`.
-- **Gift plants** (only from visitors, never in the Store): they grow 20–24h and sell for 13–16.
+- **Gift plants** (only from visitors, never in the Store): they grow 9–11h and sell for 13–16.
 - **Room to grow** is bought with coins in the Store: 100, 150, 200 … 850 coins for ten purchases, each clearing 3 rows on the side you choose.
 
 ## The Plant & Fungi Catalogue
