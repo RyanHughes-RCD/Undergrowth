@@ -331,8 +331,8 @@ export class UI {
   // -------------------------------------------------------------- Bag
 
   /** Bag sections, in order. */
-  bagSections() { return ['landscape', 'packet', 'plant', 'mushroom']; }
-  bagSectionTitle(cat) { return { landscape: 'Landscape', packet: 'Seed packets', plant: 'Plants and flowers', mushroom: 'Mushrooms' }[cat] || cap(cat); }
+  bagSections() { return ['landscape', 'produce', 'packet', 'plant', 'mushroom']; }
+  bagSectionTitle(cat) { return { landscape: 'Landscape', produce: 'Orchard crops', packet: 'Seed packets', plant: 'Plants and flowers', mushroom: 'Mushrooms' }[cat] || cap(cat); }
   /** Buttons for one Bag row: plant seeds, spread soil, sell produce. */
   bagActions(def, n) {
     const a = this.app, g = this.game;
@@ -373,6 +373,7 @@ export class UI {
     if (def.category === 'packet' && def.blind) return h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[def.school]}` }, `${schoolName(def.school)} soil`), ` · ${def.text.replace(/^\w+ seeds\.? ?/, '')}`);
     if (def.category === 'packet') return h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[def.school]}` }, `${schoolName(def.school)} soil`), ` · ${this.growHoursText(def.plant)}`);
     if (def.category === 'landscape') return h('div', { class: 'sub' }, this.landscapeLine(this.game.landscapeDef(def.landscape)));
+    if (def.category === 'produce') return h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[def.school]}` }, `${schoolName(def.school)} · tier ${def.tier}`), ` · ${def.text} It buys the next tier in the Orchard.`);
     return def.rarity ? h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, rarityName(def.rarity)) : null;
   }
 
@@ -495,6 +496,24 @@ export class UI {
               return this.buyRow(it.sprite, h('span', { style: x.def.school ? `color:${SCHOOL_COLORS[x.def.school]}` : '' }, it.name), h('div', { class: 'sub' }, this.landscapeLine(x.def)), x.price, () => a.buyLandscape(x.id), x.locks); })];
           })];
       }],
+      ['orchard', 'Orchard', () => {
+        // Crop plants: tier 1 for coins, each higher tier for the crop of the tier below (same school).
+        const rows = g.storeOrchard().filter((x) => !this.orchSchool || x.def.school === this.orchSchool);
+        const chip = (id, label, color) => h('button', { class: 'tab' + ((this.orchSchool || null) === id ? ' on' : ''), style: color ? `color:${color}` : '', onclick: () => { this.orchSchool = id; this.renderSheet(); } }, label);
+        return [h('p', { class: 'sub' }, 'Crop plants grow on their own soil and bear a crop again and again. A crop is a currency: it buys the next tier of plant of its school, and the Store buys it too.'),
+          h('div', { class: 'tabs seed-schools' }, chip(null, 'All'), ...SCHOOLS.map((k) => chip(k, schoolName(k), SCHOOL_COLORS[k]))),
+          ...SCHOOLS.filter((k) => rows.some((x) => x.def.school === k)).flatMap((k) => [h('div', { class: 'section', style: `color:${SCHOOL_COLORS[k]}` }, schoolName(k)),
+            ...rows.filter((x) => x.def.school === k).sort((a, b) => a.def.tier - b.def.tier).map((x) => {
+              const it = this.content.items[x.id];
+              const price = [x.cost.coins ? h('span', {}, ic('coin', 1), ` ${x.cost.coins}`) : null,
+                ...x.cost.items.map((c) => { const ci = this.content.items[c.item]; return h('span', { class: 'cost-item' }, this.sprites.element(ci.sprite, null, 1), ` ${c.count}`); })];
+              const have = x.cost.items.map((c) => `${g.state.inventory[c.item] || 0}/${c.count} ${this.content.items[c.item]?.name}`).join(', ');
+              return h('div', { class: 'list-row' },
+                h('div', { class: 'thumb' }, this.sprites.element(it.sprite, null, this.fit(it.sprite))),
+                h('div', { class: 'grow' }, h('b', {}, it.name), h('div', { class: 'sub' }, this.landscapeLine(x.def)), have ? h('div', { class: 'sub' }, `You have ${have}.`) : null),
+                h('button', { class: 'btn small ' + (x.can ? 'green' : 'grey'), disabled: !x.can, onclick: () => a.buyOrchard(x.id) }, ...price));
+            })])];
+      }],
       ['seeds', 'Seeds', () => {
         // Every packet is its own item: grouped by tier, one row per school, each with its own packet.
         const rows = g.storePackets().filter((x) => !this.seedSchool || x.school === this.seedSchool);
@@ -587,7 +606,7 @@ export class UI {
       ['landscape', 'Landscape', () => this.content.landscapeList.map((d) => {
         const st = g.landscapePlan(d), last = st[st.length - 1].stage;
         return { key: 'landscape:' + d.id, name: d.name, sprite: g.landscapeSprite(d.id, last), school: d.school, text: d.text,
-          hint: `${d.school ? schoolName(d.school) + '. ' : ''}In the Store, under Landscape.`, extra: [h('p', { class: 'sub center' }, this.landscapeLine(d))] };
+          hint: `${d.school ? schoolName(d.school) + '. ' : ''}In the Store, under ${d.kind === 'crop' ? 'Orchard' : 'Landscape'}.`, extra: [h('p', { class: 'sub center' }, this.landscapeLine(d))] };
       })],
       ['varieties', 'Colours', () => Object.values(this.content.varieties).map((v) => {
         const it = this.content.items[v.produce];
@@ -723,6 +742,10 @@ export class UI {
     if (!def) return '';
     const g = this.game, plan = g.landscapePlan(def), [w, h] = def.size, last = plan[plan.length - 1];
     const days = (hrs) => (hrs >= 36 ? `${Math.round(hrs / 24)} days` : `${Math.round(hrs)} hours`);
+    if (def.kind === 'crop') {
+      const T = g.cropTier(def);
+      return `${w}×${h} · tier ${def.tier} · first crop in ${days(last.hours)}, then ${T.yield} ${this.content.items[def.produce.id]?.name || 'crops'} every ${days(T.regrow)} · on ${schoolName(def.school)} soil only`;
+    }
     const parts = [`${w}×${h}`];
     if (plan.length > 1) parts.push(def.plan === 'giant' ? `a giant in about ${days(last.hours)}` : `grown in about ${days(last.hours)}`);
     if (def.water) parts.push('counts as water');
@@ -730,13 +753,22 @@ export class UI {
     parts.push(def.school ? `makes ${schoolName(def.school)} soil` : 'makes no soil');
     return parts.join(' · ');
   }
+  /** A crop plant's harvest: ready to pick (with the button), or when the next crop comes. */
+  cropLines(p, now) {
+    const g = this.game, cs = g.cropState(p, now);
+    if (!cs) return [];
+    const it = this.content.items[cs.produce];
+    if (cs.ready) return [h('div', { class: 'row gap center' }, it ? this.sprites.element(it.sprite, null, 2) : null, h('b', {}, `${cs.yield} ${it ? it.name : ''} ready`)),
+      h('div', { class: 'row center' }, h('button', { class: 'btn green', onclick: () => this.app.harvestCrop(p.id) }, 'Pick'))];
+    return [h('p', { class: 'sub center' }, `${now < cs.matureAt ? 'Its first crop' : 'Its next crop'} of ${it ? it.name : 'produce'} comes ${this.roughly(cs.readyAt - now)}.`)];
+  }
   stageWord(stage) { return { sapling: 'A sapling', young: 'Young', grown: 'Grown', ancient: 'Ancient', built: 'Built' }[stage] || cap(stage); }
   /** A placed landscape piece: its stage, when it grows on, the soil it spreads, and digging it up. */
   landBody(placedID) {
     const g = this.game, now = g.now(), p = g.landscapeByID(placedID);
     if (!p) return ['Landscape', h('p', { class: 'sub' }, 'Gone.')];
     const def = g.landscapeDef(p.defID), st = g.landscapeStage(p, now);
-    const soil = def.school ? `It spreads ${schoolName(def.school)} soil up to ${st.aura} tile${st.aura === 1 ? '' : 's'} around it at each tide${st.tries > 1 ? `, ${st.tries} tiles at a time` : ''}.` : 'It makes no soil.';
+    const soil = def.kind === 'crop' ? `It grows on ${schoolName(def.school)} soil.` : def.school ? `It spreads ${schoolName(def.school)} soil up to ${st.aura} tile${st.aura === 1 ? '' : 's'} around it at each tide${st.tries > 1 ? `, ${st.tries} tiles at a time` : ''}.` : 'It makes no soil.';
     return [def.name, [
       h('div', { class: 'hero' }, this.sprites.element(g.landscapeSprite(def.id, st.stage), null, def.size[0] > 2 ? 2 : 4)),
       def.school ? h('p', { class: 'sub center', style: `color:${SCHOOL_COLORS[def.school]}` }, schoolName(def.school)) : null,
@@ -744,6 +776,7 @@ export class UI {
       h('p', { class: 'center' }, h('b', {}, this.stageWord(st.stage)), st.next ? h('span', { class: 'sub' }, `: ${this.stageWord(st.next.stage).toLowerCase()} ${this.roughly(st.nextAt - now)}.`) : null),
       h('p', { class: 'sub center' }, soil),
       def.water ? h('p', { class: 'sub center' }, 'It counts as water: soil touching it spreads with the tides.') : null,
+      ...this.cropLines(p, now),
       h('div', { class: 'row gap wrap center' }, h('button', { class: 'btn grey', onclick: () => this.ask(`Dig up the ${def.name}?`, `It goes back to your Bag${st.index > 0 ? ', but its growth is lost' : ''}. The soil it made stays.`, 'Dig it up', () => this.app.removeLandscape(p.id)) }, 'Dig it up')),
     ]];
   }
@@ -1113,6 +1146,7 @@ export class UI {
     const body = h('div', { class: 'morning' },
       rows.length ? h('div', { class: 'gifts' }, rows) : h('p', { class: 'sub' }, g.state.plants.length ? 'Nothing is ready yet.' : 'The garden is waiting for seeds.'),
       m.growing ? h('p', { class: 'sub' }, `${m.growing} still growing. The next is ready ${this.roughly(m.next - now)}.`) : null,
+      m.orchard ? h('p', { class: 'sub' }, `${m.orchard} crop plant${m.orchard === 1 ? ' has its' : 's have their'} crop waiting to be picked.`) : null,
       m.surprise ? this.surpriseLine(m.surprise) : null,
       ...(m.news || []).map((n) => this.newsLine(n)),
       this.tideLine(g.state.lastTides, now),

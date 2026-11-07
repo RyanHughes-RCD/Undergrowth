@@ -427,8 +427,9 @@ export class ForestView {
       const [fw, fh] = def.size, st = g.landscapeStage(p, now);
       const pos = at({ x: p.tile.x, y: p.tile.y + fh - 1 });
       const flat = def.kind === 'water' || def.ground || def.look === 'ring';
-      objs.push({ sprite: g.landscapeSprite(def.id, st.stage), x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: p.tile, kind: 'landscape', key: p.id, still: true,
-        sortY: flat ? p.tile.y * TS - 1 : pos.y - 1 });
+      const crop = g.cropState(p, now), ripe = !!(crop && crop.ready);   // a crop plant with its crop waiting: fruit on, sparkling
+      objs.push({ sprite: g.landscapeSprite(def.id, ripe ? 'fruit' : st.stage), x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: p.tile, kind: 'landscape', key: p.id, still: true,
+        glimmer: ripe, phase: ripe ? hash32(p.tile.x, p.tile.y, 9) % 1000 / 250 : 0, sortY: flat ? p.tile.y * TS - 1 : pos.y - 1 });
     }
     for (const d of s.scenery || []) objs.push({ sprite: d.sprite, ...at(d.tile), tile: d.tile, kind: 'scenery', key: 'sc' + d.tile.x + ',' + d.tile.y, flip: d.flip, still: true });
     for (const d of s.decor.placed) {

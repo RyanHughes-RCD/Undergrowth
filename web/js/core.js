@@ -1357,7 +1357,7 @@ export class Game {
   /** Coins for one of an item, or 0 if it can't be sold. Garden produce: its plant's sell price. */
   sellPrice(itemID) {
     const def = this.content.items[itemID];
-    if (!def || (def.category !== 'plant' && def.category !== 'mushroom')) return 0;
+    if (!def || (def.category !== 'plant' && def.category !== 'mushroom' && def.category !== 'produce')) return 0;
     if (def.sell != null) return def.sell;
     return (this.gcfg.sellByRarity || {})[def.rarity || 'common'] || 0;
   }
@@ -1409,7 +1409,7 @@ export class Game {
       m.lastSurpriseDay = day;
       if (hashUnit(this.state.seed, day, 0x5a7e) < (cfg.surpriseChance ?? 0.7)) surprise = this.rollSurprise(now, day);
     }
-    return { ready: Object.values(ready), growing: growing.length, next, surprise };
+    return { ready: Object.values(ready), growing: growing.length, next, surprise, orchard: this.readyCrops(now).length };
   }
 
   /** Surprise kinds possible right now: [kind, weight, apply()] (later systems add gifts and rare colours). */
@@ -1595,6 +1595,7 @@ export class Game {
       if (def.onWater) {
         if (!this.waterAt(t) || this.landscapeAt(t)) return { ok: false, origin, reason: 'That goes on the water.' };
       } else if (!this.isFree(t)) return { ok: false, origin, reason: w * h > 1 ? `It needs ${w}×${h} clear tiles.` : 'Something is already there.' };
+      else if (def.kind === 'crop' && this.soilAt(t) !== def.school) return { ok: false, origin, reason: `It only grows on ${schoolName(def.school)} soil${w * h > 1 ? ', under all of it' : ''}.` };
     }
     return { ok: true, origin };
   }
@@ -1651,10 +1652,59 @@ export class Game {
       for (let i = 0; i < st.tries && i < cands.length; i++) if (rng.next() < chance) tryTake(cands[i].t, def.school);
     }
   }
-  /** The Store's landscape shelf: every piece, with its price and what locks it. */
+  /** The Store's landscape shelf: every piece but the crop plants, with its price and what locks it. */
   storeLandscape() {
-    return this.content.landscapeList.map((def) => ({ def, id: 'landscape.' + def.id, price: def.price || 0, locks: this.beautyLock(def.beauty || 0) }));
+    return this.content.landscapeList.filter((def) => def.kind !== 'crop').map((def) => ({ def, id: 'landscape.' + def.id, price: def.price || 0, locks: this.beautyLock(def.beauty || 0) }));
   }
+
+  // ---- crop plants (landscape.json kind 'crop', tuning.orchard): placed like landscape, they bear produce
+  get orchardCfg() { return this.t.orchard || {}; }
+  cropTier(def) { return ((this.orchardCfg.tiers || {})[def.tier]) || {}; }
+  /** A crop plant's price: { coins, items: [{ item, count }] } (tier 1 for coins, higher tiers for the tier below's produce). */
+  cropCost(def) {
+    const c = this.cropTier(def).cost || {};
+    if (c.prev) {
+      const below = this.content.landscapeList.find((d) => d.kind === 'crop' && d.school === def.school && d.tier === def.tier - 1);
+      return { coins: c.coins || 0, items: below ? [{ item: below.produce.id, count: c.prev }] : [] };
+    }
+    return { coins: c.coins || 0, items: [] };
+  }
+  /** The Store's orchard: every crop plant with its cost and whether you can pay it. */
+  storeOrchard() {
+    return this.content.landscapeList.filter((d) => d.kind === 'crop').map((def) => {
+      const cost = this.cropCost(def);
+      const can = this.state.coins >= cost.coins && cost.items.every((x) => (this.state.inventory[x.item] || 0) >= x.count);
+      return { def, id: 'landscape.' + def.id, cost, can };
+    });
+  }
+  buyOrchard(itemID) {
+    const row = this.storeOrchard().find((x) => x.id === itemID);
+    if (!row) throw new GameError("The Store doesn't sell that.");
+    if (!row.can) throw new GameError(row.cost.items.length ? `That costs ${row.cost.items.map((x) => `${x.count} ${this.content.items[x.item]?.name || x.item}`).join(' and ')}.` : `That costs ${row.cost.coins} coins.`);
+    if (row.cost.coins) this.spend(row.cost.coins);
+    for (const x of row.cost.items) this.consume(x.item, x.count);
+    return this.grant([{ item: itemID, count: 1 }]);
+  }
+  /** A crop plant's harvest at t: { ready, readyAt, matureAt, yield, produce } (null for other pieces). */
+  cropState(p, t) {
+    const def = this.landscapeDef(p.defID);
+    if (!def || def.kind !== 'crop') return null;
+    const plan = this.landscapePlan(def), T = this.cropTier(def);
+    const matureAt = p.placedAt + plan[plan.length - 1].hours * HOUR;
+    const readyAt = p.harvestedAt ? Math.max(matureAt, p.harvestedAt + (T.regrow ?? 6) * HOUR) : matureAt;
+    return { ready: t >= readyAt, readyAt, matureAt, yield: T.yield ?? 1, produce: def.produce.id };
+  }
+  /** Pick a crop plant's produce: it goes into the Bag, and the next crop starts growing. */
+  harvestCrop(placedID, now) {
+    const p = this.landscapeByID(placedID), cs = p && this.cropState(p, now);
+    if (!cs) throw new GameError("There's nothing to pick.");
+    if (!cs.ready) throw new GameError("It isn't ready yet.");
+    p.harvestedAt = now;
+    this.bump('cropHarvest');
+    return this.grant([{ item: cs.produce, count: cs.yield }]);
+  }
+  /** Crop plants with produce waiting. */
+  readyCrops(now) { return this.state.landscape.filter((p) => { const cs = this.cropState(p, now); return cs && cs.ready; }); }
   buyLandscape(itemID) {
     const row = this.storeLandscape().find((x) => x.id === itemID);
     if (!row) throw new GameError("The Store doesn't sell that.");
@@ -2214,6 +2264,8 @@ export class Game {
     this.rebase(now);
     for (const p of this.state.plants) p.grown = this.growNeed(p);
     this.rebase(now);
+    // Crop plants: grown, with a crop waiting.
+    for (const p of this.state.landscape) { const cs = this.cropState(p, now); if (cs && !cs.ready) { p.placedAt -= Math.max(0, cs.matureAt - now); p.harvestedAt = null; } }
     return this.state.plants.length;
   }
   devGiveCoins(n) { this.state.coins += n; }
@@ -2319,8 +2371,12 @@ export class Content {
     this.landscapeList = bundle.landscape || [];
     this.landscapeByID = Object.fromEntries(this.landscapeList.map((d) => [d.id, d]));
     const plans = (bundle.tuning.landscape || {}).plans || {};
+    const otiers = (bundle.tuning.orchard || {}).tiers || {};
     for (const d of this.landscapeList) {
       const plan = plans[d.plan] || [{ stage: 'built' }];
+      // A crop plant's produce: a Bag item (category produce) that sells and buys the next tier.
+      if (d.kind === 'crop' && d.produce) this.addItem({ id: d.produce.id, category: 'produce', name: d.produce.name, rarity: ['common', 'uncommon', 'rare', 'veryRare'][d.tier - 1] || 'common',
+        sprite: d.produce.id, school: d.school, tier: d.tier, sell: (otiers[d.tier] || {}).sell, text: `From the ${d.name}.`, inGuide: false });
       this.addItem({ id: 'landscape.' + d.id, category: 'landscape', name: d.name, rarity: 'common', sprite: `landscape.${d.id}.${plan[plan.length - 1].stage}`, landscape: d.id, school: d.school, text: d.text, inGuide: false });
     }
   }

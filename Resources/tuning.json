@@ -1216,7 +1216,122 @@
      "tries": 1,
      "beauty": 2
     }
+   ],
+   "crop1": [
+    {
+     "stage": "young",
+     "hours": 0,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 0
+    },
+    {
+     "stage": "grown",
+     "hours": 6,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 1
+    }
+   ],
+   "crop2": [
+    {
+     "stage": "young",
+     "hours": 0,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 0
+    },
+    {
+     "stage": "grown",
+     "hours": 12,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 1
+    }
+   ],
+   "crop3": [
+    {
+     "stage": "sapling",
+     "hours": 0,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 1
+    },
+    {
+     "stage": "young",
+     "hours": 12,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 1
+    },
+    {
+     "stage": "grown",
+     "hours": 36,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 2
+    }
+   ],
+   "crop4": [
+    {
+     "stage": "sapling",
+     "hours": 0,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 1
+    },
+    {
+     "stage": "young",
+     "hours": 24,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 2
+    },
+    {
+     "stage": "grown",
+     "hours": 72,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 3
+    }
    ]
+  }
+ },
+ "orchard": {
+  "_about": "Crop plants (landscape.json kind 'crop'): four tiers per school, placed like landscape pieces but only on their own school's soil (every tile of the footprint). They grow by their plan (landscape.plans crop1-crop4) and, once grown, bear a crop: `yield` of their produce item. Picking it starts the next one, ready `regrow` hours later; a crop waits on the plant until picked. Produce is a currency: tier 1 plants cost `cost.coins`; a higher tier costs `cost.prev` of the tier below's produce of the same school. Produce also sells to the Store for `sell` coins, and the wishing well takes it.",
+  "tiers": {
+   "1": {
+    "regrow": 4,
+    "yield": 3,
+    "sell": 2,
+    "cost": {
+     "coins": 15
+    }
+   },
+   "2": {
+    "regrow": 6,
+    "yield": 2,
+    "sell": 5,
+    "cost": {
+     "prev": 6
+    }
+   },
+   "3": {
+    "regrow": 10,
+    "yield": 2,
+    "sell": 12,
+    "cost": {
+     "prev": 8
+    }
+   },
+   "4": {
+    "regrow": 16,
+    "yield": 2,
+    "sell": 30,
+    "cost": {
+     "prev": 10
+    }
+   }
   }
  }
 }

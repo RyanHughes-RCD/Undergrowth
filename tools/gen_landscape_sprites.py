@@ -3,7 +3,8 @@
 
     python3 tools/gen_landscape_sprites.py
 
-Writes landscape.<id>.<stage> for every stage of each piece's plan (tuning.json -> landscape.plans): a sapling
+Writes landscape.<id>.<stage> for every stage of each piece's plan (crop plants also get landscape.<id>.fruit, the
+grown plant with its crop waiting, and an icon for their produce, produce.<school>.<tier>) (tuning.json -> landscape.plans): a sapling
 that grows into a tree, a giant tree's 3x3 ancient form, a large plant young and grown, and water and
 structures as built. Drawn from a few shapes per kind (`look` in landscape.json) in each school's colours.
 Every sprite stands on the bottom of its footprint (anchor 3px above the bottom edge, like the landmarks);
@@ -328,6 +329,109 @@ def structure(c, look, W, H, s=1.0):
             c.set(x - 1, y - 1, 13)
 
 
+# ---------------------------------------------------------------- crop plants and their produce
+
+def crop_plant(c, look, W, H, s):
+    """A crop plant without its fruit (fruit is added by fruit())."""
+    cx, bottom = W / 2, H - 3
+    if look in ("fruittree", "weeping"):
+        tree(c, "weeping" if look == "weeping" else "round", W, H, s)
+    elif look == "berrybush":
+        r = 4 + 3 * s
+        blob(c, cx, bottom - r * 0.9, r, r * 0.85)
+    elif look == "vine":
+        h = 8 + 8 * s
+        for x in (cx - 4, cx + 4):
+            c.line(x, bottom, x, bottom - h, 8)
+        c.line(cx - 4, bottom - h, cx + 4, bottom - h, 8)
+        for i in range(int(h / 2)):
+            c.ellipse(cx - 4 + (i % 3) * 4, bottom - 1 - i * 2, 1.8, 1.4, 2 if i % 2 else 3)
+    elif look == "patch":
+        for i in range(-2, 3):
+            c.ellipse(cx + i * 2.6, bottom - 2 - (i % 2), 2 + s, 1.6 + s * 0.6, 3 if i % 2 else 4)
+    elif look == "shrooms":
+        for ox, hh in ((-4, 0.6), (-1, 0.9), (3, 0.7)):
+            h = (3 + 3 * s) * hh + 1
+            c.rect(cx + ox, bottom - h, cx + ox, bottom, 13)
+            c.ellipse(cx + ox, bottom - h, 1.8 + s, 1.3, 3)
+    elif look == "croplog":
+        c.rect(1, bottom - 5, W - 2, bottom - 1, 8)
+        c.rect(1, bottom - 5, W - 2, bottom - 5, 7)
+        c.ellipse(W - 2, bottom - 3, 1.4, 2.2, 7)
+    elif look == "cropreeds":
+        for i in range(-2, 3):
+            h = 7 + 6 * s - abs(i)
+            c.line(cx + i * 2, bottom, cx + i * 2.2, bottom - h, 3 if i % 2 else 4)
+
+
+def fruit(c, look, W, H, s):
+    """The crop on a grown plant, in its produce colour (palette 5 and 6)."""
+    cx, bottom = W / 2, H - 3
+    if look in ("fruittree", "weeping"):
+        tw = (W + 6) * s
+        ccy = bottom - tw * 1.05 + tw * 0.42
+        for i in range(9):
+            a = i * 2.39996
+            r = math.sqrt((i + 0.5) / 9)
+            x, y = cx + math.cos(a) * r * tw * 0.38, ccy + math.sin(a) * r * tw * 0.3 + (tw * 0.35 if look == "weeping" else 0)
+            c.ellipse(x, y, 1.6, 1.6, 5); c.set(x - 1, y - 1, 6)
+    elif look in ("berrybush", "vine", "patch", "cropreeds"):
+        pts = {"berrybush": ((-3, -6), (2, -8), (4, -4), (-1, -3), (0, -9)), "vine": ((-4, -6), (0, -10), (4, -7), (-4, -12), (4, -13)),
+               "patch": ((-5, -3), (0, -4), (4, -3)), "cropreeds": ((-4, -8), (0, -11), (4, -9), (-2, -5), (2, -6))}[look]
+        for dx, dy in pts:
+            c.ellipse(cx + dx, bottom + dy, 1.4, 1.4, 5); c.set(cx + dx - 1, bottom + dy - 1, 6)
+    elif look == "shrooms":
+        for ox in (-4, -1, 3):
+            c.set(cx + ox, bottom - 7, 6)
+            c.ellipse(cx + ox + 1, bottom - 1, 1.5, 1.1, 5)
+    elif look == "croplog":
+        for x in range(3, W - 3, 4):
+            c.ellipse(x, bottom - 6, 1.8, 1.1, 5); c.set(x - 1, bottom - 7, 6)
+
+
+def produce_icon(look, color):
+    """A 12x12 icon for a crop: 1 outline, 2 colour, 3 light, 4 dark, 5 leaf, 6 stem."""
+    c = Canvas(12, 12)
+    if look == "berry":
+        for x, y in ((4, 7), (8, 7), (6, 4), (6, 9)):
+            c.ellipse(x, y, 2.4, 2.4, 2); c.set(x - 1, y - 1, 3)
+        c.line(6, 1, 6, 3, 6)
+    elif look == "fruit":
+        c.ellipse(6, 7, 4.2, 4, 2); c.ellipse(4.8, 5.6, 1.4, 1.2, 3); c.ellipse(7.5, 9, 1.6, 1, 4)
+        c.line(6, 1, 6, 3, 6); c.ellipse(8.4, 2.4, 1.8, 1, 5)
+    elif look == "nut":
+        c.ellipse(6, 7, 3.8, 4, 2); c.ellipse(6, 4, 4, 1.8, 4); c.set(5, 6, 3)
+    elif look == "cap":
+        c.ellipse(6, 5, 4.6, 2.8, 2); c.ellipse(4.6, 4, 1.6, 1, 3)
+        c.rect(5, 6, 7, 10, 3)
+    elif look == "gourd":
+        c.ellipse(6, 8, 3.8, 3.4, 2); c.ellipse(6, 4, 2.2, 2, 2); c.set(5, 7, 3); c.line(6, 1, 7, 2, 6)
+    elif look == "star":
+        for k in range(5):
+            a = -math.pi / 2 + k * math.tau / 5
+            c.line(6, 6, 6 + math.cos(a) * 5, 6 + math.sin(a) * 5, 2)
+        c.ellipse(6, 6, 2, 2, 3)
+    elif look == "leaf":
+        for (x, y) in ((4, 7), (7, 5), (6, 9)):
+            c.ellipse(x, y, 2.6, 1.6, 2); c.set(x, y, 3)
+        c.line(6, 11, 6, 6, 6)
+    elif look == "crystal":
+        for x, h in ((4, 6), (7, 8), (9, 5)):
+            for k in range(h):
+                w = max(0, (h - k) // 3)
+                c.rect(x - w, 11 - k, x + w, 11 - k, 2 if k < h - 2 else 3)
+    elif look == "pod":
+        c.ellipse(6, 6, 2.4, 4.6, 2)
+        for y in (3, 6, 9):
+            c.set(6, y, 3)
+        c.line(6, 0, 6, 2, 6)
+    c.outline(1)
+    r, g, b = (int(color[i:i + 2], 16) for i in (1, 3, 5))
+    dark = "#%02x%02x%02x" % (int(r * 0.6), int(g * 0.6), int(b * 0.6))
+    light = "#%02x%02x%02x" % (min(255, r + 70), min(255, g + 70), min(255, b + 70))
+    return c, ["transparent", OUT, color, light, dark, "#4f9a3a", "#6a4a2a"]
+
+
 # ---------------------------------------------------------------- sizes and stages
 
 def stage_scale(plan_name, stage, plan):
@@ -336,7 +440,7 @@ def stage_scale(plan_name, stage, plan):
     i, n = order.index(stage), len(order)
     if plan_name == "giant":
         return {"sapling": 0.26, "young": 0.45, "grown": 0.68, "ancient": 1.0}[stage]
-    if plan_name == "tree":
+    if plan_name in ("tree", "crop3", "crop4"):
         return {"sapling": 0.38, "young": 0.66, "grown": 1.0}[stage]
     return (i + 1) / n if n > 1 else 1.0
 
@@ -349,6 +453,24 @@ def build(d, plans):
     for st in plan:
         stage = st["stage"]
         s = stage_scale(d["plan"], stage, plan)
+        if d["kind"] == "crop":
+            if d["look"] in ("fruittree", "weeping"):
+                tw = max(10, (W + 6) * s)
+                cw, ch = int(max(W, tw) + 2), int(tw * 1.2) + 6
+            else:
+                cw, ch = W + 2, 22
+            c = Canvas(cw, ch)
+            sc = (max(10, (W + 6) * s)) / cw if d["look"] in ("fruittree", "weeping") else s
+            crop_plant(c, d["look"], cw, ch, sc)
+            c.outline(1)
+            write(f"landscape.{d['id']}.{stage}", (cw, ch), [c], palette=crop_palette(d), anchor=(cw // 2, ch - 3), tags=["landscape", "crop"])
+            if stage == plan[-1]["stage"]:            # the grown plant with its crop, while it waits to be picked
+                f = Canvas(cw, ch)
+                crop_plant(f, d["look"], cw, ch, sc)
+                fruit(f, d["look"], cw, ch, sc)
+                f.outline(1)
+                write(f"landscape.{d['id']}.fruit", (cw, ch), [f], palette=crop_palette(d), anchor=(cw // 2, ch - 3), tags=["landscape", "crop"])
+            continue
         if d["kind"] == "tree":
             if d["look"] == "log":
                 cw, ch = W, 16
@@ -382,6 +504,15 @@ def build(d, plans):
         write(f"landscape.{d['id']}.{stage}", (cw, ch), [c], palette=palette(d["school"]), anchor=anchor, tags=["landscape"])
 
 
+def crop_palette(d):
+    """The school's palette with its accent swapped for the crop's own colour."""
+    pal = palette(d["school"])
+    col = d["produce"]["color"]
+    r, g, b = (int(col[i:i + 2], 16) for i in (1, 3, 5))
+    pal[5], pal[6] = col, "#%02x%02x%02x" % (min(255, r + 70), min(255, g + 70), min(255, b + 70))
+    return pal
+
+
 def main():
     with open(os.path.join(ROOT, "Resources", "Content", "landscape.json")) as fh:
         pieces = json.load(fh)
@@ -390,8 +521,11 @@ def main():
     n = 0
     for d in pieces:
         build(d, plans)
-        n += len(plans.get(d["plan"]) or [1])
-    print("landscape sprites: %d (%d pieces)" % (n, len(pieces)))
+        n += len(plans.get(d["plan"]) or [1]) + (1 if d["kind"] == "crop" else 0)
+        if d.get("produce"):
+            c, pal = produce_icon(d["produce"]["look"], d["produce"]["color"])
+            write(d["produce"]["id"], (12, 12), [c], palette=pal, anchor=(6, 11), tags=["produce"])
+    print("landscape sprites: %d (%d pieces), produce icons: %d" % (n, len(pieces), sum(1 for d in pieces if d.get("produce"))))
 
 
 if __name__ == "__main__":

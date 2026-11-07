@@ -148,7 +148,7 @@ class App {
     if (this.game.state.tin) return false;         // the first session ends on the tin, not a summary
     const m = g.morning(now);
     m.news = g.takeVisitorNews();
-    if (!m.ready.length && !m.surprise && !m.growing && !this.nightNote && !m.news.length) return false;
+    if (!m.ready.length && !m.surprise && !m.growing && !this.nightNote && !m.news.length && !m.orchard) return false;
     const tiles = m.ready.flatMap((r) => r.tiles);
     if (m.surprise && m.surprise.tile) tiles.push(m.surprise.tile);
     if (tiles.length) this.view.highlight(tiles, 5, '255,236,140');
@@ -287,7 +287,12 @@ class App {
     if (landmark) { ui.selectedTile = null; if (landmark.id === STUMP) ui.open('stump'); else if (landmark.id === WELL) { ui.wellPick = {}; ui.open('well'); } else ui.forecastCard(); this.changed(false); return true; }
     // A landscape piece (only from its own tiles: a tree's canopy doesn't catch taps meant for the row above).
     const land = g.landscapeAt(tile);
-    if (land) { ui.selectedTile = null; ui.open('land', land.id); this.changed(false); return true; }
+    if (land) {
+      ui.selectedTile = null;
+      const cs = g.cropState(land, now);
+      if (cs && cs.ready) { const r = this.attempt(() => g.harvestCrop(land.id, now)); if (r) { this.present(r); this.changed(); } return true; }   // a ripe crop plant: pick it
+      ui.open('land', land.id); this.changed(false); return true;
+    }
     // A resident: its Field Guide page.
     if (tile.hitKind === 'resident') { ui.selectedTile = null; ui.open('visitor', tile.hitKey); this.changed(false); return true; }
     if (g.tinAt(tile)) { ui.selectedTile = null; ui.openOpening(); return true; }
@@ -379,6 +384,14 @@ class App {
   }
   buyLandscape(itemID) {
     const r = this.attempt(() => this.game.buyLandscape(itemID));
+    if (r) { this.present(r); this.changed(); }
+  }
+  buyOrchard(itemID) {
+    const r = this.attempt(() => this.game.buyOrchard(itemID));
+    if (r) { this.present(r); this.changed(); }
+  }
+  harvestCrop(placedID) {
+    const r = this.attempt(() => this.game.harvestCrop(placedID, this.game.now()));
     if (r) { this.present(r); this.changed(); }
   }
   removeLandscape(placedID) {
