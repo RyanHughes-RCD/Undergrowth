@@ -708,7 +708,7 @@
   "recolorCost": 0
  },
  "visitors": {
-  "_about": "Visitors (Content/visitors.json): forest animals that leave mementos, then move in. Every checkMinutes of game time (offline catch-up included, up to maxCatchUpDays) each visitor's interest rises by interest.gain while every plant it likes is in bloom (ready to pick), and falls by interest.decay when not. In its time window, once interest reaches visits.firstAt (its first memento) or visits.at[tier] (later visits), it visits unseen with chance visits.chance, at most visits.perDay a day, and leaves its next memento. On the visit after its last memento it moves in if every condition in its `stays` holds (soil patches it claims for itself: one soil tile, one resident), else it leaves a plainer hint (`restate`). A resident stays while its conditions hold and leaves at the first check where one doesn't, with a parting memento (`parting`). Moving in gives its gift seeds (gift.count) once, and residents leave the morning card's gift surprise. Perks (visitors.json perk): growth multiplies the speed of plants of its school on its patch; tideHold keeps its patch's soil through the tides. The Stump (tribute): an offering is taken at the next nightfall and works for tribute.hours: visitors of its school (and of a tier its own tier reaches: common items early visitors, uncommon settled too, rare all) gain interest tribute.mult[tier] times as fast, gain tribute.court of the normal rate even when their plants aren't blooming, and visit tribute.likedMult times as often if it's a plant they like. It never leaves a memento itself; when its time is up the Stump answers (lingered, moved or untouched). Deterministic from the garden, the visitor and the check's time.",
+  "_about": "Visitors (Content/visitors.json): forest animals that leave mementos, then move in. Every checkMinutes of game time (offline catch-up included, up to maxCatchUpDays) each visitor's interest rises by interest.gain while every plant it likes is in bloom (ready to pick), and falls by interest.decay when not. In its time window, once interest reaches visits.firstAt (its first memento) or visits.at[tier] (later visits), it visits unseen with chance visits.chance, at most visits.perDay a day, and leaves its next memento. On the visit after its last memento it moves in if every condition in its `stays` holds (soil patches it claims for itself: one soil tile, one resident), else it leaves a plainer hint (`restate`). A resident stays while its conditions hold and leaves at the first check where one doesn't, with a parting memento (`parting`). Moving in gives its gift seeds (gift.count, mystery seeds) once, and residents leave the morning card's gift surprise. Every resident gives the whole forest a buff while it lives here (visitors.json buff: schoolGrowth, allGrowth, soilMature, cropRegrow, crossPollinate, extraSeed, wellLuck, landscapeSpread, tideSpread, cropYield). In their own time of day residents roam the whole garden: every roam.legSeconds of game time a new waypoint (any land tile), walked to in roam.walkSeconds; the rest of the day they rest on their patch. The Stump (tribute): an offering is taken at the next nightfall and works for tribute.hours: visitors of its school (and of a tier its own tier reaches: common items early visitors, uncommon settled too, rare all) gain interest tribute.mult[tier] times as fast, gain tribute.court of the normal rate even when their plants aren't blooming, and visit tribute.likedMult times as often if it's a plant they like. It never leaves a memento itself; when its time is up the Stump answers (lingered, moved or untouched). Deterministic from the garden, the visitor and the check's time.",
   "checkMinutes": 30,
   "maxCatchUpDays": 7,
   "interest": {
@@ -738,6 +738,10 @@
    ],
    "court": 0.5,
    "likedMult": 2
+  },
+  "roam": {
+   "legSeconds": 40,
+   "walkSeconds": 14
   }
  },
  "naming": {

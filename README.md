@@ -207,7 +207,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - Only Spore and Verdure have a Legendary plant, so elsewhere a Legendary pull steps down to Epic.
 
 - **Harvests return seeds of the plant's own school and tier.** A rare plant gives Rare seeds, so lucky pulls compound slowly.
-- **Not in any packet:** gift plants (from visitors) and colour varieties keep their own named packets, which only friends and cross-pollination give.
+- **Every seed is a mystery seed:** there are no named packets. The former gift-only plants (Spore Lantern, Moonpetal, Foxglove, Canopy Bells, Prismbell, Wispwillow) are Rare plants in their school's packets. Visitors give mystery packets, and colour varieties breed back to mystery seeds of their plant's school and tier. Named packets left in an older save become mystery packets of the same school and tier when it loads.
 - **The plants**, by school and tier (`plants.json` `tier`):
 
   | School | Common | Uncommon | Rare |
@@ -221,7 +221,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
 
   - Grow times are on the plant's own soil. Commons and uncommons are ready within 6 hours, so a visit every six hours always finds something; rares take 8–10.
   - Commons sell for 3–7 coins, uncommons for 6–11 and rares for 13–16.
-  - Commons and uncommons return 1 seed plus a 50% chance of another; rares return a 50% chance of one; gift plants 1 plus a 25% chance.
+  - Commons and uncommons return 1 seed plus a 50% chance of another; rares return a 50% chance of one; the former gift plants 1 plus a 25% chance. Seeds come back as mystery seeds of the plant's school and tier.
   - **Epic and Legendary plants** are the catalogue's Very rare and Legendary finds, with their own art and buds:
 
     | School | Epic | Legendary |
@@ -275,7 +275,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   - The Field Guide's Plants and Mushrooms tabs open with each set's progress and the relic as a silhouette until earned. A set member's page says whether you've grown it.
 - **Cross-pollination and colour varieties** (`plants.json` varieties, `garden.varieties`):
   - Harvest a plant while a blooming (ready) plant of the same family is in one of its 8 neighbours. The same kind counts, and the families are caps, daisies, bells, clovers, spikes and willows.
-  - With a hidden chance (12%) you get a seed packet of one of its colour varieties, one not yet found first.
+  - With a hidden chance (12%) you also get one of its colour varieties itself (the produce, worth double and collected in the Colours tab), one not yet found first.
   - There are 14 varieties, one per common and uncommon plant: Lemon Marigold, Pink Cornflower, Lavender Ink Cap, Golden Hosta and so on.
   - A variety grows like its plant and breeds true. Its produce sells for twice as much and has its own entry in the Field Guide's **Colours** tab (a hint shows until found).
   - Variety colours are palette swaps computed at load: every vivid, non-green colour of the plant's sprite takes the variety's hue, and the greens too for leafy varieties (`varietySwap` in `core.js`), so no extra art is needed.
@@ -293,8 +293,23 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
     - **bed:** a raised bed with a named plant in it, at any stage. Plants never wilt, so a ready plant left unharvested holds the condition. Harvesting it ends it.
     - **beauty:** the garden's beauty tier now (not the best ever reached).
     - **resident:** another visitor living there.
-  - **What residents bring:** their gift seeds (2 packets) the first time they move in, the morning card's gift surprise, and a perk on their own patch. Plants of their school there grow faster (×1.15 early, ×1.2 settled, ×1.3 mystical). Settled and mystical residents' patches never lose soil to the tides.
-  - Residents are seen on their patch, never blocking a tile: about in their own time of day, resting otherwise. Tap one for its Field Guide page.
+  - **What residents bring:** 2 mystery packets of their school the first time they move in (Uncommon from early visitors, Rare from settled, Epic from mystical), the morning card's gift surprise, and **a buff for the whole forest** while they live here (`visitors.json` `buff`):
+
+    | Visitor | Buff |
+    |---|---|
+    | Woodlouse, Firefly, Bumblebee, Mossback Hare, Glasswing Butterfly, Will-o'-Wisp Fox | their school's plants grow 10% faster everywhere |
+    | Cave Salamander | soil matures faster at every tide (+15%) |
+    | Glowmoth | orchard crops regrow 20% faster |
+    | Ruby-throated Hummingbird | rare colours turn up 1.5× as often |
+    | Red Squirrel | harvests have a 25% chance of an extra seed packet |
+    | Prism Moth | wishes at the well are luckier |
+    | Barn Owl | landscape spreads its soil faster (+15% per try) |
+    | Lanternback Stag | every plant grows 10% faster |
+    | Mirrorshell Tortoise | the tides spread soil 25% further |
+    | Mist Crane | orchard plants give 1 more crop per pick |
+
+    Buffs stack. An orchard crop's regrow time is fixed when it's picked, so a resident leaving never un-ripens a crop. The Field Guide's Visitors tab opens with what your residents give the forest, and each visitor's page names its buff once it has lived with you.
+  - **Residents roam:** in their own time of day they wander the whole garden, never blocking a tile: every 40 seconds of game time they set off for another land tile (`visitors.roam`), walk there over 14 seconds facing the way they're going, and linger. The rest of the day they rest on their patch. Tap one for its Field Guide page.
   - **News:** mementos, arrivals and departures appear on the morning card, or on their own card when there's no morning card.
   - **The Field Guide's Visitors tab** shows a silhouette until a visitor has lived in the garden. Its page lists every memento it has left, then the plainer hints and partings since. A sparkle marks a silhouette that has left mementos.
   - Old saves: tracks are gone. A befriended visitor has already left all its mementos (and its gift), so it moves in at its next visit if it can stay.
@@ -318,7 +333,7 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
   | Mirrorshell Tortoise | mystical | Shimmer + Spore | Prism Rose, Morel | day | 3×3 Deep Shimmer · 3×3 Deep Spore · beds with Prism Rose and Morel · Lovely+ · Prism Moth and Cave Salamander live here |
   | Mist Crane | mystical | Bloom + Spirit | Anemone, Ancestor's Lace | dawn | 3×3 Deep Bloom · 3×3 Deep Spirit · beds with Anemone and Ancestor's Lace · Lovely+ · Hummingbird and Barn Owl live here |
 
-  - Gifts are as before: one of each school's early/settled pair brings a gift-only plant (Spore Lantern, Moonpetal, Foxglove, Canopy Bells, Prismbell, Wispwillow), the other a colour variety's seeds. Mystical visitors bring Rare seeds of their first school.
+  - Gifts are mystery packets of the visitor's school: Uncommon from early visitors, Rare from settled ones, Epic from mystical ones.
   - Sprites are placeholders from `tools/gen_visitor_sprites.py`.
 - **The Stump** (`landmarks.json` `landmark.stump`, `tuning.visitors.tribute`): found by the first Room to grow. It takes up 2×2 tiles, can't be cleared or moved, and the river goes around it.
   - Tap it to leave one gathered item (garden produce or a forage find). It sits on the stump until the next nightfall; until then you can take it back.
@@ -333,8 +348,8 @@ Seed packets are named only by school and tier: "Common Bloom seeds", "Uncommon 
     - **A blessing** for 6 hours: one school (sometimes two, likelier with more luck) grows 1.5× as fast, and can be planted on any soil at full speed. Afterwards a plant left on the wrong soil crawls (as when a tide changes its tile). Blessings don't stack: blessing a school again only makes it last longer. The HUD shows a pill while one is on.
     - **A seed packet** of the focus school (or of what the handful was mostly), from Common to Legendary. More luck makes the rarer tiers likelier, but a Common packet is always possible.
   - In a simulation: one Marigold gives coins about 74% of the time. A handful of 40 rare mushrooms gives coins a third of the time, and about half its packets are Legendary.
-- **Gift plants** (only from visitors, never in the Store): they grow 9–11h and sell for 13–16.
-- **Room to grow** is bought with coins in the Store: 100, 150, 200 … 850 coins for ten purchases, each clearing 3 rows on the side you choose.
+- **The former gift plants** (now Rare plants in their school's packets) grow 9–11h and sell for 13–16.
+- **Room to grow** is bought with coins in the Store: eighteen purchases, 100, 150, 200 … 850 coins for the first ten, then 1,000, 1,170, 1,360, 1,570, 1,800, 2,050, 2,320 and 2,600 (`expand-1`…`expand-18` in the Offerings spreadsheet), each clearing 3 rows on the side you choose.
 
 ## The Plant & Fungi Catalogue
 
@@ -379,7 +394,7 @@ A separate test garden for trying anything without touching your real save.
   - **Garden:** grow all plants now; +100 or +1000 coins; give any blind or named seed packet, or 5 of each; one of every landscape piece; age every placed piece a day or a week.
   - **Plant timers:** tap a plant to see its exact progress, rate, time to ready and stage times.
   - The six relic ornaments; see the beauty score and set the best beauty tier reached.
-  - **Visitors:** set a visitor's interest (ready for a memento, ready to visit, reset), make it visit now (its next memento, or moving in if it can stay), move it in regardless, or see which of its conditions hold. Also give 2 of every colour variety packet.
+  - **Visitors:** set a visitor's interest (ready for a memento, ready to visit, reset), make it visit now (its next memento, or moving in if it can stay), move it in regardless, or see which of its conditions hold. Also give 2 of every colour (variety produce).
   - Fill the Field Guide; open the whole forest; give any item or decor.
   - Complete or reset Store listings; open the seed tin as any school.
   - Grow forage finds now; save and load named setups.
@@ -433,7 +448,7 @@ tools/
   - **Hand-made sprites are never overwritten:** ids listed in `design/art/handmade_sprites.json` (sprites redrawn in the Sprite Bench, or by hand) are skipped by every generator, since they all write through `gen_placeholders.write()`. Remove an id there to let its generator draw it again.
   - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
   - The Stump and the wishing well (`landmark.stump` 32×29, `landmark.well` 32×46) are drawn art from `design/art/`, scaled to their 2×2 footprint (32 pixels wide) by `python3 tools/import_sprite_image.py` (needs Pillow). The well's roof leans over the row above; only its own tiles open it.
-  - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed, gold, violet with a seal or iridescent) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
+  - Mystery seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed, gold, violet with a seal or iridescent), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
   - Catalogue items and their bud stages (`plant.bud.<key>`; fungi get a small closed button) come from `gen_content_sprites.py`.
   - School soil tiles (`tile.<school>.<1–4>a/b`), and water come from `gen_terrain.py`.
   - Grass, the treeline floor and shrubs come from `gen_topdown.py`.
@@ -444,7 +459,7 @@ tools/
 | File | What it holds |
 |---|---|
 | `items.json` | The Plant & Fungi Catalogue (from the spreadsheet): id, category, name, rarity, sprite, school, description. |
-| `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`seeds`: comes from blind packets; `gift`: only from visitors), tier (common, uncommon, rare), companions, varieties. Numbers: `tuning.json` → `garden.plants`. Blind packets (`seeds.<school>.<tier>`) are built from the schools; each plant also has a named packet (`packet.<id>`), used for gifts. |
+| `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`seeds`: every plant comes from mystery packets), tier (common, uncommon, rare, epic, legendary), companions, varieties. Numbers: `tuning.json` → `garden.plants`. Mystery packets (`seeds.<school>.<tier>`) are built from the schools; there are no named packets. |
 | `amendments.json` | Retired soil amendments (kept so old saves' bags can be refunded). |
 | `landscape.json` | Landscape pieces and crop plants (kept by hand): id, name, school (null for paths and crossings), kind (tree, water, plant, structure, crop; crops also have tier and produce: id, name, look, colour), plan (growth stages, `tuning.landscape.plans`), size (final footprint), look (placeholder shape), price, beauty (tier that opens it), text; flags water (counts as water), onWater (goes on water), ground (drawn flat). |
 | `landmarks.json` | Landmarks: the Stump and the wishing well (`footprint` 2×2; `discovery` firstExpansion / secondExpansion: placed by Room to grow, not at the start; `tapFootprint`: only taps on its own tiles open it, so the well's roof doesn't catch taps meant for the row above). |

@@ -5,7 +5,7 @@
 // hedge. Pinch to zoom in; pan is clamped to the clearing. Each garden tile shows its soil (grass for
 // plain, the school's ground tile otherwise); objects (the Old Log, scenery, decor, finds, plants) are
 // drawn sorted by their feet; then the time-of-day light, tree shadows and fireflies.
-import { Game, hash32, decorVariant } from './core.js';
+import { Game, hash32, hashStr, decorVariant } from './core.js';
 
 export const TS = 16;
 const FOOT = 5; // objects stand a little below the tile centre
@@ -464,16 +464,27 @@ export class ForestView {
     return out.concat(this.moreObjects(now, at));
   }
   /**
-   * Residents on their patches: about in their own time of day (wandering), resting otherwise. They never
-   * take a tile. And an offering waiting on the Stump, sitting on its top.
+   * Residents roam the whole garden in their own time of day and rest on their patch otherwise; they never
+   * take a tile. Their position is worked out every frame (roam), so they walk smoothly from tile to tile.
+   * And an offering waiting on the Stump, sitting on its top.
    */
   moreObjects(now, at) {
-    const g = this.game, out = [], phase = g.dayPhase(now);
+    const g = this.game, out = [];
+    const walkable = g.residents().length ? g.walkableTiles() : [];
     for (const def of g.residents()) {
-      const t = g.residentTile(def, now);
-      if (!t) continue;
-      const awake = def.likes.time === phase, p = at(t);
-      out.push({ sprite: def.sprite, x: p.x + 3, y: p.y - 2, tile: t, kind: 'resident', key: def.id, wander: awake, still: !awake, phase: hash32(t.x, t.y, 17) % 1000 / 160, sortY: p.y + 1 });
+      const o = { sprite: def.sprite, x: 0, y: 0, tile: g.source, kind: 'resident', key: def.id, still: false, phase: hashStr(def.id) % 1000 / 160 };
+      o.roam = () => {
+        const r = g.residentRoam(def, g.now(), walkable), a = at(r.from), b = at(r.to);
+        const walking = r.awake && r.frac < 1;
+        o.x = Math.round(a.x + (b.x - a.x) * r.frac) + 3;
+        o.y = Math.round(a.y + (b.y - a.y) * r.frac) - 2 - (walking && Math.floor(performance.now() / 120) % 2 ? 1 : 0);   // a little hop as it walks
+        o.sortY = o.y + 3;
+        o.tile = r.frac < 0.5 ? r.from : r.to;
+        if (b.x !== a.x) o.flip = b.x > a.x;   // facing the way it's going (the art faces left)
+        o.still = !r.awake;
+      };
+      o.roam();
+      out.push(o);
     }
     const st = g.stump, tr = g.tributeState(now);
     if (st && tr && tr.phase === 'waiting') {
@@ -581,6 +592,7 @@ export class ForestView {
 
     // Objects (sorted by their feet): everything in the garden on screen, plus the shrub treeline.
     const pad = 32;
+    for (const o of this.objects) if (o.roam) o.roam();   // roaming residents move between rebuilds
     const drawn = this.objects.filter((o) => o.x >= view.minX - pad && o.x <= view.maxX + pad && o.y >= view.minY - pad && o.y <= view.maxY + pad * 2).concat(edgeObjs);
     drawn.sort((a, b) => (a.sortY ?? a.y) - (b.sortY ?? b.y) || a.x - b.x);
     this.drawn = drawn;

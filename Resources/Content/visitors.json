@@ -31,11 +31,13 @@
   "parting": {
    "0": "The little patch of settled Spore soil it lived on is gone, or too thin for it now."
   },
-  "perk": {
-   "growth": 1.15
-  },
   "text": "A small grey woodlouse that loves damp soil and mushroom gills. It rolls into a ball when surprised.",
-  "gift": "packet.ink-cap.lavender"
+  "gift": "seeds.spore.uncommon",
+  "buff": {
+   "type": "schoolGrowth",
+   "school": "spore",
+   "mult": 1.1
+  }
  },
  {
   "id": "visitor.salamander",
@@ -95,12 +97,12 @@
    "1": "The Velvet Shank in its raised bed is gone.",
    "2": "The woodlouse left, and it wouldn't stay without it."
   },
-  "perk": {
-   "growth": 1.2,
-   "tideHold": true
-  },
   "text": "A pale, damp-skinned salamander that shelters among fungal roots and soft soil.",
-  "gift": "packet.spore-lantern"
+  "gift": "seeds.spore.rare",
+  "buff": {
+   "type": "soilMature",
+   "add": 0.15
+  }
  },
  {
   "id": "visitor.firefly",
@@ -134,11 +136,13 @@
   "parting": {
    "0": "The little patch of settled Glow soil it lived on is gone, or too thin for it now."
   },
-  "perk": {
-   "growth": 1.15
-  },
   "text": "A glowing beetle that drifts over warm, sheltered plants at dusk.",
-  "gift": "packet.foxfire-button.azure"
+  "gift": "seeds.glow.uncommon",
+  "buff": {
+   "type": "schoolGrowth",
+   "school": "glow",
+   "mult": 1.1
+  }
  },
  {
   "id": "visitor.moth",
@@ -198,12 +202,12 @@
    "1": "The Lantern Flower in its raised bed is gone.",
    "2": "The fireflies left, and it wouldn't stay without them."
   },
-  "perk": {
-   "growth": 1.2,
-   "tideHold": true
-  },
   "text": "A soft-winged moth with luminous markings that pulse in the dark.",
-  "gift": "packet.moonpetal"
+  "gift": "seeds.glow.rare",
+  "buff": {
+   "type": "cropRegrow",
+   "mult": 1.2
+  }
  },
  {
   "id": "visitor.bumble",
@@ -238,11 +242,13 @@
   "parting": {
    "0": "The little patch of settled Bloom soil it lived on is gone, or too thin for it now."
   },
-  "perk": {
-   "growth": 1.15
-  },
   "text": "A fuzzy, round bumblebee, drawn to bright, nectar-rich flowers.",
-  "gift": "packet.marigold.lemon"
+  "gift": "seeds.bloom.uncommon",
+  "buff": {
+   "type": "schoolGrowth",
+   "school": "bloom",
+   "mult": 1.1
+  }
  },
  {
   "id": "visitor.hummingbird",
@@ -301,12 +307,12 @@
    "1": "The Lavender in its raised bed is gone.",
    "2": "The garden felt too bare for it."
   },
-  "perk": {
-   "growth": 1.2,
-   "tideHold": true
-  },
   "text": "A hovering nectar-feeder with a ruby throat. It loves tubular, brightly coloured flowers.",
-  "gift": "packet.foxglove"
+  "gift": "seeds.bloom.rare",
+  "buff": {
+   "type": "crossPollinate",
+   "mult": 1.5
+  }
  },
  {
   "id": "visitor.rabbit",
@@ -340,11 +346,13 @@
   "parting": {
    "0": "The little patch of settled Verdure soil it lived on is gone, or too thin for it now."
   },
-  "perk": {
-   "growth": 1.15
-  },
   "text": "A small hare with mossy fur and leaf-like tufts that blends into dense greenery.",
-  "gift": "packet.wood-sorrel.purple"
+  "gift": "seeds.verdure.uncommon",
+  "buff": {
+   "type": "schoolGrowth",
+   "school": "verdure",
+   "mult": 1.1
+  }
  },
  {
   "id": "visitor.squirrel",
@@ -404,12 +412,12 @@
    "1": "The Hosta in its raised bed is gone.",
    "2": "The hare left, and it wouldn't stay without it."
   },
-  "perk": {
-   "growth": 1.2,
-   "tideHold": true
-  },
   "text": "A nimble red squirrel, drawn to leafy, seed-rich corners of a garden.",
-  "gift": "packet.canopy-bells"
+  "gift": "seeds.verdure.rare",
+  "buff": {
+   "type": "extraSeed",
+   "chance": 0.25
+  }
  },
  {
   "id": "visitor.glasswing",
@@ -443,11 +451,13 @@
   "parting": {
    "0": "The little patch of settled Shimmer soil it lived on is gone, or too thin for it now."
   },
-  "perk": {
-   "growth": 1.15
-  },
   "text": "A butterfly with clear wings, made for bright, shimmering clearings.",
-  "gift": "packet.jewelweed.sapphire"
+  "gift": "seeds.shimmer.uncommon",
+  "buff": {
+   "type": "schoolGrowth",
+   "school": "shimmer",
+   "mult": 1.1
+  }
  },
  {
   "id": "visitor.prism-moth",
@@ -507,12 +517,12 @@
    "1": "The Glassbell in its raised bed is gone.",
    "2": "The glasswing left, and it wouldn't stay without it."
   },
-  "perk": {
-   "growth": 1.2,
-   "tideHold": true
-  },
   "text": "A moth with reflective scales that flash different colours as it turns.",
-  "gift": "packet.prismbell"
+  "gift": "seeds.shimmer.rare",
+  "buff": {
+   "type": "wellLuck",
+   "add": 0.5
+  }
  },
  {
   "id": "visitor.fox",
@@ -546,11 +556,13 @@
   "parting": {
    "0": "The little patch of settled Spirit soil it lived on is gone, or too thin for it now."
   },
-  "perk": {
-   "growth": 1.15
-  },
   "text": "A fox-like spirit with faintly glowing paws that wanders where the mist is thickest.",
-  "gift": "packet.wisp-cap.rose"
+  "gift": "seeds.spirit.uncommon",
+  "buff": {
+   "type": "schoolGrowth",
+   "school": "spirit",
+   "mult": 1.1
+  }
  },
  {
   "id": "visitor.owl",
@@ -610,12 +622,12 @@
    "1": "The Mistbell in its raised bed is gone.",
    "2": "The garden felt too bare for it."
   },
-  "perk": {
-   "growth": 1.2,
-   "tideHold": true
-  },
   "text": "A quiet, pale hunter that loves silent, misty gardens at night.",
-  "gift": "packet.wispwillow"
+  "gift": "seeds.spirit.rare",
+  "buff": {
+   "type": "landscapeSpread",
+   "add": 0.15
+  }
  },
  {
   "id": "visitor.stag",
@@ -714,12 +726,12 @@
    "5": "The glowmoth left, and it followed.",
    "6": "The squirrel left, and it followed."
   },
-  "perk": {
-   "growth": 1.3,
-   "tideHold": true
-  },
   "text": "A great quiet stag whose antlers carry moss and little lights. Where it walks, the green deepens and glows.",
-  "gift": "seeds.glow.rare"
+  "gift": "seeds.glow.epic",
+  "buff": {
+   "type": "allGrowth",
+   "mult": 1.1
+  }
  },
  {
   "id": "visitor.tortoise",
@@ -818,12 +830,12 @@
    "5": "The prism moth left, and it followed.",
    "6": "The salamander left, and it followed."
   },
-  "perk": {
-   "growth": 1.3,
-   "tideHold": true
-  },
   "text": "An ancient tortoise whose shell reflects the sky like still water, with mushrooms growing in its seams.",
-  "gift": "seeds.shimmer.rare"
+  "gift": "seeds.shimmer.epic",
+  "buff": {
+   "type": "tideSpread",
+   "mult": 1.25
+  }
  },
  {
   "id": "visitor.crane",
@@ -922,11 +934,11 @@
    "5": "The hummingbird left, and it followed.",
    "6": "The owl left, and it followed."
   },
-  "perk": {
-   "growth": 1.3,
-   "tideHold": true
-  },
   "text": "A tall pale crane that arrives with the dawn mist. Flowers open where it has stood.",
-  "gift": "seeds.spirit.rare"
+  "gift": "seeds.bloom.epic",
+  "buff": {
+   "type": "cropYield",
+   "add": 1
+  }
  }
 ]

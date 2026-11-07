@@ -642,7 +642,7 @@ export class UI {
     const g = this.game, p = item.plant && g.plantDef(item.plant);
     if (!p) return {};
     const c = g.plantCfg(p.id);
-    const from = p.source === 'gift' ? 'Only a friend of the forest can bring its seeds.' : `It comes up from ${schoolName(p.school)} seeds${{ common: '', uncommon: ', now and then', rare: ', rarely', epic: ', very rarely, and more often from the finest packets', legendary: ', almost never, and only from the finest packets' }[p.tier || 'common']}.`;
+    const from = `It comes up from ${schoolName(p.school)} seeds${{ common: '', uncommon: ', now and then', rare: ', rarely', epic: ', very rarely, and more often from the finest packets', legendary: ', almost never, and only from the finest packets' }[p.tier || 'common']}.`;
     const inSet = g.collectionPlants(p.school).includes(p);
     const grown = g.discovered.has('plant:' + p.id);
     return {
@@ -655,6 +655,13 @@ export class UI {
   }
   /** Plants and Mushrooms open with each school's collection: plants grown of its set, and its reward. */
   guideHeader(tab) {
+    if (tab === 'visitors') {
+      // What everyone living here gives the forest, together.
+      const res = this.game.residents();
+      return [h('div', { class: 'section' }, 'What your residents give the forest'),
+        res.length ? h('ul', { class: 'clues' }, res.map((d) => h('li', {}, h('b', {}, d.name + ': '), this.game.buffText(d))))
+          : h('p', { class: 'sub' }, 'Nobody lives here yet. Each animal that moves in gives the whole forest something while it stays.')];
+    }
     if (tab !== 'plant' && tab !== 'mushroom') return [];
     const g = this.game;
     return [h('div', { class: 'collections' }, SCHOOLS.map((school) => {
@@ -704,6 +711,7 @@ export class UI {
       h('p', { class: 'center' }, h('b', {}, known ? def.name : this.story('visitors.unknownName'))),
       known && def.text ? h('p', { class: 'sub center' }, def.text) : null,
       status ? h('p', { class: 'sub center' }, status) : null,
+      known ? h('p', { class: 'center blessing' }, `${stage === 'resident' ? 'While it lives here' : 'When it lives here'}: ${g.buffText(def)}`) : null,
       h('div', { class: 'section' }, 'Mementos'),
       st.notes.length ? h('ul', { class: 'clues' }, st.notes.map((n) => h('li', { class: 'memento-' + n.kind }, label[n.kind] ? h('b', {}, label[n.kind] + ': ') : null, n.text)))
         : h('p', { class: 'sub' }, this.story('visitors.noMementos')),
@@ -722,7 +730,7 @@ export class UI {
     if (n.type === 'movedIn') {
       const gifts = (n.results || []).map((x) => { const d = this.content.items[x.item]; return d ? ` ${x.count} × ${d.name}` : ''; }).join(',');
       return h('div', { class: 'news arrival' }, this.sprites.element(def.sprite, null, 2, '', true),
-        h('p', {}, h('b', {}, this.story('visitors.movedIn', { name })), ' ', h('span', { class: 'sub' }, this.story('visitors.movedInText') + (gifts ? ` It brought you${gifts}.` : ''))));
+        h('p', {}, h('b', {}, this.story('visitors.movedIn', { name })), ' ', h('span', { class: 'sub' }, this.story('visitors.movedInText') + (gifts ? ` It brought you${gifts}.` : '') + ` ${g.buffText(def)}`)));
     }
     const head = n.type === 'parting' ? this.story('visitors.parting', { name })
       : this.story(`visitors.${n.type === 'restate' ? 'restate' : 'memento'}${known ? 'Known' : ''}`, { name });
@@ -923,7 +931,7 @@ export class UI {
     const decorSel = h('select', { class: 'select' }, (this.content.cosmetics || []).map((c) => h('option', { value: c.id }, c.name)));
     const packetSel = h('select', { class: 'select' }, [
       h('optgroup', { label: 'Blind packets' }, this.content.itemList.filter((i) => i.blind).map((i) => h('option', { value: i.id }, i.name))),
-      h('optgroup', { label: 'Named packets (any plant)' }, this.content.plantList.map((p) => h('option', { value: 'packet.' + p.id }, `${p.name} seeds`)))]);
+    ]);
     return [
       ['Weather and water', [
         (() => {
@@ -963,7 +971,7 @@ export class UI {
             b('Move in now', () => { this.sheet = null; this.close(); a.dev((gm, t) => gm.devGuestMoveIn(sel.value, t)); }),
             b('Conditions', () => a.dev((gm, t) => gm.devGuestConditions(sel.value, t), (r) => r.map((x) => `${x.ok ? '✓' : '✗'} ${say(x.c)}`).join(' · '))));
         })(),
-        h('div', { class: 'row gap wrap' }, b('2 of every colour variety', () => a.dev((gm) => gm.devGiveVarieties(2), (n) => `+2 of ${n} variety packets.`)))]],
+        h('div', { class: 'row gap wrap' }, b('2 of every colour', () => a.dev((gm) => gm.devGiveVarieties(2), (n) => `+2 of ${n} colours.`)))]],
       ['Unlock', [h('div', { class: 'row gap wrap' },
         b('Fill Field Guide', () => a.dev((gm) => gm.devFillGuide(), 'Field Guide complete.')),
         b('Whole forest open', () => a.dev((gm, t) => gm.devOpenForest(t), 'The clearing now covers the whole forest.')))]],

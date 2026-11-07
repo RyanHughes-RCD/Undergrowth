@@ -197,7 +197,8 @@ class App {
     else if (e.type === 'soilRetired') ui.celebrate('Soil, the old way', `Bags of soil aren't sold any more: trees, water and plants make their own soil now, spreading it around them as they grow. Your leftover bags were traded back for ${e.coins} coins. Look under Landscape in the Store.`, null, 'OK');
     else if (e.type === 'crossPollinated') {
       const v = this.game.varietyDef(e.variety);
-      ui.toast(`Something new among the seeds: ${v ? v.name : 'a new colour'}.`, v ? this.content.items[v.packet]?.sprite : null);
+      const it = v && this.content.items[v.produce];
+      ui.toast(`A new colour came up beside its neighbour: ${v ? v.name : 'a rare colour'}.`, it ? it.sprite : null);
     }
     else if (e.type === 'companionFound') {
       const g = this.game;

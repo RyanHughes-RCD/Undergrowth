@@ -116,16 +116,18 @@ def parse_colours(v):
 # ------------------------------------------------------------------ read
 
 def garden_item_ids():
-    """Seed packets (blind seeds.<school>.<tier>, and named packet.<plant id> from plants.json) and soil amendments (amendments.json): Bag items
-    the game builds from their own files, which listings may give or ask for too."""
+    """Bag items the game builds from its own files, which listings may give or ask for too: mystery seed
+    packets (seeds.<school>.<tier>; there are no named packets), colour varieties' produce
+    (<plant's item>.<variety>), landscape pieces (landscape.<id>) and orchard crops (produce.<school>.<tier>)."""
     plants = load("plants.json") or []
-    out = ["packet." + p["id"] for p in plants] + [a["id"] for a in load("amendments.json") or []]
-    # Blind seed packets: seeds.<school>.<tier>.
-    out += ["seeds.%s.%s" % (s, t) for s in ("spore", "glow", "bloom", "verdure", "shimmer", "spirit") for t in ("common", "uncommon", "rare")]
-    # Colour varieties: their seed packets (packet.<variety id>) and produce (<plant's item>.<variety>).
+    out = ["seeds.%s.%s" % (s, t) for s in ("spore", "glow", "bloom", "verdure", "shimmer", "spirit") for t in ("common", "uncommon", "rare", "epic", "legendary")]
     for p in plants:
         for v in p.get("varieties", []):
-            out += ["packet." + v["id"], p["item"] + "." + v["id"].split(".", 1)[1]]
+            out.append(p["item"] + "." + v["id"].split(".", 1)[1])
+    for d in load("landscape.json") or []:
+        out.append("landscape." + d["id"])
+        if d.get("produce"):
+            out.append(d["produce"]["id"])
     return out
 
 
