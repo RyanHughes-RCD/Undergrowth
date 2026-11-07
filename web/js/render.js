@@ -427,8 +427,12 @@ export class ForestView {
       const [fw, fh] = def.size, st = g.landscapeStage(p, now);
       const pos = at({ x: p.tile.x, y: p.tile.y + fh - 1 });
       const flat = def.kind === 'water' || def.ground || def.look === 'ring';
-      const crop = g.cropState(p, now), ripe = !!(crop && crop.ready);   // a crop plant with its crop waiting: fruit on, sparkling
-      objs.push({ sprite: g.landscapeSprite(def.id, ripe ? 'fruit' : st.stage), x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: p.tile, kind: 'landscape', key: p.id, still: true,
+      // A crop plant with its crop waiting: its grown sprite with the fruit overlay on top, sparkling.
+      // Crop plants may be mirrored (p.flip, chosen when placed); the overlay follows.
+      const crop = g.cropState(p, now), ripe = !!(crop && crop.ready), flip = !!p.flip;
+      const overlay = ripe ? g.landscapeSprite(def.id, 'fruit') : null;
+      objs.push({ sprite: g.landscapeSprite(def.id, st.stage), x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: p.tile, kind: 'landscape', key: p.id, still: true, flip,
+        after: overlay ? (c, x, y) => this.blit(overlay, null, x, y, 0, flip) : null,
         glimmer: ripe, phase: ripe ? hash32(p.tile.x, p.tile.y, 9) % 1000 / 250 : 0, sortY: flat ? p.tile.y * TS - 1 : pos.y - 1 });
     }
     for (const d of s.scenery || []) objs.push({ sprite: d.sprite, ...at(d.tile), tile: d.tile, kind: 'scenery', key: 'sc' + d.tile.x + ',' + d.tile.y, flip: d.flip, still: true });
@@ -989,7 +993,8 @@ export class ForestView {
         if (!l || l.id !== o.key) continue;
       }
       // Landscape pieces answer only on their own tiles (a canopy over the row above lets taps through).
-      if (o.kind === 'landscape') { const lp = this.game.landscapeAt(tileAt(w.x, w.y)); if (!lp || lp.id !== o.key) continue; }
+      // Their own tiles are the whole hit area, so a mirrored piece needs no pixel test.
+      if (o.kind === 'landscape') { const lp = this.game.landscapeAt(tileAt(w.x, w.y)); if (!lp || lp.id !== o.key) continue; return { ...o.tile, hitKind: o.kind, hitKey: o.key }; }
       const f = this.sprites.frames(o.sprite, o.variant)[0];
       const a = this.sprites.anchor(o.sprite);
       const ox = o.drawX ?? o.x, oy = o.drawY ?? o.y;

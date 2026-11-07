@@ -141,7 +141,8 @@ Crop plants (`Content/landscape.json` kind `crop`, `tuning.orchard`): four tiers
   | 3 | 3 days | every 12 hours | 2 | 12 |
   | 4 | 5 days | every 24 hours | 2 | 30 |
 
-  A ripe plant shows its fruit and sparkles. **Tap it to pick**; the next crop starts then. A crop waits on the plant until picked (nothing spoils), but doesn't stack up.
+  A ripe plant shows its fruit and sparkles: it's drawn as its grown sprite with a fruit overlay on top (`landscape.<id>.fruit`, only the fruit, same size and anchor), so the fruit can be redrawn on its own. **Tap it to pick**; the next crop starts then.
+  - **Half come up mirrored:** each crop plant has a 50% chance (`orchard.mirrorChance`) of being placed flipped left to right, fruit and all, for variety. A crop waits on the plant until picked (nothing spoils), but doesn't stack up.
 - **Tier 4 is a long climb.** With one plant per tier, going from a tier-1 plant to buying tier 4 takes about 26 days. Three plants per tier takes about two weeks. Even twelve tier-1 plants and eight of each higher tier, which needs a lot of soil, space and coins, takes about ten days.
 - **Crops** (`produce.<school>.<tier>`) go into the Bag under Orchard crops. They sell to the Store, and the wishing well takes them; they count for their school's focus.
 - The morning card says how many crop plants have a crop waiting. Developer mode's *Grow all plants now* ripens them too.
