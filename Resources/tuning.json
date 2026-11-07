@@ -1298,7 +1298,7 @@
   }
  },
  "orchard": {
-  "_about": "Crop plants (landscape.json kind 'crop'): four tiers per school, placed like landscape pieces but only on their own school's soil (every tile of the footprint). They grow by their plan (landscape.plans crop1-crop4) and, once grown, bear a crop: `yield` of their produce item. Picking it starts the next one, ready `regrow` hours later; a crop waits on the plant until picked. Produce is a currency: tier 1 plants cost `cost.coins`; a higher tier costs `cost.prev` of the tier below's produce of the same school. Produce also sells to the Store for `sell` coins, and the wishing well takes it.",
+  "_about": "Crop plants (landscape.json kind 'crop'): four tiers per school, placed like landscape pieces but only on their own school's soil (every tile of the footprint). They grow by their plan (landscape.plans crop1-crop4) and, once grown, bear a crop: `yield` of their produce item. Picking it starts the next one, ready `regrow` hours later; a crop waits on the plant until picked. Produce is a currency: tier 1 plants cost `cost.coins`; a higher tier costs `cost.prev` of the tier below's produce of the same school. Produce also sells to the Store for `sell` coins, and the wishing well takes it. Each crop plant has mirrorChance of being placed mirrored (left to right), for variety. A ripe plant is drawn as its grown sprite with its fruit overlay (landscape.<id>.fruit) on top.",
   "tiers": {
    "1": {
     "regrow": 4,
@@ -1332,6 +1332,7 @@
      "prev": 60
     }
    }
-  }
+  },
+  "mirrorChance": 0.5
  }
 }

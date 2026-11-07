@@ -1609,6 +1609,7 @@ export class Game {
     this.rebase(now);
     this.consume(itemID);
     const p = { id: this.rng.uuid(), defID: def.id, tile: chk.origin, placedAt: now };
+    if (def.kind === 'crop' && this.rng.chance((this.t.orchard || {}).mirrorChance ?? 0.5)) p.flip = true;   // crop plants: half come up mirrored, for variety
     this.state.landscape.push(p);
     this._landIndex = null;
     if (def.school && !def.onWater) for (const t of this.landscapeTiles(p)) if (this.soilAt(t) !== def.school) this.setSoil(t, def.school, 1);

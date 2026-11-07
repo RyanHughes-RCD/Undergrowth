@@ -3,8 +3,9 @@
 
     python3 tools/gen_landscape_sprites.py
 
-Writes landscape.<id>.<stage> for every stage of each piece's plan (crop plants also get landscape.<id>.fruit, the
-grown plant with its crop waiting, and an icon for their produce, produce.<school>.<tier>) (tuning.json -> landscape.plans): a sapling
+Writes landscape.<id>.<stage> for every stage of each piece's plan (crop plants also get landscape.<id>.fruit, an overlay
+of just the crop that's drawn over the grown sprite while it waits to be picked, and an icon for their produce,
+produce.<school>.<tier>) (tuning.json -> landscape.plans): a sapling
 that grows into a tree, a giant tree's 3x3 ancient form, a large plant young and grown, and water and
 structures as built. Drawn from a few shapes per kind (`look` in landscape.json) in each school's colours.
 Every sprite stands on the bottom of its footprint (anchor 3px above the bottom edge, like the landmarks);
@@ -464,12 +465,12 @@ def build(d, plans):
             crop_plant(c, d["look"], cw, ch, sc)
             c.outline(1)
             write(f"landscape.{d['id']}.{stage}", (cw, ch), [c], palette=crop_palette(d), anchor=(cw // 2, ch - 3), tags=["landscape", "crop"])
-            if stage == plan[-1]["stage"]:            # the grown plant with its crop, while it waits to be picked
+            if stage == plan[-1]["stage"]:
+                # The crop as an overlay: only the fruit, the same size and anchor as the grown sprite, drawn on
+                # top of it while the crop waits to be picked (so the fruit can be redrawn on its own).
                 f = Canvas(cw, ch)
-                crop_plant(f, d["look"], cw, ch, sc)
-                fruit(f, d["look"], cw, ch, sc)
-                f.outline(1)
-                write(f"landscape.{d['id']}.fruit", (cw, ch), [f], palette=crop_palette(d), anchor=(cw // 2, ch - 3), tags=["landscape", "crop"])
+                fruit(f, d["look"], cw, ch, sc)          # no outline of its own: the fruit sits on the canopy
+                write(f"landscape.{d['id']}.fruit", (cw, ch), [f], palette=crop_palette(d), anchor=(cw // 2, ch - 3), tags=["landscape", "crop", "overlay"])
             continue
         if d["kind"] == "tree":
             if d["look"] == "log":

@@ -141,7 +141,8 @@ Crop plants (`Content/landscape.json` kind `crop`, `tuning.orchard`): four tiers
   | 3 | 3 days | every 12 hours | 2 | 12 |
   | 4 | 5 days | every 24 hours | 2 | 30 |
 
-  A ripe plant shows its fruit and sparkles. **Tap it to pick**; the next crop starts then. A crop waits on the plant until picked (nothing spoils), but doesn't stack up.
+  A ripe plant shows its fruit and sparkles: it's drawn as its grown sprite with a fruit overlay on top (`landscape.<id>.fruit`, only the fruit, same size and anchor), so the fruit can be redrawn on its own. **Tap it to pick**; the next crop starts then.
+  - **Half come up mirrored:** each crop plant has a 50% chance (`orchard.mirrorChance`) of being placed flipped left to right, fruit and all, for variety. A crop waits on the plant until picked (nothing spoils), but doesn't stack up.
 - **Tier 4 is a long climb.** With one plant per tier, going from a tier-1 plant to buying tier 4 takes about 26 days. Three plants per tier takes about two weeks. Even twelve tier-1 plants and eight of each higher tier, which needs a lot of soil, space and coins, takes about ten days.
 - **Crops** (`produce.<school>.<tier>`) go into the Bag under Orchard crops. They sell to the Store, and the wishing well takes them; they count for their school's focus.
 - The morning card says how many crop plants have a crop waiting. Developer mode's *Grow all plants now* ripens them too.
@@ -429,6 +430,7 @@ tools/
 - **`anchor`** is measured in pixel-edge coordinates from the top-left. Objects anchor at their feet; ground tiles at their centre.
 - **Missing sprite ids** render as a magenta "?" instead of crashing.
 - **Placeholder art:** `python3 tools/gen_placeholders.py` regenerates every placeholder sprite. Re-running it reproduces the committed sprites exactly.
+  - **Hand-made sprites are never overwritten:** ids listed in `design/art/handmade_sprites.json` (sprites redrawn in the Sprite Bench, or by hand) are skipped by every generator, since they all write through `gen_placeholders.write()`. Remove an id there to let its generator draw it again.
   - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
   - The Stump and the wishing well (`landmark.stump` 32×29, `landmark.well` 32×46) are drawn art from `design/art/`, scaled to their 2×2 footprint (32 pixels wide) by `python3 tools/import_sprite_image.py` (needs Pillow). The well's roof leans over the row above; only its own tiles open it.
   - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed, gold, violet with a seal or iridescent) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
