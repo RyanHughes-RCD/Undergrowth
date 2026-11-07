@@ -1243,7 +1243,7 @@
     },
     {
      "stage": "grown",
-     "hours": 12,
+     "hours": 24,
      "aura": 0,
      "tries": 0,
      "beauty": 1
@@ -1259,14 +1259,14 @@
     },
     {
      "stage": "young",
-     "hours": 12,
+     "hours": 24,
      "aura": 0,
      "tries": 0,
      "beauty": 1
     },
     {
      "stage": "grown",
-     "hours": 36,
+     "hours": 72,
      "aura": 0,
      "tries": 0,
      "beauty": 2
@@ -1282,14 +1282,14 @@
     },
     {
      "stage": "young",
-     "hours": 24,
+     "hours": 48,
      "aura": 0,
      "tries": 0,
      "beauty": 2
     },
     {
      "stage": "grown",
-     "hours": 72,
+     "hours": 120,
      "aura": 0,
      "tries": 0,
      "beauty": 3
@@ -1309,27 +1309,27 @@
     }
    },
    "2": {
-    "regrow": 6,
+    "regrow": 8,
     "yield": 2,
     "sell": 5,
     "cost": {
-     "prev": 6
+     "prev": 20
     }
    },
    "3": {
-    "regrow": 10,
+    "regrow": 12,
     "yield": 2,
     "sell": 12,
     "cost": {
-     "prev": 8
+     "prev": 40
     }
    },
    "4": {
-    "regrow": 16,
+    "regrow": 24,
     "yield": 2,
     "sell": 30,
     "cost": {
-     "prev": 10
+     "prev": 60
     }
    }
   }

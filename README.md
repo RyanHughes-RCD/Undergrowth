@@ -130,19 +130,19 @@ Crop plants (`Content/landscape.json` kind `crop`, `tuning.orchard`): four tiers
 | Shimmer | Sugar-crystal Reeds → Sugar Crystals | Prism Grape Vine → Prism Grapes | Glass Cherry Tree → Glass Cherries | Rainbow Fig Tree → Rainbow Figs |
 | Spirit | Mist Currant Bush → Mist Currants | Ghost Gooseberry → Ghost Gooseberries | Elderberry Tree → Elderberries | Dreamplum Tree → Dreamplums |
 
-- **A currency ladder:** the Store's **Orchard** tab sells tier 1 for 15 coins. Each higher tier costs the crop of the tier below, of the same school: 6, 8 and 10. Each row shows how much of its price you have.
+- **A currency ladder:** the Store's **Orchard** tab sells tier 1 for 15 coins. Each higher tier costs the crop of the tier below, of the same school: 20, 40 and 60. Each row shows how much of its price you have.
 - **Own soil only:** a crop plant can only be placed where every tile of its footprint is its school's soil, so the landscape comes first. Its footprint is reserved like any landscape piece, and the tides and other pieces never change the soil under it.
 - **Growing and bearing:**
 
   | Tier | First crop | Then | Crop per pick | Sells for |
   |---|---|---|---|---|
   | 1 | 6 hours | every 4 hours | 3 | 2 |
-  | 2 | 12 hours | every 6 hours | 2 | 5 |
-  | 3 | 1.5 days | every 10 hours | 2 | 12 |
-  | 4 | 3 days | every 16 hours | 2 | 30 |
+  | 2 | 1 day | every 8 hours | 2 | 5 |
+  | 3 | 3 days | every 12 hours | 2 | 12 |
+  | 4 | 5 days | every 24 hours | 2 | 30 |
 
   A ripe plant shows its fruit and sparkles. **Tap it to pick**; the next crop starts then. A crop waits on the plant until picked (nothing spoils), but doesn't stack up.
-- With one plant per tier, going from a tier-1 plant to buying tier 4 takes about five days. More plants of a tier speed it up.
+- **Tier 4 is a long climb.** With one plant per tier, going from a tier-1 plant to buying tier 4 takes about 26 days. Three plants per tier takes about two weeks. Even twelve tier-1 plants and eight of each higher tier, which needs a lot of soil, space and coins, takes about ten days.
 - **Crops** (`produce.<school>.<tier>`) go into the Bag under Orchard crops. They sell to the Store, and the wishing well takes them; they count for their school's focus.
 - The morning card says how many crop plants have a crop waiting. Developer mode's *Grow all plants now* ripens them too.
 - A crop plant's page shows when its next crop comes and has a **Pick** button. Digging it up returns it to the Bag (its growth is lost).
