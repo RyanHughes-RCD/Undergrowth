@@ -30,7 +30,7 @@
   }
  },
  "garden": {
-  "_about": "The garden. Plants (Content/plants.json) grow through stages (seed, sprout, bud, ready; a plant only flowers when it's ready to pick) over growHours on their own school's soil, timed from timestamps so time away counts. soil: growth speed on the plant's own soil (preferred), on plain soil (plain); on another school's soil it can't be planted at all. stages: the share of growth at which sprout and bud begin; ready (in bloom) at 1. Per plant (plants): growHours, yield (produce per harvest), seeds [packets always returned, chance of one more], sell (coins per produce). Every plant leaves its tile when it's harvested. Seed packets and their odds: packets. amendments: the Store's daily soil stock. sellByRarity: the price of anything else in the Bag that can be sold (foraged finds). startCoins: coins in a new garden. starterSet: what the opening's tin holds: Common seeds of the chosen school and of the runner-up, and a few amendments of each. morning: after minAwayHours of real time away a card sums up what's ready; at most one surprise per local day, with surpriseChance, chosen by weight among the kinds possible right now.",
+  "_about": "The garden. Plants (Content/plants.json) grow through stages (seed, sprout, bud, ready; a plant only flowers when it's ready to pick) over growHours on their own school's soil, timed from timestamps so time away counts. soil: growth speed on the plant's own soil (preferred), on plain soil (plain); on another school's soil it can't be planted at all. stages: the share of growth at which sprout and bud begin; ready (in bloom) at 1. Per plant (plants): growHours, yield (produce per harvest), seeds [packets always returned, chance of one more], sell (coins per produce). Every plant leaves its tile when it's harvested. Seed packets and their odds: packets. amendments: retired (refunds for old bags). sellByRarity: the price of anything else in the Bag that can be sold (foraged finds). startCoins: coins in a new garden. starterSet: what the opening's tin holds (see its _about). morning: after minAwayHours of real time away a card sums up what's ready; at most one surprise per local day, with surpriseChance, chosen by weight among the kinds possible right now.",
   "startCoins": 20,
   "soil": {
    "preferred": 1,
@@ -55,12 +55,9 @@
    "bud": 0.45
   },
   "amendments": {
-   "_about": "Soil amendments: every school's is always in the Store, but dear. A school bag costs price + perExpansion × Room to grow purchases, and each school bag already bought that local day multiplies it by dayStep (so redoing the garden at once is ruinous; prices reset each morning), rounded to `round` coins. Garden loam (back to plain) is always plainPrice. Other sources: the opening's tin, and the soil patches Room to grow uncovers.",
-   "price": 20,
-   "perExpansion": 15,
-   "dayStep": 1.5,
-   "round": 5,
-   "plainPrice": 2
+   "_about": "Soil amendments are retired: landscape pieces make soil now. Bags left in an older save are refunded on load: refund coins per school bag, plainRefund per Garden loam.",
+   "refund": 20,
+   "plainRefund": 2
   },
   "sellByRarity": {
    "common": 2,
@@ -70,10 +67,35 @@
    "legendary": 30
   },
   "starterSet": {
+   "_about": "What the opening's tin holds: Common seeds of the chosen school and the runner-up, and landscape pieces (landscape) for each: a tree and a large plant of the chosen school, a large plant of the runner-up.",
    "primaryPackets": 4,
    "secondPackets": 2,
-   "primaryAmendments": 2,
-   "secondAmendments": 1
+   "landscape": {
+    "spore": [
+     "giant-toadstool",
+     "puffball-mound"
+    ],
+    "glow": [
+     "foxfire-pine",
+     "glowworm-fern"
+    ],
+    "bloom": [
+     "honey-linden",
+     "rose-bramble"
+    ],
+    "verdure": [
+     "great-beech",
+     "giant-fern"
+    ],
+    "shimmer": [
+     "prism-aspen",
+     "glassreed-clump"
+    ],
+    "spirit": [
+     "misty-pine",
+     "mistbell-thicket"
+    ]
+   }
   },
   "morning": {
    "minAwayHours": 4,
@@ -1088,6 +1110,228 @@
     1
    ],
    "luckPerTier": 0.35
+  }
+ },
+ "landscape": {
+  "_about": "Landscape pieces (Content/landscape.json): trees, water, large plants and structures, bought in the Store and placed from the Bag. Each takes its final footprint (`size`) from the day it's placed, so a sapling that will grow to 3x3 reserves 3x3. Its growth follows its `plan`: a list of stages, each reached `hours` after placing. A piece with a school makes its soil: its footprint turns to that soil when placed, and at every tide each try (`tries` per stage) has tryChance to spread its soil to one tile within `aura` tiles of the footprint (nearest first), held off by a tile's maturity and plants like the tides (tides.hold). Water pieces (water: true) count as water for the tides, so a patch touching them can spread. onWater pieces go on water tiles; ground pieces are drawn flat. `beauty` per stage adds to garden beauty. Pieces with no school (paths, walls, crossings) make no soil. Store gating: `beauty` on a piece is the beauty tier that puts it on the shelf.",
+  "tryChance": 0.5,
+  "plans": {
+   "tree": [
+    {
+     "stage": "sapling",
+     "hours": 0,
+     "aura": 1,
+     "tries": 1,
+     "beauty": 1
+    },
+    {
+     "stage": "young",
+     "hours": 18,
+     "aura": 1,
+     "tries": 1,
+     "beauty": 2
+    },
+    {
+     "stage": "grown",
+     "hours": 60,
+     "aura": 2,
+     "tries": 2,
+     "beauty": 4
+    }
+   ],
+   "giant": [
+    {
+     "stage": "sapling",
+     "hours": 0,
+     "aura": 1,
+     "tries": 1,
+     "beauty": 1
+    },
+    {
+     "stage": "young",
+     "hours": 24,
+     "aura": 1,
+     "tries": 1,
+     "beauty": 2
+    },
+    {
+     "stage": "grown",
+     "hours": 96,
+     "aura": 2,
+     "tries": 2,
+     "beauty": 5
+    },
+    {
+     "stage": "ancient",
+     "hours": 336,
+     "aura": 3,
+     "tries": 3,
+     "beauty": 10
+    }
+   ],
+   "plant": [
+    {
+     "stage": "young",
+     "hours": 0,
+     "aura": 1,
+     "tries": 1,
+     "beauty": 1
+    },
+    {
+     "stage": "grown",
+     "hours": 18,
+     "aura": 1,
+     "tries": 1,
+     "beauty": 2
+    }
+   ],
+   "slow": [
+    {
+     "stage": "young",
+     "hours": 0,
+     "aura": 1,
+     "tries": 1,
+     "beauty": 1
+    },
+    {
+     "stage": "grown",
+     "hours": 48,
+     "aura": 2,
+     "tries": 1,
+     "beauty": 3
+    },
+    {
+     "stage": "ancient",
+     "hours": 168,
+     "aura": 2,
+     "tries": 2,
+     "beauty": 6
+    }
+   ],
+   "fixed": [
+    {
+     "stage": "built",
+     "hours": 0,
+     "aura": 1,
+     "tries": 1,
+     "beauty": 2
+    }
+   ],
+   "crop1": [
+    {
+     "stage": "young",
+     "hours": 0,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 0
+    },
+    {
+     "stage": "grown",
+     "hours": 6,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 1
+    }
+   ],
+   "crop2": [
+    {
+     "stage": "young",
+     "hours": 0,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 0
+    },
+    {
+     "stage": "grown",
+     "hours": 24,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 1
+    }
+   ],
+   "crop3": [
+    {
+     "stage": "sapling",
+     "hours": 0,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 1
+    },
+    {
+     "stage": "young",
+     "hours": 24,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 1
+    },
+    {
+     "stage": "grown",
+     "hours": 72,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 2
+    }
+   ],
+   "crop4": [
+    {
+     "stage": "sapling",
+     "hours": 0,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 1
+    },
+    {
+     "stage": "young",
+     "hours": 48,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 2
+    },
+    {
+     "stage": "grown",
+     "hours": 120,
+     "aura": 0,
+     "tries": 0,
+     "beauty": 3
+    }
+   ]
+  }
+ },
+ "orchard": {
+  "_about": "Crop plants (landscape.json kind 'crop'): four tiers per school, placed like landscape pieces but only on their own school's soil (every tile of the footprint). They grow by their plan (landscape.plans crop1-crop4) and, once grown, bear a crop: `yield` of their produce item. Picking it starts the next one, ready `regrow` hours later; a crop waits on the plant until picked. Produce is a currency: tier 1 plants cost `cost.coins`; a higher tier costs `cost.prev` of the tier below's produce of the same school. Produce also sells to the Store for `sell` coins, and the wishing well takes it.",
+  "tiers": {
+   "1": {
+    "regrow": 4,
+    "yield": 3,
+    "sell": 2,
+    "cost": {
+     "coins": 15
+    }
+   },
+   "2": {
+    "regrow": 8,
+    "yield": 2,
+    "sell": 5,
+    "cost": {
+     "prev": 20
+    }
+   },
+   "3": {
+    "regrow": 12,
+    "yield": 2,
+    "sell": 12,
+    "cost": {
+     "prev": 40
+    }
+   },
+   "4": {
+    "regrow": 24,
+    "yield": 2,
+    "sell": 30,
+    "cost": {
+     "prev": 60
+    }
+   }
   }
  }
 }

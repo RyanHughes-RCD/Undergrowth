@@ -259,7 +259,7 @@ export class ForestView {
     const chance = ((this.app.content.tuning.visuals.soilDetails || {}).chance || [])[g.soilLevel(t) - 1] || 0;
     const hh = hash32(x, y, school.length, 0xde7a);
     if (hh / 4294967296 >= chance) return;
-    if (g.plantAt(t) || g.decorAt(t) || g.sceneryAt(t) || g.landmarkAt(t) || g.forageAt(t) || g.tinAt(t)) return;
+    if (g.plantAt(t) || g.decorAt(t) || g.sceneryAt(t) || g.landmarkAt(t) || g.landscapeAt(t) || g.forageAt(t) || g.tinAt(t)) return;
     const id = `detail.${school}.${(hh >>> 3) & 1 ? 'a' : 'b'}`;
     this.blit(id, null, c.x + ((hh >>> 8) % 7) - 3, c.y + 5 - ((hh >>> 12) % 4), 0, ((hh >>> 16) & 1) === 1);
   }
@@ -419,6 +419,18 @@ export class ForestView {
       const pos = at({ x: l.tile.x, y: l.tile.y + fh - 1 });
       objs.push({ sprite: def.sprite, x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: l.tile, kind: 'landmark', key: l.id, still: true, sortY: pos.y - TS });
     }
+    // Landscape pieces: drawn across their footprint, standing on its bottom row. Flat ones (water, paths,
+    // rings) go under everything else on their tiles.
+    for (const p of s.landscape || []) {
+      const def = g.landscapeDef(p.defID);
+      if (!def) continue;
+      const [fw, fh] = def.size, st = g.landscapeStage(p, now);
+      const pos = at({ x: p.tile.x, y: p.tile.y + fh - 1 });
+      const flat = def.kind === 'water' || def.ground || def.look === 'ring';
+      const crop = g.cropState(p, now), ripe = !!(crop && crop.ready);   // a crop plant with its crop waiting: fruit on, sparkling
+      objs.push({ sprite: g.landscapeSprite(def.id, ripe ? 'fruit' : st.stage), x: pos.x + (fw - 1) * TS / 2, y: pos.y, tile: p.tile, kind: 'landscape', key: p.id, still: true,
+        glimmer: ripe, phase: ripe ? hash32(p.tile.x, p.tile.y, 9) % 1000 / 250 : 0, sortY: flat ? p.tile.y * TS - 1 : pos.y - 1 });
+    }
     for (const d of s.scenery || []) objs.push({ sprite: d.sprite, ...at(d.tile), tile: d.tile, kind: 'scenery', key: 'sc' + d.tile.x + ',' + d.tile.y, flip: d.flip, still: true });
     for (const d of s.decor.placed) {
       const def = g.decorDef(d.decorID);
@@ -462,7 +474,7 @@ export class ForestView {
     const st = g.stump, tr = g.tributeState(now);
     if (st && tr && tr.phase === 'waiting') {
       const it = this.app.content.items[tr.item], p = at({ x: st.tile.x, y: st.tile.y + 1 });
-      if (it) out.push({ sprite: it.sprite, variant: it.variant || null, x: p.x + TS / 2, y: p.y - 34, tile: st.tile, kind: 'landmark', key: 'tribute', still: true, sortY: p.y - TS + 1 });
+      if (it) out.push({ sprite: it.sprite, variant: it.variant || null, x: p.x + TS / 2, y: p.y - 15, tile: st.tile, kind: 'landmark', key: 'tribute', still: true, sortY: p.y - TS + 1 });
     }
     return out;
   }
@@ -609,7 +621,8 @@ export class ForestView {
    */
   drawUnderlay(ctx) {
     const m = this.app.ui.mode, g = this.game;
-    if (!m || (m.type !== 'plant' && m.type !== 'amend')) return;
+    if (m && m.type === 'landscape') { this.drawPlaceable(ctx, m.itemID); return; }
+    if (!m || m.type !== 'plant') return;
     const item = this.app.content.items[m.itemID];
     if (!item) return;
     const pulse = 0.55 + 0.25 * Math.sin(performance.now() / 300);
@@ -618,13 +631,34 @@ export class ForestView {
       const t = { x, y };
       // Planting: its own soil glows brightly, plain ground faintly (it grows there, but slowly).
       const chk = m.type === 'plant' ? g.canPlantPacket(m.itemID, t) : null;
-      const ok = m.type === 'plant' ? chk.ok : (!g.plantAt(t) && !g.landmarkAt(t) && !g.sceneryAt(t) && (item.amend || null) !== g.soilAt(t));
+      const ok = chk.ok;
       if (!ok) continue;
       const k = chk && chk.factor < 1 ? 0.45 : 1;
       ctx.fillStyle = `rgba(255,246,190,${0.12 * pulse * k})`;
       ctx.fillRect(x * TS, y * TS, TS, TS);
       ctx.strokeStyle = `rgba(255,246,190,${0.7 * pulse * k})`;
       ctx.strokeRect(x * TS + 1.5, y * TS + 1.5, TS - 3, TS - 3);
+    }
+  }
+  /**
+   * While placing a landscape piece: every tile you could tap to put it there glows (its footprint is
+   * centred on the tap). Worked out once per piece and garden state, not every frame.
+   */
+  drawPlaceable(ctx, itemID) {
+    const g = this.game, it = this.app.content.items[itemID], def = it && g.landscapeDef(it.landscape);
+    if (!def) return;
+    const k = [itemID, g.state.landscape.length, g.state.plants.length, g.state.decor.placed.length, g.state.water.length, JSON.stringify(g.clearing)].join('|');
+    if (!this._placeable || this._placeable.k !== k) {
+      const tiles = [], c = g.clearing;
+      for (let y = c.y0; y <= c.y1; y++) for (let x = c.x0; x <= c.x1; x++) if (g.canPlaceLandscape(def.id, { x, y }).ok) tiles.push({ x, y });
+      this._placeable = { k, tiles };
+    }
+    const pulse = 0.55 + 0.25 * Math.sin(performance.now() / 300);
+    for (const t of this._placeable.tiles) {
+      ctx.fillStyle = `rgba(190,255,200,${0.12 * pulse})`;
+      ctx.fillRect(t.x * TS, t.y * TS, TS, TS);
+      ctx.strokeStyle = `rgba(190,255,200,${0.6 * pulse})`;
+      ctx.strokeRect(t.x * TS + 1.5, t.y * TS + 1.5, TS - 3, TS - 3);
     }
   }
   /** Rain falling on rainy and stormy days: short slanted streaks, more and faster in a storm. Still with reduced motion. */
@@ -954,6 +988,8 @@ export class ForestView {
         const t = tileAt(w.x, w.y), l = this.game.landmarkAt(t);
         if (!l || l.id !== o.key) continue;
       }
+      // Landscape pieces answer only on their own tiles (a canopy over the row above lets taps through).
+      if (o.kind === 'landscape') { const lp = this.game.landscapeAt(tileAt(w.x, w.y)); if (!lp || lp.id !== o.key) continue; }
       const f = this.sprites.frames(o.sprite, o.variant)[0];
       const a = this.sprites.anchor(o.sprite);
       const ox = o.drawX ?? o.x, oy = o.drawY ?? o.y;

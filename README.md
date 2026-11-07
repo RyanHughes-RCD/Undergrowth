@@ -11,6 +11,8 @@ The rework was built in phases:
 5. Replaced the Old Log with water (first a spring, now a 2×2 pool) and its streams, plus weather, the moon, soil spread by the tides, soil maturity and digging channels.
 6. Visitors who stay: mementos instead of tracks, residents who live in the garden while their conditions hold, and the Stump, which takes offerings.
 7. Epic and Legendary seeds, and the wishing well.
+8. Landscape: trees, water, large plants and structures that make their own soil. Soil bags are retired.
+9. The orchard: four tiers of crop plant per school, whose regrowing crops are the currency for the next tier.
 
 ## Running it
 
@@ -65,7 +67,7 @@ The garden is a new game, so older forests aren't carried over:
   - An old seed tin waits by the log (`start.tin`). Tapping it shows the words on its lid, then five quiet questions with four answers each (`Content/opening.json`). No answer names a school or a mechanic. Each answer adds weight to one or two schools.
   - The highest total chooses the garden's starting school, and the runner-up adds a little. The tin holds a starter set (`garden.starterSet`):
     - 4 Common seeds of that school and 2 Common seeds of the runner-up;
-    - 2 amendments of the school and 1 of the runner-up.
+    - landscape pieces: a tree and a large plant of the school, and a large plant of the runner-up (`starterSet.landscape`). Placing them is how a garden gets its first soil.
   - A new garden also starts with 20 coins (`garden.startCoins`).
   - `python3 tools/check_opening.py` checks the weights: every school can be chosen, and over every possible set of answers the shares are 13–19%.
 - **The foraging patch** (`tuning.json` → `forage`, on by default): plain finds turn up by chance on the clearing's outer ring, by the treeline. They are Brown Button Cap, Clover, Sorrel and Meadow Daisy.
@@ -87,6 +89,65 @@ The garden is a new game, so older forests aren't carried over:
 - **Field Guide:** tabs for Plants and Mushrooms (the Plant & Fungi Catalogue), Colours and Visitors. Unfound entries are silhouettes. An entry you can grow also has its growing notes (soil, grow time, price, where its seeds come from, its set, good neighbours), and while unfound it hints at where to look (a sparkle). Plants and Mushrooms open with the collections. (There used to be a separate Garden tab with just the growable plants; its notes now live on these entries.)
 - **Time:** the real local clock (`tuning.json` → `clock`). Everything runs on timestamps, so the garden catches up when the game reopens.
 
+## Landscape (web)
+
+Trees, water, large plants and structures (`Content/landscape.json`, `tuning.landscape`): 61 pieces, about ten per school plus neutral paths and crossings. They're the main way to shape the garden, and the only way to make soil.
+
+- **Buying and placing:** the Store's **Landscape** tab (first) lists every piece by kind (Trees, Water, Large plants, Structures), with a school filter and a Paths filter. Bigger pieces open with the beauty tier (`beauty` on a piece). A piece goes into the Bag; **Place** it, then tap a lit tile. The footprint is centred on the tap (just above-left of it for even sizes).
+- **Footprints are reserved:** a piece takes its final footprint (`size`) from the day it's placed. A sapling that will become a 3×3 giant claims all nine tiles at once, so it never runs out of room. Nothing else can go on those tiles.
+- **Growth** follows the piece's `plan`, by real time since it was placed:
+
+  | Plan | Stages (hours after placing) | Used by |
+  |---|---|---|
+  | tree | sapling 0 · young 18 · grown 60 | 1×1 and 2×2 trees |
+  | giant | sapling 0 · young 24 · grown 96 · ancient 336 (14 days) | one 3×3 tree per school: Shelfback Elm, Lantern Willow, Petalfall Tree, Old Oak, Crystal Birch, Weeping Yew |
+  | plant | young 0 · grown 18 | large plants |
+  | slow | young 0 · grown 48 · ancient 168 | the Toadstool Circle (3×3) |
+  | fixed | built 0 | water, structures, the Fallen Giant |
+
+- **Making soil:** a piece with a school turns its footprint to that soil when placed. Then at every tide it spreads it: each of its `tries` has a 50% chance (`tryChance`) to turn the nearest tile within `aura` tiles of its footprint that isn't that soil yet. The tile resists by its maturity and any plant on it, as with the tides.
+  - Aura and tries grow with the stage: 1 and 1 for a sapling or young piece, 2 and 2 grown, 3 and 3 for an ancient giant.
+  - Pieces of different schools near each other compete for the tiles between them.
+  - Soil a piece made stays if the piece is dug up.
+- **Water pieces count as water** (basins, seeps, troughs, pools, springs, barrels, fountains): tiles beside them are banks for the tides, so a patch touching them spreads like one touching the stream. They can't be dug from, though: channels still lead only from the river.
+- **Crossings** (Footbridge, Stepping-stone Ford) go on water tiles. **Paths, walls and the swing** have no school and make no soil.
+- **Beauty:** each piece adds its stage's `beauty` (a sapling 1, an ancient giant 10).
+- **Tap a piece** (on its own tiles; a canopy over the row above lets taps through) for its page: stage, when it grows on, the soil it spreads, and **Dig it up** (back to the Bag; its growth is lost).
+- **The Field Guide's Landscape tab** fills in as you place each piece.
+- The river avoids pieces where it can. If Room to grow's stream must cross one, the piece goes back to the Bag.
+- Placeholder art for every stage (`landscape.<id>.<stage>`) comes from `tools/gen_landscape_sprites.py`.
+
+## The orchard (web)
+
+Crop plants (`Content/landscape.json` kind `crop`, `tuning.orchard`): four tiers per school, 24 in all. They're placed like landscape pieces and bear a crop over and over. Each crop is a currency.
+
+| School | Tier 1 (1×1) | Tier 2 (1×1) | Tier 3 (2×2 tree) | Tier 4 (2×2 tree) |
+|---|---|---|---|---|
+| Spore | Button Patch → Button Caps | Oyster Log → Oyster Mushrooms | Truffle Oak → Truffles | Morel Elm → Golden Morels |
+| Glow | Glowberry Bush → Glowberries | Lantern Gourd Vine → Lantern Gourds | Moonplum Tree → Moonplums | Starfruit Willow → Starfruit |
+| Bloom | Berry Bramble → Wildberries | Rosehip Shrub → Rosehips | Honey Pear Tree → Honey Pears | Sunpeach Tree → Sunpeaches |
+| Verdure | Mint Patch → Mint Sprigs | Pea Arbour → Peapods | Apple Tree → Apples | Walnut Tree → Walnuts |
+| Shimmer | Sugar-crystal Reeds → Sugar Crystals | Prism Grape Vine → Prism Grapes | Glass Cherry Tree → Glass Cherries | Rainbow Fig Tree → Rainbow Figs |
+| Spirit | Mist Currant Bush → Mist Currants | Ghost Gooseberry → Ghost Gooseberries | Elderberry Tree → Elderberries | Dreamplum Tree → Dreamplums |
+
+- **A currency ladder:** the Store's **Orchard** tab sells tier 1 for 15 coins. Each higher tier costs the crop of the tier below, of the same school: 20, 40 and 60. Each row shows how much of its price you have.
+- **Own soil only:** a crop plant can only be placed where every tile of its footprint is its school's soil, so the landscape comes first. Its footprint is reserved like any landscape piece, and the tides and other pieces never change the soil under it.
+- **Growing and bearing:**
+
+  | Tier | First crop | Then | Crop per pick | Sells for |
+  |---|---|---|---|---|
+  | 1 | 6 hours | every 4 hours | 3 | 2 |
+  | 2 | 1 day | every 8 hours | 2 | 5 |
+  | 3 | 3 days | every 12 hours | 2 | 12 |
+  | 4 | 5 days | every 24 hours | 2 | 30 |
+
+  A ripe plant shows its fruit and sparkles. **Tap it to pick**; the next crop starts then. A crop waits on the plant until picked (nothing spoils), but doesn't stack up.
+- **Tier 4 is a long climb.** With one plant per tier, going from a tier-1 plant to buying tier 4 takes about 26 days. Three plants per tier takes about two weeks. Even twelve tier-1 plants and eight of each higher tier, which needs a lot of soil, space and coins, takes about ten days.
+- **Crops** (`produce.<school>.<tier>`) go into the Bag under Orchard crops. They sell to the Store, and the wishing well takes them; they count for their school's focus.
+- The morning card says how many crop plants have a crop waiting. Developer mode's *Grow all plants now* ripens them too.
+- A crop plant's page shows when its next crop comes and has a **Pick** button. Digging it up returns it to the Bag (its growth is lost).
+- Placeholder art (each stage, a ripe `fruit` sprite, and a crop icon) comes from `tools/gen_landscape_sprites.py`.
+
 ## Growing things (web)
 
 The core loop: choose a seed packet, plant it on a tile you choose, watch it grow through its stages, harvest it (produce, and usually seeds back), sell the produce, and decide what to plant next. Plants are defined in `Resources/Content/plants.json` (kept by hand) and every number is in `tuning.json` → `garden`.
@@ -95,17 +156,8 @@ The core loop: choose a seed packet, plant it on a tile you choose, watch it gro
   - The art, names and Field Guide text come from the Plant & Fungi Catalogue: each plant names the catalogue item it yields (`item`).
   - Numbers live only in tuning, keyed by plant id.
 - **Soil:** every clearing tile has one soil: plain, or one of the six schools (saved as `state.soil`; plain isn't stored).
-  - You change a tile's soil on purpose with an amendment from the Bag: Spore compost, Glow dust, Bloom mulch, Verdure leaf mould, Shimmer crystal dust or Spirit mist. Garden loam turns it back to plain (`Content/amendments.json`).
-  - One bag does one tile, and the soil stays until you change it. A tile with a plant on it can't be changed.
-  - **Soil is dear** (`garden.amendments`). Every school's amendment is always in the Store, but a bag costs 20 coins + 15 for each Room to grow you've bought, and each school bag already bought that day makes the next 1.5× dearer (rounded to 5). Prices reset each morning, so reshaping the garden takes days, not one shopping trip. Garden loam is always 2.
-
-    | Room to grow bought | 1st bag today | 2nd | 3rd | 4th | 5th | 5 bags in a day |
-    |---|---|---|---|---|---|---|
-    | 0 | 20 | 30 | 45 | 70 | 100 | 265 |
-    | 2 | 50 | 75 | 115 | 170 | 255 | 665 |
-    | 5 | 95 | 145 | 215 | 320 | 480 | 1255 |
-    | 10 | 170 | 255 | 385 | 575 | 860 | 2245 |
-  - The other sources are the opening's tin and the soil patches Room to grow uncovers.
+  - **Soil comes from the landscape.** Trees, water, large plants and structures each make their school's soil (see Landscape). The tides spread it further, and Room to grow uncovers a wild patch of soil with each purchase.
+  - **Soil bags are retired.** The Store no longer sells them, and the tin no longer holds them. Bags left in an older save are traded back for coins when it loads: 20 per school bag and 2 per Garden loam (`garden.amendments`). A card says so once.
   - The tile shows its soil: plain is grass, and a school's soil is its ground tile (`tile.<school>.3a/b`).
 - **Growing well:**
   - On its own school's soil a plant grows at normal speed (`soil.preferred` 1).
@@ -301,7 +353,7 @@ This writes `Resources/Content/items.json` (127 entries; ids `<category>.<slug>`
 - **Requests:** one row per Store listing or Old Log request.
   - **Kind:** `shop` (bought with coins, again and again), `upgrade` (bought once, chained: Room to grow), `commission` (a one-off request at the Old Log) or `order` (the pool of daily orders).
   - **Coins:** the price.
-  - Up to four items with counts (seed packets and amendments included).
+  - Up to four items with counts (seed packets included).
   - **Reward:** `cosmetic`, `item`, `unlock` = `expansion`, or `coins`.
   - **Gating:** Field Guide entries, another request done first, a beauty tier, a garden day.
   - Decor costs 15–80 coins. Room to grow costs 100, 150, 200, 260, 330, 410, 500, 600, 720 and 850.
@@ -323,7 +375,7 @@ A separate test garden for trying anything without touching your real save.
   - Entering developer mode saves the real garden and keeps a backup copy (`undergrowth.forest.v1.backup`).
   - Test gardens are marked (`state.dev`), and saving one over the real garden is refused.
 - **Tools:**
-  - **Garden:** grow all plants now; +100 or +1000 coins; give any blind or named seed packet or amendment, or 5 of each.
+  - **Garden:** grow all plants now; +100 or +1000 coins; give any blind or named seed packet, or 5 of each; one of every landscape piece; age every placed piece a day or a week.
   - **Plant timers:** tap a plant to see its exact progress, rate, time to ready and stage times.
   - The six relic ornaments; see the beauty score and set the best beauty tier reached.
   - **Visitors:** set a visitor's interest (ready for a memento, ready to visit, reset), make it visit now (its next memento, or moving in if it can stay), move it in regardless, or see which of its conditions hold. Also give 2 of every colour variety packet.
@@ -378,7 +430,7 @@ tools/
 - **Missing sprite ids** render as a magenta "?" instead of crashing.
 - **Placeholder art:** `python3 tools/gen_placeholders.py` regenerates every placeholder sprite. Re-running it reproduces the committed sprites exactly.
   - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
-  - The Stump and the wishing well (`landmark.stump` 58×53, `landmark.well` 44×63) are drawn art, imported at their own size (one art pixel per game pixel) from `design/art/` by `python3 tools/import_sprite_image.py` (needs Pillow). They stand on their 2×2 tiles and overhang a little, like a tree.
+  - The Stump and the wishing well (`landmark.stump` 32×29, `landmark.well` 32×46) are drawn art from `design/art/`, scaled to their 2×2 footprint (32 pixels wide) by `python3 tools/import_sprite_image.py` (needs Pillow). The well's roof leans over the row above; only its own tiles open it.
   - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed, gold, violet with a seal or iridescent) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
   - Catalogue items and their bud stages (`plant.bud.<key>`; fungi get a small closed button) come from `gen_content_sprites.py`.
   - School soil tiles (`tile.<school>.<1–4>a/b`), and water come from `gen_terrain.py`.
@@ -391,7 +443,8 @@ tools/
 |---|---|
 | `items.json` | The Plant & Fungi Catalogue (from the spreadsheet): id, category, name, rarity, sprite, school, description. |
 | `plants.json` | Garden plants (kept by hand): id, the catalogue item it yields, school, kind, family, source (`seeds`: comes from blind packets; `gift`: only from visitors), tier (common, uncommon, rare), companions, varieties. Numbers: `tuning.json` → `garden.plants`. Blind packets (`seeds.<school>.<tier>`) are built from the schools; each plant also has a named packet (`packet.<id>`), used for gifts. |
-| `amendments.json` | Soil amendments (kept by hand): id, school (null = plain loam), name, text. |
+| `amendments.json` | Retired soil amendments (kept so old saves' bags can be refunded). |
+| `landscape.json` | Landscape pieces and crop plants (kept by hand): id, name, school (null for paths and crossings), kind (tree, water, plant, structure, crop; crops also have tier and produce: id, name, look, colour), plan (growth stages, `tuning.landscape.plans`), size (final footprint), look (placeholder shape), price, beauty (tier that opens it), text; flags water (counts as water), onWater (goes on water), ground (drawn flat). |
 | `landmarks.json` | Landmarks: the Stump and the wishing well (`footprint` 2×2; `discovery` firstExpansion / secondExpansion: placed by Room to grow, not at the start; `tapFootprint`: only taps on its own tiles open it, so the well's roof doesn't catch taps meant for the row above). |
 | `opening.json` | The seed tin's card, the questions and their school weights, and what each school's tin holds. |
 | `visitors.json` | Fifteen forest animals: name, sprite, tier (early, settled, mystical), school (and `schools` for two), likes (`plants` that must be blooming, `time` window), `stays` (conditions: soil, bed, beauty, resident), `mementos` (text, and which conditions each `hint`s at), `restate` and `parting` (a line per condition), `perk` (growth, tideHold), Field Guide text and gift (a seed packet id). |

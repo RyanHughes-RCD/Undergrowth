@@ -29,8 +29,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # sprite id: source picture, art-pixel size in the picture, colours, tags; optional `width` scales the art
 # (without it, one art pixel is one game pixel: the picture keeps its own size)
 ART = {
-    "landmark.stump": {"src": "design/art/tree_stump.jpg", "cell": 20, "colors": 32, "tags": ["landmark"]},
-    # The well is scaled to its 2x2 footprint (32 wide); its roof leans over the row above.
+    # Both landmarks are scaled to their 2x2 footprint (32 wide); the well's roof leans over the row above.
+    "landmark.stump": {"src": "design/art/tree_stump.jpg", "cell": 20, "width": 32, "colors": 32, "tags": ["landmark"]},
     "landmark.well": {"src": "design/art/wishing_well.jpg", "cell": 20, "width": 32, "colors": 32, "tags": ["landmark"]},
 }
 WHITE = 690          # r+g+b above this is background
