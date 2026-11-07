@@ -194,6 +194,7 @@ class App {
       this.nightNote = e;
     }
     else if (e.type === 'collection') ui.collectionCard(e);
+    else if (e.type === 'soilRetired') ui.celebrate('Soil, the old way', `Bags of soil aren't sold any more: trees, water and plants make their own soil now, spreading it around them as they grow. Your leftover bags were traded back for ${e.coins} coins. Look under Landscape in the Store.`, null, 'OK');
     else if (e.type === 'crossPollinated') {
       const v = this.game.varietyDef(e.variety);
       ui.toast(`Something new among the seeds: ${v ? v.name : 'a new colour'}.`, v ? this.content.items[v.packet]?.sprite : null);
@@ -266,10 +267,15 @@ class App {
         if (this.plantAt(id, tile, false) && !(g.state.inventory[id] > 0)) ui.mode = null;
         this.changed();
       },
-      amend: (tile) => {
-        const id = ui.mode.itemID;
-        if (this.amendAt(id, tile, false) && !(g.state.inventory[id] > 0)) ui.mode = null;
-        this.changed();
+      landscape: (tile) => {
+        const id = ui.mode.itemID, it = this.content.items[id];
+        const p = this.attempt(() => g.placeLandscape(id, tile, g.now()));
+        if (p) {
+          if (!(g.state.inventory[id] > 0)) ui.mode = null;
+          const def = g.landscapeDef(p.defID);
+          ui.toast(`${def.name} planted.${def.school ? ` ${def.school.charAt(0).toUpperCase() + def.school.slice(1)} soil will spread from it.` : ''}`, it && it.sprite);
+          this.changed();
+        }
       },
     };
   }
@@ -279,6 +285,9 @@ class App {
     const g = this.game, ui = this.ui, now = g.now();
     const landmark = g.landmarkAt(tile);
     if (landmark) { ui.selectedTile = null; if (landmark.id === STUMP) ui.open('stump'); else if (landmark.id === WELL) { ui.wellPick = {}; ui.open('well'); } else ui.forecastCard(); this.changed(false); return true; }
+    // A landscape piece (only from its own tiles: a tree's canopy doesn't catch taps meant for the row above).
+    const land = g.landscapeAt(tile);
+    if (land) { ui.selectedTile = null; ui.open('land', land.id); this.changed(false); return true; }
     // A resident: its Field Guide page.
     if (tile.hitKind === 'resident') { ui.selectedTile = null; ui.open('visitor', tile.hitKey); this.changed(false); return true; }
     if (g.tinAt(tile)) { ui.selectedTile = null; ui.openOpening(); return true; }
@@ -314,7 +323,7 @@ class App {
   }
 
   beginPlanting(itemID) { this.beginMode({ type: 'plant', itemID }); }
-  beginAmend(itemID) { this.beginMode({ type: 'amend', itemID }); }
+  beginLandscape(itemID) { this.beginMode({ type: 'landscape', itemID }); }
 
   /** Plant a seed packet on a tile (from planting mode or a tile's card). */
   plantAt(itemID, tile, refresh = true) {
@@ -326,16 +335,6 @@ class App {
     this.ui.toast(slow ? `Planted. ${name} grows slowly in plain soil; it likes ${def.school.charAt(0).toUpperCase() + def.school.slice(1)} soil.` : `Planted. ${p.blind ? 'Watch for its bud.' : `It'll be ready ${this.ui.roughly(g.readyAt(p) - g.now())}.`}`, this.content.items[itemID]?.sprite);
     if (refresh) { this.ui.selectedTile = null; this.changed(); }
     return p;
-  }
-
-  /** Spread a soil amendment on a tile. */
-  amendAt(itemID, tile, refresh = true) {
-    const g = this.game;
-    const r = this.attempt(() => ({ soil: g.amend(itemID, tile, g.now()) }));
-    if (!r) return null;
-    this.ui.toast(r.soil ? `${r.soil.charAt(0).toUpperCase() + r.soil.slice(1)} soil now.` : 'Plain soil again.', this.content.items[itemID]?.sprite);
-    if (refresh) this.changed();
-    return r;
   }
 
   /** Dig a channel: the tile becomes water (its soil is lost). */
@@ -378,9 +377,13 @@ class App {
     const r = this.attempt(() => this.game.buyPacket(packetID, this.game.now()));
     if (r) { this.present(r); this.changed(); }
   }
-  buyAmendment(itemID) {
-    const r = this.attempt(() => this.game.buyAmendment(itemID, this.game.now()));
+  buyLandscape(itemID) {
+    const r = this.attempt(() => this.game.buyLandscape(itemID));
     if (r) { this.present(r); this.changed(); }
+  }
+  removeLandscape(placedID) {
+    const r = this.attempt(() => this.game.removeLandscape(placedID, this.game.now()));
+    if (r) { this.ui.sheet = null; this.ui.close(); this.present(r); this.changed(); }
   }
 
   beginMode(mode) { this.ui.sheet = null; this.ui.close(); this.ui.selectedTile = null; this.ui.mode = mode; this.changed(false); }

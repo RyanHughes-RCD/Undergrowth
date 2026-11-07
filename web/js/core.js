@@ -189,7 +189,18 @@ export class Game {
     s.guests = s.guests || {};             // visitors: interest, mementos left (series), notes, home while resident
     s.visitorNews = s.visitorNews || [];   // mementos, arrivals and departures since the player last looked
     s.tribute = s.tribute || null;         // the offering on the Stump
-    s.wellBuffs = s.wellBuffs || [];       // the wishing well's blessings in force: { schools, from, until, mult }
+    s.wellBuffs = s.wellBuffs || [];
+    s.landscape = s.landscape || [];       // placed landscape pieces: { id, defID, tile (top-left), placedAt }
+    // Soil bags are retired (landscape makes soil now): bags left from an older save become coins.
+    let refund = 0;
+    const A = (this.t.garden || {}).amendments || {};
+    for (const id of Object.keys(s.inventory)) {
+      if (!id.startsWith('amend.')) continue;
+      refund += s.inventory[id] * (id === 'amend.plain' ? (A.plainRefund ?? 2) : (A.refund ?? 20));
+      delete s.inventory[id];
+    }
+    if (refund) { s.coins = (s.coins || 0) + refund; this.events.push({ type: 'soilRetired', coins: refund }); }
+    delete s.soilShop;       // the wishing well's blessings in force: { schools, from, until, mult }
     // Before mementos, visitors left tracks and were befriended with a tap. A befriended one has already
     // shown itself: it moves in at its next visit if it can stay.
     delete s.guestTracks;
@@ -399,9 +410,9 @@ export class Game {
     this.bump('debrisCleared');
     return d;
   }
-  /** Nothing on the tile: no water, landmark, scenery, decor, plant, find or the seed tin. */
+  /** Nothing on the tile: no water, landmark, landscape piece, scenery, decor, plant, find or the seed tin. */
   isFree(t) {
-    return this.inBounds(t) && this.inClearing(t) && !this.waterAt(t) && !this.landmarkAt(t) && !this.sceneryAt(t) && !this.decorAt(t) && !this.plantAt(t) && !this.forageAt(t) && !this.tinAt(t);
+    return this.inBounds(t) && this.inClearing(t) && !this.waterAt(t) && !this.landmarkAt(t) && !this.landscapeAt(t) && !this.sceneryAt(t) && !this.decorAt(t) && !this.plantAt(t) && !this.forageAt(t) && !this.tinAt(t);
   }
 
   // ---- the pool and its streams (tuning.water)
@@ -429,6 +440,8 @@ export class Game {
     s.scenery = s.scenery.filter((x) => !at(x));
     s.forage.finds = s.forage.finds.filter((x) => !at(x));
     for (const d of s.decor.placed.filter(at)) { s.decor.placed = s.decor.placed.filter((x) => x !== d); s.decor.owned[d.decorID] = (s.decor.owned[d.decorID] || 0) + 1; }
+    const lp = this.landscapeAt(t);
+    if (lp) { s.landscape = s.landscape.filter((x) => x !== lp); this._landIndex = null; s.inventory['landscape.' + lp.defID] = (s.inventory['landscape.' + lp.defID] || 0) + 1; }
     s.water.push(k);
     if (s.tin && at(s.tin)) { const n = this.freeNear(t); if (n) s.tin.tile = n; }
   }
@@ -438,8 +451,13 @@ export class Game {
   }
   /** Water (the pool and the streams): what banks are measured from. */
   isWet(t) { return this.waterAt(t); }
-  /** A tile touching water (side by side): its soil can be carried off, or carried in. */
+  /** A tile touching water (side by side), a water piece (a basin) included: its soil can spread with the tides. */
   isBank(t) {
+    if (this.isWet(t) || !this.inClearing(t) || this.landmarkAt(t) || this.basinAt(t)) return false;
+    return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const n = { x: t.x + dx, y: t.y + dy }; return this.isWet(n) || this.basinAt(n); });
+  }
+  /** A tile touching the river itself (not a basin): only these can be dug into channels. */
+  isRiverBank(t) {
     if (this.isWet(t) || !this.inClearing(t) || this.landmarkAt(t)) return false;
     return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => this.isWet({ x: t.x + dx, y: t.y + dy }));
   }
@@ -529,7 +547,7 @@ export class Game {
     const sway = (hash32(this.state.seed, tier, 0x7e3) % 5) - 2;
     if (side === 'top' || side === 'bottom') mid.x = Math.min(c.x1 - 1, Math.max(c.x0 + 1, mid.x + sway));
     else mid.y = Math.min(c.y1 - 1, Math.max(c.y0 + 1, mid.y + sway));
-    const blocked = (t) => this.plantAt(t) || this.decorAt(t) || this.tinAt(t) || this.sceneryAt(t) || this.landmarkAt(t);
+    const blocked = (t) => this.plantAt(t) || this.decorAt(t) || this.tinAt(t) || this.sceneryAt(t) || this.landmarkAt(t) || this.landscapeAt(t);
     const a = !blocked(mid) && this.riverPath(start, mid, tier), b = a && this.riverPath(mid, target, tier);
     const path = a && b ? [...a, ...b] : this.riverPath(start, target, tier);
     if (!path) return [];
@@ -550,7 +568,7 @@ export class Game {
     const cost = (t) => {
       let k = 1 + hashUnit(this.state.seed, tier, t.x, t.y, 0x7e2) * 1.4;
       if (this.waterAt(t)) k = 0.6;
-      else if (this.plantAt(t) || this.decorAt(t) || this.tinAt(t) || (this.sceneryAt(t) && this.sceneryAt(t).feature)) k += 12;
+      else if (this.plantAt(t) || this.decorAt(t) || this.tinAt(t) || this.landscapeAt(t) || (this.sceneryAt(t) && this.sceneryAt(t).feature)) k += 12;
       else if (this.sceneryAt(t)) k += 3;
       else if (this.soilAt(t)) k += 0.6;
       return k;
@@ -582,7 +600,7 @@ export class Game {
     if (!this.inBounds(t) || !this.inClearing(t)) return { ok: false, reason: "That's outside the clearing." };
     if (this.isWet(t)) return { ok: false, reason: "It's already water." };
     if (!this.isFree(t)) return { ok: false, reason: 'Clear the tile first.' };
-    if (!this.isBank(t)) return { ok: false, reason: 'Water can only be led from the water next to it.' };
+    if (!this.isRiverBank(t)) return { ok: false, reason: 'Water can only be led from the water next to it.' };
     return { ok: true, cost: this.digCost() };
   }
   /** Dig a tile beside the water: its soil is lost, and water takes its place. */
@@ -774,7 +792,7 @@ export class Game {
     // as it is. Never through the water; only high water carries soil across to the other side.
     const snapshot = this.wateredSoilTiles().map((t) => ({ t, school: this.soilAt(t) }));
     const level = this.waterLevel(power);
-    const open = (t) => this.inClearing(t) && !this.isWet(t) && !this.landmarkAt(t) && !this.sceneryAt(t);
+    const open = (t) => this.inClearing(t) && !this.isWet(t) && !this.landmarkAt(t) && !this.sceneryAt(t) && !this.landscapeAt(t);
     const chances = {};   // per school: [along the bank, outward], from its group's push in today's weather
     const odds = (school) => chances[school] || (chances[school] = ((push) => [Math.min(T.cap ?? 0.8, (T.alongBank ?? 0.25) * push), Math.min(T.cap ?? 0.8, (T.inland ?? 0.06) * push)])(this.spreadPush(w, school)));
     let crossed = 0;
@@ -791,6 +809,8 @@ export class Game {
         if (across.length) { const before = taken.length; tryTake(across[rng.int(0, across.length - 1)], x.school); if (taken.length > before) { taken[taken.length - 1].crossed = true; crossed++; } }
       }
     }
+    // Landscape pieces make their soil around them.
+    this.landscapeSpread(at, rng, tryTake, open);
     // Soil that held through the tide may mature a level.
     let matured = 0;
     for (const k of Object.keys(this.state.soil)) {
@@ -963,7 +983,7 @@ export class Game {
 
   /**
    * Opens the seed tin: the answers choose a school, and the tin holds that school's starter seed packets
-   * and soil amendments, plus a few of the runner-up school's (tuning.garden.starterSet).
+   * and landscape pieces (a tree and a large plant), plus a few of the runner-up's (tuning.garden.starterSet).
    * Returns { school, second, results }.
    */
   openTin(answers, now, forceSchool = null) {
@@ -983,8 +1003,10 @@ export class Game {
     const add = (item, count) => { if (count > 0 && this.content.items[item]) out.push({ item, count }); };
     add(blindPacketID(school, 'common'), cfg.primaryPackets ?? 4);
     add(blindPacketID(second, 'common'), cfg.secondPackets ?? 2);
-    add('amend.' + school, cfg.primaryAmendments ?? 2);
-    add('amend.' + second, cfg.secondAmendments ?? 1);
+    const L = cfg.landscape || {};
+    for (const id of L[school] || []) add('landscape.' + id, 1);
+    const sp = (L[second] || []).slice(-1)[0];   // the runner-up's large plant
+    if (sp) add('landscape.' + sp, 1);
     return out;
   }
 
@@ -1331,24 +1353,6 @@ export class Game {
     this.rebase(now);
   }
 
-  /** Use a soil amendment on a tile: its soil becomes that school (or plain) until changed again. */
-  amend(itemID, tile, now) {
-    const def = this.content.items[itemID];
-    if (!def || def.category !== 'amendment') throw new GameError("That isn't a soil amendment.");
-    if (!(this.state.inventory[itemID] > 0)) throw new GameError('You have none left.');
-    if (!this.inBounds(tile) || !this.inClearing(tile)) throw new GameError("That's outside the clearing.");
-    if (this.isWet(tile)) throw new GameError("You can't spread soil on water.");
-    if (this.plantAt(tile)) throw new GameError('Something is growing there. Change the soil once the tile is empty.');
-    if (this.landmarkAt(tile) || this.sceneryAt(tile)) throw new GameError("That ground can't be dug.");
-    const cur = this.soilAt(tile);
-    if ((def.amend || null) === cur) throw new GameError(`It's already ${schoolName(cur)} soil.`);
-    this.consume(itemID);
-    this.setSoil(tile, def.amend || null, 1);
-    this.discover('soil:' + (def.amend || 'plain'));
-    this.bump('amend');
-    return def.amend || null;
-  }
-
   // ---- coins, selling and the Store
   /** Coins for one of an item, or 0 if it can't be sold. Garden produce: its plant's sell price. */
   sellPrice(itemID) {
@@ -1385,38 +1389,6 @@ export class Game {
     this.spend(row.price * n);
     return this.grant([{ item: packetID, count: n }]);
   }
-  /** School soil bags bought today (the day's prices climb with each one). */
-  soilBoughtToday(now) {
-    const day = Game.dayNumber(now), st = this.state.soilShop;
-    if (!st || st.day !== day) return 0;
-    return Array.isArray(st.bought) ? st.bought.length : (st.bought || 0);   // older saves kept a list
-  }
-  /**
-   * A bag's price now. Garden loam (back to plain) is always plainPrice. School soil starts at
-   * price + perExpansion × Room to grow bought, and each school bag already bought today multiplies it by
-   * dayStep (back to the start each morning), rounded to `round` coins.
-   */
-  amendmentPrice(itemID, now = this.state.lastUpdated) {
-    const def = this.content.items[itemID], c = this.gcfg.amendments || {};
-    if (!def || def.category !== 'amendment') return 0;
-    if (!def.amend) return c.plainPrice ?? 2;
-    const base = (c.price ?? 20) + (c.perExpansion ?? 15) * this.expansionTier;
-    const r = c.round ?? 5;
-    return Math.max(r, Math.round(base * Math.pow(c.dayStep ?? 1.5, this.soilBoughtToday(now)) / r) * r);
-  }
-  /** The Store's soil: every school's amendment and Garden loam, always in stock. Returns [{ id, price }]. */
-  soilStock(now) {
-    return this.content.amendmentList.slice().sort((a, b) => (a.school ? 0 : 1) - (b.school ? 0 : 1) || SCHOOLS.indexOf(a.school) - SCHOOLS.indexOf(b.school))
-      .map((a) => ({ id: a.id, price: this.amendmentPrice(a.id, now) }));
-  }
-  buyAmendment(itemID, now = this.state.lastUpdated) {
-    const row = this.soilStock(now).find((x) => x.id === itemID);
-    if (!row) throw new GameError("The Store doesn't sell that.");
-    this.spend(row.price);
-    if (this.content.items[itemID].amend) this.state.soilShop = { day: Game.dayNumber(now), bought: this.soilBoughtToday(now) + 1 };
-    return this.grant([{ item: itemID, count: 1 }]);
-  }
-
   // ---- the morning check
   /**
    * What's waiting after time away: ready plants by kind, how many are still growing and the next one to
@@ -1572,6 +1544,126 @@ export class Game {
   }
   /** Anything at the Old Log that could be delivered right now. */
   oldLogReady(now) { const b = this.oldLogBoard(now); return [...b.orders, ...b.commissions].filter((st) => st.ready).length; }
+
+  // ---- landscape (Content/landscape.json, tuning.landscape): trees, water, large plants and structures
+  //
+  // Bought in the Store and placed from the Bag. A piece takes its final footprint from the day it's placed
+  // (a sapling that will grow to 3x3 reserves 3x3) and grows through its plan's stages over real time. A
+  // piece with a school makes that soil: its footprint turns when it's placed, and at every tide it spreads
+  // the soil to tiles around it (further and faster as it grows). Water pieces count as water for the tides.
+  get landCfg() { return this.t.landscape || {}; }
+  landscapeDef(id) { return this.content.landscapeByID[id] || null; }
+  /** Where a piece goes when the player taps tile `t`: its top-left (the tap is the footprint's centre, or just above-left of it). */
+  landscapeOrigin(def, t) { const [w, h] = def.size; return { x: t.x - Math.floor((w - 1) / 2), y: t.y - Math.floor((h - 1) / 2) }; }
+  landscapeTiles(p) {
+    const def = this.landscapeDef(p.defID), [w, h] = def ? def.size : [1, 1], out = [];
+    for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) out.push({ x: p.tile.x + dx, y: p.tile.y + dy });
+    return out;
+  }
+  /** "x,y" -> placed piece, rebuilt when pieces change. */
+  landIndex() {
+    if (!this._landIndex) {
+      this._landIndex = new Map();
+      for (const p of this.state.landscape) for (const t of this.landscapeTiles(p)) this._landIndex.set(key(t), p);
+    }
+    return this._landIndex;
+  }
+  landscapeAt(t) { return this.landIndex().get(key(t)) || null; }
+  landscapeByID(id) { return this.state.landscape.find((p) => p.id === id) || null; }
+  /** A tile under a water piece (a basin, a seep): it counts as water for the tides. */
+  basinAt(t) { const p = this.landscapeAt(t); return !!p && !!(this.landscapeDef(p.defID) || {}).water; }
+  /** A piece's growth stages: [{ stage, hours, aura, tries, beauty }]. */
+  landscapePlan(def) { return ((this.landCfg.plans || {})[def.plan]) || [{ stage: 'built', hours: 0, aura: 1, tries: 1, beauty: 2 }]; }
+  /** Its stage at t: { stage, aura, tries, beauty, index, next (the next stage, if any), nextAt }. */
+  landscapeStage(p, t) {
+    const def = this.landscapeDef(p.defID), plan = this.landscapePlan(def);
+    let i = 0;
+    while (i + 1 < plan.length && t - p.placedAt >= plan[i + 1].hours * HOUR) i++;
+    const next = plan[i + 1] || null;
+    return { ...plan[i], index: i, last: plan.length - 1, next, nextAt: next ? p.placedAt + next.hours * HOUR : null };
+  }
+  /** The sprite for a piece at a stage: landscape.<id>.<stage>. */
+  landscapeSprite(defID, stage) { return `landscape.${defID}.${stage}`; }
+  /** Whether a piece can go where the player tapped, and why not: { ok, origin, reason }. */
+  canPlaceLandscape(defID, tap) {
+    const def = this.landscapeDef(defID);
+    if (!def) return { ok: false, reason: 'Unknown.' };
+    const origin = this.landscapeOrigin(def, tap), [w, h] = def.size;
+    for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) {
+      const t = { x: origin.x + dx, y: origin.y + dy };
+      if (!this.inBounds(t) || !this.inClearing(t)) return { ok: false, origin, reason: `It needs room: ${w}×${h} tiles inside the clearing.` };
+      if (def.onWater) {
+        if (!this.waterAt(t) || this.landscapeAt(t)) return { ok: false, origin, reason: 'That goes on the water.' };
+      } else if (!this.isFree(t)) return { ok: false, origin, reason: w * h > 1 ? `It needs ${w}×${h} clear tiles.` : 'Something is already there.' };
+    }
+    return { ok: true, origin };
+  }
+  /** Place a piece from the Bag. Its footprint takes its soil at once. */
+  placeLandscape(itemID, tap, now) {
+    const it = this.content.items[itemID], def = it && this.landscapeDef(it.landscape);
+    if (!def) throw new GameError("That isn't something to plant in the landscape.");
+    if (!(this.state.inventory[itemID] > 0)) throw new GameError('You have none left.');
+    const chk = this.canPlaceLandscape(def.id, tap);
+    if (!chk.ok) throw new GameError(chk.reason);
+    this.rebase(now);
+    this.consume(itemID);
+    const p = { id: this.rng.uuid(), defID: def.id, tile: chk.origin, placedAt: now };
+    this.state.landscape.push(p);
+    this._landIndex = null;
+    if (def.school && !def.onWater) for (const t of this.landscapeTiles(p)) if (this.soilAt(t) !== def.school) this.setSoil(t, def.school, 1);
+    this.discover('landscape:' + def.id);
+    if (def.school) this.discover('soil:' + def.school);
+    this.rebase(now);
+    this.bump('landscape');
+    return p;
+  }
+  /** Dig a piece up: it goes back to the Bag (its growth is lost); the soil it made stays. */
+  removeLandscape(placedID, now) {
+    const p = this.landscapeByID(placedID);
+    if (!p) throw new GameError("It's gone.");
+    this.rebase(now);
+    this.state.landscape = this.state.landscape.filter((x) => x !== p);
+    this._landIndex = null;
+    this.rebase(now);
+    return this.grant([{ item: 'landscape.' + p.defID, count: 1 }]);
+  }
+  /**
+   * At a tide (time `at`), each piece with a school spreads its soil: `tries` times, with tryChance, to the
+   * nearest tile within `aura` of its footprint that isn't its soil yet. `tryTake` is the tide's (resistance,
+   * one change per tile per tide). Deterministic from the tide's rng.
+   */
+  landscapeSpread(at, rng, tryTake, open) {
+    const chance = this.landCfg.tryChance ?? 0.5;
+    for (const p of this.state.landscape) {
+      const def = this.landscapeDef(p.defID);
+      if (!def || !def.school || def.onWater) continue;
+      const st = this.landscapeStage(p, at);
+      if (!(st.aura > 0) || !(st.tries > 0)) continue;
+      const foot = this.landscapeTiles(p), [w, h] = def.size, r = st.aura;
+      const cands = [];
+      for (let y = p.tile.y - r; y < p.tile.y + h + r; y++) for (let x = p.tile.x - r; x < p.tile.x + w + r; x++) {
+        const t = { x, y };
+        if (this.landscapeAt(t) || !open(t) || this.soilAt(t) === def.school) continue;
+        const d = Math.min(...foot.map((f) => Math.max(Math.abs(f.x - x), Math.abs(f.y - y))));
+        cands.push({ t, d: d + hashUnit(this.state.seed, x, y, 0x1a7d) * 0.5 });
+      }
+      cands.sort((a, b) => a.d - b.d);
+      for (let i = 0; i < st.tries && i < cands.length; i++) if (rng.next() < chance) tryTake(cands[i].t, def.school);
+    }
+  }
+  /** The Store's landscape shelf: every piece, with its price and what locks it. */
+  storeLandscape() {
+    return this.content.landscapeList.map((def) => ({ def, id: 'landscape.' + def.id, price: def.price || 0, locks: this.beautyLock(def.beauty || 0) }));
+  }
+  buyLandscape(itemID) {
+    const row = this.storeLandscape().find((x) => x.id === itemID);
+    if (!row) throw new GameError("The Store doesn't sell that.");
+    if (row.locks.length) throw new GameError("That isn't on the shelf yet.");
+    this.spend(row.price);
+    return this.grant([{ item: itemID, count: 1 }]);
+  }
+  /** Beauty from the landscape: each piece's stage beauty. */
+  landscapeBeauty(now) { return this.state.landscape.reduce((a, p) => a + (this.landscapeStage(p, now).beauty || 0), 0); }
 
   // ---- decor (Content/cosmetics.json, and relic ornaments from relics.json)
   decorDef(id) { return this.content.decorByID[id] || null; }
@@ -2048,7 +2140,7 @@ export class Game {
     const blooming = this.state.plants.filter((p) => this.isBlooming(p, now)).length;
     const decor = this.state.decor.placed.reduce((a, d) => a + (this.decorKind(this.decorDef(d.decorID)).beauty || 0), 0)
       + this.state.scenery.reduce((a, x) => a + (x.feature ? (this.featureDef(x.feature) || {}).beauty || 0 : 0), 0);
-    return kinds * (b.variety ?? 3) + blooming * (b.blooming ?? 1) + decor;
+    return kinds * (b.variety ?? 3) + blooming * (b.blooming ?? 1) + decor + this.landscapeBeauty(now);
   }
   get beautyTiers() { return (this.gcfg.beauty || {}).tiers || [{ name: 'Bare', at: 0 }]; }
   /** The tier now: { index, name, frac } (frac = how far toward the next tier, for the meter). */
@@ -2153,7 +2245,9 @@ export class Game {
   devGiveOrnaments() { for (const r of this.content.relicList) this.state.decor.owned[r.id] = (this.state.decor.owned[r.id] || 0) + 1; return this.content.relicList.length; }
   devSetBeautyBest(i) { this.state.beautyBest = i; }
   devGivePackets(n = 5) { const ids = this.content.itemList.filter((i) => i.blind).map((i) => i.id); for (const id of ids) this.grant([{ item: id, count: n }]); return ids.length; }
-  devGiveAmendments(n = 5) { for (const a of this.content.amendmentList) this.grant([{ item: a.id, count: n }]); return this.content.amendmentList.length; }
+  devGiveLandscape(n = 1) { for (const d of this.content.landscapeList) this.grant([{ item: 'landscape.' + d.id, count: n }]); return this.content.landscapeList.length; }
+  /** Age every placed piece by `hours` (developer mode), so its next stages arrive sooner. */
+  devAgeLandscape(hours) { for (const p of this.state.landscape) p.placedAt -= hours * HOUR; return this.state.landscape.length; }
   devForageNow(now) {
     const f = this.state.forage;
     f.slot = this.forageSlot(now) - (this.forageCfg.maxCatchUpSlots ?? 48);
@@ -2218,8 +2312,17 @@ export class Content {
     // Relics (relics.json) are decor ornaments: kind "ornament", with their school.
     for (const r of this.relicList) this.cosmetics.push({ id: r.id, name: r.name, sprite: r.sprite, size: [1, 1], kind: 'ornament', school: r.school, text: r.inscription });
     this.decorByID = Object.fromEntries(this.cosmetics.map((c) => [c.id, c]));
+    // Soil amendments are retired (old saves' bags are refunded); their items stay defined for that.
     this.amendmentList = bundle.amendments || [];
     for (const a of this.amendmentList) this.addItem({ id: a.id, category: 'amendment', name: a.name, rarity: 'common', sprite: a.id, amend: a.school, text: a.text, inGuide: false });
+    // Landscape pieces (landscape.json): Bag items landscape.<id>, shown by their final stage.
+    this.landscapeList = bundle.landscape || [];
+    this.landscapeByID = Object.fromEntries(this.landscapeList.map((d) => [d.id, d]));
+    const plans = (bundle.tuning.landscape || {}).plans || {};
+    for (const d of this.landscapeList) {
+      const plan = plans[d.plan] || [{ stage: 'built' }];
+      this.addItem({ id: 'landscape.' + d.id, category: 'landscape', name: d.name, rarity: 'common', sprite: `landscape.${d.id}.${plan[plan.length - 1].stage}`, landscape: d.id, school: d.school, text: d.text, inGuide: false });
+    }
   }
   addItem(it) {
     if (this.items[it.id]) return this.items[it.id];

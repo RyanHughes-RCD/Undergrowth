@@ -356,6 +356,8 @@ if __name__ == "__main__":
     gen_garden_sprites.main()
     import gen_visitor_sprites  # the visiting animals
     gen_visitor_sprites.main()
+    import gen_landscape_sprites  # trees, water, large plants and structures, by growth stage
+    gen_landscape_sprites.main()
     import gen_terrain  # one soil tile pair per garden school
     gen_terrain.main()
     count = sum(len(files) for _, _, files in os.walk(OUT))

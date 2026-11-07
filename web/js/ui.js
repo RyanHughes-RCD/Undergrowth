@@ -143,7 +143,7 @@ export class UI {
       decor: () => `Tap an open tile to place the ${g.decorDef(m.decorID)?.name || 'decoration'}`,
       decorMove: () => 'Tap an open tile to move it there',
       plant: () => `Tap a lit tile to plant ${this.content.items[m.itemID]?.name || 'seeds'} (${left(m.itemID)} left)`,
-      amend: () => `Tap a tile to spread ${this.content.items[m.itemID]?.name || 'it'} (${left(m.itemID)} left)`,
+      landscape: () => { const it = this.content.items[m.itemID], d = it && g.landscapeDef(it.landscape); return `Tap a lit tile for the ${d ? d.name : 'piece'}${d && d.size[0] * d.size[1] > 1 ? ` (it takes ${d.size[0]}×${d.size[1]}, centred where you tap)` : ''}`; },
     }[m.type];
     return h('div', { class: 'banner' }, h('span', {}, text ? text() : this.modeText(m)),
       h('button', { class: 'btn small grey', onclick: () => { this.mode = null; this.app.changed(false); } }, m.done ? 'Done' : 'Cancel'));
@@ -207,7 +207,6 @@ export class UI {
       ];
     }
     const packets = Object.keys(g.state.inventory).filter((id) => this.content.items[id]?.category === 'packet' && g.canPlantPacket(id, tile).ok);
-    const amends = Object.keys(g.state.inventory).filter((id) => this.content.items[id]?.category === 'amendment' && (this.content.items[id].amend || null) !== soil);
     const blocked = !g.isFree(tile) && !g.hostsPlant(tile);
     return [
       h('p', { class: 'sub' }, soil ? `${schoolName(soil)} plants grow well here${g.soilLevel(tile) > 1 ? ', and better the longer it holds' : ''}. Other plants won't take.` : 'Anything grows here, but slowly. Plants grow best in their own soil.'),
@@ -215,8 +214,6 @@ export class UI {
       blocked ? null : packets.length ? h('div', { class: 'row gap wrap' }, packets.map((id) => h('button', { class: 'btn green small', title: this.content.items[id].name, onclick: () => a.plantAt(id, tile) },
         this.sprites.element(this.content.items[id].sprite, null, 1), ' ', this.content.items[id].name.replace(/ seeds$/, ''))))
         : h('p', { class: 'sub' }, 'No seeds in your Bag that grow in this soil.'),
-      blocked || !amends.length ? null : h('div', { class: 'row gap wrap' }, h('span', { class: 'sub' }, 'Change the soil: '), amends.map((id) => h('button', { class: 'btn small', title: this.content.items[id].name, onclick: () => a.amendAt(id, tile) },
-        this.sprites.element(this.content.items[id].sprite, null, 1)))),
     ];
   }
   /** Extra lines on a growing plant's card: its companions (named once discovered) and a relic close by. */
@@ -308,6 +305,7 @@ export class UI {
       visitor: () => this.visitorBody(arg),
       stump: () => ['The Stump', this.stumpBody()],
       well: () => ['The Wishing Well', this.wellBody()],
+      land: () => this.landBody(arg),
     };
   }
 
@@ -333,13 +331,13 @@ export class UI {
   // -------------------------------------------------------------- Bag
 
   /** Bag sections, in order. */
-  bagSections() { return ['packet', 'amendment', 'plant', 'mushroom']; }
-  bagSectionTitle(cat) { return { packet: 'Seed packets', amendment: 'Soil', plant: 'Plants and flowers', mushroom: 'Mushrooms' }[cat] || cap(cat); }
+  bagSections() { return ['landscape', 'packet', 'plant', 'mushroom']; }
+  bagSectionTitle(cat) { return { landscape: 'Landscape', packet: 'Seed packets', plant: 'Plants and flowers', mushroom: 'Mushrooms' }[cat] || cap(cat); }
   /** Buttons for one Bag row: plant seeds, spread soil, sell produce. */
   bagActions(def, n) {
     const a = this.app, g = this.game;
     if (def.category === 'packet') return [h('button', { class: 'btn green small', onclick: () => a.beginPlanting(def.id) }, 'Plant')];
-    if (def.category === 'amendment') return [h('button', { class: 'btn small', onclick: () => a.beginAmend(def.id) }, 'Use')];
+    if (def.category === 'landscape') return [h('button', { class: 'btn green small', onclick: () => a.beginLandscape(def.id) }, 'Place')];
     const price = g.sellPrice(def.id);
     return price ? [h('button', { class: 'btn small', title: `Sell one for ${price} coins`, onclick: () => a.sellItem(def.id, 1) }, ic('coin', 1), ` ${price}`)] : [];
   }
@@ -355,7 +353,7 @@ export class UI {
       out.push(h('div', { class: 'section' }, this.bagSectionTitle(cat)));
       for (const { def, n } of owned.filter((e) => e.def.category === cat).sort((a, b) => rarityIndex(b.def.rarity) - rarityIndex(a.def.rarity) || a.def.name.localeCompare(b.def.name))) {
         out.push(h('div', { class: 'list-row' },
-          h('div', { class: 'thumb' }, this.sprites.element(def.sprite, def.variant || null, 3)),
+          h('div', { class: 'thumb' }, this.sprites.element(def.sprite, def.variant || null, this.fit(def.sprite))),
           h('div', { class: 'grow' }, h('b', {}, def.name), this.bagLine(def)),
           h('b', {}, `×${n}`), ...this.bagActions(def, n)));
       }
@@ -374,7 +372,7 @@ export class UI {
   bagLine(def) {
     if (def.category === 'packet' && def.blind) return h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[def.school]}` }, `${schoolName(def.school)} soil`), ` · ${def.text.replace(/^\w+ seeds\.? ?/, '')}`);
     if (def.category === 'packet') return h('div', { class: 'sub' }, h('span', { style: `color:${SCHOOL_COLORS[def.school]}` }, `${schoolName(def.school)} soil`), ` · ${this.growHoursText(def.plant)}`);
-    if (def.category === 'amendment') return h('div', { class: 'sub' }, def.text);
+    if (def.category === 'landscape') return h('div', { class: 'sub' }, this.landscapeLine(this.game.landscapeDef(def.landscape)));
     return def.rarity ? h('div', { class: 'sub', style: `color:${RARITY_COLORS[def.rarity]}` }, rarityName(def.rarity)) : null;
   }
 
@@ -440,10 +438,12 @@ export class UI {
   storeBadge() { return 0; }
 
   /** One row in the Store: art, name, a line, and a Buy button with its price. */
+  /** A scale that keeps a sprite inside a box of `box` px (never above `max`), for thumbnails of big pieces. */
+  fit(sprite, box = 48, max = 3) { const s = this.sprites.size(sprite); return Math.min(max, box / Math.max(s.w, s.h)); }
   buyRow(sprite, name, line, price, onBuy, locks = [], variant = null) {
     const can = !locks.length && this.game.state.coins >= price;
     return h('div', { class: 'list-row' + (locks.length ? ' locked' : '') },
-      h('div', { class: 'thumb' }, this.sprites.element(sprite, locks.length ? SIL : variant, 3)),
+      h('div', { class: 'thumb' }, this.sprites.element(sprite, locks.length ? SIL : variant, this.fit(sprite))),
       h('div', { class: 'grow' }, h('b', {}, locks.length ? '???' : name), locks.length ? h('div', { class: 'sub lock' }, ic('lock', 1), ` Opens with ${this.lockText(locks)}.`) : line),
       locks.length ? null : h('button', { class: 'btn small ' + (can ? 'green' : 'grey'), disabled: !can, onclick: onBuy }, ic('coin', 1), ` ${price}`));
   }
@@ -481,6 +481,20 @@ export class UI {
     const grow = board.filter((st) => st.req.reward.type === 'unlock' && st.req.reward.id === 'expansion');
     const sellable = Object.entries(g.state.inventory).filter(([id, n]) => n > 0 && g.sellPrice(id)).map(([id, n]) => ({ def: this.content.items[id], n, price: g.sellPrice(id) }));
     return [
+      ['landscape', 'Landscape', () => {
+        // Trees, water, large plants and structures: each makes its school's soil around it.
+        const rows = g.storeLandscape().filter((x) => !this.landSchool || x.def.school === (this.landSchool === 'none' ? null : this.landSchool));
+        const chip = (id, label, color) => h('button', { class: 'tab' + ((this.landSchool || null) === id ? ' on' : ''), style: color ? `color:${color}` : '', onclick: () => { this.landSchool = id; this.renderSheet(); } }, label);
+        const KINDS = [['tree', 'Trees'], ['water', 'Water'], ['plant', 'Large plants'], ['structure', 'Structures']];
+        return [h('p', { class: 'sub' }, 'Shape the forest. Each piece makes its own soil, spreading it around itself as it grows; trees grow for days, and some become giants. Water counts as water: soil touching it spreads with the tides.'),
+          h('div', { class: 'tabs seed-schools' }, chip(null, 'All'), ...SCHOOLS.map((k) => chip(k, schoolName(k), SCHOOL_COLORS[k])), chip('none', 'Paths')),
+          ...KINDS.flatMap(([kind, label]) => {
+            const list = rows.filter((x) => x.def.kind === kind);
+            if (!list.length) return [];
+            return [h('div', { class: 'section' }, label), ...list.map((x) => { const it = this.content.items[x.id];
+              return this.buyRow(it.sprite, h('span', { style: x.def.school ? `color:${SCHOOL_COLORS[x.def.school]}` : '' }, it.name), h('div', { class: 'sub' }, this.landscapeLine(x.def)), x.price, () => a.buyLandscape(x.id), x.locks); })];
+          })];
+      }],
       ['seeds', 'Seeds', () => {
         // Every packet is its own item: grouped by tier, one row per school, each with its own packet.
         const rows = g.storePackets().filter((x) => !this.seedSchool || x.school === this.seedSchool);
@@ -494,13 +508,6 @@ export class UI {
               ...list.map((x) => { const it = this.content.items[x.id];
                 return this.buyRow(it.sprite, h('span', { style: `color:${SCHOOL_COLORS[x.school]}` }, it.name), h('div', { class: 'sub' }, it.text), x.price, () => a.buyPacket(x.id), x.locks); })];
           })];
-      }],
-      ['soil', 'Soil', () => {
-        const n = g.soilBoughtToday(now);
-        return [h('p', { class: 'sub' }, "Every soil is on the shelf, but good soil is dear: it costs more as the garden grows, and each bag you buy today makes the next one dearer still. Prices settle again each morning. Room to grow uncovers some for free."),
-          n ? h('p', { class: 'sub' }, `You've bought ${n} bag${n === 1 ? '' : 's'} of soil today.`) : null,
-          ...g.soilStock(now).map((x) => { const am = this.content.items[x.id];
-            return this.buyRow(am.sprite, am.amend ? h('span', { style: `color:${SCHOOL_COLORS[am.amend]}` }, am.name) : am.name, h('div', { class: 'sub' }, am.text), x.price, () => a.buyAmendment(x.id)); })];
       }],
       ['decor', 'Decor', () => [h('p', { class: 'sub' }, 'Things to set out in your garden. Find them in your Bag under Decor.'),
         ...decor.map((st) => { const d = g.decorDef(st.req.reward.id) || {}; return this.buyRow(d.sprite || 'ui.icon.board', d.name || st.req.name, h('div', { class: 'sub' }, d.text || st.req.text || ''), st.coins, () => a.deliverRequest(st.req.id), st.locks); })]],
@@ -577,6 +584,11 @@ export class UI {
     return [
       ['plant', 'Plants', () => items('plant')],
       ['mushroom', 'Mushrooms', () => items('mushroom')],
+      ['landscape', 'Landscape', () => this.content.landscapeList.map((d) => {
+        const st = g.landscapePlan(d), last = st[st.length - 1].stage;
+        return { key: 'landscape:' + d.id, name: d.name, sprite: g.landscapeSprite(d.id, last), school: d.school, text: d.text,
+          hint: `${d.school ? schoolName(d.school) + '. ' : ''}In the Store, under Landscape.`, extra: [h('p', { class: 'sub center' }, this.landscapeLine(d))] };
+      })],
       ['varieties', 'Colours', () => Object.values(this.content.varieties).map((v) => {
         const it = this.content.items[v.produce];
         return { key: 'item:' + v.produce, name: v.name, sprite: it.sprite, variant: v.variant, school: it.school, text: it.guideText,
@@ -600,7 +612,7 @@ export class UI {
         return h('button', {
           class: 'guide-cell' + (known ? '' : ' unknown') + (e.hint && !known ? ' teaser' : ''),
           onclick: () => { if (e.visitor) this.open('visitor', e.visitor.id); else if (known) this.open('entry', e); else if (e.hint) this.open('entry', { name: '???', sprite: e.sprite, variant: SIL, text: e.hint }); },
-        }, this.sprites.element(e.sprite, known ? e.variant : SIL, 4),
+        }, this.sprites.element(e.sprite, known ? e.variant : SIL, this.fit(e.sprite, 64, 4)),
           h('span', {}, known ? e.name : '???', !known && e.hint ? ic('sparkle', 1) : null),
           e.rarity ? h('i', { class: 'dot', style: `background:${RARITY_COLORS[e.rarity]}` }) : null);
       })),
@@ -706,6 +718,35 @@ export class UI {
     this.celebrate(title, h('div', { class: 'morning' }, news.map((n) => this.newsLine(n))), art, 'OK');
   }
 
+  /** One line about a landscape piece: its size, what it grows into, and the soil it makes. */
+  landscapeLine(def) {
+    if (!def) return '';
+    const g = this.game, plan = g.landscapePlan(def), [w, h] = def.size, last = plan[plan.length - 1];
+    const days = (hrs) => (hrs >= 36 ? `${Math.round(hrs / 24)} days` : `${Math.round(hrs)} hours`);
+    const parts = [`${w}×${h}`];
+    if (plan.length > 1) parts.push(def.plan === 'giant' ? `a giant in about ${days(last.hours)}` : `grown in about ${days(last.hours)}`);
+    if (def.water) parts.push('counts as water');
+    if (def.onWater) parts.push('goes on the water');
+    parts.push(def.school ? `makes ${schoolName(def.school)} soil` : 'makes no soil');
+    return parts.join(' · ');
+  }
+  stageWord(stage) { return { sapling: 'A sapling', young: 'Young', grown: 'Grown', ancient: 'Ancient', built: 'Built' }[stage] || cap(stage); }
+  /** A placed landscape piece: its stage, when it grows on, the soil it spreads, and digging it up. */
+  landBody(placedID) {
+    const g = this.game, now = g.now(), p = g.landscapeByID(placedID);
+    if (!p) return ['Landscape', h('p', { class: 'sub' }, 'Gone.')];
+    const def = g.landscapeDef(p.defID), st = g.landscapeStage(p, now);
+    const soil = def.school ? `It spreads ${schoolName(def.school)} soil up to ${st.aura} tile${st.aura === 1 ? '' : 's'} around it at each tide${st.tries > 1 ? `, ${st.tries} tiles at a time` : ''}.` : 'It makes no soil.';
+    return [def.name, [
+      h('div', { class: 'hero' }, this.sprites.element(g.landscapeSprite(def.id, st.stage), null, def.size[0] > 2 ? 2 : 4)),
+      def.school ? h('p', { class: 'sub center', style: `color:${SCHOOL_COLORS[def.school]}` }, schoolName(def.school)) : null,
+      h('p', { class: 'sub center' }, def.text),
+      h('p', { class: 'center' }, h('b', {}, this.stageWord(st.stage)), st.next ? h('span', { class: 'sub' }, `: ${this.stageWord(st.next.stage).toLowerCase()} ${this.roughly(st.nextAt - now)}.`) : null),
+      h('p', { class: 'sub center' }, soil),
+      def.water ? h('p', { class: 'sub center' }, 'It counts as water: soil touching it spreads with the tides.') : null,
+      h('div', { class: 'row gap wrap center' }, h('button', { class: 'btn grey', onclick: () => this.ask(`Dig up the ${def.name}?`, `It goes back to your Bag${st.index > 0 ? ', but its growth is lost' : ''}. The soil it made stays.`, 'Dig it up', () => this.app.removeLandscape(p.id)) }, 'Dig it up')),
+    ]];
+  }
   /** Blessing lines: which schools grow faster (and anywhere), and for how long. */
   blessingLines(now) {
     return this.game.blessings.map((b) => h('p', { class: 'sub blessing' },
@@ -850,7 +891,6 @@ export class UI {
     const packetSel = h('select', { class: 'select' }, [
       h('optgroup', { label: 'Blind packets' }, this.content.itemList.filter((i) => i.blind).map((i) => h('option', { value: i.id }, i.name))),
       h('optgroup', { label: 'Named packets (any plant)' }, this.content.plantList.map((p) => h('option', { value: 'packet.' + p.id }, `${p.name} seeds`)))]);
-    const amendSel = h('select', { class: 'select' }, (this.content.amendmentList || []).map((x) => h('option', { value: x.id }, x.name)));
     return [
       ['Weather and water', [
         (() => {
@@ -876,8 +916,9 @@ export class UI {
           ...g.beautyTiers.map((t, i) => b(String(i), () => a.dev((gm) => gm.devSetBeautyBest(i), `Best beauty tier: ${t.name}.`)))),
         h('div', { class: 'row gap wrap' }, packetSel, b('+1', () => a.debugGive(packetSel.value, 1)), b('+5', () => a.debugGive(packetSel.value, 5)),
           b('5 of every packet', () => a.dev((gm) => gm.devGivePackets(5), (n) => `+5 of ${n} packets.`))),
-        h('div', { class: 'row gap wrap' }, amendSel, b('+1', () => a.debugGive(amendSel.value, 1)), b('+5', () => a.debugGive(amendSel.value, 5)),
-          b('5 of every soil', () => a.dev((gm) => gm.devGiveAmendments(5), (n) => `+5 of ${n} amendments.`)))]],
+        h('div', { class: 'row gap wrap' }, b('One of every landscape piece', () => a.dev((gm) => gm.devGiveLandscape(1), (n) => `+${n} landscape pieces.`)),
+          b('Age landscape a day', () => a.dev((gm) => gm.devAgeLandscape(24), (n) => `${n} piece(s) a day older.`)),
+          b('Age landscape a week', () => a.dev((gm) => gm.devAgeLandscape(168), (n) => `${n} piece(s) a week older.`)))]],
       ['Visitors', [
         h('p', { class: 'sub' }, "Set a visitor's interest, make it visit now (its next memento, or moving in if it can stay), move it in regardless, or see which of its conditions hold."),
         (() => {

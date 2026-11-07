@@ -13,7 +13,7 @@ import os
 import shutil
 
 # Resources/Content files bundled for the browser (each becomes bundle[<name>]).
-CONTENT_FILES = ("items", "nameParts", "landmarks", "story", "opening", "visitors", "relics", "requests", "cosmetics", "plants", "amendments")
+CONTENT_FILES = ("items", "nameParts", "landmarks", "story", "opening", "visitors", "relics", "requests", "cosmetics", "plants", "amendments", "landscape")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RES = os.path.join(ROOT, "Resources")
 OUT = os.path.join(ROOT, "dist")

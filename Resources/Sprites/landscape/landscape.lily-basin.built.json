@@ -1,0 +1,70 @@
+{
+ "id": "landscape.lily-basin.built",
+ "size": [
+  32,
+  34
+ ],
+ "anchor": [
+  16,
+  31
+ ],
+ "palette": [
+  "transparent",
+  "#1b1420",
+  "#356b2e",
+  "#5aa84a",
+  "#8ad46b",
+  "#ff79b8",
+  "#ffd0e8",
+  "#4a3424",
+  "#7a5a3a",
+  "#5e5e68",
+  "#9a9aa6",
+  "#2a5a8a",
+  "#7ab8e8",
+  "#f4efe0"
+ ],
+ "frames": [
+  {
+   "rows": [
+    "................................",
+    "................................",
+    "................................",
+    "................................",
+    "................................",
+    "...........1111111111...........",
+    ".........11999999999911.........",
+    ".......119999999999999911.......",
+    "......199999bbbbbbbb999991......",
+    "....11999bbbbbbbbbbbbbb99911....",
+    "...19999bbbbbbbbbbbbbbbb99991...",
+    "...199bbbbbbbbbbbbbbbbbbbb991...",
+    "..199bbbbbbbbbbbbbbbbbbbbbb991..",
+    ".1999bbbbbbbbbbbbbbbbbbbbbb9991.",
+    ".199bbbbbcccccccbbbbbbbbbbbb991.",
+    "1999bbbccccccccccccbbbbbbbbb9991",
+    "199bbbcccccccccccccbbbbbbbbbb991",
+    "199bbbbccccccccccccbbbbbbbbbb991",
+    "199bbbbbccccccccccbbbbbbbbbbb991",
+    "199bbbbbbbbbbbbbbbbbbbbbbbbbb991",
+    "199bbbbbbbbbbbbbbbbbbbbbbbbbb991",
+    "199bbbbbbbbbbbbbbbbbbb6bbbbbb991",
+    ".199bbbb5bbbbbbbbbbbbbbbbbbb991.",
+    ".199bbbbbbbbbbbbbbbbbbbbbbbb991.",
+    "..199bbbbbbbbbbbbbbbbbbbbbb991..",
+    "..1999bbbbbbbbbbbbbbbbbbbb9991..",
+    "...1999bbbbbbbbbbbbbbbbbb9991...",
+    "....1999bbbbbbbbbbbbbbbb9991....",
+    ".....19999bbbbbbbbbbbb99991.....",
+    "......11999999bbbb99999911......",
+    "........1199999999999911........",
+    "..........111199991111..........",
+    "..............1111..............",
+    "................................"
+   ]
+  }
+ ],
+ "tags": [
+  "landscape"
+ ]
+}
