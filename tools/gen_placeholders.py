@@ -72,7 +72,19 @@ class Canvas:
         return ["".join("." if v == 0 else ALPHABET[v] for v in row) for row in self.px]
 
 
+# Sprites drawn or touched up by hand (design/art/handmade_sprites.json): every generator writes through write(),
+# which leaves these alone, so re-running a generator never overwrites hand-made art.
+_HANDMADE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "design", "art", "handmade_sprites.json")
+try:
+    with open(_HANDMADE_PATH) as _fh:
+        HANDMADE = set(json.load(_fh).get("sprites", []))
+except FileNotFoundError:
+    HANDMADE = set()
+
+
 def write(sprite_id, size, frames, palette=None, palette_ref=None, anchor=None, tags=None, durations=None):
+    if sprite_id in HANDMADE:
+        return
     data = {"id": sprite_id, "size": list(size)}
     if anchor is not None:
         data["anchor"] = list(anchor)

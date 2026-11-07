@@ -430,6 +430,7 @@ tools/
 - **`anchor`** is measured in pixel-edge coordinates from the top-left. Objects anchor at their feet; ground tiles at their centre.
 - **Missing sprite ids** render as a magenta "?" instead of crashing.
 - **Placeholder art:** `python3 tools/gen_placeholders.py` regenerates every placeholder sprite. Re-running it reproduces the committed sprites exactly.
+  - **Hand-made sprites are never overwritten:** ids listed in `design/art/handmade_sprites.json` (sprites redrawn in the Sprite Bench, or by hand) are skipped by every generator, since they all write through `gen_placeholders.write()`. Remove an id there to let its generator draw it again.
   - Visitor animals (`visitor.<id>`, two frames each) come from `gen_visitor_sprites.py`.
   - The Stump and the wishing well (`landmark.stump` 32×29, `landmark.well` 32×46) are drawn art from `design/art/`, scaled to their 2×2 footprint (32 pixels wide) by `python3 tools/import_sprite_image.py` (needs Pillow). The well's roof leans over the row above; only its own tiles open it.
   - Blind seed packets (`packet.<school>.<tier>`: a question mark, plain, green-trimmed, gold, violet with a seal or iridescent) and named packets (`packet.<plant>`: banded in its soil's colour with a little flower or cap in the plant's own colour), amendment sacks (`amend.<school>`), the seed tin (`garden.tin`) and the coin come from `gen_garden_sprites.py`.
