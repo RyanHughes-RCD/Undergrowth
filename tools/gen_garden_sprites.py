@@ -4,10 +4,9 @@
     python3 tools/gen_garden_sprites.py
 
 Writes:
-  packet.<plant id>     a named seed packet for every plant in Content/plants.json (gifts and colour varieties use
-                        these): a band in its soil's colour and a little flower or cap in the plant's own colour
-  packet.<school>.<tier> a blind seed packet (Common, Uncommon or Rare seeds of a school): a question mark, and
-                        a trim for the tier
+  packet.<school>.<tier> a mystery seed packet (Common to Legendary seeds of a school): a question mark, and
+                        a trim for the tier. (There are no named packets: every seed is a mystery seed. The old
+                        packets() drawing of named packets is kept below but no longer run.)
   amend.<school>        a cloth sack of soil amendment for each school (Content/amendments.json), and
   amend.plain           a sack of plain garden loam
   garden.tin            the opening's old seed tin
@@ -185,7 +184,6 @@ def _outlined(draw, size):
 
 
 def main():
-    packets()
     blind_packets()
     amendments()
     tin()

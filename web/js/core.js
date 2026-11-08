@@ -200,7 +200,18 @@ export class Game {
       delete s.inventory[id];
     }
     if (refund) { s.coins = (s.coins || 0) + refund; this.events.push({ type: 'soilRetired', coins: refund }); }
-    delete s.soilShop;       // the wishing well's blessings in force: { schools, from, until, mult }
+    delete s.soilShop;
+    // Named seed packets are retired (every seed is a mystery seed): packet.<plant>[.<colour>] becomes that
+    // plant's school and tier of mystery seeds.
+    for (const id of Object.keys(s.inventory)) {
+      if (!id.startsWith('packet.')) continue;
+      const pl = (this.content.plants || {})[id.slice(7).split('.')[0]];
+      const n = s.inventory[id];
+      delete s.inventory[id];
+      if (!pl) continue;
+      const to = blindPacketID(pl.school, pl.tier || 'common');
+      s.inventory[to] = (s.inventory[to] || 0) + n;
+    }       // the wishing well's blessings in force: { schools, from, until, mult }
     // Before mementos, visitors left tracks and were befriended with a tap. A befriended one has already
     // shown itself: it moves in at its next visit if it can stay.
     delete s.guestTracks;
@@ -780,7 +791,6 @@ export class Game {
     const tryTake = (t, school) => {
       const cur = this.soilAt(t);
       if (cur === school || changed.has(key(t))) return;
-      if (this.tideHeld(t)) { held++; return; }      // a resident with tideHold keeps its patch
       const resist = this.soilLevel(t) + (this.plantAt(t) ? (T.plantHold ?? 1.5) : 0);
       if (resist > 0 && rng.next() < resist / (resist + (T.hold ?? 1.2))) { held++; return; }
       taken.push({ tile: { ...t }, from: cur, to: school, plant: !!this.plantAt(t) });
@@ -793,6 +803,7 @@ export class Game {
     const snapshot = this.wateredSoilTiles().map((t) => ({ t, school: this.soilAt(t) }));
     const level = this.waterLevel(power);
     const open = (t) => this.inClearing(t) && !this.isWet(t) && !this.landmarkAt(t) && !this.sceneryAt(t) && !this.landscapeAt(t);
+    const tideMult = this.buffMult('tideSpread'), matureChance = (T.matureChance ?? 0.5) + this.buffSum('soilMature', 'add');
     const chances = {};   // per school: [along the bank, outward], from its group's push in today's weather
     const odds = (school) => chances[school] || (chances[school] = ((push) => [Math.min(T.cap ?? 0.8, (T.alongBank ?? 0.25) * push), Math.min(T.cap ?? 0.8, (T.inland ?? 0.06) * push)])(this.spreadPush(w, school)));
     let crossed = 0;
@@ -801,7 +812,7 @@ export class Game {
       const near = this.landNeighbours(x.t).filter((t) => open(t) && this.soilAt(t) !== x.school);
       const bank = this.isBank(x.t);
       const along = bank ? near.filter((t) => this.isBank(t)) : [];
-      const [pAlong, pIn] = odds(x.school);
+      const [pAlong, pIn] = odds(x.school).map((q) => Math.min(T.cap ?? 0.8, q * tideMult));   // tideSpread residents
       if (along.length && rng.next() < pAlong) tryTake(along[rng.int(0, along.length - 1)], x.school);
       if (near.length && rng.next() < pIn) tryTake(near[rng.int(0, near.length - 1)], x.school);
       if (bank && level.cross > 0 && rng.next() < level.cross) {
@@ -816,7 +827,7 @@ export class Game {
     for (const k of Object.keys(this.state.soil)) {
       if (changed.has(k)) continue;
       const lv = this.state.soilLevel[k] || 1;
-      if (lv < maxLv && rng.next() < (T.matureChance ?? 0.5)) { this.state.soilLevel[k] = lv + 1; matured++; }
+      if (lv < maxLv && rng.next() < matureChance) { this.state.soilLevel[k] = lv + 1; matured++; }
     }
     this.rebase(at);
     return { n, at, day: d, weather: w.id, moon: m.index, power, level: level.index, taken, held, matured, crossed };
@@ -1141,7 +1152,7 @@ export class Game {
     const speeds = this.activeCompanions(p).filter((x) => x.rule.effect === 'speed').length;
     if (speeds) r *= Math.min(c.maxSpeed ?? 1.5, Math.pow(c.speed ?? 1.25, speeds));
     r *= this.ornamentFactor(p);
-    r *= this.residentGrowth(p);
+    r *= this.residentGrowth(def.school);
     r *= this.blessingMult(def.school);
     return r;
   }
@@ -1256,8 +1267,7 @@ export class Game {
   /** The seed packet a harvest returns (a variety breeds true). */
   packetOf(p) {
     const v = p.variety && this.varietyDef(p.variety), def = this.plantDef(p.plantID);
-    if (v) return v.packet;
-    return def && def.source === 'seeds' ? blindPacketID(def.school, def.tier || 'common') : 'packet.' + p.plantID;
+    return def ? blindPacketID(def.school, def.tier || 'common') : null;   // every seed is a mystery seed now
   }
   /** Still a mystery seedling (from a blind packet, before its bud shows)? */
   isHidden(p, t) { return !!p.blind && ['seed', 'sprout'].includes(this.stageOf(p, t)); }
@@ -1288,7 +1298,7 @@ export class Game {
     const companions = this.activeCompanions(p);
     const pending = [{ item: this.produceOf(p), count: this.harvestYield(p) }];
     const [always, chance] = cfg.seeds || [1, 0.5];
-    const seeds = (always || 0) + (this.rng.chance(chance || 0) ? 1 : 0);
+    const seeds = (always || 0) + (this.rng.chance(chance || 0) ? 1 : 0) + (this.rng.chance(this.buffSum('extraSeed', 'chance')) ? 1 : 0);
     if (seeds > 0) pending.push({ item: this.packetOf(p), count: seeds });
     for (const x of extras) pending.push(x);
     const results = this.grant(pending.filter((x) => x.item && x.count > 0));
@@ -1314,11 +1324,11 @@ export class Game {
     const vars = (def && def.varieties) || [];
     if (!vars.length) return [];
     const partner = this.neighbours(p.tile).some((q) => q !== p && this.plantDef(q.plantID)?.family === def.family && this.isBlooming(q, now));
-    if (!partner || !this.rng.chance((this.gcfg.varieties || {}).chance ?? 0.12)) return [];
+    if (!partner || !this.rng.chance(((this.gcfg.varieties || {}).chance ?? 0.12) * this.buffMult('crossPollinate'))) return [];
     const fresh = vars.filter((v) => !this.discovered.has('item:' + this.varietyDef(v.id).produce));
     const v = this.rng.pick(fresh.length ? fresh : vars);
     this.events.push({ type: 'crossPollinated', plantID: p.plantID, variety: v.id, tile: p.tile });
-    return [{ item: this.varietyDef(v.id).packet, count: 1 }];
+    return [{ item: this.varietyDef(v.id).produce, count: 1 }];   // the colour itself: a rarer, dearer harvest
   }
   afterHarvest(p, now) { this.checkCollection(this.plantDef(p.plantID)?.school, now); }
 
@@ -1635,7 +1645,7 @@ export class Game {
    * one change per tile per tide). Deterministic from the tide's rng.
    */
   landscapeSpread(at, rng, tryTake, open) {
-    const chance = this.landCfg.tryChance ?? 0.5;
+    const chance = Math.min(1, (this.landCfg.tryChance ?? 0.5) + this.buffSum('landscapeSpread', 'add'));
     for (const p of this.state.landscape) {
       const def = this.landscapeDef(p.defID);
       if (!def || !def.school || def.onWater) continue;
@@ -1692,8 +1702,9 @@ export class Game {
     if (!def || def.kind !== 'crop') return null;
     const plan = this.landscapePlan(def), T = this.cropTier(def);
     const matureAt = p.placedAt + plan[plan.length - 1].hours * HOUR;
-    const readyAt = p.harvestedAt ? Math.max(matureAt, p.harvestedAt + (T.regrow ?? 6) * HOUR) : matureAt;
-    return { ready: t >= readyAt, readyAt, matureAt, yield: T.yield ?? 1, produce: def.produce.id };
+    // The regrow time is fixed when a crop is picked (p.regrowH), so a resident leaving never un-ripens a crop.
+    const readyAt = p.harvestedAt ? Math.max(matureAt, p.harvestedAt + (p.regrowH ?? T.regrow ?? 6) * HOUR) : matureAt;
+    return { ready: t >= readyAt, readyAt, matureAt, yield: (T.yield ?? 1) + this.buffSum('cropYield', 'add'), produce: def.produce.id };
   }
   /** Pick a crop plant's produce: it goes into the Bag, and the next crop starts growing. */
   harvestCrop(placedID, now) {
@@ -1701,6 +1712,7 @@ export class Game {
     if (!cs) throw new GameError("There's nothing to pick.");
     if (!cs.ready) throw new GameError("It isn't ready yet.");
     p.harvestedAt = now;
+    p.regrowH = (this.cropTier(this.landscapeDef(p.defID)).regrow ?? 6) / this.buffMult('cropRegrow');
     this.bump('cropHarvest');
     return this.grant([{ item: cs.produce, count: cs.yield }]);
   }
@@ -1975,22 +1987,51 @@ export class Game {
     for (const d of this.residents()) for (const p of Object.values(this.guest(d.id).home.patches || {})) for (const k of p) out.set(k, d);
     return out;
   }
-  /** Residents' perks on a plant: plants of its school on its patch grow faster (perk.growth). */
-  residentGrowth(p) {
-    const d = this.homeTiles().get(key(p.tile)), def = this.plantDef(p.plantID);
-    if (!d || !def || !(d.perk || {}).growth || !this.guestSchools(d).includes(def.school)) return 1;
-    return d.perk.growth;
+  // ---- residents' buffs (visitors.json "buff"): every resident gives the whole forest something
+  /** The buffs of a type from everyone living here now: [buff]. */
+  residentBuffs(type) { return this.residents().map((d) => d.buff).filter((b) => b && b.type === type); }
+  buffSum(type, field) { return this.residentBuffs(type).reduce((a, b) => a + (b[field] || 0), 0); }
+  buffMult(type, filter = null) { return this.residentBuffs(type).filter((b) => !filter || filter(b)).reduce((a, b) => a * (b.mult || 1), 1); }
+  /** Growth from residents for a plant of a school: its school's growers and the all-plants growers. */
+  residentGrowth(school) { return this.buffMult('schoolGrowth', (b) => b.school === school) * this.buffMult('allGrowth'); }
+  /** The buff in words, for the Field Guide and arrival news. */
+  buffText(def) {
+    const b = def.buff || {}, pct = (m) => `${Math.round((m - 1) * 100)}%`;
+    switch (b.type) {
+      case 'schoolGrowth': return `${schoolName(b.school)} plants grow ${pct(b.mult)} faster, all over the forest.`;
+      case 'allGrowth': return `Every plant in the forest grows ${pct(b.mult)} faster.`;
+      case 'soilMature': return 'Soil matures faster at every tide.';
+      case 'cropRegrow': return `Orchard crops regrow ${pct(b.mult)} faster.`;
+      case 'crossPollinate': return 'Rare colours turn up more often between good neighbours.';
+      case 'extraSeed': return `Harvests have a ${Math.round(b.chance * 100)}% chance of an extra seed packet.`;
+      case 'wellLuck': return 'Wishes at the well are luckier.';
+      case 'landscapeSpread': return 'Landscape spreads its soil faster.';
+      case 'tideSpread': return `The tides spread soil ${pct(b.mult)} further.`;
+      case 'cropYield': return `Orchard plants give ${b.add} more crop per pick.`;
+      default: return '';
+    }
   }
-  /** A tile on a resident's patch with perk.tideHold never loses its soil to the tide. */
-  tideHeld(t) { const d = this.homeTiles().get(key(t)); return !!(d && (d.perk || {}).tideHold); }
-  /** Where a resident is seen: somewhere on its patch, moving to another tile every hour or so. */
-  residentTile(def, now) {
-    const tiles = Object.values(this.guest(def.id).home?.patches || {}).flat();
-    if (!tiles.length) return null;
-    const k = tiles[hash32(this.state.seed, hashStr(def.id), Math.floor(now / HOUR)) % tiles.length];
-    const [x, y] = k.split(',').map(Number);
-    return { x, y };
+  /**
+   * Where a resident is at `now`. In its own time of day it roams the whole garden: it walks from one
+   * land tile to the next (roam.walkSeconds of game time), lingers there, then sets off again; each
+   * waypoint is chosen from the garden seed, the visitor and the leg, so every view agrees. The rest of
+   * the day it rests on its own patch. Returns { from, to, frac (0..1 along the leg), awake }.
+   */
+  residentRoam(def, now, walkable) {
+    const R = this.guestCfg.roam || {}, legMs = (R.legSeconds ?? 40) * 1000, walkMs = (R.walkSeconds ?? 14) * 1000;
+    const awake = def.likes.time === this.dayPhase(now);
+    const tiles = walkable && walkable.length ? walkable : null;
+    if (!awake || !tiles) {
+      const home = Object.values(this.guest(def.id).home?.patches || {}).flat();
+      const k = home.length ? home[hash32(this.state.seed, hashStr(def.id), Math.floor(now / HOUR)) % home.length] : null;
+      const t = k ? (([x, y]) => ({ x, y }))(k.split(',').map(Number)) : (tiles ? tiles[0] : this.source);
+      return { from: t, to: t, frac: 1, awake: false };
+    }
+    const leg = Math.floor(now / legMs), at = (n) => tiles[hash32(this.state.seed, hashStr(def.id), n, 0x70a3) % tiles.length];
+    return { from: at(leg - 1), to: at(leg), frac: Math.min(1, (now - leg * legMs) / walkMs), awake: true };
   }
+  /** Land a resident may walk on: any clearing tile that isn't water or a landmark. */
+  walkableTiles() { return this.clearingTiles().filter((t) => !this.isWet(t) && !this.landmarkAt(t)); }
   /** News since the player last looked (mementos, arrivals, departures, the Stump). Taking it clears it. */
   takeVisitorNews() { const n = this.state.visitorNews; this.state.visitorNews = []; return n; }
 
@@ -2102,7 +2143,8 @@ export class Game {
       count += k;
     }
     const c = this.wellCfg;
-    return { value, count, luck: Math.min(c.maxLuck ?? 5, Math.log2(1 + value / (c.luckScale ?? 10))) };
+    const luck = Math.min(c.maxLuck ?? 5, Math.log2(1 + value / (c.luckScale ?? 10)) + (count ? this.buffSum('wellLuck', 'add') : 0));
+    return { value, count, luck };
   }
   /** Picks from [[value, weight]] with this.rng. */
   weighted(list) {
@@ -2270,7 +2312,7 @@ export class Game {
     return this.state.plants.length;
   }
   devGiveCoins(n) { this.state.coins += n; }
-  devGiveVarieties(n = 2) { const v = Object.values(this.content.varieties); for (const x of v) this.grant([{ item: x.packet, count: n }]); return v.length; }
+  devGiveVarieties(n = 2) { const v = Object.values(this.content.varieties); for (const x of v) this.grant([{ item: x.produce, count: n }]); return v.length; }
   /** Set a visitor's interest: none (and forget it), first (ready for its first memento) or visit (ready to visit). */
   devGuestStage(id, stage) {
     const def = this.guestDef(id), g = this.guest(id);
@@ -2334,7 +2376,6 @@ export class Content {
       this.plants[p.id] = p;
       if (g[p.id] && g[p.id].sell != null) item.sell = g[p.id].sell;
       item.plant = p.id;
-      this.addItem({ id: 'packet.' + p.id, category: 'packet', name: `${p.name} seeds`, rarity: item.rarity, sprite: 'packet.' + p.id, plant: p.id, school: p.school, text: p.packet, inGuide: false });
     }
     // Colour varieties (plants.json varieties): their own produce (with a palette swap) and seed packets.
     this.varieties = {};
@@ -2345,13 +2386,10 @@ export class Content {
       for (const v of p.varieties || []) {
         const suffix = v.id.split('.').slice(1).join('.');
         const variant = varietySwap(spritePal[item.sprite], v.hue, v.leaves);
-        const [r, gg, b] = hslToRgb(v.hue / 360, 0.65, 0.6), [r2, g2, b2] = hslToRgb(v.hue / 360, 0.5, 0.82);
-        const def = { ...v, plantID: p.id, produce: `${item.id}.${suffix}`, packet: 'packet.' + v.id, variant };
+        const def = { ...v, plantID: p.id, produce: `${item.id}.${suffix}`, variant };
         this.varieties[v.id] = def;
         this.addItem({ id: def.produce, category: item.category, name: v.name, rarity: item.rarity, sprite: item.sprite, variant, school: p.school, plant: p.id, variety: v.id,
           sell: item.sell != null ? item.sell * mult : undefined, guideText: `A colour of ${p.name} that only cross-pollination brings.` });
-        this.addItem({ id: def.packet, category: 'packet', name: `${v.name} seeds`, rarity: item.rarity, sprite: 'packet.' + p.id, variant: { swap: { 7: rgbHex(r, gg, b), 8: rgbHex(r2, g2, b2) } },
-          plant: p.id, variety: v.id, school: p.school, text: `${p.packet || ''} A rare colour.`.trim(), inGuide: false });
       }
     }
     // Blind seed packets: Common, Uncommon and Rare seeds of each school (tuning.garden.packets).
